@@ -1,0 +1,160 @@
+/* Trip Management Component Styles */
+
+.trip-id[b-re3vceuo8c] {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: var(--color-primary);
+}
+
+.vehicle-info[b-re3vceuo8c] {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vehicle-reg[b-re3vceuo8c] {
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.vehicle-details[b-re3vceuo8c] {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.driver-info[b-re3vceuo8c] {
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.destination[b-re3vceuo8c] {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trip-date[b-re3vceuo8c] {
+    font-family: 'Segoe UI', sans-serif;
+    color: var(--color-text);
+}
+
+.status[b-re3vceuo8c] {
+    display: flex;
+    align-items: center;
+}
+
+.status-badge[b-re3vceuo8c] {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-success[b-re3vceuo8c] {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-warning[b-re3vceuo8c] {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-info[b-re3vceuo8c] {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.status-danger[b-re3vceuo8c] {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.status-default[b-re3vceuo8c] {
+    background-color: #e9ecef;
+    color: #495057;
+    border: 1px solid #dee2e6;
+}
+
+.distance[b-re3vceuo8c] {
+    text-align: right;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.btn-icon-view[b-re3vceuo8c] {
+    background-color: var(--color-info);
+    color: white;
+}
+
+.btn-icon-view:hover[b-re3vceuo8c] {
+    background-color: var(--color-info-dark);
+    transform: translateY(-1px);
+}
+
+/* Form specific styling */
+.form-grid[b-re3vceuo8c] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.form-grid .form-field:nth-child(5)[b-re3vceuo8c],
+.form-grid .form-field:nth-child(7)[b-re3vceuo8c] {
+    grid-column: span 2;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .form-grid[b-re3vceuo8c] {
+        grid-template-columns: 1fr;
+    }
+    
+    .form-grid .form-field[b-re3vceuo8c] {
+        grid-column: span 1 !important;
+    }
+    
+    .vehicle-info[b-re3vceuo8c],
+    .destination[b-re3vceuo8c] {
+        max-width: none;
+    }
+}
+
+/* Empty state customization */
+.empty-state i.bx-trip[b-re3vceuo8c] {
+    font-size: 4rem;
+    color: var(--color-primary-light);
+}
+
+/* Search bar enhancements */
+.search-input-wrapper[b-re3vceuo8c] {
+    position: relative;
+    max-width: 500px;
+}
+
+/* Table responsive improvements */
+@media (max-width: 1024px) {
+    .data-table th:nth-child(3)[b-re3vceuo8c],
+    .data-table td:nth-child(3)[b-re3vceuo8c],
+    .data-table th:nth-child(7)[b-re3vceuo8c],
+    .data-table td:nth-child(7)[b-re3vceuo8c] {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .data-table th:nth-child(4)[b-re3vceuo8c],
+    .data-table td:nth-child(4)[b-re3vceuo8c],
+    .data-table th:nth-child(5)[b-re3vceuo8c],
+    .data-table td:nth-child(5)[b-re3vceuo8c] {
+        display: none;
+    }
+}

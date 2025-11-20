@@ -1,0 +1,220 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject ReferenceDataApiService RefDataService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading fuel types...</p>
+    </div>
+}
+else if (_fuelTypes.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-gas-pump"></i>
+        <h3>No fuel types found</h3>
+        <p>Get started by adding your first fuel type</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Fuel Type
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Fuel Type
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Fuel Type Code</th>
+                        <th>Fuel Type Name</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var fuelType in _fuelTypes)
+                    {
+                        <tr>
+                            <td>@fuelType.fuel_type_code</td>
+                            <td>@fuelType.fuel_type_name</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(fuelType)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(fuelType)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showDialog)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>@(_isEdit ? "Edit Fuel Type" : "Add Fuel Type")</h3>
+            </div>
+            <form @onsubmit="SaveFuelType" @onsubmit:preventDefault="true">
+                <div class="modal-body">
+                    <div class="form-field">
+                        <label class="form-label">Fuel Type Name <span class="required">*</span></label>
+                        <input type="text" class="form-input" @bind="_currentFuelType.fuel_type_name" placeholder="e.g., Diesel" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideDialog" disabled="@_saving">Cancel</button>
+                    <button type="submit" class="btn btn-primary" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-sm"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>@(_isEdit ? "Update" : "Create")</span>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>@_currentFuelType.fuel_type_name</strong>?</p>
+                <p class="warning-text">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideDeleteDialog" disabled="@_deleting">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteFuelType" disabled="@_deleting">
+                    @if (_deleting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <i class="bx bx-trash"></i>
+                        <span>Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<FuelTypeDto> _fuelTypes = new();
+    private FuelTypeDto _currentFuelType = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+    private bool _deleting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFuelTypes();
+    }
+
+    private async Task LoadFuelTypes()
+    {
+        _loading = true;
+        _fuelTypes = await RefDataService.GetFuelTypesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentFuelType = new FuelTypeDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(FuelTypeDto fuelType)
+    {
+        _currentFuelType = fuelType with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(FuelTypeDto fuelType)
+    {
+        _currentFuelType = fuelType;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentFuelType = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveFuelType()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await RefDataService.UpdateFuelTypeAsync(_currentFuelType.fuel_type_code, _currentFuelType);
+        }
+        else
+        {
+            success = await RefDataService.CreateFuelTypeAsync(_currentFuelType);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadFuelTypes();
+        }
+    }
+
+    private async Task DeleteFuelType()
+    {
+        _deleting = true;
+        var success = await RefDataService.DeleteFuelTypeAsync(_currentFuelType.fuel_type_code);
+        _deleting = false;
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadFuelTypes();
+        }
+    }
+}

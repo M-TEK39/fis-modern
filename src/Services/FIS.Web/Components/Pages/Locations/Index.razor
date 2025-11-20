@@ -1,0 +1,223 @@
+@page "/locations"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-current-location"></i>
+            Location Management
+        </h1>
+        <p class="page-description">Manage physical locations and geographic references</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Location
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading locations...</p>
+        </div>
+    }
+    else if (_locations.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-current-location"></i>
+            <h3>No locations found</h3>
+            <p>Get started by adding your first location</p>
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Location
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <div class="table-controls">
+                    <button class="btn btn-primary" @onclick="ShowAddDialog">
+                        <i class="bx bx-plus"></i>
+                        Add Location
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Location Name</th>
+                            <th>Address</th>
+                            <th>Coordinates</th>
+                            <th class="actions-column">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var location in _locations)
+                        {
+                            <tr>
+                                <td>@location.LocationName</td>
+                                <td>@location.Address</td>
+                                <td>
+                                    @if (location.Latitude.HasValue && location.Longitude.HasValue)
+                                    {
+                                        <span>@location.Latitude.Value.ToString("F6"), @location.Longitude.Value.ToString("F6")</span>
+                                    }
+                                </td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(location)" title="Edit">
+                                            <i class="bx bx-edit"></i>
+                                            <span>Edit</span>
+                                        </button>
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(location)" title="Delete">
+                                            <i class="bx bx-trash"></i>
+                                            <span>Delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<Modal IsVisible="_showDialog"
+       Title="@(_isEdit ? "Edit Location" : "Add Location")"
+       OnCancel="HideDialog"
+       OnSubmit="SaveLocation"
+       IsSaving="_saving">
+    <div class="form-grid">
+        <div class="form-field">
+            <label class="form-label">Location Name <span class="required">*</span></label>
+            <input type="text" @bind="_currentLocation.LocationName" class="form-input" placeholder="Enter location name" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Address</label>
+            <textarea @bind="_currentLocation.Address" class="form-input" rows="2" placeholder="Enter address"></textarea>
+        </div>
+        <div class="form-field">
+            <label class="form-label">Latitude</label>
+            <input type="number" step="any" @bind="_currentLocation.Latitude" class="form-input" placeholder="e.g. -26.2041" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Longitude</label>
+            <input type="number" step="any" @bind="_currentLocation.Longitude" class="form-input" placeholder="e.g. 28.0473" />
+        </div>
+    </div>
+</Modal>
+
+<ConfirmationModal IsVisible="_showDeleteConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteDialog"
+                  OnConfirm="DeleteLocation"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete <strong>@_currentLocation.LocationName</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
+</ConfirmationModal>
+
+@code {
+    private List<LocationDto> _locations = new();
+    private LocationDto _currentLocation = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+
+    protected override void OnInitialized()
+    {
+        LoadLocations();
+    }
+
+    private void LoadLocations()
+    {
+        _loading = true;
+        try
+        {
+            // Placeholder implementation until API is ready
+            _locations = new List<LocationDto>();
+        }
+        catch
+        {
+            _locations = new List<LocationDto>();
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentLocation = new LocationDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(LocationDto location)
+    {
+        _currentLocation = new LocationDto 
+        { 
+            Id = location.Id,
+            LocationName = location.LocationName,
+            Address = location.Address,
+            Latitude = location.Latitude,
+            Longitude = location.Longitude
+        };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(LocationDto location)
+    {
+        _currentLocation = location;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentLocation = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveLocation()
+    {
+        _saving = true;
+        // Placeholder implementation
+        await Task.Delay(500);
+        _saving = false;
+        HideDialog();
+        LoadLocations();
+    }
+
+    private async Task DeleteLocation()
+    {
+        // Placeholder implementation
+        await Task.Delay(500);
+        HideDeleteDialog();
+        LoadLocations();
+    }
+
+    public class LocationDto
+    {
+        public int Id { get; set; }
+        public string? LocationName { get; set; }
+        public string? Address { get; set; }
+        public decimal? Latitude { get; set; }
+        public decimal? Longitude { get; set; }
+    }
+}

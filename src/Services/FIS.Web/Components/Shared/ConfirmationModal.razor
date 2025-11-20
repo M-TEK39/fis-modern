@@ -1,0 +1,40 @@
+@if (IsVisible)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 class="modal-title">@Title</h3>
+            </div>
+            <div class="modal-body">
+                @ChildContent
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsDeleting">
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-danger" @onclick="OnConfirm" disabled="@IsDeleting">
+                    @if (IsDeleting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>@(DeleteText ?? "Deleting...")</span>
+                    }
+                    else
+                    {
+                        <span>@(ConfirmText ?? "Delete")</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "Confirm Delete";
+    [Parameter] public string? ConfirmText { get; set; }
+    [Parameter] public string? DeleteText { get; set; }
+    [Parameter] public bool IsDeleting { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

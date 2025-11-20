@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>FIS.Data.SqlServer</name>
+    </assembly>
+    <members>
+        <member name="T:FIS.Data.SqlServer.FisDbContext">
+             <summary>
+             FIXED DbContext with PROPER constraints and business rule enforcement
+            
+             CRITICAL FIXES:
+             - Unique constraints preventing duplicate active contracts per vehicle
+             - Proper foreign key relationships with cascading rules
+             - Business rule validation at database level
+             - Fixed data integrity constraints that were disabled in legacy system
+             </summary>
+        </member>
+    </members>
+</doc>

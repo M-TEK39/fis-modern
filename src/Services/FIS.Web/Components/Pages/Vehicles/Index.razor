@@ -1,0 +1,218 @@
+@page "/vehicles"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject NavigationManager Navigation
+
+<PageTitle>Vehicle Master - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-car-mechanic"></i>
+            Vehicle Master
+        </h1>
+        <p class="page-description">Manage fleet vehicles, registrations, and vehicle information</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" @onclick="NavigateToCreate">
+            <i class="bx bx-plus"></i>
+            Add Vehicle
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="search-bar">
+        <div class="search-input-wrapper">
+            <i class="bx bx-search"></i>
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="Search by registration, VIN, or VMF code..."
+                @bind="_searchQuery"
+                @bind:event="oninput"
+                @onkeyup="HandleSearchKeyUp" />
+            @if (!string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                    <i class="bx bx-x"></i>
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading vehicles...</p>
+        </div>
+    }
+    else if (_vehicles.Data.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-car"></i>
+            <h3>No vehicles found</h3>
+            <p>@(_hasSearched ? "Try adjusting your search criteria" : "Get started by adding your first vehicle")</p>
+            @if (!_hasSearched)
+            {
+                <button class="btn btn-primary" @onclick="NavigateToCreate">
+                    <i class="bx bx-plus"></i>
+                    Add Vehicle
+                </button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="vehicle-grid">
+            @foreach (var vehicle in _vehicles.Data)
+            {
+                <article class="vehicle-card" @onclick="() => NavigateToDetail(vehicle.vmf_code)">
+                    <div class="vehicle-card-header">
+                        <div class="vehicle-reg">@vehicle.registration_number</div>
+                        <div class="vehicle-badge">@vehicle.status_description</div>
+                    </div>
+                    <div class="vehicle-card-body">
+                        <div class="vehicle-info">
+                            <span class="vehicle-label">VMF Code:</span>
+                            <span class="vehicle-value">@vehicle.vmf_code</span>
+                        </div>
+                        <div class="vehicle-info">
+                            <span class="vehicle-label">Fleet Number:</span>
+                            <span class="vehicle-value">@vehicle.fleet_number</span>
+                        </div>
+                        <div class="vehicle-info">
+                            <span class="vehicle-label">Model:</span>
+                            <span class="vehicle-value">@vehicle.model_name</span>
+                        </div>
+                        <div class="vehicle-info">
+                            <span class="vehicle-label">Year:</span>
+                            <span class="vehicle-value">@vehicle.year_manufactured</span>
+                        </div>
+                        <div class="vehicle-info">
+                            <span class="vehicle-label">Location:</span>
+                            <span class="vehicle-value">@vehicle.location_description</span>
+                        </div>
+                    </div>
+                    <div class="vehicle-card-footer">
+                        <span class="vehicle-meta">
+                            <i class="bx bx-tachometer"></i>
+                            @((vehicle.current_odo ?? 0).ToString("N0")) km
+                        </span>
+                        <span class="vehicle-meta">
+                            <i class="bx bx-calendar"></i>
+                            @(vehicle.take_on_date?.ToString("yyyy-MM-dd") ?? "N/A")
+                        </span>
+                    </div>
+                </article>
+            }
+        </div>
+
+        @if (_vehicles.TotalPages > 1)
+        {
+            <div class="pagination">
+                <button 
+                    class="pagination-btn" 
+                    @onclick="PreviousPage" 
+                    disabled="@(_vehicles.PageNumber <= 1)">
+                    <i class="bx bx-chevron-left"></i>
+                    Previous
+                </button>
+                
+                <div class="pagination-info">
+                    Page @_vehicles.PageNumber of @_vehicles.TotalPages
+                    <span class="pagination-meta">(@_vehicles.TotalCount vehicles)</span>
+                </div>
+                
+                <button 
+                    class="pagination-btn" 
+                    @onclick="NextPage" 
+                    disabled="@(_vehicles.PageNumber >= _vehicles.TotalPages)">
+                    Next
+                    <i class="bx bx-chevron-right"></i>
+                </button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private PagedResult<VehicleDto> _vehicles = new();
+    private string _searchQuery = string.Empty;
+    private int _currentPage = 1;
+    private const int PageSize = 12;
+    private bool _loading = true;
+    private bool _hasSearched = false;
+    private System.Threading.Timer? _searchTimer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicles();
+    }
+
+    private async Task LoadVehicles()
+    {
+        _loading = true;
+        _vehicles = await VehicleService.GetVehiclesAsync(_currentPage, PageSize, _searchQuery);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void HandleSearchKeyUp(KeyboardEventArgs e)
+    {
+        _searchTimer?.Dispose();
+        _searchTimer = new System.Threading.Timer(async _ =>
+        {
+            _hasSearched = !string.IsNullOrWhiteSpace(_searchQuery);
+            _currentPage = 1;
+            await InvokeAsync(async () =>
+            {
+                await LoadVehicles();
+            });
+        }, null, 500, Timeout.Infinite);
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        _hasSearched = false;
+        _currentPage = 1;
+        await LoadVehicles();
+    }
+
+    private async Task NextPage()
+    {
+        if (_vehicles.PageNumber < _vehicles.TotalPages)
+        {
+            _currentPage++;
+            await LoadVehicles();
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (_vehicles.PageNumber > 1)
+        {
+            _currentPage--;
+            await LoadVehicles();
+        }
+    }
+
+    private void NavigateToDetail(int vmfCode)
+    {
+        Navigation.NavigateTo($"/vehicles/{vmfCode}");
+    }
+
+    private void NavigateToCreate()
+    {
+        Navigation.NavigateTo("/vehicles/create");
+    }
+
+    public void Dispose()
+    {
+        _searchTimer?.Dispose();
+    }
+}

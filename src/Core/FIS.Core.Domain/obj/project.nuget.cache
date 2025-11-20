@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "dgSpecHash": "nEGwKn4PbFhK/0zsWjry6sHZ02wXu0rkMMHCru8jP0UhQ9lOPqgweAbekPue8k1bXZO0fk1HtslE+RrQelsKyQ==",
+  "success": true,
+  "projectFilePath": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj",
+  "expectedPackageFiles": [
+    "/home/dev/work/fis-modern/packages/microsoft.build.tasks.git/1.1.1/microsoft.build.tasks.git.1.1.1.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.configuration.abstractions/8.0.0/microsoft.extensions.configuration.abstractions.8.0.0.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.configuration.binder/8.0.0/microsoft.extensions.configuration.binder.8.0.0.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.dependencyinjection.abstractions/8.0.2/microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.logging.abstractions/8.0.2/microsoft.extensions.logging.abstractions.8.0.2.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.options/8.0.0/microsoft.extensions.options.8.0.0.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.options.configurationextensions/8.0.0/microsoft.extensions.options.configurationextensions.8.0.0.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.extensions.primitives/8.0.0/microsoft.extensions.primitives.8.0.0.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.sourcelink.common/1.1.1/microsoft.sourcelink.common.1.1.1.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/microsoft.sourcelink.github/1.1.1/microsoft.sourcelink.github.1.1.1.nupkg.sha512"
+  ],
+  "logs": []
+}

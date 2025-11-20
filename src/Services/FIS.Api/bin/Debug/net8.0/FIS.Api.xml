@@ -1,0 +1,1356 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>FIS.Api</name>
+    </assembly>
+    <members>
+        <member name="T:FIS.Api.Controllers.ContractsController">
+            <summary>
+            Contract/Hire management API endpoints
+            Provides comprehensive contract operations with legacy business logic
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.Hire(FIS.Api.Controllers.HireContractDto)">
+            <summary>
+            Hire a vehicle (create new contract)
+            Uses ContractService with full validation and journal integration
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.ReturnVehicle(System.Int32,FIS.Api.Controllers.ReturnContractDto)">
+            <summary>
+            Return a vehicle (end active contract by VMF code)
+            Uses ContractService for proper business logic
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.GetActive">
+            <summary>
+            Get all active contracts
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.GetById(System.Int32)">
+            <summary>
+            Get contract by ID
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.CloseContract(System.Int32,FIS.Api.Controllers.CloseContractRequest)">
+            <summary>
+            Close/end a contract by contract code
+            Legacy: CloseContract operation with journal detail reversal
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.ExtendContract(System.Int32,FIS.Api.Controllers.ExtendContractRequest)">
+            <summary>
+            Extend contract target return date
+            Legacy: ExtendContractTargetReturnDate operation
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractsController.CancelContract(System.Int32,FIS.Api.Controllers.CancelContractRequest)">
+            <summary>
+            Cancel a contract
+            Legacy: CancelContract operation
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.ContractStatusController">
+            <summary>
+            API Controller for ContractStatus operations
+            Provides endpoints for managing contract status types
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.GetAllStatuses">
+            <summary>
+            Get all contract statuses
+            </summary>
+            <returns>List of all contract status entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.GetStatus(System.Int16)">
+            <summary>
+            Get contract status by status code
+            </summary>
+            <param name="statusCode">The status code to retrieve</param>
+            <returns>ContractStatus entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.GetStatusByDescription(System.String)">
+            <summary>
+            Get contract status by description
+            </summary>
+            <param name="description">The status description to search for</param>
+            <returns>ContractStatus entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.GetStatusByAbbreviation(System.String)">
+            <summary>
+            Get contract status by abbreviation
+            </summary>
+            <param name="abbreviation">The status abbreviation to search for</param>
+            <returns>ContractStatus entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.GetActiveStatuses">
+            <summary>
+            Get active contract statuses only
+            </summary>
+            <returns>List of active contract status entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.GetFinalStatuses">
+            <summary>
+            Get final contract statuses only
+            </summary>
+            <returns>List of final contract status entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.SearchStatuses(System.String)">
+            <summary>
+            Search contract statuses by partial description match
+            </summary>
+            <param name="searchTerm">The search term to match against descriptions</param>
+            <returns>List of matching contract status entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.CreateStatus(FIS.Api.DTOs.CreateContractStatusDto)">
+            <summary>
+            Create a new contract status
+            </summary>
+            <param name="createStatusDto">The contract status data to create</param>
+            <returns>The created contract status entity</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.UpdateStatus(System.Int16,FIS.Core.Domain.Entities.ContractStatus)">
+            <summary>
+            Update an existing contract status
+            </summary>
+            <param name="statusCode">The status code to update</param>
+            <param name="status">The updated contract status data</param>
+            <returns>The updated contract status entity</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.ContractStatusController.DeleteStatus(System.Int16)">
+            <summary>
+            Delete a contract status
+            </summary>
+            <param name="statusCode">The status code to delete</param>
+            <returns>No content if successful</returns>
+        </member>
+        <member name="T:FIS.Api.Controllers.DTOs.VehicleCreationRequest">
+            <summary>
+            Request for creating a new vehicle with business validation
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.RegistrationNumber">
+            <summary>
+            Vehicle registration number (unique identifier)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.SiteCode">
+            <summary>
+            Site code where vehicle will be based
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.VehicleType">
+            <summary>
+            Vehicle type (V=Vehicle, T=Trailer, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.Make">
+            <summary>
+            Vehicle make (manufacturer)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.Model">
+            <summary>
+            Vehicle model
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.Year">
+            <summary>
+            Year of manufacture
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.Color">
+            <summary>
+            Vehicle color
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.InitialMileage">
+            <summary>
+            Initial mileage/odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.ServiceIntervalMiles">
+            <summary>
+            Service interval in miles (default 10000)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.ServiceIntervalMonths">
+            <summary>
+            Service interval in months (default 12)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleCreationRequest.Notes">
+            <summary>
+            Vehicle notes or special instructions
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.DTOs.OdometerUpdateRequest">
+            <summary>
+            Request for updating vehicle odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.OdometerUpdateRequest.NewOdometer">
+            <summary>
+            New odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.OdometerUpdateRequest.Notes">
+            <summary>
+            Optional notes about the odometer update
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.DTOs.VehicleSearchCriteria">
+            <summary>
+            Search criteria for advanced vehicle filtering
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.Status">
+            <summary>
+            Filter by vehicle status (A=Active, I=Inactive)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.IsAvailable">
+            <summary>
+            Filter by availability status (true for available, false for hired)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.RegistrationNumberSearch">
+            <summary>
+            Search term for registration number (partial match)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.VehicleType">
+            <summary>
+            Filter by vehicle type (V=Vehicle, T=Trailer, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.SiteCode">
+            <summary>
+            Filter by site code
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.MinYear">
+            <summary>
+            Filter by minimum vehicle year
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.MaxYear">
+            <summary>
+            Filter by maximum vehicle year
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.MinMileage">
+            <summary>
+            Filter by mileage range - minimum
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.MaxMileage">
+            <summary>
+            Filter by mileage range - maximum
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.NeedsService">
+            <summary>
+            Filter vehicles that need service based on business rules
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.SortBy">
+            <summary>
+            Sort by field (Registration, Year, Mileage, Status)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.SortDirection">
+            <summary>
+            Sort direction (ASC or DESC)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.DTOs.VehicleSearchCriteria.MaxResults">
+            <summary>
+            Maximum number of results to return (default 100, max 1000)
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.FleetManagementController">
+             <summary>
+             Fleet Management Controller - Modern API with Legacy Database Compatibility
+            
+             Demonstrates how to build modern REST APIs that work seamlessly with 34-year-old legacy systems
+             without requiring database migrations. Showcases "partially run" deployment strategy.
+            
+             Business Logic Features:
+             - Fuel card issuance and management using legacy Fuel_card table
+             - Vehicle-driver allocation using legacy trip_drivers and relationships
+             - Fleet reporting that leverages existing legacy data structures
+             - Modern API patterns with legacy backend compatibility
+             </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.FleetManagementController.IssueFuelCard(FIS.Api.Controllers.IssueFuelCardRequest)">
+            <summary>
+            Issue a new fuel card to a vehicle - Modern API with legacy backend
+            POST /api/fleetmanagement/fuelcards/issue
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.FleetManagementController.ReturnFuelCard(System.Int32,FIS.Api.Controllers.ReturnFuelCardRequest)">
+            <summary>
+            Return/cancel a fuel card - Legacy-compatible status transitions
+            PUT /api/fleetmanagement/fuelcards/{fuelCardCode}/return
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.FleetManagementController.GetFuelCardReport(System.Nullable{System.Int32})">
+            <summary>
+            Get fuel card allocation report - Legacy data with modern analytics
+            GET /api/fleetmanagement/reports/fuelcard-allocation
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.FuelTypeController">
+            <summary>
+            API Controller for FuelType entity operations
+            Provides REST endpoints for vehicle fuel type management
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.GetAllFuelTypes">
+            <summary>
+            Gets all fuel types
+            </summary>
+            <returns>List of all fuel types</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.GetFuelType(System.Int16)">
+            <summary>
+            Gets a fuel type by its code
+            </summary>
+            <param name="id">The fuel type code</param>
+            <returns>The fuel type if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.GetFuelTypeByDescription(System.String)">
+            <summary>
+            Gets a fuel type by its description
+            </summary>
+            <param name="description">The fuel type description</param>
+            <returns>The fuel type if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.SearchFuelTypes(System.String)">
+            <summary>
+            Searches fuel types by description containing the search term
+            </summary>
+            <param name="searchTerm">The search term</param>
+            <returns>List of matching fuel types</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.CreateFuelType(FIS.Api.DTOs.CreateFuelTypeDto)">
+            <summary>
+            Creates a new fuel type
+            </summary>
+            <param name="createFuelTypeDto">The fuel type data to create</param>
+            <returns>The created fuel type</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.UpdateFuelType(System.Int16,FIS.Data.Entities.FuelType)">
+            <summary>
+            Updates an existing fuel type
+            </summary>
+            <param name="id">The fuel type code</param>
+            <param name="fuelType">The fuel type data to update</param>
+            <returns>The updated fuel type</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.FuelTypeController.DeleteFuelType(System.Int16)">
+            <summary>
+            Deletes a fuel type
+            </summary>
+            <param name="id">The fuel type code</param>
+            <returns>No content if successful</returns>
+        </member>
+        <member name="T:FIS.Api.Controllers.LicenseController">
+            <summary>
+            API Controller for License operations
+            Provides endpoints for managing license types and requirements
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.GetAllLicenses">
+            <summary>
+            Get all licenses
+            </summary>
+            <returns>List of all license entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.GetLicense(System.Int16)">
+            <summary>
+            Get license by license code
+            </summary>
+            <param name="licenceCode">The license code to retrieve</param>
+            <returns>License entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.GetLicenseByDescription(System.String)">
+            <summary>
+            Get license by description
+            </summary>
+            <param name="description">The license description to search for</param>
+            <returns>License entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.SearchLicenses(System.String)">
+            <summary>
+            Search licenses by partial description match
+            </summary>
+            <param name="searchTerm">The search term to match against descriptions</param>
+            <returns>List of matching license entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.CreateLicense(FIS.Api.DTOs.CreateLicenseDto)">
+            <summary>
+            Create a new license
+            </summary>
+            <param name="createLicenseDto">The license data to create</param>
+            <returns>The created license entity</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.UpdateLicense(System.Int16,FIS.Core.Domain.Entities.License)">
+            <summary>
+            Update an existing license
+            </summary>
+            <param name="licenceCode">The license code to update</param>
+            <param name="license">The updated license data</param>
+            <returns>The updated license entity</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.LicenseController.DeleteLicense(System.Int16)">
+            <summary>
+            Delete a license
+            </summary>
+            <param name="licenceCode">The license code to delete</param>
+            <returns>No content if successful</returns>
+        </member>
+        <member name="T:FIS.Api.Controllers.LocationController">
+            <summary>
+            API Controller for location management operations
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.GetLocations">
+            <summary>
+            Get all locations
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.GetLocation(System.Int32)">
+            <summary>
+            Get a location by ID
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.GetLocationByName(System.String)">
+            <summary>
+            Get a location by name
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.GetLocationsByCountry(System.String)">
+            <summary>
+            Get locations by country
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.GetLocationsByProvince(System.String)">
+            <summary>
+            Get locations by province/state
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.SearchLocations(System.String)">
+            <summary>
+            Search locations by name, description, city, province, or country
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.CreateLocation(FIS.Core.Domain.Entities.Location)">
+            <summary>
+            Create a new location
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.UpdateLocation(System.Int32,FIS.Core.Domain.Entities.Location)">
+            <summary>
+            Update an existing location
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.LocationController.DeleteLocation(System.Int32)">
+            <summary>
+            Delete a location (soft delete - marks as inactive)
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.MaintenanceRecordController">
+            <summary>
+            API Controller for vehicle maintenance record operations
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.GetMaintenanceRecord(System.Int32)">
+            <summary>
+            Get a maintenance record by ID
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.GetMaintenanceRecordsByVehicle(System.Int32)">
+            <summary>
+            Get all maintenance records for a vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.GetMaintenanceRecordsByDateRange(System.DateTime,System.DateTime)">
+            <summary>
+            Get maintenance records by date range
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.GetMaintenanceRecordsByServiceType(System.String)">
+            <summary>
+            Get maintenance records by service type
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.SearchMaintenanceRecords(System.String)">
+            <summary>
+            Search maintenance records by description, service provider, or work order
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.CreateMaintenanceRecord(FIS.Core.Domain.Entities.MaintenanceRecord)">
+            <summary>
+            Create a new maintenance record
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.UpdateMaintenanceRecord(System.Int32,FIS.Core.Domain.Entities.MaintenanceRecord)">
+            <summary>
+            Update an existing maintenance record
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.DeleteMaintenanceRecord(System.Int32)">
+            <summary>
+            Delete a maintenance record
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceRecordController.GetMaintenanceStats(System.Int32)">
+            <summary>
+            Get maintenance statistics for a vehicle
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.MaintenanceTriggerController">
+            <summary>
+            API Controller for MaintenanceTrigger entity operations
+            Provides REST endpoints for vehicle maintenance trigger management
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.GetAllMaintenanceTriggers">
+            <summary>
+            Gets all maintenance triggers
+            </summary>
+            <returns>List of all maintenance triggers</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.GetMaintenanceTrigger(System.Int16)">
+            <summary>
+            Gets a maintenance trigger by its code
+            </summary>
+            <param name="id">The maintenance trigger code</param>
+            <returns>The maintenance trigger if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.GetMaintenanceTriggerByDescription(System.String)">
+            <summary>
+            Gets a maintenance trigger by its description
+            </summary>
+            <param name="description">The maintenance trigger description</param>
+            <returns>The maintenance trigger if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.GetMaintenanceTriggerByTriggerId(System.String)">
+            <summary>
+            Gets a maintenance trigger by its trigger ID
+            </summary>
+            <param name="triggerId">The trigger ID</param>
+            <returns>The maintenance trigger if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.SearchMaintenanceTriggers(System.String)">
+            <summary>
+            Searches maintenance triggers by description containing the search term
+            </summary>
+            <param name="searchTerm">The search term</param>
+            <returns>List of matching maintenance triggers</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.CreateMaintenanceTrigger(FIS.Api.DTOs.CreateMaintenanceTriggerDto)">
+            <summary>
+            Creates a new maintenance trigger
+            </summary>
+            <param name="createMaintenanceTriggerDto">The maintenance trigger data to create</param>
+            <returns>The created maintenance trigger</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.UpdateMaintenanceTrigger(System.Int16,FIS.Data.Entities.MaintenanceTrigger)">
+            <summary>
+            Updates an existing maintenance trigger
+            </summary>
+            <param name="id">The maintenance trigger code</param>
+            <param name="trigger">The maintenance trigger data to update</param>
+            <returns>The updated maintenance trigger</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MaintenanceTriggerController.DeleteMaintenanceTrigger(System.Int16)">
+            <summary>
+            Deletes a maintenance trigger
+            </summary>
+            <param name="id">The maintenance trigger code</param>
+            <returns>No content if successful</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.GetMakes">
+            <summary>
+            Get all vehicle makes
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.GetMake(System.Int16)">
+            <summary>
+            Get a make by code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.SearchMakes(System.String)">
+            <summary>
+            Search makes by name or code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.GetMakeByName(System.String)">
+            <summary>
+            Get make by name
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.CreateMake(FIS.Api.DTOs.CreateMakeDto)">
+            <summary>
+            Create a new make
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.UpdateMake(System.Int16,FIS.Core.Domain.Entities.Make)">
+            <summary>
+            Update an existing make
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.MakeController.DeleteMake(System.Int16)">
+            <summary>
+            Delete a make
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.GetModels">
+            <summary>
+            Get all vehicle models
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.GetModel(System.Int16)">
+            <summary>
+            Get a model by code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.GetModelsByMake(System.Int16)">
+            <summary>
+            Get all models for a specific make
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.SearchModels(System.String)">
+            <summary>
+            Search models by name or specifications
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.GetModelsByEngineType(System.String)">
+            <summary>
+            Get models by engine type
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.CreateModel(FIS.Core.Domain.Entities.Model)">
+            <summary>
+            Create a new model
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.UpdateModel(System.Int16,FIS.Core.Domain.Entities.Model)">
+            <summary>
+            Update an existing model
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.DeleteModel(System.Int16)">
+            <summary>
+            Delete a model
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.NotificationController">
+            <summary>
+            Email Notification API endpoints
+            Provides fleet-specific notifications and bulk email capabilities
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendEmail(FIS.Api.Controllers.EmailRequest)">
+            <summary>
+            Send basic email
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendHtmlEmail(FIS.Api.Controllers.EmailRequest)">
+            <summary>
+            Send HTML email
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendEmailWithAttachments(FIS.Api.Controllers.EmailWithAttachmentsRequest)">
+            <summary>
+            Send email with attachments
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendMaintenanceReminder(FIS.Api.Controllers.VehicleNotificationRequest)">
+            <summary>
+            Send maintenance reminder for a vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendLicenceReminder(FIS.Api.Controllers.VehicleNotificationRequest)">
+            <summary>
+            Send licence renewal reminder for a vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendCofReminder(FIS.Api.Controllers.VehicleNotificationRequest)">
+            <summary>
+            Send Certificate of Fitness (COF) reminder for a vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendContractExpiryNotification(FIS.Api.Controllers.ContractNotificationRequest)">
+            <summary>
+            Send contract expiry notification
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendVehicleReport(FIS.Api.Controllers.VehicleNotificationRequest)">
+            <summary>
+            Send vehicle report via email
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendTripSummaryReport(FIS.Api.Controllers.DateRangeReportRequest)">
+            <summary>
+            Send trip summary report via email
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendMaintenanceCostReport(FIS.Api.Controllers.DateRangeReportRequest)">
+            <summary>
+            Send maintenance cost report via email
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendFinancialReport(FIS.Api.Controllers.FinancialReportRequest)">
+            <summary>
+            Send financial report via email
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendBulkMaintenanceReminders">
+            <summary>
+            Send bulk maintenance reminders
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendBulkLicenceReminders">
+            <summary>
+            Send bulk licence reminders
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendBulkCofReminders">
+            <summary>
+            Send bulk COF reminders
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.SendBulkContractExpiryNotifications">
+            <summary>
+            Send bulk contract expiry notifications
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.NotificationController.GetEmailServiceStatus">
+            <summary>
+            Get email service configuration status
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.EmailRequest">
+            <summary>
+            Basic email request
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.EmailWithAttachmentsRequest">
+            <summary>
+            Email request with attachments
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.VehicleNotificationRequest">
+            <summary>
+            Vehicle notification request
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.ContractNotificationRequest">
+            <summary>
+            Contract notification request
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.DateRangeReportRequest">
+            <summary>
+            Date range report request
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.FinancialReportRequest">
+            <summary>
+            Financial report request
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.PrivateHireController">
+            <summary>
+            API Controller for private hire vehicle operations
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.GetPrivateHires">
+            <summary>
+            Get all private hire vehicles
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.GetPrivateHire(System.Int32)">
+            <summary>
+            Get a private hire vehicle by code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.GetPrivateHiresByVehicle(System.Int32)">
+            <summary>
+            Get private hires by vehicle VMF code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.GetPrivateHiresByDateRange(System.DateTime,System.DateTime)">
+            <summary>
+            Get private hires by date range
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.SearchPrivateHires(System.String)">
+            <summary>
+            Search private hire vehicles by registration or details
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.CreatePrivateHire(FIS.Core.Domain.Entities.PrivateHire)">
+            <summary>
+            Create a new private hire vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.UpdatePrivateHire(System.Int32,FIS.Core.Domain.Entities.PrivateHire)">
+            <summary>
+            Update an existing private hire vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.PrivateHireController.DeletePrivateHire(System.Int32)">
+            <summary>
+            Delete a private hire vehicle
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.ReportController">
+            <summary>
+            Reporting API endpoints
+            Provides vehicle, financial, maintenance, and trip reports with export capabilities
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetVehicleReport(System.Int32)">
+            <summary>
+            Generate detailed vehicle report
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetVehicleReportPdf(System.Int32)">
+            <summary>
+            Generate vehicle report as PDF
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetMasterFileReport(System.Nullable{System.Int32})">
+            <summary>
+            Generate master file report for all vehicles
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetUniversalReport(FIS.Core.Application.Interfaces.UniversalReportRequest)">
+            <summary>
+            Generate universal vehicle report with custom filters
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetServiceHistory(System.Int32)">
+            <summary>
+            Generate service history report for a vehicle
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetMaintenanceCostReport(System.Nullable{System.Int32},System.DateTime,System.DateTime)">
+            <summary>
+            Generate maintenance cost report
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetBillingHistory(System.Int32,System.Int32)">
+            <summary>
+            Generate vehicle billing history
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetContractBilling(System.Int32,System.DateTime,System.DateTime)">
+            <summary>
+            Generate contract billing report
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetTripSummary(System.Nullable{System.Int32},System.DateTime,System.DateTime)">
+            <summary>
+            Generate trip summary report
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetTripDetail(System.Int32)">
+            <summary>
+            Generate trip detail report
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetContractSummary(System.Nullable{System.Int32})">
+            <summary>
+            Generate contract summary report
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetAuthorityReport(System.Int32)">
+            <summary>
+            Generate authority report for contract
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.ExportToCsv(FIS.Api.Controllers.ExportRequest)">
+            <summary>
+            Export data to CSV
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.ExportToExcel(FIS.Api.Controllers.ExportRequest)">
+            <summary>
+            Export data to Excel
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ReportController.GetAvailableReports">
+            <summary>
+            Get list of available report definitions
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.ExportRequest">
+            <summary>
+            Export request model
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.TariffController">
+            <summary>
+            Tariff calculation API endpoints
+            Provides access to the comprehensive tariff calculation system
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TariffController.GetContractTariff(System.Int32,System.Nullable{System.DateTime},System.String)">
+            <summary>
+            Calculate tariff for a contract
+            </summary>
+            <param name="contractCode">Contract identifier</param>
+            <param name="checkDate">Date to check tariff for</param>
+            <param name="tariffType">Type of tariff (Fixed or Kilos)</param>
+            <returns>Tariff result with amount and status</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TariffController.CalculateTariff(FIS.Api.Controllers.TariffCalculationRequest)">
+            <summary>
+            Calculate tariff for a vehicle with full parameters
+            </summary>
+            <param name="request">Tariff calculation request</param>
+            <returns>Tariff result</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TariffController.CheckGGMTInternal(System.Int16,System.Int32)">
+            <summary>
+            Check if site/department is GGMT internal (should not be billed)
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TariffController.CheckVehicleMissing(System.Int32)">
+            <summary>
+            Check if vehicle is missing (should return 0.00 tariff)
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TariffController.CheckLeaseProRated(System.DateTime)">
+            <summary>
+            Check if lease contract should be pro-rated to 0.00
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.TariffCalculationRequest">
+            <summary>
+            Request model for tariff calculation
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.TripDriverController">
+            <summary>
+            API Controller for trip driver assignment operations
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.GetTripDrivers">
+            <summary>
+            Get all trip drivers
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.GetTripDriver(System.Int32)">
+            <summary>
+            Get a trip driver by code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.GetTripDriversBySite(System.Int32)">
+            <summary>
+            Get trip drivers by site
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.GetPrimaryDrivers">
+            <summary>
+            Get primary drivers only
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.SearchTripDrivers(System.String)">
+            <summary>
+            Search trip drivers by name or ID
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.CreateTripDriver(FIS.Core.Domain.Entities.TripDriver)">
+            <summary>
+            Create a new trip driver
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.UpdateTripDriver(System.Int32,FIS.Core.Domain.Entities.TripDriver)">
+            <summary>
+            Update an existing trip driver
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TripDriverController.DeleteTripDriver(System.Int32)">
+            <summary>
+            Delete a trip driver
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.TypeController">
+            <summary>
+            API Controller for vehicle type operations
+            Provides endpoints for managing vehicle types/classifications
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.GetAllTypes">
+            <summary>
+            Gets all vehicle types
+            </summary>
+            <returns>List of all vehicle types</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.GetType(System.Int16)">
+            <summary>
+            Gets a specific vehicle type by code
+            </summary>
+            <param name="id">The type code</param>
+            <returns>Type details if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.GetTypeByName(System.String)">
+            <summary>
+            Gets a specific vehicle type by name
+            </summary>
+            <param name="name">The type name/description</param>
+            <returns>Type details if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.SearchTypes(System.String)">
+            <summary>
+            Searches vehicle types by description
+            </summary>
+            <param name="searchTerm">The term to search for in type descriptions</param>
+            <returns>List of matching types</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.CreateType(FIS.Api.DTOs.CreateTypeDto)">
+            <summary>
+            Creates a new vehicle type
+            </summary>
+            <param name="createTypeDto">The type data to create</param>
+            <returns>Created type with assigned code</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.UpdateType(System.Int16,FIS.Data.Entities.Type)">
+            <summary>
+            Updates an existing vehicle type
+            </summary>
+            <param name="id">The type code to update</param>
+            <param name="type">The updated type data</param>
+            <returns>Updated type data</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.TypeController.DeleteType(System.Int16)">
+            <summary>
+            Deletes a vehicle type
+            </summary>
+            <param name="id">The type code to delete</param>
+            <returns>No content if successful</returns>
+        </member>
+        <member name="T:FIS.Api.Controllers.UnitOfMeasureController">
+            <summary>
+            API Controller for UnitOfMeasure operations
+            Provides endpoints for managing units of measurement
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.GetAllUnits">
+            <summary>
+            Get all units of measure
+            </summary>
+            <returns>List of all unit of measure entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.GetUnit(System.Int16)">
+            <summary>
+            Get unit of measure by unit code
+            </summary>
+            <param name="unitCode">The unit code to retrieve</param>
+            <returns>UnitOfMeasure entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.GetUnitByDescription(System.String)">
+            <summary>
+            Get unit of measure by description
+            </summary>
+            <param name="description">The unit description to search for</param>
+            <returns>UnitOfMeasure entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.GetUnitByAbbreviation(System.String)">
+            <summary>
+            Get unit of measure by abbreviation
+            </summary>
+            <param name="abbreviation">The unit abbreviation to search for</param>
+            <returns>UnitOfMeasure entity if found</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.GetUnitsByCategory(System.String)">
+            <summary>
+            Get units of measure by category
+            </summary>
+            <param name="category">The unit category to filter by</param>
+            <returns>List of units in the specified category</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.SearchUnits(System.String)">
+            <summary>
+            Search units of measure by partial description match
+            </summary>
+            <param name="searchTerm">The search term to match against descriptions</param>
+            <returns>List of matching unit of measure entities</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.CreateUnit(FIS.Api.DTOs.CreateUnitOfMeasureDto)">
+            <summary>
+            Create a new unit of measure
+            </summary>
+            <param name="createUnitDto">The unit of measure data to create</param>
+            <returns>The created unit of measure entity</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.UpdateUnit(System.Int16,FIS.Core.Domain.Entities.UnitOfMeasure)">
+            <summary>
+            Update an existing unit of measure
+            </summary>
+            <param name="unitCode">The unit code to update</param>
+            <param name="unit">The updated unit of measure data</param>
+            <returns>The updated unit of measure entity</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.UnitOfMeasureController.DeleteUnit(System.Int16)">
+            <summary>
+            Delete a unit of measure
+            </summary>
+            <param name="unitCode">The unit code to delete</param>
+            <returns>No content if successful</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.VehiclesController.GetVehicles">
+            <summary>
+            Get all vehicles
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.VehiclesController.GetVehicle(System.Int32)">
+            <summary>
+            Get a vehicle by VMF code
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.VehiclesController.SearchVehicles(System.String)">
+            <summary>
+            Search vehicles by term (fleet number, registration, etc.)
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.VehiclesController.GetVehicleByFleetNumber(System.String)">
+            <summary>
+            Get vehicle by fleet number
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.VehiclesController.GetDatabaseStatus">
+            <summary>
+            Get database connection status and basic counts
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.VehiclesController.GetServiceAlerts">
+            <summary>
+            Get vehicles that need service based on business rules
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.VehicleCreationApiRequest">
+            <summary>
+            API request for creating a new vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.FleetNumber">
+            <summary>
+            Fleet number (unique identifier for the vehicle)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.RegistrationNumber">
+            <summary>
+            Vehicle registration number
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.SiteCode">
+            <summary>
+            Site code where vehicle will be based
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.ModelCode">
+            <summary>
+            Vehicle model code (optional - defaults to 1)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.TypeCode">
+            <summary>
+            Vehicle type code (optional - defaults to 1)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.Year">
+            <summary>
+            Year of manufacture
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.InitialMileage">
+            <summary>
+            Initial mileage/odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.ChassisNumber">
+            <summary>
+            Chassis number
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.EngineNumber">
+            <summary>
+            Engine number
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.PurchaseDate">
+            <summary>
+            Purchase date
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.VehicleCreationApiRequest.PurchaseAmount">
+            <summary>
+            Purchase amount
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Controllers.UpdateOdometerDto">
+            <summary>
+            DTO for odometer update requests
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.UpdateOdometerDto.NewOdometer">
+            <summary>
+            New odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Api.Controllers.UpdateOdometerDto.Notes">
+            <summary>
+            Optional notes about the odometer update
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateContractStatusDto">
+            <summary>
+            Data Transfer Object for creating new ContractStatus entities
+            Used in API endpoints to transfer contract status creation data
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateContractStatusDto.status_description">
+            <summary>
+            Contract status description (Active, Completed, Cancelled, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateContractStatusDto.status_abbreviation">
+            <summary>
+            Optional status abbreviation
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateContractStatusDto.is_active">
+            <summary>
+            Indicates if this status means the contract is active
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateContractStatusDto.is_final">
+            <summary>
+            Indicates if this status means the contract is finalized/closed
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateMakeDto">
+            <summary>
+            DTO for creating a new Make entity
+            Excludes auto-generated ID fields
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateMakeDto.make_description">
+            <summary>
+            Make description/name (Toyota, Ford, BMW, etc.)
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateTypeDto">
+            <summary>
+            DTO for creating a new Type entity
+            Excludes auto-generated ID fields
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateTypeDto.type_description">
+            <summary>
+            Description of the vehicle type (e.g., "Car", "Van", "Truck", "Motorcycle")
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateFuelTypeDto">
+            <summary>
+            DTO for creating a new FuelType entity
+            Excludes auto-generated ID fields
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateFuelTypeDto.fuel_description">
+            <summary>
+            Description of the fuel type (e.g., "Petrol", "Diesel", "Electric", "Hybrid")
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateMaintenanceTriggerDto">
+            <summary>
+            DTO for creating a new MaintenanceTrigger entity
+            Excludes auto-generated ID fields
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateMaintenanceTriggerDto.description">
+            <summary>
+            Description of the maintenance trigger (e.g., "Mileage Based", "Time Based", "Hours Based")
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateMaintenanceTriggerDto.trigger_id">
+            <summary>
+            Trigger identifier code for the maintenance system
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateLicenseDto">
+            <summary>
+            Data Transfer Object for creating new License entities
+            Used in API endpoints to transfer license creation data
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateLicenseDto.licence_description">
+            <summary>
+            License type description (Driver's License, Commercial License, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateLicenseDto.licence_category">
+            <summary>
+            Optional license category code
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.CreateUnitOfMeasureDto">
+            <summary>
+            Data Transfer Object for creating new UnitOfMeasure entities
+            Used in API endpoints to transfer unit of measure creation data
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateUnitOfMeasureDto.unit_description">
+            <summary>
+            Unit of measure description (Kilometers, Miles, Liters, Gallons, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateUnitOfMeasureDto.unit_abbreviation">
+            <summary>
+            Optional short abbreviation (km, mi, L, gal, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Api.DTOs.CreateUnitOfMeasureDto.unit_category">
+            <summary>
+            Unit category (Distance, Volume, Weight, etc.)
+            </summary>
+        </member>
+        <member name="T:FIS.Api.Services.FuelCardManagementService">
+             <summary>
+             Fuel Card Management Service - Legacy Compatible Business Logic
+            
+             Demonstrates how to create modern business logic that works with legacy database schemas
+             without requiring migrations. Uses real legacy Fuel_card table structure.
+            
+             Key Legacy Compatibility Patterns:
+             - Works with existing CHAR fields and legacy naming conventions
+             - Handles legacy business rules (ExpReason values, status transitions)
+             - Preserves legacy audit trail and workflow patterns
+             - Uses vmf_code for vehicle relationships (not modern foreign keys)
+             </summary>
+        </member>
+        <member name="M:FIS.Api.Services.FuelCardManagementService.IssueFuelCardAsync(System.Int32,System.String,System.String,System.Int32)">
+            <summary>
+            Issue a new fuel card to a vehicle using legacy workflow patterns
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Services.FuelCardManagementService.ReturnFuelCardAsync(System.Int32,System.String)">
+            <summary>
+            Return/cancel a fuel card using legacy status transition patterns
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Services.FuelCardManagementService.GetAllocationReportAsync(System.Nullable{System.Int32})">
+            <summary>
+            Get fuel card allocation report using legacy data patterns
+            </summary>
+        </member>
+    </members>
+</doc>

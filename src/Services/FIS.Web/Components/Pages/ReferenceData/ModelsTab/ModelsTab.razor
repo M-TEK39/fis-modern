@@ -1,0 +1,178 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject ReferenceDataApiService RefDataService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading models...</p>
+    </div>
+}
+else if (_models.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-cog"></i>
+        <h3>No models found</h3>
+        <p>Get started by adding your first vehicle model</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Model
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Model
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Model Code</th>
+                        <th>Model Name</th>
+                        <th>Make</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var model in _models)
+                    {
+                        <tr>
+                            <td>@model.model_code</td>
+                            <td>@model.model_name</td>
+                            <td>@(model.make_name ?? "N/A")</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(model)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                        <span>Edit</span>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(model)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                        <span>Delete</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<Modal IsVisible="_showDialog"
+       Title="@(_isEdit ? "Edit Model" : "Add Model")"
+       OnCancel="HideDialog"
+       OnSubmit="SaveModel"
+       IsSaving="_saving">
+    <div class="form-field">
+        <label class="form-label">Model Name <span class="required">*</span></label>
+        <input type="text" class="form-input" @bind="_currentModel.model_name" placeholder="e.g., Corolla" />
+    </div>
+</Modal>
+
+<ConfirmationModal IsVisible="_showDeleteConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteDialog"
+                  OnConfirm="DeleteModel"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete <strong>@_currentModel.model_name</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
+</ConfirmationModal>
+
+@code {
+    private List<ModelDto> _models = new();
+    private ModelDto _currentModel = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadModels();
+    }
+
+    private async Task LoadModels()
+    {
+        _loading = true;
+        _models = await RefDataService.GetModelsAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentModel = new ModelDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(ModelDto model)
+    {
+        _currentModel = model with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(ModelDto model)
+    {
+        _currentModel = model;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentModel = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveModel()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await RefDataService.UpdateModelAsync(_currentModel.model_code, _currentModel);
+        }
+        else
+        {
+            success = await RefDataService.CreateModelAsync(_currentModel);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadModels();
+        }
+    }
+
+    private async Task DeleteModel()
+    {
+        var success = await RefDataService.DeleteModelAsync(_currentModel.model_code);
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadModels();
+        }
+    }
+}

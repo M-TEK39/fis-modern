@@ -1,0 +1,319 @@
+@page "/contracts"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@using ContractModel = FIS.Web.Models.ContractDto
+@inject VehicleApiService VehicleService
+@inject DepartmentApiService DepartmentService
+@inject ContractApiService ContractService
+
+<PageTitle>Contract Management - Fleet Information System</PageTitle>
+
+<div class="page-container">
+    <div class="page-header">
+        <div class="page-title-section">
+            <h1>
+                <i class="bx bx-file"></i>
+                Contract Management
+            </h1>
+            <p>Manage vehicle contracts, assignments, and contract maintenance</p>
+        </div>
+        <div class="page-actions">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                New Contract
+            </button>
+        </div>
+    </div>
+
+    <div class="page-content">
+        <ContractSearchBar SearchTerm="_searchTerm" OnSearchChange="OnSearchChange" />
+        
+        <ContractsTable 
+            Contracts="_filteredContracts"
+            Loading="_loading"
+            HasSearchTerm="@(!string.IsNullOrWhiteSpace(_searchTerm))"
+            OnAddContract="ShowAddDialog"
+            OnRefresh="RefreshData"
+            OnView="ViewContract"
+            OnEdit="ShowEditDialog"
+            OnDelete="ShowDeleteDialog" />
+    </div>
+</div>
+
+@* Modal for Add/Edit Contract *@
+@if (_showAddDialog || _showEditDialog)
+{
+    <Modal IsVisible="true" 
+           Title="@(_showEditDialog ? "Edit Contract" : "New Contract")" 
+           Size="Modal.ModalSize.Large"
+           OnCancel="CloseDialogs"
+           OnSubmit="SaveContract">
+        <ChildContent>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Contract Number</label>
+                    <input type="text" @bind="_currentContract.contract_number" class="form-input" placeholder="Enter contract number" />
+                </div>
+                
+                <div class="form-group">
+                    <label>Vehicle</label>
+                    <select @bind="_currentContract.vehicle_registration" class="form-input">
+                        <option value="">Select Vehicle</option>
+                        @foreach (var vehicle in _vehicles)
+                        {
+                            <option value="@vehicle.registration_number">@vehicle.registration_number - @vehicle.model_name</option>
+                        }
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Department</label>
+                    <select @bind="_currentContract.department_code" class="form-input">
+                        <option value="0">Select Department</option>
+                        @foreach (var dept in _departments)
+                        {
+                            <option value="@dept.department_code">@dept.department_description</option>
+                        }
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Contractor Name</label>
+                    <input type="text" @bind="_currentContract.contractor_name" class="form-input" placeholder="Enter contractor name" />
+                </div>
+                
+                <div class="form-group">
+                    <label>Start Date</label>
+                    <input type="date" @bind="_currentContract.start_date" class="form-input" />
+                </div>
+                
+                <div class="form-group">
+                    <label>End Date</label>
+                    <input type="date" @bind="_currentContract.end_date" class="form-input" />
+                </div>
+                
+                <div class="form-group">
+                    <label>Monthly Cost (R)</label>
+                    <input type="number" step="0.01" @bind="_currentContract.monthly_cost" class="form-input" placeholder="0.00" />
+                </div>
+                
+                <div class="form-group">
+                    <label>Status</label>
+                    <select @bind="_currentContract.status" class="form-input">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Expired">Expired</option>
+                        <option value="Pending">Pending</option>
+                    </select>
+                </div>
+                
+                <div class="form-group form-group-full">
+                    <label>Contract Notes</label>
+                    <textarea @bind="_currentContract.contract_notes" class="form-input" rows="3" placeholder="Enter contract notes or special terms"></textarea>
+                </div>
+            </div>
+        </ChildContent>
+    </Modal>
+}
+
+@code {
+    // State management
+    private bool _loading = true;
+    private bool _showAddDialog = false;
+    private bool _showEditDialog = false;
+    private string _searchTerm = "";
+
+    // Data collections
+    private List<ContractModel> _contracts = new();
+    private List<ContractModel> _filteredContracts = new();
+    private List<VehicleDto> _vehicles = new();
+    private List<DepartmentDto> _departments = new();
+    
+    // Current contract for add/edit
+    private ContractModel _currentContract = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            // Mock data for now - replace with actual API calls when available
+            await Task.CompletedTask; // Remove this when replacing with real API calls
+            
+            _contracts = new List<ContractModel>
+            {
+                new() { 
+                    contract_id = 1, 
+                    contract_number = "CON-2024-001", 
+                    vehicle_registration = "GP123ABC",
+                    vehicle_make = "Toyota", 
+                    vehicle_model = "Camry 2020",
+                    Vehicle = new VehicleDto { registration_number = "GP123ABC", model_name = "Toyota Camry 2020" },
+                    department_name = "IT Department",
+                    Department = new DepartmentDto { department_code = 1, department_description = "IT Department" },
+                    start_date = DateTime.Now.AddMonths(-6), 
+                    end_date = DateTime.Now.AddMonths(6),
+                    monthly_cost = 8500,
+                    status = "Active"
+                },
+                new() { 
+                    contract_id = 2, 
+                    contract_number = "CON-2024-002", 
+                    vehicle_registration = "GP456DEF",
+                    vehicle_make = "Ford", 
+                    vehicle_model = "Ranger 2019",
+                    Vehicle = new VehicleDto { registration_number = "GP456DEF", model_name = "Ford Ranger 2019" },
+                    department_name = "Operations Department",
+                    Department = new DepartmentDto { department_code = 2, department_description = "Operations Department" },
+                    start_date = DateTime.Now.AddMonths(-12), 
+                    end_date = DateTime.Now.AddMonths(-2),
+                    monthly_cost = 12000,
+                    status = "Expired"
+                }
+            };
+
+            _vehicles = new List<VehicleDto>
+            {
+                new() { vmf_code = 1, registration_number = "GP123ABC", model_name = "Toyota Camry 2020" },
+                new() { vmf_code = 2, registration_number = "GP456DEF", model_name = "Ford Ranger 2019" },
+                new() { vmf_code = 3, registration_number = "GP789GHI", model_name = "Nissan Navara 2021" }
+            };
+
+            _departments = new List<DepartmentDto>
+            {
+                new() { department_code = 1, department_description = "IT Department" },
+                new() { department_code = 2, department_description = "Operations Department" },
+                new() { department_code = 3, department_description = "Finance Department" }
+            };
+
+            FilterContracts();
+        }
+        catch (Exception ex)
+        {
+            // Handle error
+            Console.WriteLine($"Error loading data: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnSearchChange(string searchTerm)
+    {
+        _searchTerm = searchTerm;
+        FilterContracts();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void FilterContracts()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredContracts = _contracts.ToList();
+        }
+        else
+        {
+            var searchLower = _searchTerm.ToLower();
+            _filteredContracts = _contracts.Where(c =>
+                c.contract_number.ToLower().Contains(searchLower) ||
+                c.vehicle_registration.ToLower().Contains(searchLower) ||
+                c.department_name.ToLower().Contains(searchLower) ||
+                (c.contractor_name?.ToLower().Contains(searchLower) == true)
+            ).ToList();
+        }
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentContract = new ContractModel 
+        { 
+            start_date = DateTime.Today,
+            status = "Active"
+        };
+        _showAddDialog = true;
+    }
+
+    private void ShowEditDialog(ContractModel contract)
+    {
+        _currentContract = new ContractModel
+        {
+            contract_id = contract.contract_id,
+            contract_number = contract.contract_number,
+            vehicle_registration = contract.vehicle_registration,
+            vehicle_make = contract.vehicle_make,
+            vehicle_model = contract.vehicle_model,
+            department_code = contract.department_code,
+            department_name = contract.department_name,
+            contractor_name = contract.contractor_name,
+            start_date = contract.start_date,
+            end_date = contract.end_date,
+            monthly_cost = contract.monthly_cost,
+            status = contract.status,
+            contract_notes = contract.contract_notes ?? ""
+        };
+        _showEditDialog = true;
+    }
+
+    private void ViewContract(ContractModel contract)
+    {
+        // For now, just edit
+        ShowEditDialog(contract);
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+    }
+
+    private void SaveContract()
+    {
+        try
+        {
+            if (_showAddDialog)
+            {
+                // Mock create
+                _currentContract.contract_id = _contracts.Count + 1;
+                _contracts.Add(_currentContract);
+            }
+            else
+            {
+                // Mock update
+                var index = _contracts.FindIndex(c => c.contract_id == _currentContract.contract_id);
+                if (index >= 0)
+                {
+                    _contracts[index] = _currentContract;
+                }
+            }
+            
+            FilterContracts();
+            CloseDialogs();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving contract: {ex.Message}");
+        }
+    }
+
+    private void ShowDeleteDialog(ContractModel contract)
+    {
+        // Mock delete
+        _contracts.RemoveAll(c => c.contract_id == contract.contract_id);
+        FilterContracts();
+    }
+
+    private void CloseDialogs()
+    {
+        _showAddDialog = false;
+        _showEditDialog = false;
+        _currentContract = new ContractModel();
+    }
+}

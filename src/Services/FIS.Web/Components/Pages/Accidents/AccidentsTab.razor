@@ -1,0 +1,166 @@
+@using FIS.Web.Models
+@using FIS.Web.Services
+
+<div class="accidents-tab">
+    <div class="search-bar">
+        <div class="search-input-wrapper">
+            <i class="bx bx-search"></i>
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="Search accidents by vehicle, reference number, or description..." 
+                @bind="SearchTerm" 
+                @oninput="OnSearchInput" />
+            @if (!string.IsNullOrWhiteSpace(SearchTerm))
+            {
+                <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                    <i class="bx bx-x"></i>
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (Loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading accidents...</p>
+        </div>
+    }
+    else if (FilteredAccidents.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-car-crash"></i>
+            <h3>No accidents found</h3>
+            <p>@(SearchTerm?.Length > 0 ? "No accidents match your search criteria" : "No accidents have been reported yet")</p>
+            @if (SearchTerm?.Length == 0)
+            {
+                <button class="btn btn-primary" @onclick="OnAddAccident">
+                    <i class="bx bx-plus"></i>
+                    Report New Accident
+                </button>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@FilteredAccidents.Count Accident(s)</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="OnRefresh" title="Refresh">
+                        <i class="bx bx-refresh"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Ref Number</th>
+                            <th>Date</th>
+                            <th>Vehicle</th>
+                            <th>Location</th>
+                            <th>Severity</th>
+                            <th>Repair Cost</th>
+                            <th>Third Party</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var accident in FilteredAccidents)
+                        {
+                            <tr>
+                                <td class="ref-number">@accident.accident_reference</td>
+                                <td class="accident-date">@accident.accident_date.ToString("dd MMM yyyy")</td>
+                                <td class="vehicle-info">
+                                    <span class="vehicle-reg">@accident.vehicle_registration</span>
+                                    <span class="vehicle-details">@accident.vehicle_description</span>
+                                </td>
+                                <td class="location">@accident.accident_location</td>
+                                <td class="severity">
+                                    <span class="severity-badge @GetSeverityClass(accident.severity)">
+                                        @accident.severity
+                                    </span>
+                                </td>
+                                <td class="cost">R @accident.cost_of_repair?.ToString("N2")</td>
+                                <td class="cost">R @accident.third_party_claim?.ToString("N2")</td>
+                                <td class="status">
+                                    <span class="status-badge @GetStatusClass(accident.status)">
+                                        @accident.status
+                                    </span>
+                                </td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-view" @onclick="() => OnView.InvokeAsync(accident)" title="View Details">
+                                            <i class="bx bx-show"></i>
+                                            <span>View</span>
+                                        </button>
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => OnEdit.InvokeAsync(accident)" title="Edit">
+                                            <i class="bx bx-edit"></i>
+                                            <span>Edit</span>
+                                        </button>
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => OnDelete.InvokeAsync(accident)" title="Delete">
+                                            <i class="bx bx-trash"></i>
+                                            <span>Delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public List<AccidentDto> FilteredAccidents { get; set; } = new();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string SearchTerm { get; set; } = "";
+    [Parameter] public EventCallback<string> OnSearchChange { get; set; }
+    [Parameter] public EventCallback OnAddAccident { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback<AccidentDto> OnView { get; set; }
+    [Parameter] public EventCallback<AccidentDto> OnEdit { get; set; }
+    [Parameter] public EventCallback<AccidentDto> OnDelete { get; set; }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        SearchTerm = e.Value?.ToString() ?? "";
+        await OnSearchChange.InvokeAsync(SearchTerm);
+    }
+
+    private async Task ClearSearch()
+    {
+        SearchTerm = "";
+        await OnSearchChange.InvokeAsync(SearchTerm);
+    }
+
+    private string GetSeverityClass(string severity)
+    {
+        return severity?.ToLower() switch
+        {
+            "minor" => "severity-minor",
+            "moderate" => "severity-moderate", 
+            "major" => "severity-major",
+            "total loss" => "severity-critical",
+            _ => "severity-default"
+        };
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "reported" => "status-warning",
+            "under investigation" => "status-info",
+            "repairs in progress" => "status-warning",
+            "completed" => "status-success",
+            "closed" => "status-success",
+            _ => "status-default"
+        };
+    }
+}

@@ -1,0 +1,352 @@
+@page "/vehicles/{VmfCode:int}"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject NavigationManager Navigation
+
+<PageTitle>Vehicle Details - Fleet Information System</PageTitle>
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading vehicle details...</p>
+    </div>
+}
+else if (_vehicle == null)
+{
+    <div class="error-state">
+        <i class="bx bx-error-circle"></i>
+        <h3>Vehicle not found</h3>
+        <p>The vehicle with VMF code @VmfCode could not be found.</p>
+        <button class="btn btn-primary" @onclick="NavigateToList">
+            <i class="bx bx-arrow-back"></i>
+            Back to Vehicles
+        </button>
+    </div>
+}
+else
+{
+    <div class="detail-header">
+        <div class="breadcrumb">
+            <button class="breadcrumb-link" @onclick="NavigateToList">
+                <i class="bx bx-chevron-left"></i>
+                Vehicles
+            </button>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-current">@_vehicle.registration_number</span>
+        </div>
+        
+        <div class="detail-actions">
+            <button class="btn btn-secondary" @onclick="() => NavigateToEdit(_vehicle.vmf_code)">
+                <i class="bx bx-edit"></i>
+                Edit Vehicle
+            </button>
+            <button class="btn btn-danger" @onclick="ShowDeleteConfirmation">
+                <i class="bx bx-trash"></i>
+                Delete
+            </button>
+        </div>
+    </div>
+
+    <div class="detail-content">
+        <div class="detail-card primary-card">
+            <div class="card-header">
+                <div class="vehicle-title">
+                    <h1 class="vehicle-reg">@_vehicle.registration_number</h1>
+                    <span class="vehicle-badge">@_vehicle.status_description</span>
+                </div>
+                <div class="vehicle-subtitle">
+                    VMF Code: @_vehicle.vmf_code | Fleet Number: @_vehicle.fleet_number
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <div class="detail-grid">
+                    <div class="detail-section">
+                        <h3 class="section-title">
+                            <i class="bx bx-info-circle"></i>
+                            Identification
+                        </h3>
+                        <div class="detail-fields">
+                            <div class="detail-field">
+                                <span class="field-label">Fleet Number (GG)</span>
+                                <span class="field-value">@(_vehicle.fleet_number ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Registration (GP)</span>
+                                <span class="field-value">@(_vehicle.registration_number ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Asset Number</span>
+                                <span class="field-value">@(_vehicle.asset_number ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Chassis Number</span>
+                                <span class="field-value">@(_vehicle.chassis_number ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Engine Number</span>
+                                <span class="field-value">@(_vehicle.engine_number_1 ?? "N/A")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">
+                            <i class="bx bx-car"></i>
+                            Vehicle Specifications
+                        </h3>
+                        <div class="detail-fields">
+                            <div class="detail-field">
+                                <span class="field-label">Model</span>
+                                <span class="field-value">@(_vehicle.model_name ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Type</span>
+                                <span class="field-value">@(_vehicle.type_name ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Year Manufactured</span>
+                                <span class="field-value">@(_vehicle.year_manufactured?.ToString() ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Colour</span>
+                                <span class="field-value">@(_vehicle.colour ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Transmission</span>
+                                <span class="field-value">@(_vehicle.transmission ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Tare (kg)</span>
+                                <span class="field-value">@(_vehicle.tare?.ToString("N0") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">GVM (kg)</span>
+                                <span class="field-value">@(_vehicle.gvm?.ToString("N0") ?? "N/A")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">
+                            <i class="bx bx-tachometer"></i>
+                            Odometer & Dates
+                        </h3>
+                        <div class="detail-fields">
+                            <div class="detail-field">
+                                <span class="field-label">Take On Date</span>
+                                <span class="field-value">@(_vehicle.take_on_date?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Take On Odo</span>
+                                <span class="field-value">@((_vehicle.take_on_odo ?? 0).ToString("N0")) km</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Current Odo</span>
+                                <span class="field-value">@((_vehicle.current_odo ?? 0).ToString("N0")) km</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Odo Last Updated</span>
+                                <span class="field-value">@(_vehicle.odo_update_date?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Status</span>
+                                <span class="field-value">@(_vehicle.status_description ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Location</span>
+                                <span class="field-value">@(_vehicle.location_description ?? "N/A")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">
+                            <i class="bx bx-credit-card"></i>
+                            Cards & Licensing
+                        </h3>
+                        <div class="detail-fields">
+                            <div class="detail-field">
+                                <span class="field-label">Fuel Card Number</span>
+                                <span class="field-value">@(_vehicle.fuel_card_number ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Fuel Card Date</span>
+                                <span class="field-value">@(_vehicle.fuel_card_date?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Maint Card Number</span>
+                                <span class="field-value">@(_vehicle.maint_card_number ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Maint Card Expiry</span>
+                                <span class="field-value">@(_vehicle.maint_card_exdate?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Licence Due Date</span>
+                                <span class="field-value">@(_vehicle.licence_due_date?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">
+                            <i class="bx bx-wallet"></i>
+                            Financial Information
+                        </h3>
+                        <div class="detail-fields">
+                            <div class="detail-field">
+                                <span class="field-label">Purchase Date</span>
+                                <span class="field-value">@(_vehicle.purchase_date?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Purchase Amount</span>
+                                <span class="field-value">@(_vehicle.purchase_amount?.ToString("C") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Purchased From</span>
+                                <span class="field-value">@(_vehicle.purchased_from ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Book Value</span>
+                                <span class="field-value">@(_vehicle.book_value?.ToString("C") ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Book Value Date</span>
+                                <span class="field-value">@(_vehicle.book_value_date?.ToString("dd MMM yyyy") ?? "N/A")</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <h3 class="section-title">
+                            <i class="bx bx-wrench"></i>
+                            Additional Details
+                        </h3>
+                        <div class="detail-fields">
+                            <div class="detail-field">
+                                <span class="field-label">Optional Extras</span>
+                                <span class="field-value">@(_vehicle.optional_extras ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Tow Hitch</span>
+                                <span class="field-value">@(_vehicle.tow_hitch ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Canopy</span>
+                                <span class="field-value">@(_vehicle.canopy ?? "N/A")</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">Additional Fuel Tank</span>
+                                <span class="field-value">@(_vehicle.additional_fuel_tank?.ToString() ?? "N/A") L</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_showDeleteDialog)
+    {
+        <div class="modal-overlay" @onclick="HideDeleteConfirmation">
+            <div class="modal-dialog" @onclick:stopPropagation="true">
+                <div class="modal-header">
+                    <h3>Confirm Delete</h3>
+                    <button class="modal-close" @onclick="HideDeleteConfirmation">
+                        <i class="bx bx-x"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete vehicle <strong>@_vehicle.registration_number</strong>?</p>
+                    <p class="warning-text">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
+                    <button class="btn btn-danger" @onclick="DeleteVehicle" disabled="@_deleting">
+                        @if (_deleting)
+                        {
+                            <span class="spinner-sm"></span>
+                            <span>Deleting...</span>
+                        }
+                        else
+                        {
+                            <i class="bx bx-trash"></i>
+                            <span>Delete</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter]
+    public int VmfCode { get; set; }
+
+    private VehicleDto? _vehicle;
+    private bool _loading = true;
+    private bool _showDeleteDialog = false;
+    private bool _deleting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicle();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadVehicle();
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        _vehicle = await VehicleService.GetVehicleAsync(VmfCode);
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void NavigateToList()
+    {
+        Navigation.NavigateTo("/vehicles");
+    }
+
+    private void NavigateToEdit(int vmfCode)
+    {
+        Navigation.NavigateTo($"/vehicles/{vmfCode}/edit");
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        _showDeleteDialog = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        _showDeleteDialog = false;
+    }
+
+    private async Task DeleteVehicle()
+    {
+        if (_vehicle == null) return;
+
+        _deleting = true;
+        var success = await VehicleService.DeleteVehicleAsync(_vehicle.vmf_code);
+        _deleting = false;
+
+        if (success)
+        {
+            NavigateToList();
+        }
+        else
+        {
+            // TODO: Show error notification
+            _showDeleteDialog = false;
+        }
+    }
+}

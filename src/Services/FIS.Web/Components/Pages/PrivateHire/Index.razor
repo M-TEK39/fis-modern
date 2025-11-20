@@ -1,0 +1,746 @@
+@page "/private-hire"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject PrivateHireApiService PrivateHireService
+@inject DepartmentApiService DepartmentService
+
+<PageTitle>Private Hire Management - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-car"></i>
+            Private Hire Management
+        </h1>
+        <p class="page-description">Manage private hire vehicles, contractors, and related operations</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" @onclick="ShowAddVehicleDialog">
+            <i class="bx bx-plus"></i>
+            New Private Hire Vehicle
+        </button>
+        <button class="btn btn-secondary" @onclick="ShowAddContractorDialog">
+            <i class="bx bx-building"></i>
+            New Contractor
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="tabs-container">
+        <div class="tabs">
+            <button class="tab-btn @(_activeTab == "vehicles" ? "active" : "")" @onclick='() => SetActiveTab("vehicles")'>
+                <i class="bx bx-car"></i>
+                Private Hire Vehicles
+            </button>
+            <button class="tab-btn @(_activeTab == "contractors" ? "active" : "")" @onclick='() => SetActiveTab("contractors")'>
+                <i class="bx bx-building"></i>
+                Contractors
+            </button>
+            <button class="tab-btn @(_activeTab == "reports" ? "active" : "")" @onclick='() => SetActiveTab("reports")'>
+                <i class="bx bx-file-find"></i>
+                Reports
+            </button>
+        </div>
+    </div>
+
+    @if (_activeTab == "vehicles")
+    {
+        <div class="tab-content">
+            <div class="search-bar">
+                <div class="search-input-wrapper">
+                    <i class="bx bx-search"></i>
+                    <input 
+                        type="text" 
+                        class="search-input" 
+                        placeholder="Search private hire vehicles..." 
+                        @bind="_searchTerm" 
+                        @oninput="OnSearchInput" />
+                    @if (!string.IsNullOrWhiteSpace(_searchTerm))
+                    {
+                        <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                            <i class="bx bx-x"></i>
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_loading)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading private hire vehicles...</p>
+                </div>
+            }
+            else if (_filteredVehicles.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bx bx-car"></i>
+                    <h3>No private hire vehicles found</h3>
+                    <p>@(_searchTerm?.Length > 0 ? "No vehicles match your search criteria" : "Get started by adding your first private hire vehicle")</p>
+                    @if (_searchTerm?.Length == 0)
+                    {
+                        <button class="btn btn-primary" @onclick="ShowAddVehicleDialog">
+                            <i class="bx bx-plus"></i>
+                            Add Private Hire Vehicle
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">@_filteredVehicles.Count Private Hire Vehicle(s)</span>
+                        <div class="table-controls">
+                            <button class="btn btn-secondary btn-sm" @onclick="RefreshData" title="Refresh">
+                                <i class="bx bx-refresh"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Registration</th>
+                                    <th>Make & Model</th>
+                                    <th>Contractor</th>
+                                    <th>Department</th>
+                                    <th>Status</th>
+                                    <th>Hire Start</th>
+                                    <th>Hire End</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var vehicle in _filteredVehicles)
+                                {
+                                    <tr>
+                                        <td class="vehicle-reg">@vehicle.registration_number</td>
+                                        <td class="vehicle-info">@vehicle.make_model</td>
+                                        <td class="contractor">@vehicle.contractor_name</td>
+                                        <td class="department">@vehicle.department_name</td>
+                                        <td class="status">
+                                            <span class="status-badge @GetStatusClass(vehicle.hire_status)">
+                                                @vehicle.hire_status
+                                            </span>
+                                        </td>
+                                        <td class="hire-date">@vehicle.hire_start_date?.ToString("dd MMM yyyy")</td>
+                                        <td class="hire-date">@(vehicle.hire_end_date?.ToString("dd MMM yyyy") ?? "Ongoing")</td>
+                                        <td class="actions-column">
+                                            <div class="table-actions">
+                                                <button class="btn-icon btn-icon-view" @onclick="() => ViewVehicle(vehicle)" title="View Details">
+                                                    <i class="bx bx-show"></i>
+                                                    <span>View</span>
+                                                </button>
+                                                <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditVehicleDialog(vehicle)" title="Edit">
+                                                    <i class="bx bx-edit"></i>
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteVehicleDialog(vehicle)" title="Delete">
+                                                    <i class="bx bx-trash"></i>
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_activeTab == "contractors")
+    {
+        <div class="tab-content">
+            <div class="search-bar">
+                <div class="search-input-wrapper">
+                    <i class="bx bx-search"></i>
+                    <input 
+                        type="text" 
+                        class="search-input" 
+                        placeholder="Search contractors..." 
+                        @bind="_contractorSearchTerm" 
+                        @oninput="OnContractorSearchInput" />
+                </div>
+            </div>
+
+            @if (_loadingContractors)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading contractors...</p>
+                </div>
+            }
+            else if (_filteredContractors.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bx bx-building"></i>
+                    <h3>No contractors found</h3>
+                    <p>Get started by adding your first private hire contractor</p>
+                    <button class="btn btn-primary" @onclick="ShowAddContractorDialog">
+                        <i class="bx bx-plus"></i>
+                        Add Contractor
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">@_filteredContractors.Count Contractor(s)</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Company Name</th>
+                                    <th>Contact Person</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var contractor in _filteredContractors)
+                                {
+                                    <tr>
+                                        <td class="company-name">@contractor.company_name</td>
+                                        <td class="contact-person">@contractor.contact_person</td>
+                                        <td class="phone">@contractor.phone</td>
+                                        <td class="email">@contractor.email</td>
+                                        <td class="status">
+                                            <span class="status-badge @GetStatusClass(contractor.status)">
+                                                @contractor.status
+                                            </span>
+                                        </td>
+                                        <td class="actions-column">
+                                            <div class="table-actions">
+                                                <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditContractorDialog(contractor)" title="Edit">
+                                                    <i class="bx bx-edit"></i>
+                                                    <span>Edit</span>
+                                                </button>
+                                                <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteContractorDialog(contractor)" title="Delete">
+                                                    <i class="bx bx-trash"></i>
+                                                    <span>Delete</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+    else if (_activeTab == "reports")
+    {
+        <div class="tab-content">
+            <div class="reports-grid">
+                <div class="report-card" @onclick='() => GenerateReport("all-vehicles")'>
+                    <i class="bx bx-file-find"></i>
+                    <h3>All Private Hire Vehicles</h3>
+                    <p>Complete list of all private hire vehicles in the system</p>
+                </div>
+                <div class="report-card" @onclick='() => GenerateReport("single-vehicle")'>
+                    <i class="bx bx-search-alt"></i>
+                    <h3>Single Vehicle Report</h3>
+                    <p>Detailed report for a specific private hire vehicle</p>
+                </div>
+                <div class="report-card" @onclick='() => GenerateReport("contractors")'>
+                    <i class="bx bx-building"></i>
+                    <h3>Private Hire Contractors</h3>
+                    <p>List of all registered private hire contractors</p>
+                </div>
+                <div class="report-card" @onclick='() => GenerateReport("by-department")'>
+                    <i class="bx bx-group"></i>
+                    <h3>Vehicles by Department</h3>
+                    <p>Private hire vehicles grouped by department</p>
+                </div>
+                <div class="report-card" @onclick='() => GenerateReport("by-site")'>
+                    <i class="bx bx-map"></i>
+                    <h3>Vehicles by Site</h3>
+                    <p>Private hire vehicles grouped by site location</p>
+                </div>
+                <div class="report-card" @onclick='() => GenerateReport("expiring-contracts")'>
+                    <i class="bx bx-time"></i>
+                    <h3>Expiring Contracts</h3>
+                    <p>Contracts nearing their expiration dates</p>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Vehicle Modal -->
+<Modal IsVisible="_showVehicleDialog"
+       Title="@(_isEditVehicle ? "Edit Private Hire Vehicle" : "New Private Hire Vehicle")"
+       OnCancel="HideVehicleDialog"
+       OnSubmit="SaveVehicle"
+       IsSaving="_savingVehicle">
+    <div class="form-grid">
+        <div class="form-field">
+            <label class="form-label">Registration Number <span class="required">*</span></label>
+            <input type="text" @bind="_currentVehicle.registration_number" class="form-input" placeholder="Enter registration" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Make & Model <span class="required">*</span></label>
+            <input type="text" @bind="_currentVehicle.make_model" class="form-input" placeholder="e.g., Toyota Corolla" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Contractor <span class="required">*</span></label>
+            <select @bind="_currentVehicle.contractor_id" class="form-input">
+                <option value="">Select Contractor</option>
+                @foreach (var contractor in _contractors)
+                {
+                    <option value="@contractor.contractor_id">@contractor.company_name</option>
+                }
+            </select>
+        </div>
+        <div class="form-field">
+            <label class="form-label">Department <span class="required">*</span></label>
+            <select @bind="_currentVehicle.department_code" class="form-input">
+                <option value="">Select Department</option>
+                @foreach (var dept in _departments)
+                {
+                    <option value="@dept.department_code">@dept.department_description</option>
+                }
+            </select>
+        </div>
+        <div class="form-field">
+            <label class="form-label">Hire Start Date <span class="required">*</span></label>
+            <input type="date" @bind="_currentVehicle.hire_start_date" class="form-input" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Hire End Date</label>
+            <input type="date" @bind="_currentVehicle.hire_end_date" class="form-input" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Monthly Rate</label>
+            <input type="number" step="0.01" @bind="_currentVehicle.monthly_rate" class="form-input" placeholder="0.00" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Status</label>
+            <select @bind="_currentVehicle.hire_status" class="form-input">
+                <option value="Active">Active</option>
+                <option value="Pending">Pending</option>
+                <option value="Expired">Expired</option>
+                <option value="Terminated">Terminated</option>
+            </select>
+        </div>
+        <div class="form-field full-width">
+            <label class="form-label">Notes</label>
+            <textarea @bind="_currentVehicle.notes" class="form-input" rows="3" placeholder="Additional notes..."></textarea>
+        </div>
+    </div>
+</Modal>
+
+<!-- Contractor Modal -->
+<Modal IsVisible="_showContractorDialog"
+       Title="@(_isEditContractor ? "Edit Contractor" : "New Contractor")"
+       OnCancel="HideContractorDialog"
+       OnSubmit="SaveContractor"
+       IsSaving="_savingContractor">
+    <div class="form-grid">
+        <div class="form-field">
+            <label class="form-label">Company Name <span class="required">*</span></label>
+            <input type="text" @bind="_currentContractor.company_name" class="form-input" placeholder="Enter company name" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Contact Person <span class="required">*</span></label>
+            <input type="text" @bind="_currentContractor.contact_person" class="form-input" placeholder="Contact person name" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Phone <span class="required">*</span></label>
+            <input type="tel" @bind="_currentContractor.phone" class="form-input" placeholder="Phone number" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Email</label>
+            <input type="email" @bind="_currentContractor.email" class="form-input" placeholder="Email address" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Business Registration</label>
+            <input type="text" @bind="_currentContractor.business_registration" class="form-input" placeholder="Registration number" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Status</label>
+            <select @bind="_currentContractor.status" class="form-input">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Suspended">Suspended</option>
+            </select>
+        </div>
+        <div class="form-field full-width">
+            <label class="form-label">Address</label>
+            <textarea @bind="_currentContractor.address" class="form-input" rows="3" placeholder="Physical address"></textarea>
+        </div>
+    </div>
+</Modal>
+
+<!-- Delete Confirmation Modals -->
+<ConfirmationModal IsVisible="_showDeleteVehicleConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteVehicleDialog"
+                  OnConfirm="DeleteVehicle"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete private hire vehicle <strong>@_currentVehicle.registration_number</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
+</ConfirmationModal>
+
+<ConfirmationModal IsVisible="_showDeleteContractorConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteContractorDialog"
+                  OnConfirm="DeleteContractor"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete contractor <strong>@_currentContractor.company_name</strong>?</p>
+    <p class="warning-text">This action cannot be undone and will affect all associated vehicles.</p>
+</ConfirmationModal>
+
+@code {
+    private List<PrivateHireVehicleDto> _vehicles = new();
+    private List<PrivateHireVehicleDto> _filteredVehicles = new();
+    private List<PrivateHireContractorDto> _contractors = new();
+    private List<PrivateHireContractorDto> _filteredContractors = new();
+    private List<DepartmentDto> _departments = new();
+    
+    private PrivateHireVehicleDto _currentVehicle = new();
+    private PrivateHireContractorDto _currentContractor = new();
+    
+    private string _activeTab = "vehicles";
+    private bool _loading = true;
+    private bool _loadingContractors = true;
+    
+    private bool _showVehicleDialog = false;
+    private bool _showContractorDialog = false;
+    private bool _showDeleteVehicleConfirm = false;
+    private bool _showDeleteContractorConfirm = false;
+    
+    private bool _isEditVehicle = false;
+    private bool _isEditContractor = false;
+    private bool _savingVehicle = false;
+    private bool _savingContractor = false;
+    
+    private string _searchTerm = "";
+    private string _contractorSearchTerm = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _loadingContractors = true;
+        
+        try
+        {
+            // Load vehicles from API service
+            _vehicles = await PrivateHireService.GetVehiclesAsync();
+            
+            // Load contractors from API service
+            _contractors = await PrivateHireService.GetContractorsAsync();
+            
+            // Load departments
+            try
+            {
+                _departments = await DepartmentService.GetDepartmentsAsync();
+            }
+            catch
+            {
+                _departments = new List<DepartmentDto>();
+            }
+            
+            // Apply filters
+            ApplySearchFilter();
+            ApplyContractorSearchFilter();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading private hire data: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            _loadingContractors = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SetActiveTab(string tab)
+    {
+        _activeTab = tab;
+        StateHasChanged();
+    }
+
+    private void ApplySearchFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _filteredVehicles = _vehicles.ToList();
+        }
+        else
+        {
+            var searchLower = _searchTerm.ToLower();
+            _filteredVehicles = _vehicles.Where(v => 
+                v.registration_number.ToLower().Contains(searchLower) ||
+                v.make_model.ToLower().Contains(searchLower) ||
+                v.contractor_name.ToLower().Contains(searchLower)
+            ).ToList();
+        }
+    }
+
+    private void ApplyContractorSearchFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_contractorSearchTerm))
+        {
+            _filteredContractors = _contractors.ToList();
+        }
+        else
+        {
+            var searchLower = _contractorSearchTerm.ToLower();
+            _filteredContractors = _contractors.Where(c => 
+                c.company_name.ToLower().Contains(searchLower) ||
+                c.contact_person.ToLower().Contains(searchLower)
+            ).ToList();
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? "";
+        ApplySearchFilter();
+        StateHasChanged();
+    }
+
+    private void OnContractorSearchInput(ChangeEventArgs e)
+    {
+        _contractorSearchTerm = e.Value?.ToString() ?? "";
+        ApplyContractorSearchFilter();
+        StateHasChanged();
+    }
+
+    private void ClearSearch()
+    {
+        _searchTerm = "";
+        ApplySearchFilter();
+        StateHasChanged();
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+    }
+
+    // Vehicle methods
+    private void ShowAddVehicleDialog()
+    {
+        _currentVehicle = new PrivateHireVehicleDto 
+        { 
+            hire_start_date = DateTime.Today,
+            hire_status = "Active"
+        };
+        _isEditVehicle = false;
+        _showVehicleDialog = true;
+    }
+
+    private void ShowEditVehicleDialog(PrivateHireVehicleDto vehicle)
+    {
+        _currentVehicle = new PrivateHireVehicleDto
+        {
+            vehicle_id = vehicle.vehicle_id,
+            registration_number = vehicle.registration_number,
+            make_model = vehicle.make_model,
+            contractor_id = vehicle.contractor_id,
+            department_code = vehicle.department_code,
+            hire_start_date = vehicle.hire_start_date,
+            hire_end_date = vehicle.hire_end_date,
+            monthly_rate = vehicle.monthly_rate,
+            hire_status = vehicle.hire_status,
+            notes = vehicle.notes
+        };
+        _isEditVehicle = true;
+        _showVehicleDialog = true;
+    }
+
+    private void ViewVehicle(PrivateHireVehicleDto vehicle)
+    {
+        // Navigate to vehicle details view
+        // Navigation.NavigateTo($"/private-hire/{vehicle.vehicle_id}");
+    }
+
+    private void HideVehicleDialog()
+    {
+        _showVehicleDialog = false;
+        _currentVehicle = new();
+    }
+
+    private async Task SaveVehicle()
+    {
+        _savingVehicle = true;
+        try
+        {
+            if (_isEditVehicle)
+            {
+                await PrivateHireService.UpdateVehicleAsync(_currentVehicle.vehicle_id, _currentVehicle);
+            }
+            else
+            {
+                await PrivateHireService.CreateVehicleAsync(_currentVehicle);
+            }
+            
+            HideVehicleDialog();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving vehicle: {ex.Message}");
+        }
+        finally
+        {
+            _savingVehicle = false;
+        }
+    }
+
+    private void ShowDeleteVehicleDialog(PrivateHireVehicleDto vehicle)
+    {
+        _currentVehicle = vehicle;
+        _showDeleteVehicleConfirm = true;
+    }
+
+    private void HideDeleteVehicleDialog()
+    {
+        _showDeleteVehicleConfirm = false;
+        _currentVehicle = new();
+    }
+
+    private async Task DeleteVehicle()
+    {
+        try
+        {
+            await PrivateHireService.DeleteVehicleAsync(_currentVehicle.vehicle_id);
+            HideDeleteVehicleDialog();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting vehicle: {ex.Message}");
+        }
+    }
+
+    // Contractor methods
+    private void ShowAddContractorDialog()
+    {
+        _currentContractor = new PrivateHireContractorDto 
+        { 
+            status = "Active"
+        };
+        _isEditContractor = false;
+        _showContractorDialog = true;
+    }
+
+    private void ShowEditContractorDialog(PrivateHireContractorDto contractor)
+    {
+        _currentContractor = new PrivateHireContractorDto
+        {
+            contractor_id = contractor.contractor_id,
+            company_name = contractor.company_name,
+            contact_person = contractor.contact_person,
+            phone = contractor.phone,
+            email = contractor.email,
+            business_registration = contractor.business_registration,
+            address = contractor.address,
+            status = contractor.status
+        };
+        _isEditContractor = true;
+        _showContractorDialog = true;
+    }
+
+    private void HideContractorDialog()
+    {
+        _showContractorDialog = false;
+        _currentContractor = new();
+    }
+
+    private async Task SaveContractor()
+    {
+        _savingContractor = true;
+        try
+        {
+            if (_isEditContractor)
+            {
+                await PrivateHireService.UpdateContractorAsync(_currentContractor.contractor_id, _currentContractor);
+            }
+            else
+            {
+                await PrivateHireService.CreateContractorAsync(_currentContractor);
+            }
+            
+            HideContractorDialog();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving contractor: {ex.Message}");
+        }
+        finally
+        {
+            _savingContractor = false;
+        }
+    }
+
+    private void ShowDeleteContractorDialog(PrivateHireContractorDto contractor)
+    {
+        _currentContractor = contractor;
+        _showDeleteContractorConfirm = true;
+    }
+
+    private void HideDeleteContractorDialog()
+    {
+        _showDeleteContractorConfirm = false;
+        _currentContractor = new();
+    }
+
+    private async Task DeleteContractor()
+    {
+        try
+        {
+            await PrivateHireService.DeleteContractorAsync(_currentContractor.contractor_id);
+            HideDeleteContractorDialog();
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting contractor: {ex.Message}");
+        }
+    }
+
+    private void GenerateReport(string reportType)
+    {
+        // Navigate to specific report generation page or show report dialog
+        Console.WriteLine($"Generating report: {reportType}");
+        // Implementation would depend on reporting system
+    }
+
+    private string GetStatusClass(string status)
+    {
+        return status?.ToLower() switch
+        {
+            "active" => "status-success",
+            "pending" => "status-warning",
+            "expired" => "status-danger",
+            "terminated" => "status-danger",
+            "inactive" => "status-warning",
+            "suspended" => "status-danger",
+            _ => "status-default"
+        };
+    }
+}

@@ -1,0 +1,219 @@
+@page "/sites"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-map-pin"></i>
+            Site Management
+        </h1>
+        <p class="page-description">Manage operational sites and locations</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Site
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading sites...</p>
+        </div>
+    }
+    else if (_sites.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-map-pin"></i>
+            <h3>No sites found</h3>
+            <p>Get started by adding your first operational site</p>
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Site
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <div class="table-controls">
+                    <button class="btn btn-primary" @onclick="ShowAddDialog">
+                        <i class="bx bx-plus"></i>
+                        Add Site
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Site Code</th>
+                            <th>Site Name</th>
+                            <th>Address</th>
+                            <th>Contact Info</th>
+                            <th class="actions-column">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var site in _sites)
+                        {
+                            <tr>
+                                <td>@site.site_code</td>
+                                <td>@site.site_description</td>
+                                <td>@site.site_address</td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(site.site_telephone))
+                                    {
+                                        <span>📞 @site.site_telephone</span>
+                                    }
+                                </td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(site)" title="Edit">
+                                            <i class="bx bx-edit"></i>
+                                            <span>Edit</span>
+                                        </button>
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(site)" title="Delete">
+                                            <i class="bx bx-trash"></i>
+                                            <span>Delete</span>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<Modal IsVisible="_showDialog"
+       Title="@(_isEdit ? "Edit Site" : "Add Site")"
+       OnCancel="HideDialog"
+       OnSubmit="SaveSite"
+       IsSaving="_saving">
+    <div class="form-grid">
+        <div class="form-field">
+            <label class="form-label">Site Description <span class="required">*</span></label>
+            <input type="text" @bind="_currentSite.site_description" class="form-input" placeholder="Enter site name/description" />
+        </div>
+        <div class="form-field">
+            <label class="form-label">Site Address</label>
+            <textarea @bind="_currentSite.site_address" class="form-input" rows="3" placeholder="Enter complete address"></textarea>
+        </div>
+        <div class="form-field">
+            <label class="form-label">Telephone Number</label>
+            <input type="tel" @bind="_currentSite.site_telephone" class="form-input" placeholder="Enter contact number" />
+        </div>
+    </div>
+</Modal>
+
+<ConfirmationModal IsVisible="_showDeleteConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteDialog"
+                  OnConfirm="DeleteSite"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete <strong>@_currentSite.site_description</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
+</ConfirmationModal>
+
+@code {
+    private List<SiteDto> _sites = new();
+    private SiteDto _currentSite = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+
+    protected override void OnInitialized()
+    {
+        LoadSites();
+    }
+
+    private void LoadSites()
+    {
+        _loading = true;
+        try
+        {
+            // _sites = await SiteService.GetSitesAsync();
+            _sites = new List<SiteDto>(); // Placeholder until API is ready
+        }
+        catch
+        {
+            _sites = new List<SiteDto>();
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentSite = new SiteDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(SiteDto site)
+    {
+        _currentSite = new SiteDto 
+        { 
+            site_code = site.site_code,
+            site_description = site.site_description,
+            site_address = site.site_address,
+            site_telephone = site.site_telephone
+        };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(SiteDto site)
+    {
+        _currentSite = site;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentSite = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveSite()
+    {
+        _saving = true;
+        // Placeholder implementation
+        await Task.Delay(500);
+        _saving = false;
+        HideDialog();
+        LoadSites();
+    }
+
+    private async Task DeleteSite()
+    {
+        // Placeholder implementation
+        await Task.Delay(500);
+        HideDeleteDialog();
+        LoadSites();
+    }
+
+    public class SiteDto
+    {
+        public int site_code { get; set; }
+        public string? site_description { get; set; }
+        public string? site_address { get; set; }
+        public string? site_telephone { get; set; }
+    }
+}

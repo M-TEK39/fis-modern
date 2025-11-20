@@ -1,0 +1,351 @@
+using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
+
+namespace FIS.Api.Controllers;
+
+public class CreateTripDto
+{
+    public int ContractCode { get; set; }
+    public string? ApproverName { get; set; }
+    public string? ApproverRank { get; set; }
+    public string? ApproverTelephone { get; set; }
+    public int? EndOdometer { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public string? TripReason { get; set; }
+    public string? TripRequestNumber { get; set; }
+    public DateTime IssueDate { get; set; } = DateTime.Now;
+    public short TripTypeCode { get; set; }
+    public short TripIncidentTypeCode { get; set; }
+    public short? UserAccessCode { get; set; }
+    public bool LockedForTransfer { get; set; } = false;
+    public bool TripIsMonthly { get; set; } = false;
+}
+
+public class UpdateTripDto : CreateTripDto { }
+
+public class TripDto
+{
+    public int TripAuthorityCode { get; set; }
+    public int ContractCode { get; set; }
+    public string? ApproverName { get; set; }
+    public string? ApproverRank { get; set; }
+    public string? ApproverTelephone { get; set; }
+    public int? EndOdometer { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public string? TripReason { get; set; }
+    public string? TripRequestNumber { get; set; }
+    public DateTime IssueDate { get; set; }
+    public short TripTypeCode { get; set; }
+    public short TripIncidentTypeCode { get; set; }
+    public short? UserAccessCode { get; set; }
+    public bool LockedForTransfer { get; set; }
+    public bool TripIsMonthly { get; set; }
+    
+    // Computed properties for display
+    public string ApproverFullInfo => $"{ApproverName} ({ApproverRank})".Trim();
+    public bool IsExpired => ExpiryDate.HasValue && ExpiryDate.Value < DateTime.Now;
+    public int DaysUntilExpiry => ExpiryDate.HasValue ? 
+        (int)(ExpiryDate.Value - DateTime.Now).TotalDays : 0;
+}
+
+[ApiController]
+[Route("api/[controller]")]
+public class TripController : ControllerBase
+{
+    private readonly ITripService _tripService;
+    private readonly ILogger<TripController> _logger;
+
+    public TripController(ITripService tripService, ILogger<TripController> logger)
+    {
+        _tripService = tripService;
+        _logger = logger;
+    }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<TripDto>> GetTrip(int id)
+    {
+        try
+        {
+            var trip = await _tripService.GetTripByIdAsync(id);
+            if (trip == null)
+            {
+                return NotFound();
+            }
+
+            var tripDto = new TripDto
+            {
+                TripAuthorityCode = trip.trip_authority_code,
+                ContractCode = trip.contract_code,
+                ApproverName = trip.approver_name,
+                ApproverRank = trip.approver_rank,
+                ApproverTelephone = trip.approver_tel,
+                EndOdometer = trip.end_odo_meter,
+                ExpiryDate = trip.expiry_date,
+                TripReason = trip.trip_reason,
+                TripRequestNumber = trip.trip_request_number,
+                IssueDate = trip.issue_date,
+                TripTypeCode = trip.trip_type_code,
+                TripIncidentTypeCode = trip.trip_incident_type_code,
+                UserAccessCode = trip.user_access_code,
+                LockedForTransfer = trip.locked_for_transfer,
+                TripIsMonthly = trip.Trip_Is_Monthly
+            };
+
+            return Ok(tripDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("vehicle/{vmfCode}")]
+    public async Task<ActionResult<IEnumerable<TripDto>>> GetTripsByVehicle(int vmfCode)
+    {
+        try
+        {
+            var trips = await _tripService.GetTripsByVehicleAsync(vmfCode);
+            var tripDtos = trips.Select(t => new TripDto
+            {
+                TripAuthorityCode = t.trip_authority_code,
+                ContractCode = t.contract_code,
+                ApproverName = t.approver_name,
+                ApproverRank = t.approver_rank,
+                ApproverTelephone = t.approver_tel,
+                EndOdometer = t.end_odo_meter,
+                ExpiryDate = t.expiry_date,
+                TripReason = t.trip_reason,
+                TripRequestNumber = t.trip_request_number,
+                IssueDate = t.issue_date,
+                TripTypeCode = t.trip_type_code,
+                TripIncidentTypeCode = t.trip_incident_type_code,
+                UserAccessCode = t.user_access_code,
+                LockedForTransfer = t.locked_for_transfer,
+                TripIsMonthly = t.Trip_Is_Monthly
+            });
+            return Ok(tripDtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving trips for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("driver/{driverId}")]
+    public async Task<ActionResult<IEnumerable<TripDto>>> GetTripsByDriver(string driverId)
+    {
+        try
+        {
+            var trips = await _tripService.GetTripsByDriverAsync(driverId);
+            var tripDtos = trips.Select(t => new TripDto
+            {
+                TripAuthorityCode = t.trip_authority_code,
+                ContractCode = t.contract_code,
+                ApproverName = t.approver_name,
+                ApproverRank = t.approver_rank,
+                ApproverTelephone = t.approver_tel,
+                EndOdometer = t.end_odo_meter,
+                ExpiryDate = t.expiry_date,
+                TripReason = t.trip_reason,
+                TripRequestNumber = t.trip_request_number,
+                IssueDate = t.issue_date,
+                TripTypeCode = t.trip_type_code,
+                TripIncidentTypeCode = t.trip_incident_type_code,
+                UserAccessCode = t.user_access_code,
+                LockedForTransfer = t.locked_for_transfer,
+                TripIsMonthly = t.Trip_Is_Monthly
+            });
+            return Ok(tripDtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving trips for driver {DriverId}", driverId);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("daterange")]
+    public async Task<ActionResult<IEnumerable<TripDto>>> GetTripsByDateRange(
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate)
+    {
+        try
+        {
+            var trips = await _tripService.GetTripsByDateRangeAsync(startDate, endDate);
+            var tripDtos = trips.Select(t => new TripDto
+            {
+                TripAuthorityCode = t.trip_authority_code,
+                ContractCode = t.contract_code,
+                ApproverName = t.approver_name,
+                ApproverRank = t.approver_rank,
+                ApproverTelephone = t.approver_tel,
+                EndOdometer = t.end_odo_meter,
+                ExpiryDate = t.expiry_date,
+                TripReason = t.trip_reason,
+                TripRequestNumber = t.trip_request_number,
+                IssueDate = t.issue_date,
+                TripTypeCode = t.trip_type_code,
+                TripIncidentTypeCode = t.trip_incident_type_code,
+                UserAccessCode = t.user_access_code,
+                LockedForTransfer = t.locked_for_transfer,
+                TripIsMonthly = t.Trip_Is_Monthly
+            });
+            return Ok(tripDtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving trips for date range {StartDate} to {EndDate}", startDate, endDate);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("recent")]
+    public async Task<ActionResult<IEnumerable<TripDto>>> GetRecentTrips([FromQuery] int days = 30)
+    {
+        try
+        {
+            var startDate = DateTime.Now.AddDays(-days);
+            var endDate = DateTime.Now;
+            
+            return await GetTripsByDateRange(startDate, endDate);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving recent trips for {Days} days", days);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpPost]
+    public async Task<ActionResult<TripDto>> CreateTrip([FromBody] CreateTripDto createTripDto)
+    {
+        try
+        {
+            var trip = new Trip
+            {
+                contract_code = createTripDto.ContractCode,
+                approver_name = createTripDto.ApproverName,
+                approver_rank = createTripDto.ApproverRank,
+                approver_tel = createTripDto.ApproverTelephone,
+                end_odo_meter = createTripDto.EndOdometer,
+                expiry_date = createTripDto.ExpiryDate,
+                trip_reason = createTripDto.TripReason,
+                trip_request_number = createTripDto.TripRequestNumber,
+                issue_date = createTripDto.IssueDate,
+                trip_type_code = createTripDto.TripTypeCode,
+                trip_incident_type_code = createTripDto.TripIncidentTypeCode,
+                user_access_code = createTripDto.UserAccessCode,
+                locked_for_transfer = createTripDto.LockedForTransfer,
+                Trip_Is_Monthly = createTripDto.TripIsMonthly
+            };
+
+            var createdTrip = await _tripService.CreateTripAsync(trip);
+
+            var tripDto = new TripDto
+            {
+                TripAuthorityCode = createdTrip.trip_authority_code,
+                ContractCode = createdTrip.contract_code,
+                ApproverName = createdTrip.approver_name,
+                ApproverRank = createdTrip.approver_rank,
+                ApproverTelephone = createdTrip.approver_tel,
+                EndOdometer = createdTrip.end_odo_meter,
+                ExpiryDate = createdTrip.expiry_date,
+                TripReason = createdTrip.trip_reason,
+                TripRequestNumber = createdTrip.trip_request_number,
+                IssueDate = createdTrip.issue_date,
+                TripTypeCode = createdTrip.trip_type_code,
+                TripIncidentTypeCode = createdTrip.trip_incident_type_code,
+                UserAccessCode = createdTrip.user_access_code,
+                LockedForTransfer = createdTrip.locked_for_transfer,
+                TripIsMonthly = createdTrip.Trip_Is_Monthly
+            };
+
+            return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.trip_authority_code }, tripDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating trip");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpPut("{id}")]
+    public async Task<ActionResult<TripDto>> UpdateTrip(int id, [FromBody] UpdateTripDto updateTripDto)
+    {
+        try
+        {
+            var existingTrip = await _tripService.GetTripByIdAsync(id);
+            if (existingTrip == null)
+            {
+                return NotFound();
+            }
+
+            existingTrip.contract_code = updateTripDto.ContractCode;
+            existingTrip.approver_name = updateTripDto.ApproverName;
+            existingTrip.approver_rank = updateTripDto.ApproverRank;
+            existingTrip.approver_tel = updateTripDto.ApproverTelephone;
+            existingTrip.end_odo_meter = updateTripDto.EndOdometer;
+            existingTrip.expiry_date = updateTripDto.ExpiryDate;
+            existingTrip.trip_reason = updateTripDto.TripReason;
+            existingTrip.trip_request_number = updateTripDto.TripRequestNumber;
+            existingTrip.issue_date = updateTripDto.IssueDate;
+            existingTrip.trip_type_code = updateTripDto.TripTypeCode;
+            existingTrip.trip_incident_type_code = updateTripDto.TripIncidentTypeCode;
+            existingTrip.user_access_code = updateTripDto.UserAccessCode;
+            existingTrip.locked_for_transfer = updateTripDto.LockedForTransfer;
+            existingTrip.Trip_Is_Monthly = updateTripDto.TripIsMonthly;
+
+            await _tripService.UpdateTripAsync(existingTrip);
+
+            var tripDto = new TripDto
+            {
+                TripAuthorityCode = existingTrip.trip_authority_code,
+                ContractCode = existingTrip.contract_code,
+                ApproverName = existingTrip.approver_name,
+                ApproverRank = existingTrip.approver_rank,
+                ApproverTelephone = existingTrip.approver_tel,
+                EndOdometer = existingTrip.end_odo_meter,
+                ExpiryDate = existingTrip.expiry_date,
+                TripReason = existingTrip.trip_reason,
+                TripRequestNumber = existingTrip.trip_request_number,
+                IssueDate = existingTrip.issue_date,
+                TripTypeCode = existingTrip.trip_type_code,
+                TripIncidentTypeCode = existingTrip.trip_incident_type_code,
+                UserAccessCode = existingTrip.user_access_code,
+                LockedForTransfer = existingTrip.locked_for_transfer,
+                TripIsMonthly = existingTrip.Trip_Is_Monthly
+            };
+
+            return Ok(tripDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteTrip(int id)
+    {
+        try
+        {
+            var existingTrip = await _tripService.GetTripByIdAsync(id);
+            if (existingTrip == null)
+            {
+                return NotFound();
+            }
+
+            await _tripService.DeleteTripAsync(id);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+}

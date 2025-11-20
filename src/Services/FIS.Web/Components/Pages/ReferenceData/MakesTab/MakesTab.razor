@@ -1,0 +1,176 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject ReferenceDataApiService RefDataService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading makes...</p>
+    </div>
+}
+else if (_makes.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-car"></i>
+        <h3>No makes found</h3>
+        <p>Get started by adding your first vehicle make</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Make
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Make
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Make Code</th>
+                        <th>Make Name</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var make in _makes)
+                    {
+                        <tr>
+                            <td>@make.make_code</td>
+                            <td>@make.make_name</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(make)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                        <span>Edit</span>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(make)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                        <span>Delete</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<Modal IsVisible="_showDialog"
+       Title="@(_isEdit ? "Edit Make" : "Add Make")"
+       OnCancel="HideDialog"
+       OnSubmit="SaveMake"
+       IsSaving="_saving">
+    <div class="form-field">
+        <label class="form-label">Make Name <span class="required">*</span></label>
+        <input type="text" @bind="_currentMake.make_name" class="form-input" placeholder="e.g., Toyota" />
+    </div>
+</Modal>
+
+<ConfirmationModal IsVisible="_showDeleteConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteDialog"
+                  OnConfirm="DeleteMake"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete <strong>@_currentMake.make_name</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
+</ConfirmationModal>
+
+@code {
+    private List<MakeDto> _makes = new();
+    private MakeDto _currentMake = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMakes();
+    }
+
+    private async Task LoadMakes()
+    {
+        _loading = true;
+        _makes = await RefDataService.GetMakesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentMake = new MakeDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(MakeDto make)
+    {
+        _currentMake = make with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(MakeDto make)
+    {
+        _currentMake = make;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentMake = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveMake()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await RefDataService.UpdateMakeAsync(_currentMake.make_code, _currentMake);
+        }
+        else
+        {
+            success = await RefDataService.CreateMakeAsync(_currentMake);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadMakes();
+        }
+    }
+
+    private async Task DeleteMake()
+    {
+        var success = await RefDataService.DeleteMakeAsync(_currentMake.make_code);
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadMakes();
+        }
+    }
+}

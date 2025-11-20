@@ -1,0 +1,17 @@
+/home/dev/work/fis-modern/src/Data/FIS.Data/bin/Debug/net8.0/FIS.Data.deps.json
+/home/dev/work/fis-modern/src/Data/FIS.Data/bin/Debug/net8.0/FIS.Data.runtimeconfig.json
+/home/dev/work/fis-modern/src/Data/FIS.Data/bin/Debug/net8.0/FIS.Data.dll
+/home/dev/work/fis-modern/src/Data/FIS.Data/bin/Debug/net8.0/FIS.Data.pdb
+/home/dev/work/fis-modern/src/Data/FIS.Data/bin/Debug/net8.0/FIS.Data.xml
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.csproj.AssemblyReference.cache
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.GeneratedMSBuildEditorConfig.editorconfig
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.AssemblyInfoInputs.cache
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.AssemblyInfo.cs
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.csproj.CoreCompileInputs.cache
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.sourcelink.json
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.dll
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/refint/FIS.Data.dll
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.xml
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.pdb
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/FIS.Data.genruntimeconfig.cache
+/home/dev/work/fis-modern/src/Data/FIS.Data/obj/Debug/net8.0/ref/FIS.Data.dll

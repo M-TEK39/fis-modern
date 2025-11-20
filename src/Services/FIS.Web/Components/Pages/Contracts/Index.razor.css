@@ -1,0 +1,246 @@
+/* Contracts Index Page Styles */
+.page-container {
+    padding: 1.5rem;
+    max-width: 100%;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: var(--background);
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-title-section h1 {
+    color: var(--foreground);
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-title-section h1 i {
+    color: var(--primary);
+    font-size: 1.75rem;
+}
+
+.page-title-section p {
+    color: var(--muted-foreground);
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+/* Contracts Index Page Styles */
+.page-container {
+    padding: 1.5rem;
+    max-width: 100%;
+    margin: 0 auto;
+    min-height: 100vh;
+    background: var(--background);
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.page-title-section h1 {
+    color: var(--foreground);
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.page-title-section h1 i {
+    color: var(--primary);
+    font-size: 1.75rem;
+}
+
+.page-title-section p {
+    color: var(--muted-foreground);
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.page-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.page-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Button Styles */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25;
+    border-radius: 0.375rem;
+    border: 1px solid transparent;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: hsl(from var(--primary) h s calc(l - 5));
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Form Styles */
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group-full {
+    grid-column: 1 / -1;
+}
+
+.form-group label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--foreground);
+    margin-bottom: 0.25rem;
+}
+
+.form-input,
+.form-select {
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--background);
+    color: var(--foreground);
+    font-size: 0.875rem;
+    transition: all 0.15s ease-in-out;
+}
+
+.form-input:focus,
+.form-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px hsla(from var(--primary) h s l / 0.2);
+}
+
+.form-input::placeholder {
+    color: var(--muted-foreground);
+}
+
+textarea.form-input {
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .page-container {
+        padding: 1rem;
+    }
+    
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .page-title-section h1 {
+        font-size: 1.5rem;
+    }
+    
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .page-container {
+        background: hsl(222.2 84% 4.9%);
+    }
+}
+
+[data-theme="dark"] .page-container {
+    background: hsl(222.2 84% 4.9%);
+}
+
+/* CSS Custom Properties for theming */
+:root {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(222.2 84% 4.9%);
+    --primary: hsl(222.2 47.4% 11.2%);
+    --primary-foreground: hsl(210 40% 98%);
+    --muted-foreground: hsl(215.4 16.3% 46.9%);
+    --border: hsl(214.3 31.8% 91.4%);
+}
+
+[data-theme="dark"] {
+    --background: hsl(222.2 84% 4.9%);
+    --foreground: hsl(210 40% 98%);
+    --primary: hsl(210 40% 98%);
+    --primary-foreground: hsl(222.2 47.4% 11.2%);
+    --muted-foreground: hsl(215.4 16.3% 56.9%);
+    --border: hsl(217.2 32.6% 17.5%);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: hsl(222.2 84% 4.9%);
+        --foreground: hsl(210 40% 98%);
+        --primary: hsl(210 40% 98%);
+        --primary-foreground: hsl(222.2 47.4% 11.2%);
+        --muted-foreground: hsl(215.4 16.3% 56.9%);
+        --border: hsl(217.2 32.6% 17.5%);
+    }
+}

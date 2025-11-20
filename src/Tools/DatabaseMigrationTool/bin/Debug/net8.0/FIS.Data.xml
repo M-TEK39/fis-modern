@@ -1,0 +1,66 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>FIS.Data</name>
+    </assembly>
+    <members>
+        <member name="T:FIS.Data.Entities.FuelType">
+            <summary>
+            FuelType entity representing fuel types from legacy 'fuel_type' table.
+            Maps vehicle fuel classifications like petrol, diesel, electric, hybrid, etc.
+            Used by Model entity for vehicle specifications.
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.FuelType.fuel_type_code">
+            <summary>
+            Primary key - unique identifier for the fuel type
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.FuelType.fuel_description">
+            <summary>
+            Description of the fuel type (e.g., "Petrol", "Diesel", "Electric", "Hybrid")
+            </summary>
+        </member>
+        <member name="T:FIS.Data.Entities.MaintenanceTrigger">
+            <summary>
+            MaintenanceTrigger entity representing maintenance triggers from legacy 'maintenance_trigger' table.
+            Maps maintenance trigger types for vehicle service scheduling (e.g., mileage-based, time-based).
+            Used by Model entity for vehicle maintenance configuration.
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.MaintenanceTrigger.maint_trigger_code">
+            <summary>
+            Primary key - unique identifier for the maintenance trigger
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.MaintenanceTrigger.description">
+            <summary>
+            Description of the maintenance trigger (e.g., "Mileage Based", "Time Based", "Hours Based")
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.MaintenanceTrigger.trigger_id">
+            <summary>
+            Trigger identifier code for the maintenance system
+            </summary>
+        </member>
+        <member name="T:FIS.Data.Entities.Type">
+            <summary>
+            Type entity representing vehicle types/classifications from legacy 'type' table.
+            Maps vehicle classification types like car, van, truck, motorcycle, etc.
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.Type.type_code">
+            <summary>
+            Primary key - unique identifier for the vehicle type
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Data.Entities.Type.type_description">
+            <summary>
+            Description of the vehicle type (e.g., "Car", "Van", "Truck", "Motorcycle")
+            </summary>
+        </member>
+    </members>
+</doc>

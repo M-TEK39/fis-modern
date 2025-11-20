@@ -1,0 +1,239 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject DepartmentApiService DepartmentService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading departments...</p>
+    </div>
+}
+else if (_departments.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-buildings"></i>
+        <h3>No departments found</h3>
+        <p>Get started by adding your first department</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Department
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Department
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Department</th>
+                        <th>Contact</th>
+                        <th>Telephone</th>
+                        <th>Email</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var dept in _departments)
+                    {
+                        <tr>
+                            <td>@dept.department_code</td>
+                            <td>@dept.department_description</td>
+                            <td>@(dept.contact_person ?? "-")</td>
+                            <td>@(dept.telephone ?? "-")</td>
+                            <td>@(dept.email ?? "-")</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(dept)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(dept)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showDialog)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog modal-large">
+            <div class="modal-header">
+                <h3>@(_isEdit ? "Edit Department" : "Add Department")</h3>
+            </div>
+            <form @onsubmit="SaveDepartment" @onsubmit:preventDefault="true">
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-field" style="grid-column: 1 / -1;">
+                            <label class="form-label">Department Description <span class="required">*</span></label>
+                            <input type="text" @bind="_currentDept.department_description" class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Contact Person</label>
+                            <input type="text" @bind="_currentDept.contact_person" class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Telephone</label>
+                            <input type="text" @bind="_currentDept.telephone" class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Email</label>
+                            <input type="email" @bind="_currentDept.email" class="form-input" />
+                            </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideDialog" disabled="@_saving">Cancel</button>
+                    <button type="submit" class="btn btn-primary" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-sm"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>@(_isEdit ? "Update" : "Create")</span>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>@_currentDept.department_description</strong>?</p>
+                <p class="warning-text">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideDeleteDialog" disabled="@_deleting">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteDepartment" disabled="@_deleting">
+                    @if (_deleting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <i class="bx bx-trash"></i>
+                        <span>Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DepartmentDto> _departments = new();
+    private DepartmentDto _currentDept = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+    private bool _deleting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDepartments();
+    }
+
+    private async Task LoadDepartments()
+    {
+        _loading = true;
+        _departments = await DepartmentService.GetDepartmentsAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentDept = new DepartmentDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(DepartmentDto dept)
+    {
+        _currentDept = dept with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(DepartmentDto dept)
+    {
+        _currentDept = dept;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentDept = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveDepartment()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await DepartmentService.UpdateDepartmentAsync(_currentDept.department_code, _currentDept);
+        }
+        else
+        {
+            success = await DepartmentService.CreateDepartmentAsync(_currentDept);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadDepartments();
+        }
+    }
+
+    private async Task DeleteDepartment()
+    {
+        _deleting = true;
+        var success = await DepartmentService.DeleteDepartmentAsync(_currentDept.department_code);
+        _deleting = false;
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadDepartments();
+        }
+    }
+}

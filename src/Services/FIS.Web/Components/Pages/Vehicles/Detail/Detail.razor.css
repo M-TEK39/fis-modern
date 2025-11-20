@@ -1,0 +1,336 @@
+/* Vehicle Detail Page Styles */
+
+.detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--fis-muted-text);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease;
+    font-weight: 500;
+}
+
+.breadcrumb-link:hover {
+    color: var(--fis-text);
+    background: var(--fis-hover);
+}
+
+.breadcrumb-separator {
+    color: var(--fis-border);
+}
+
+.breadcrumb-current {
+    color: var(--fis-text);
+    font-weight: 600;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.btn-secondary {
+    background: var(--fis-surface);
+    color: var(--fis-text);
+    border: 1px solid var(--fis-border);
+}
+
+.btn-secondary:hover {
+    background: var(--fis-hover);
+    border-color: var(--fis-accent);
+}
+
+.btn-danger {
+    background: hsl(0, 84%, 60%);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: hsl(0, 84%, 50%);
+}
+
+.detail-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.detail-card {
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.75rem;
+    box-shadow: var(--fis-shadow);
+}
+
+.primary-card {
+    border-top: 4px solid var(--fis-accent);
+}
+
+.card-header {
+    padding: 2rem;
+    border-bottom: 1px solid var(--fis-border);
+}
+
+.vehicle-title {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.vehicle-reg {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--fis-text);
+    margin: 0;
+    letter-spacing: 0.05em;
+}
+
+.vehicle-subtitle {
+    color: var(--fis-muted-text);
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.card-body {
+    padding: 2rem;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 2rem;
+}
+
+.detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--fis-text);
+    margin: 0;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--fis-border);
+}
+
+.section-title i {
+    font-size: 1.5rem;
+    color: var(--fis-accent);
+}
+
+.detail-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.detail-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.field-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--fis-muted-text);
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.field-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--fis-text);
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-dialog {
+    background: var(--fis-surface);
+    border-radius: 0.75rem;
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+    max-width: 500px;
+    width: 100%;
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--fis-border);
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--fis-text);
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--fis-muted-text);
+    padding: 0.5rem;
+    border-radius: 0.375rem;
+    transition: all 0.15s ease;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    background: var(--fis-hover);
+    color: var(--fis-text);
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+.modal-body p {
+    margin: 0 0 0.75rem 0;
+    color: var(--fis-text);
+}
+
+.warning-text {
+    color: hsl(0, 84%, 60%);
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding: 1.5rem;
+    border-top: 1px solid var(--fis-border);
+}
+
+.spinner-sm {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+.error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem;
+    text-align: center;
+}
+
+.error-state i {
+    font-size: 4rem;
+    color: hsl(0, 84%, 60%);
+    margin-bottom: 1rem;
+}
+
+.error-state h3 {
+    margin: 0 0 0.5rem 0;
+    color: var(--fis-text);
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.error-state p {
+    color: var(--fis-muted-text);
+    margin: 0 0 1.5rem 0;
+}
+
+@media (max-width: 768px) {
+    .detail-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .detail-actions {
+        width: 100%;
+    }
+
+    .detail-actions .btn {
+        flex: 1;
+    }
+
+    .detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .card-header,
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    .vehicle-reg {
+        font-size: 1.5rem;
+    }
+}

@@ -1,0 +1,394 @@
+@page "/drivers"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Driver Management - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-id-card"></i>
+            Driver Management
+        </h1>
+        <p class="page-description">Manage authorized drivers and their licensing information</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Driver
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading drivers...</p>
+        </div>
+    }
+    else if (_drivers.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-id-card"></i>
+            <h3>No drivers found</h3>
+            <p>Get started by adding your first authorized driver</p>
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Driver
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="driver-grid">
+            @foreach (var driver in _drivers)
+            {
+                <article class="driver-card">
+                    <div class="driver-card-header">
+                        <div class="driver-status @(driver.driver_active ? "active" : "inactive")">
+                            <i class="bx @(driver.driver_active ? "bx-check-circle" : "bx-x-circle")"></i>
+                            @(driver.driver_active ? "Active" : "Inactive")
+                        </div>
+                        <div class="driver-actions">
+                            <button class="btn-icon btn-edit" @onclick="() => ShowEditDialog(driver)" title="Edit Driver">
+                                <i class="bx bx-edit"></i>
+                                <span class="btn-text">Edit</span>
+                            </button>
+                            <button class="btn-icon btn-delete" @onclick="() => ShowDeleteDialog(driver)" title="Delete Driver">
+                                <i class="bx bx-trash"></i>
+                                <span class="btn-text">Delete</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="driver-card-body">
+                        <h3 class="driver-name">@driver.driver_surname, @driver.driver_firstname</h3>
+                        <div class="driver-info">
+                            <i class="bx bx-id-card"></i>
+                            <span>ID: @(driver.driver_SA_id ?? driver.driver_passportnumber ?? "N/A")</span>
+                        </div>
+                        <div class="driver-info">
+                            <i class="bx bx-credit-card"></i>
+                            <span>Licence: @(driver.driver_licence_number ?? "N/A")</span>
+                        </div>
+                        @if (driver.driver_licence_ExpiryDate.HasValue)
+                        {
+                            var daysUntilExpiry = (driver.driver_licence_ExpiryDate.Value - DateTime.Now).Days;
+                            var expiryClass = daysUntilExpiry < 30 ? "expiry-warning" : daysUntilExpiry < 90 ? "expiry-soon" : "";
+                            <div class="driver-info @expiryClass">
+                                <i class="bx bx-calendar"></i>
+                                <span>Expires: @driver.driver_licence_ExpiryDate.Value.ToString("dd MMM yyyy")</span>
+                            </div>
+                        }
+                        @if (driver.driver_hasPDP)
+                        {
+                            <div class="driver-badge">
+                                <i class="bx bx-shield-alt-2"></i>
+                                PDP Holder
+                            </div>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+
+    <Modal IsVisible="_showDialog" 
+           Title="@(_isEdit ? "Edit Driver" : "Add Driver")" 
+           Size="Modal.ModalSize.Large"
+           SubmitText="@(_isEdit ? "Update" : "Create")"
+           IsSaving="_saving"
+           OnSubmit="SaveDriver" 
+           OnCancel="HideDialog">
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="form-label">Surname <span class="required">*</span></label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_surname" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">First Name <span class="required">*</span></label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_firstname" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">SA ID Number</label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_SA_id" placeholder="13-digit ID" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Passport Number</label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_passportnumber" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Persal Number</label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_persalnumber" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Contract Number</label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_contractnumber" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Site Code <span class="required">*</span></label>
+                <input type="number" class="form-input" @bind="_currentDriver.site_code" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Licence Type ID <span class="required">*</span></label>
+                <input type="number" class="form-input" @bind="_currentDriver.driver_licence_type_id" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Licence Number <span class="required">*</span></label>
+                <input type="text" class="form-input" @bind="_currentDriver.driver_licence_number" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Licence Issue Date</label>
+                <input type="date" class="form-input" @bind="_currentDriver.driver_licence_issuedate" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Licence Expiry Date</label>
+                <input type="date" class="form-input" @bind="_currentDriver.driver_licence_ExpiryDate" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label">Last Verified Date</label>
+                <input type="date" class="form-input" @bind="_currentDriver.driver_licence_lastVerifiedDate" />
+            </div>
+
+            <div class="form-field">
+                <label class="form-label form-checkbox">
+                    <input type="checkbox" @bind="_currentDriver.driver_hasPDP" />
+                    <span>Has PDP (Professional Driving Permit)</span>
+                </label>
+            </div>
+
+            @if (_currentDriver.driver_hasPDP)
+            {
+                <div class="form-field">
+                    <label class="form-label">PDP Expiry Date</label>
+                    <input type="date" class="form-input" @bind="_currentDriver.driver_PDP_ExpiryDate" />
+                </div>
+            }
+
+            <div class="form-field">
+                <label class="form-label form-checkbox">
+                    <input type="checkbox" @bind="_currentDriver.driver_active" />
+                    <span>Active Driver</span>
+                </label>
+            </div>
+        </div>
+    </Modal>
+
+    <ConfirmationModal IsVisible="_showDeleteConfirm" 
+                      Title="Confirm Delete" 
+                      ConfirmText="Delete"
+                      IsDeleting="_deleting"
+                      OnConfirm="DeleteDriver" 
+                      OnCancel="HideDeleteDialog">
+        <p>Are you sure you want to delete driver <strong>@_currentDriver.driver_surname, @_currentDriver.driver_firstname</strong>?</p>
+        <p style="color: var(--fis-muted-text); font-size: 0.875rem; margin-top: 0.5rem;">This action cannot be undone.</p>
+    </ConfirmationModal>
+</div>
+
+@code {
+    // Driver model for this component
+    public class Driver
+    {
+        public int site_driver_code { get; set; }
+        public string? driver_surname { get; set; }
+        public string? driver_firstname { get; set; }
+        public string? driver_SA_id { get; set; }
+        public string? driver_passportnumber { get; set; }
+        public string? driver_persalnumber { get; set; }
+        public string? driver_contractnumber { get; set; }
+        public int site_code { get; set; }
+        public int driver_licence_type_id { get; set; }
+        public string? driver_licence_number { get; set; }
+        public DateTime? driver_licence_issuedate { get; set; }
+        public DateTime? driver_licence_ExpiryDate { get; set; }
+        public DateTime? driver_licence_lastVerifiedDate { get; set; }
+        public bool driver_hasPDP { get; set; }
+        public DateTime? driver_PDP_ExpiryDate { get; set; }
+        public bool driver_active { get; set; }
+    }
+
+    private List<Driver> _drivers = new();
+    private Driver _currentDriver = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+    private bool _deleting = false;
+
+    protected override void OnInitialized()
+    {
+        LoadDrivers();
+    }
+
+    private void LoadDrivers()
+    {
+        // TODO: Replace with actual API call when DriverService is available
+        // _drivers = await DriverService.GetDriversAsync();
+        
+        // Mock data for now
+        _drivers = new List<Driver>
+        {
+            new() { 
+                site_driver_code = 1, 
+                driver_surname = "Smith", 
+                driver_firstname = "John", 
+                driver_SA_id = "8001015009088",
+                driver_licence_number = "DL123456789",
+                site_code = 1,
+                driver_licence_type_id = 1,
+                driver_active = true,
+                driver_hasPDP = true,
+                driver_licence_ExpiryDate = DateTime.Now.AddYears(2)
+            },
+            new() { 
+                site_driver_code = 2, 
+                driver_surname = "Jones", 
+                driver_firstname = "Mary", 
+                driver_SA_id = "8505125234567",
+                driver_licence_number = "DL987654321",
+                site_code = 1,
+                driver_licence_type_id = 2,
+                driver_active = true,
+                driver_hasPDP = false,
+                driver_licence_ExpiryDate = DateTime.Now.AddMonths(6)
+            }
+        };
+        _loading = false;
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentDriver = new Driver { driver_active = true };
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(Driver driver)
+    {
+        _currentDriver = new Driver
+        {
+            site_driver_code = driver.site_driver_code,
+            driver_surname = driver.driver_surname,
+            driver_firstname = driver.driver_firstname,
+            driver_SA_id = driver.driver_SA_id,
+            driver_passportnumber = driver.driver_passportnumber,
+            driver_persalnumber = driver.driver_persalnumber,
+            driver_contractnumber = driver.driver_contractnumber,
+            site_code = driver.site_code,
+            driver_licence_type_id = driver.driver_licence_type_id,
+            driver_licence_number = driver.driver_licence_number,
+            driver_licence_issuedate = driver.driver_licence_issuedate,
+            driver_licence_ExpiryDate = driver.driver_licence_ExpiryDate,
+            driver_licence_lastVerifiedDate = driver.driver_licence_lastVerifiedDate,
+            driver_hasPDP = driver.driver_hasPDP,
+            driver_PDP_ExpiryDate = driver.driver_PDP_ExpiryDate,
+            driver_active = driver.driver_active
+        };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(Driver driver)
+    {
+        _currentDriver = driver;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentDriver = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private void SaveDriver()
+    {
+        _saving = true;
+        bool success = true; // Mock success for now
+
+        if (_isEdit)
+        {
+            // TODO: Replace with actual API call
+            // success = await DriverService.UpdateDriverAsync(_currentDriver.site_driver_code, _currentDriver);
+            
+            // Mock update
+            var existingDriver = _drivers.FirstOrDefault(d => d.site_driver_code == _currentDriver.site_driver_code);
+            if (existingDriver != null)
+            {
+                existingDriver.driver_surname = _currentDriver.driver_surname;
+                existingDriver.driver_firstname = _currentDriver.driver_firstname;
+                existingDriver.driver_SA_id = _currentDriver.driver_SA_id;
+                existingDriver.driver_passportnumber = _currentDriver.driver_passportnumber;
+                existingDriver.driver_persalnumber = _currentDriver.driver_persalnumber;
+                existingDriver.driver_contractnumber = _currentDriver.driver_contractnumber;
+                existingDriver.site_code = _currentDriver.site_code;
+                existingDriver.driver_licence_type_id = _currentDriver.driver_licence_type_id;
+                existingDriver.driver_licence_number = _currentDriver.driver_licence_number;
+                existingDriver.driver_licence_issuedate = _currentDriver.driver_licence_issuedate;
+                existingDriver.driver_licence_ExpiryDate = _currentDriver.driver_licence_ExpiryDate;
+                existingDriver.driver_licence_lastVerifiedDate = _currentDriver.driver_licence_lastVerifiedDate;
+                existingDriver.driver_hasPDP = _currentDriver.driver_hasPDP;
+                existingDriver.driver_PDP_ExpiryDate = _currentDriver.driver_PDP_ExpiryDate;
+                existingDriver.driver_active = _currentDriver.driver_active;
+            }
+        }
+        else
+        {
+            // TODO: Replace with actual API call
+            // success = await DriverService.CreateDriverAsync(_currentDriver);
+            
+            // Mock create
+            _currentDriver.site_driver_code = _drivers.Max(d => d.site_driver_code) + 1;
+            _drivers.Add(_currentDriver);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            LoadDrivers();
+        }
+    }
+
+    private void DeleteDriver()
+    {
+        _deleting = true;
+        
+        // TODO: Replace with actual API call
+        // var success = await DriverService.DeleteDriverAsync(_currentDriver.site_driver_code);
+        
+        // Mock delete
+        var driverToRemove = _drivers.FirstOrDefault(d => d.site_driver_code == _currentDriver.site_driver_code);
+        if (driverToRemove != null)
+        {
+            _drivers.Remove(driverToRemove);
+        }
+        var success = true; // Mock success
+        
+        _deleting = false;
+
+        if (success)
+        {
+            HideDeleteDialog();
+            LoadDrivers();
+        }
+    }
+}

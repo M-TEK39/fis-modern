@@ -1,0 +1,344 @@
+@page "/vehicles/create"
+@page "/vehicles/{VmfCode:int}/edit"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject NavigationManager Navigation
+
+<PageTitle>@(_isEditMode ? "Edit Vehicle" : "Add Vehicle") - Fleet Information System</PageTitle>
+
+<div class="form-page">
+    <div class="form-header">
+        <div class="breadcrumb">
+            <span class="breadcrumb-link" @onclick="NavigateToList">
+                <i class="bx bx-chevron-left"></i>
+                Vehicles
+            </span>
+            <span class="breadcrumb-separator">/</span>
+            <span class="breadcrumb-current">@(_isEditMode ? "Edit Vehicle" : "Add Vehicle")</span>
+        </div>
+    </div>
+
+    <div class="form-container">
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>@(_isEditMode ? "Edit Vehicle" : "Add New Vehicle")</h2>
+                <p>@(_isEditMode ? "Update vehicle information" : "Enter vehicle details - all fields from legacy system")</p>
+            </div>
+
+            <div class="form-card-body">
+                <EditForm Model="@_vehicle" OnValidSubmit="HandleSubmit">
+                    <DataAnnotationsValidator />
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-info-circle"></i>
+                            Core Information
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Model Code <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.model_code" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Type Code <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.type_code" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Vehicle Status Code <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.vehicle_status_code" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Location Code <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.location_code" class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-id-card"></i>
+                            Identification Numbers
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Fleet Number (GG) <span class="required">*</span></label>
+                                <InputText @bind-Value="_vehicle.fleet_number" class="form-input" placeholder="e.g., GG123" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Registration Number (GP) <span class="required">*</span></label>
+                                <InputText @bind-Value="_vehicle.registration_number" class="form-input" placeholder="e.g., GP123ABC" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Asset Number</label>
+                                <InputText @bind-Value="_vehicle.asset_number" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Engine Number <span class="required">*</span></label>
+                                <InputText @bind-Value="_vehicle.engine_number_1" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Chassis Number <span class="required">*</span></label>
+                                <InputText @bind-Value="_vehicle.chassis_number" class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-tachometer"></i>
+                            Odometer & Dates
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Take On Date <span class="required">*</span></label>
+                                <InputDate @bind-Value="_vehicle.take_on_date" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Take On Odo (km) <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.take_on_odo" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Current Odo (km) <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.current_odo" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Odo Adjustment</label>
+                                <InputNumber @bind-Value="_vehicle.odo_adjustment" class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-car"></i>
+                            Vehicle Specifications
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Year Manufactured <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.year_manufactured" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Colour</label>
+                                <InputText @bind-Value="_vehicle.colour" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Transmission</label>
+                                <InputText @bind-Value="_vehicle.transmission" class="form-input" placeholder="e.g., Manual/Automatic" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Tare (kg) <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.tare" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">GVM (kg)</label>
+                                <InputNumber @bind-Value="_vehicle.gvm" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Tow Hitch</label>
+                                <InputText @bind-Value="_vehicle.tow_hitch" class="form-input" placeholder="Yes/No" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Canopy</label>
+                                <InputText @bind-Value="_vehicle.canopy" class="form-input" placeholder="Yes/No" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Optional Extras</label>
+                                <InputText @bind-Value="_vehicle.optional_extras" class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-credit-card"></i>
+                            Cards & Licensing
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Fuel Card Number</label>
+                                <InputText @bind-Value="_vehicle.fuel_card_number" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Fuel Card Date</label>
+                                <InputDate @bind-Value="_vehicle.fuel_card_date" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Maint Card Number</label>
+                                <InputText @bind-Value="_vehicle.maint_card_number" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Maint Card Expiry</label>
+                                <InputDate @bind-Value="_vehicle.maint_card_exdate" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Operator Card Number</label>
+                                <InputText @bind-Value="_vehicle.operator_card_number" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Licence Due Date <span class="required">*</span></label>
+                                <InputDate @bind-Value="_vehicle.licence_due_date" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Additional Fuel Tank (L)</label>
+                                <InputNumber @bind-Value="_vehicle.additional_fuel_tank" class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-wallet"></i>
+                            Financial Information
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Purchase Date</label>
+                                <InputDate @bind-Value="_vehicle.purchase_date" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Purchase Amount</label>
+                                <InputNumber @bind-Value="_vehicle.purchase_amount" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Purchased From</label>
+                                <InputText @bind-Value="_vehicle.purchased_from" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Book Value</label>
+                                <InputNumber @bind-Value="_vehicle.book_value" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Book Value Date</label>
+                                <InputDate @bind-Value="_vehicle.book_value_date" class="form-input" />
+                            </div>
+
+                            <div class="form-field">
+                                <label class="form-label">Monthly Overhead</label>
+                                <InputNumber @bind-Value="_vehicle.monthly_overhead" class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" @onclick="NavigateToList" disabled="@_saving">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary" disabled="@_saving">
+                            @if (_saving)
+                            {
+                                <span class="spinner-sm"></span>
+                                <span>@(_isEditMode ? "Updating..." : "Creating...")</span>
+                            }
+                            else
+                            {
+                                <i class="bx @(_isEditMode ? "bx-check" : "bx-plus")"></i>
+                                <span>@(_isEditMode ? "Update Vehicle" : "Create Vehicle")</span>
+                            }
+                        </button>
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-error">
+                            <i class="bx bx-error-circle"></i>
+                            <span>@_errorMessage</span>
+                        </div>
+                    }
+                </EditForm>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int? VmfCode { get; set; }
+
+    private VehicleDto _vehicle = new();
+    private bool _isEditMode => VmfCode.HasValue;
+    private bool _saving = false;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_isEditMode && VmfCode.HasValue)
+        {
+            var vehicle = await VehicleService.GetVehicleAsync(VmfCode.Value);
+            if (vehicle != null)
+            {
+                _vehicle = vehicle;
+            }
+            else
+            {
+                _errorMessage = "Vehicle not found";
+            }
+        }
+        else
+        {
+            // Initialize with defaults for new vehicle
+            _vehicle.take_on_date = DateTime.Now;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _saving = true;
+        _errorMessage = null;
+
+        bool success;
+        if (_isEditMode && VmfCode.HasValue)
+        {
+            success = await VehicleService.UpdateVehicleAsync(VmfCode.Value, _vehicle);
+        }
+        else
+        {
+            success = await VehicleService.CreateVehicleAsync(_vehicle);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            NavigateToList();
+        }
+        else
+        {
+            _errorMessage = $"Failed to {(_isEditMode ? "update" : "create")} vehicle. Please try again.";
+        }
+    }
+
+    private void NavigateToList()
+    {
+        Navigation.NavigateTo("/vehicles");
+    }
+}

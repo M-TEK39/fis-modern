@@ -1,0 +1,54 @@
+@if (IsVisible)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog @(Size == ModalSize.Large ? "modal-large" : "")">
+            <div class="modal-header">
+                <h3 class="modal-title">@Title</h3>
+            </div>
+            <form @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
+                <div class="modal-body">
+                    @ChildContent
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsSaving">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+                        @if (IsSaving)
+                        {
+                            <span class="spinner-sm"></span>
+                            <span>@(SaveText ?? "Saving...")</span>
+                        }
+                        else
+                        {
+                            <span>@(SubmitText ?? "Save")</span>
+                        }
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? SubmitText { get; set; }
+    [Parameter] public string? SaveText { get; set; }
+    [Parameter] public bool IsSaving { get; set; }
+    [Parameter] public ModalSize Size { get; set; } = ModalSize.Normal;
+    [Parameter] public EventCallback OnSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    public enum ModalSize
+    {
+        Normal,
+        Large
+    }
+
+    private async Task HandleSubmit()
+    {
+        await OnSubmit.InvokeAsync();
+    }
+}

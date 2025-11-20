@@ -1,0 +1,159 @@
+is_global = true
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = FIS.Web
+build_property.RootNamespace = FIS.Web
+build_property.ProjectDir = /home/dev/work/fis-modern/src/Services/FIS.Web/
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = /home/dev/work/fis-modern/src/Services/FIS.Web
+build_property._RazorSourceGeneratorDebug = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9BcHAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Counter.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Db3VudGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Error.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9FcnJvci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Weather.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9XZWF0aGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9Sb3V0ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9fSW1wb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9MYXlvdXQvTWFpbkxheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-qow82onfxm
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9MYXlvdXQvTmF2TWVudS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-or108im9sf
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Accidents/AccidentForm.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BY2NpZGVudHMvQWNjaWRlbnRGb3JtLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-jofme36ixz
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Accidents/AccidentsTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BY2NpZGVudHMvQWNjaWRlbnRzVGFiLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-azvl7tln4f
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Accidents/ClaimsTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BY2NpZGVudHMvQ2xhaW1zVGFiLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-345gsksmst
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Accidents/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BY2NpZGVudHMvSW5kZXgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-zylwa1q66o
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Accidents/ReportsTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BY2NpZGVudHMvUmVwb3J0c1RhYi5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-1ip4z151t3
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Contracts/ContractSearchBar.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Db250cmFjdHMvQ29udHJhY3RTZWFyY2hCYXIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-r2m401nq5d
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Contracts/ContractsTable.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Db250cmFjdHMvQ29udHJhY3RzVGFibGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-7bl5nvw29n
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Contracts/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Db250cmFjdHMvSW5kZXgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-wxvle3o07v
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Departments/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9EZXBhcnRtZW50cy9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-p5rga6s556
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Drivers/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Ecml2ZXJzL0luZGV4LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-xjcofygf45
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Ib21lLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-1o6mj6nd44
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Locations/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Mb2NhdGlvbnMvSW5kZXgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-ypdq8hotke
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/PrivateHire/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Qcml2YXRlSGlyZS9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-7wye8w6nbz
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/DepartmentsTab/DepartmentsTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0RlcGFydG1lbnRzVGFiL0RlcGFydG1lbnRzVGFiLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-q111i22734
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/FuelTypesTab/FuelTypesTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0Z1ZWxUeXBlc1RhYi9GdWVsVHlwZXNUYWIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-qz6pjf2l7s
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0luZGV4LnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-s4b9tu9zvq
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/MakesTab/MakesTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL01ha2VzVGFiL01ha2VzVGFiLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-1i5zggbct7
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/ModelsTab/ModelsTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL01vZGVsc1RhYi9Nb2RlbHNUYWIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-60e8xyqgxb
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/TypesTab/TypesTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL1R5cGVzVGFiL1R5cGVzVGFiLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-72tyk2366w
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Sites/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9TaXRlcy9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-ar2xye6k62
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Trips/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Ucmlwcy9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-re3vceuo8c
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-aqljpaloi3
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Vehicles/Detail/Detail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9EZXRhaWwvRGV0YWlsLnJhem9y
+build_metadata.AdditionalFiles.CssScope = b-w38iovon9q
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Vehicles/Form/Form.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9Gb3JtL0Zvcm0ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-s1avarjk5b
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Vehicles/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-1mioas3jt6
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Shared/ConfirmationModal.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9TaGFyZWQvQ29uZmlybWF0aW9uTW9kYWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-46jfuhysfz
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Shared/Modal.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9TaGFyZWQvTW9kYWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = b-5cbeor0ugw

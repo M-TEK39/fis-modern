@@ -1,0 +1,860 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>FIS.Core.Domain</name>
+    </assembly>
+    <members>
+        <member name="T:FIS.Core.Domain.Entities.ContractStatus">
+            <summary>
+            ContractStatus Entity - Contract status types and descriptions
+            Maps to legacy 'contract_status' table with exact field names for compatibility
+            Defines contract status values used throughout the contract lifecycle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.ContractStatus.contract_status_code">
+            <summary>
+            Primary key - Contract status code (status identifier)
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.ContractStatus.status_description">
+            <summary>
+            Contract status description (Active, Completed, Cancelled, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.ContractStatus.status_abbreviation">
+            <summary>
+            Optional status abbreviation
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.ContractStatus.is_active">
+            <summary>
+            Indicates if this status means the contract is active
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.ContractStatus.is_final">
+            <summary>
+            Indicates if this status means the contract is finalized/closed
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.ContractTerms">
+            <summary>
+            Represents contract terms and conditions
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.VehicleMaintenanceRecord">
+            <summary>
+            Represents vehicle maintenance records
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Contract">
+            <summary>
+            Contract Entity - EXACT legacy schema match for contract table
+            Uses exact field names from Database.cs - NO modernization
+            CRITICAL: This table needs unique constraint on (vmf_code, still_current) where still_current = 'Y'
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Driver">
+            <summary>
+            Driver Entity - Legacy compatibility for site_drivers table
+            Maps to the actual legacy site_drivers schema from Database.cs
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.BatchTariffRequest">
+            <summary>
+            Request model for batch tariff calculations.
+            Used when calculating multiple contract tariffs in a single operation.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffRequest.ContractCode">
+            <summary>
+            Contract code to calculate tariff for
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffRequest.CheckDate">
+            <summary>
+            Date to calculate tariff as of
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffRequest.TariffType">
+            <summary>
+            Type of tariff to calculate (Fixed, Kilos, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffRequest.VmfCode">
+            <summary>
+            Optional vehicle code (if different from contract default)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffRequest.Reference">
+            <summary>
+            Optional reference for tracking this request
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.BatchTariffResult">
+            <summary>
+            Result model for batch tariff calculations.
+            Contains the calculated tariff amount and any error information.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.ContractCode">
+            <summary>
+            Contract code that was calculated
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.CheckDate">
+            <summary>
+            Date the tariff was calculated for
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.TariffType">
+            <summary>
+            Type of tariff that was calculated
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.Amount">
+            <summary>
+            Calculated tariff amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.Status">
+            <summary>
+            Status of the calculation
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.Message">
+            <summary>
+            Message (error or info) from the calculation
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.Source">
+            <summary>
+            Source of the tariff calculation
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.IsSuccess">
+            <summary>
+            Whether the calculation was successful
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.Reference">
+            <summary>
+            Optional reference from the original request
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BatchTariffResult.VmfCode">
+            <summary>
+            Optional vehicle code used in calculation
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.FinancialReconciliation">
+            <summary>
+            Result model for financial reconciliation operations.
+            Used to identify discrepancies between calculated and recorded tariffs.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.PeriodStart">
+            <summary>
+            Start of the reconciliation period
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.PeriodEnd">
+            <summary>
+            End of the reconciliation period
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.SiteCode">
+            <summary>
+            Optional site code filter
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.DepartmentCode">
+            <summary>
+            Optional department code filter
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.Discrepancies">
+            <summary>
+            List of discovered discrepancies
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.TotalDiscrepancies">
+            <summary>
+            Total number of discrepancies found
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.TotalDifference">
+            <summary>
+            Total absolute difference across all discrepancies
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.RequiresAction">
+            <summary>
+            Whether any discrepancies require manual review
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialReconciliation.ReconciliationDate">
+            <summary>
+            When this reconciliation was performed
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy">
+            <summary>
+            Represents a discrepancy between calculated and recorded tariff amounts.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.ContractCode">
+            <summary>
+            Contract code with discrepancy
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.VmfCode">
+            <summary>
+            Vehicle code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.CalculatedAmount">
+            <summary>
+            Amount calculated by tariff engine
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.RecordedAmount">
+            <summary>
+            Amount recorded in financial system
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.Difference">
+            <summary>
+            Difference (calculated - recorded)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.TariffSource">
+            <summary>
+            Source of the calculated tariff
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.Description">
+            <summary>
+            Description of the discrepancy
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.RequiresReview">
+            <summary>
+            Whether this discrepancy requires manual review
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.TariffDiscrepancy.ResolutionNotes">
+            <summary>
+            Optional resolution notes
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.FinancialEntry">
+            <summary>
+            Represents a financial entry for reconciliation comparison.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialEntry.Date">
+            <summary>
+            Entry date
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialEntry.ContractCode">
+            <summary>
+            Contract code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialEntry.Amount">
+            <summary>
+            Entry amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialEntry.EntryType">
+            <summary>
+            Entry type or description
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.FinancialEntry.Reference">
+            <summary>
+            Reference number
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.Invoice">
+            <summary>
+            Invoice header - monthly invoice per department.
+            Maps to legacy dbo.invoice table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.InvoiceItem">
+            <summary>
+            Invoice line item - detailed charges for each vehicle/contract.
+            Maps to legacy dbo.invoice_item table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.LeaseTariff">
+            <summary>
+            Lease vehicle tariff rates.
+            Contains lease-specific monthly rates and excess kilometer charges.
+            Maps to legacy dbo.LeaseTariff table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.MaintenanceValue">
+            <summary>
+            Maintenance cost matrix for modern tariff system (fin schema).
+            Defines maintenance costs by vehicle class and age.
+            Maps to legacy fin.MaintenanceValue table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult">
+            <summary>
+            Result model for monthly billing calculations.
+            Contains all contract billing details for a specific period and site/department.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.SiteCode">
+            <summary>
+            Site code for the billing
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.DepartmentCode">
+            <summary>
+            Department code for the billing
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.BillingPeriodStart">
+            <summary>
+            Start of the billing period
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.BillingPeriodEnd">
+            <summary>
+            End of the billing period
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.ContractBillings">
+            <summary>
+            Individual contract billing details
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.TotalFixedCharges">
+            <summary>
+            Total fixed charges across all contracts
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.TotalKilometerCharges">
+            <summary>
+            Total kilometer charges across all contracts
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.TotalExcessCharges">
+            <summary>
+            Total excess charges across all contracts
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.GrandTotal">
+            <summary>
+            Grand total of all charges
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.CalculatedAt">
+            <summary>
+            When this billing was calculated
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.MonthlyBillingResult.BillingReference">
+            <summary>
+            Optional reference number for this billing run
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.ContractBilling">
+            <summary>
+            Billing details for a single contract within a monthly billing period.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.ContractCode">
+            <summary>
+            Contract code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.VmfCode">
+            <summary>
+            Vehicle code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.ContractType">
+            <summary>
+            Contract type (A = Assigned, L = Lease, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.BillingItems">
+            <summary>
+            Individual billing items for this contract
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.TotalFixedCharges">
+            <summary>
+            Total fixed charges for this contract
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.TotalKilometerCharges">
+            <summary>
+            Total kilometer charges for this contract
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.TotalExcessCharges">
+            <summary>
+            Total excess charges for this contract
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.ContractBilling.TotalAmount">
+            <summary>
+            Total amount for this contract
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.BillingItem">
+            <summary>
+            Individual billing item within a contract billing.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.Date">
+            <summary>
+            Date this charge applies to
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.Description">
+            <summary>
+            Description of the charge
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.Amount">
+            <summary>
+            Amount of the charge
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.TariffType">
+            <summary>
+            Type of tariff this represents
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.Source">
+            <summary>
+            Source of the tariff
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.Quantity">
+            <summary>
+            Optional quantity (e.g., kilometers)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Financial.BillingItem.Rate">
+            <summary>
+            Optional rate applied
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.Overhead">
+            <summary>
+            Overhead costs for modern tariff system (fin schema).
+            Defines overhead cost categories and amounts.
+            Maps to legacy fin.Overhead table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.Tariff">
+            <summary>
+            Legacy tariff table (pre-2009 tariff system).
+            Contains tariff rates by vehicle class and year manufactured.
+            Maps to legacy dbo.tariff table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.TariffParameter">
+            <summary>
+            Tariff parameters for modern tariff system (post-2009, fin schema).
+            Contains annual tariff configuration parameters.
+            Maps to legacy fin.TariffParameter table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.TariffWeightCalculation">
+            <summary>
+            Tariff weight calculation for overhead distribution (fin schema).
+            Distributes overhead across vehicle categories using weighted factors.
+            Maps to legacy fin.TariffWeightCalculation table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.VehicleTariff">
+            <summary>
+            Calculated vehicle tariff for modern tariff system (post-2009, fin schema).
+            Contains all calculated tariff components for a specific vehicle.
+            Maps to legacy fin.vehicle_tariff table.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.FuelCard">
+            <summary>
+            FuelCard Entity - EXACT legacy schema match for Fuel_card table
+            Uses exact field names from Database.cs - NO modernization
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.JournalDetail">
+            <summary>
+            JournalDetail Entity - Financial journal entries for contract billing
+            EXACT legacy schema match from Database.cs
+            Maps to journal_detail table
+            Used for tracking financial transactions related to contracts
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.License">
+            <summary>
+            License Entity - License types required for vehicle operation
+            Maps to legacy 'license' table with exact field names for compatibility
+            Defines license requirements for different vehicle models
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.License.licence_code">
+            <summary>
+            Primary key - License code (license type identifier)
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.License.licence_description">
+            <summary>
+            License type description (Driver's License, Commercial License, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.License.licence_category">
+            <summary>
+            Optional license category code
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Location">
+            <summary>
+            Location Entity - Fixed version with proper validation
+            Represents physical locations where vehicles can be stationed
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Site">
+            <summary>
+            Site Entity - EXACT legacy schema match for site table
+            Uses exact field names from Database.cs - NO modernization
+            Note: Contains legacy typo "Depatrment_code" - kept for compatibility
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.MaintenanceRecord">
+            <summary>
+            MaintenanceRecord Entity - Legacy compatibility for maintenance_records table
+            Maps to legacy snake_case structure with relationships to vehicles and service providers
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.TripDriver">
+            <summary>
+            TripDriver Entity - Legacy compatibility for trip_driver table
+            Maps to the actual legacy trip_driver schema from Database.cs
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.UnitOfMeasure">
+            <summary>
+            UnitOfMeasure Entity - Units of measurement for vehicle specifications
+            Maps to legacy 'unit_of_measure' table with exact field names for compatibility
+            Defines measurement units used throughout the system (km, miles, liters, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.UnitOfMeasure.unit_of_measure_code">
+            <summary>
+            Primary key - Unit of measure code (unit identifier)
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.UnitOfMeasure.unit_description">
+            <summary>
+            Unit of measure description (Kilometers, Miles, Liters, Gallons, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.UnitOfMeasure.unit_abbreviation">
+            <summary>
+            Optional short abbreviation (km, mi, L, gal, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.UnitOfMeasure.unit_category">
+            <summary>
+            Unit category (Distance, Volume, Weight, etc.)
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Department">
+            <summary>
+            Department Entity - Legacy compatibility for department table
+            Maps to the actual legacy department schema from Database.cs
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.User">
+            <summary>
+            User Entity - EXACT legacy schema match for TS_Users table
+            Uses exact field names from Database.cs - NO modernization
+            Maps to the actual legacy TS_Users table with only 3 fields
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Make">
+            <summary>
+            Make Entity - Vehicle manufacturer/brand definitions
+            Maps to legacy 'make' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Make.make_code">
+            <summary>
+            Primary key - Make code (manufacturer identifier)
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Make.make_description">
+            <summary>
+            Make description/name (Toyota, Ford, BMW, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Make.Models">
+            <summary>
+            Models associated with this make
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Make.Vehicles">
+            <summary>
+            Vehicles of this make
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Model">
+            <summary>
+            Model Entity - Vehicle model definitions with specifications
+            Maps to legacy 'model' table with exact field names for compatibility
+            Contains detailed vehicle specifications and configuration
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.model_code">
+            <summary>
+            Primary key - Model code (model identifier)
+            Auto-generated identity column in legacy database
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.make_code">
+            <summary>
+            Foreign key to Make table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.unit_of_measure_code">
+            <summary>
+            Unit of measure code for specifications
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.fuel_type_code">
+            <summary>
+            Foreign key to fuel_type table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.licence_code">
+            <summary>
+            License type code required for this model
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.maint_trigger_code">
+            <summary>
+            Optional maintenance trigger code for service scheduling
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.class_code">
+            <summary>
+            Vehicle class code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.model_description">
+            <summary>
+            Model description/name (Camry, F-150, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.engine_type">
+            <summary>
+            Engine type description
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.engine_capacity">
+            <summary>
+            Engine capacity in CC
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.rated_power">
+            <summary>
+            Rated power in kW
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.fuel_tank_capacity">
+            <summary>
+            Fuel tank capacity in liters
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.target_consumption">
+            <summary>
+            Target fuel consumption (L/100km)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.target_tyre_life">
+            <summary>
+            Target tyre life in kilometers
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.service_interval">
+            <summary>
+            Service interval in kilometers
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.vemm_code">
+            <summary>
+            VEMM code for vehicle registration
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.licence_fee_code">
+            <summary>
+            License fee code for registration costs
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.gvm">
+            <summary>
+            Gross Vehicle Mass (GVM) in kg
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.transmission">
+            <summary>
+            Transmission type (Manual, Automatic, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.wesbank_kilos_per_litre">
+            <summary>
+            Wesbank fuel efficiency (kilos per liter)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.Make">
+            <summary>
+            Associated make/manufacturer
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.Vehicles">
+            <summary>
+            Vehicles using this model
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.PrivateHire">
+            <summary>
+            PrivateHire Entity - Legacy compatibility for Private_hire table
+            Maps to the actual legacy Private_hire schema from Database.cs
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Trip">
+            <summary>
+            Trip Entity - Legacy compatibility for trip_authorities table
+            Maps to the actual legacy trip_authorities schema from Database.cs
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Vehicle">
+            <summary>
+            Vehicle Entity - EXACT legacy schema match for vehicle_master table
+            Uses exact field names from Database.cs - NO modernization
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Enums.TariffStatus">
+            <summary>
+            Status codes matching legacy GetVehicleTariff return values.
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffStatus.Valid">
+            <summary>
+            Valid tariff amount (> 0 or = 0 with valid reason).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffStatus.YearNotFound">
+            <summary>
+            Year manufactured not found (returns -1).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffStatus.NoMatch">
+            <summary>
+            No matching tariff for class/year/date combination (returns -2).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffStatus.Incomplete">
+            <summary>
+            Incomplete tariff - missing overhead or maintenance components (returns -3).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffStatus.Error">
+            <summary>
+            Error during calculation.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Enums.TariffSource">
+            <summary>
+            Source of tariff calculation.
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSource.None">
+            <summary>
+            No tariff found.
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSource.Legacy">
+            <summary>
+            Legacy tariff table (pre-2009).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSource.Modern">
+            <summary>
+            Modern fin.vehicle_tariff table (post-2009).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSource.Lease">
+            <summary>
+            LeaseTariff table (lease-specific rates).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSource.SpecialRule">
+            <summary>
+            Special business rule (0.00 tariff for GGMT internal, relief vehicles, etc.).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSource.Error">
+            <summary>
+            Error occurred during calculation.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Enums.TariffType">
+            <summary>
+            Type of tariff requested.
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffType.Fixed">
+            <summary>
+            Fixed tariff (daily/monthly/hourly charges).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffType.Kilos">
+            <summary>
+            Kilometer tariff (per-kilometer charges).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffType.Excess">
+            <summary>
+            Excess kilometer charges for lease vehicles.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Enums.TariffSystem">
+            <summary>
+            Tariff system to use for calculation.
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSystem.Legacy">
+            <summary>
+            Legacy tariff table (pre-2009).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSystem.Modern">
+            <summary>
+            Modern fin.vehicle_tariff table (post-2009).
+            </summary>
+        </member>
+        <member name="F:FIS.Core.Domain.Enums.TariffSystem.Lease">
+            <summary>
+            LeaseTariff table (lease-specific).
+            </summary>
+        </member>
+    </members>
+</doc>

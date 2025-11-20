@@ -1,0 +1,52 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
+namespace FIS.Core.Domain.Entities.Financial;
+
+/// <summary>
+/// Maintenance cost matrix for modern tariff system (fin schema).
+/// Defines maintenance costs by vehicle class and age.
+/// Maps to legacy fin.MaintenanceValue table.
+/// </summary>
+[Table("MaintenanceValue", Schema = "fin")]
+public class MaintenanceValue
+{
+    [Key]
+    [Column("TariffParameterID")]
+    public int TariffParameterID { get; set; }
+
+    [Key]
+    [Column("class_code")]
+    public short class_code { get; set; }
+
+    [Key]
+    [Column("months_age")]
+    public short months_age { get; set; }
+
+    [Column("class_number")]
+    public string class_number { get; set; } = string.Empty;
+
+    [Column("kilometer_age")]
+    public int kilometer_age { get; set; }
+
+    [Column("amount")]
+    public decimal amount { get; set; }
+
+    [Column("RandPerKilometer")]
+    public decimal RandPerKilometer { get; set; }
+
+    [Column("CaptureDate")]
+    public DateTime CaptureDate { get; set; }
+
+    [Column("ModifiedDate")]
+    public DateTime? ModifiedDate { get; set; }
+
+    [Column("user_access_code")]
+    public short? user_access_code { get; set; }
+
+    [Column("user_access_name")]
+    public string? user_access_name { get; set; }
+
+    // Navigation properties
+    public virtual TariffParameter? TariffParameter { get; set; }
+}

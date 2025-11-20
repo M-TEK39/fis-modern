@@ -1,0 +1,83 @@
+:root {
+    color-scheme: light;
+    --fis-app-bg: hsl(220, 30%, 98%);
+    --fis-sidebar-bg: hsl(0, 0%, 100%);
+    --fis-surface: hsl(0, 0%, 100%);
+    --fis-border: hsl(214, 32%, 91%);
+    --fis-text: hsl(222, 47%, 11%);
+    --fis-muted-text: hsl(215, 16%, 47%);
+    --fis-accent: hsl(222, 47%, 11%);
+    --fis-accent-soft: hsl(214, 32%, 95%);
+    --fis-hover: hsl(214, 32%, 91%);
+    --fis-icon-bg: hsl(214, 32%, 91%);
+    --fis-icon-fg: hsl(222, 47%, 11%);
+    --fis-error-bg: hsl(0, 84%, 60%, 0.1);
+    --fis-success: hsl(142, 71%, 45%);
+    --fis-ring: hsl(222, 84%, 5%, 0.15);
+    --fis-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+    --fis-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --fis-app-bg: hsl(222, 47%, 8%);
+        --fis-sidebar-bg: hsl(222, 47%, 11%);
+        --fis-surface: hsl(222, 47%, 11%);
+        --fis-border: hsl(217, 33%, 17%);
+        --fis-text: hsl(210, 40%, 98%);
+        --fis-muted-text: hsl(215, 20%, 65%);
+        --fis-accent: hsl(210, 40%, 98%);
+        --fis-accent-soft: hsl(217, 33%, 17%);
+        --fis-hover: hsl(217, 33%, 17%);
+        --fis-icon-bg: hsl(217, 33%, 17%);
+        --fis-icon-fg: hsl(210, 40%, 98%);
+        --fis-error-bg: hsl(0, 63%, 31%, 0.2);
+        --fis-success: hsl(142, 71%, 45%);
+        --fis-ring: hsl(210, 40%, 98%, 0.2);
+        --fis-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+        --fis-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+    }
+}
+
+html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Helvetica Neue", "Arial", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--fis-app-bg);
+    color: var(--fis-text);
+    margin: 0;
+    min-height: 100%;
+    line-height: 1.6;
+}
+
+a, .btn-link {
+    color: var(--fis-accent);
+    text-decoration: none;
+    transition: color 0.15s ease-in-out;
+}
+
+a:hover, .btn-link:hover {
+    color: var(--fis-muted-text);
+    text-decoration: none;
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+    outline: 2px solid var(--fis-ring);
+    outline-offset: 2px;
+}
+
+.blazor-error-boundary {
+    background: var(--fis-error-bg);
+    border-radius: 0.75rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--fis-border);
+    box-shadow: var(--fis-shadow);
+}
+
+.blazor-error-boundary::after {
+    content: "An error has occurred.";
+    color: var(--fis-text);
+    font-weight: 500;
+}

@@ -1,0 +1,176 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject ReferenceDataApiService RefDataService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading types...</p>
+    </div>
+}
+else if (_vehicleTypes.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-category"></i>
+        <h3>No types found</h3>
+        <p>Get started by adding your first vehicle type</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus"></i>
+            Add Type
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Type
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type Code</th>
+                        <th>Type Name</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var type in _vehicleTypes)
+                    {
+                        <tr>
+                            <td>@type.type_code</td>
+                            <td>@type.type_name</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(type)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                        <span>Edit</span>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(type)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                        <span>Delete</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+<Modal IsVisible="_showDialog"
+       Title="@(_isEdit ? "Edit Type" : "Add Type")"
+       OnCancel="HideDialog"
+       OnSubmit="SaveVehicleType"
+       IsSaving="_saving">
+    <div class="form-field">
+        <label class="form-label">Type Name <span class="required">*</span></label>
+        <input type="text" class="form-input" @bind="_currentVehicleType.type_name" placeholder="e.g., Sedan" />
+    </div>
+</Modal>
+
+<ConfirmationModal IsVisible="_showDeleteConfirm"
+                  Title="Confirm Delete"
+                  OnCancel="HideDeleteDialog"
+                  OnConfirm="DeleteVehicleType"
+                  IsDeleting="false">
+    <p>Are you sure you want to delete <strong>@_currentVehicleType.type_name</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
+</ConfirmationModal>
+
+@code {
+    private List<VehicleTypeDto> _vehicleTypes = new();
+    private VehicleTypeDto _currentVehicleType = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicleTypes();
+    }
+
+    private async Task LoadVehicleTypes()
+    {
+        _loading = true;
+        _vehicleTypes = await RefDataService.GetTypesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentVehicleType = new VehicleTypeDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(VehicleTypeDto type)
+    {
+        _currentVehicleType = type with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(VehicleTypeDto type)
+    {
+        _currentVehicleType = type;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentVehicleType = new();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveVehicleType()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await RefDataService.UpdateTypeAsync(_currentVehicleType.type_code, _currentVehicleType);
+        }
+        else
+        {
+            success = await RefDataService.CreateTypeAsync(_currentVehicleType);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadVehicleTypes();
+        }
+    }
+
+    private async Task DeleteVehicleType()
+    {
+        var success = await RefDataService.DeleteTypeAsync(_currentVehicleType.type_code);
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadVehicleTypes();
+        }
+    }
+}

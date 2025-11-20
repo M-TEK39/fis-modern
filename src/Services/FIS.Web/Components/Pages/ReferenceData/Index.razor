@@ -1,0 +1,76 @@
+@page "/reference-data"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Pages.ReferenceData
+@inject ReferenceDataApiService RefDataService
+@inject DepartmentApiService DepartmentService
+
+<PageTitle>Reference Data Management - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-data"></i>
+            Reference Data Management
+        </h1>
+        <p class="page-description">Manage vehicle makes, models, types, and fuel types</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="tabs">
+        <button class="tab @(_activeTab == "makes" ? "active" : "")" @onclick='() => SetActiveTab("makes")'>
+            <i class="bx bx-car"></i>
+            Vehicle Makes
+        </button>
+        <button class="tab @(_activeTab == "models" ? "active" : "")" @onclick='() => SetActiveTab("models")'>
+            <i class="bx bx-cog"></i>
+            Vehicle Models
+        </button>
+        <button class="tab @(_activeTab == "types" ? "active" : "")" @onclick='() => SetActiveTab("types")'>
+            <i class="bx bx-category"></i>
+            Vehicle Types
+        </button>
+        <button class="tab @(_activeTab == "fueltypes" ? "active" : "")" @onclick='() => SetActiveTab("fueltypes")'>
+            <i class="bx bx-gas-pump"></i>
+            Fuel Types
+        </button>
+        <button class="tab @(_activeTab == "departments" ? "active" : "")" @onclick='() => SetActiveTab("departments")'>
+            <i class="bx bx-buildings"></i>
+            Departments
+        </button>
+    </div>
+
+    <div class="tab-content">
+        @if (_activeTab == "makes")
+        {
+            <MakesTab />
+        }
+        else if (_activeTab == "models")
+        {
+            <ModelsTab />
+        }
+        else if (_activeTab == "types")
+        {
+            <TypesTab />
+        }
+        else if (_activeTab == "fueltypes")
+        {
+            <FuelTypesTab />
+        }
+        else if (_activeTab == "departments")
+        {
+            <DepartmentsTab />
+        }
+    </div>
+</div>
+
+@code {
+    private string _activeTab = "makes";
+
+    private void SetActiveTab(string tab)
+    {
+        _activeTab = tab;
+    }
+}
