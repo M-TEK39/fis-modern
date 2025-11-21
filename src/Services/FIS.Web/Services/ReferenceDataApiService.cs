@@ -270,7 +270,10 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/fueltypes/{fuelTypeCode}", fuelType);
+            var response = await _httpClient.PutAsJsonAsync(
+                $"api/fueltypes/{fuelTypeCode}",
+                fuelType
+            );
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

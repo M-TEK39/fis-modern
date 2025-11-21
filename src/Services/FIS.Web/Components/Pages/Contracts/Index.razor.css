@@ -43,51 +43,6 @@
     align-items: center;
 }
 
-/* Contracts Index Page Styles */
-.page-container {
-    padding: 1.5rem;
-    max-width: 100%;
-    margin: 0 auto;
-    min-height: 100vh;
-    background: var(--background);
-}
-
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--border);
-}
-
-.page-title-section h1 {
-    color: var(--foreground);
-    font-size: 2rem;
-    font-weight: 700;
-    margin: 0 0 0.25rem 0;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.page-title-section h1 i {
-    color: var(--primary);
-    font-size: 1.75rem;
-}
-
-.page-title-section p {
-    color: var(--muted-foreground);
-    margin: 0;
-    font-size: 0.95rem;
-}
-
-.page-actions {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-}
-
 .page-content {
     display: flex;
     flex-direction: column;
@@ -119,8 +74,8 @@
 }
 
 .btn-primary {
-    background: var(--primary);
-    color: var(--primary-foreground);
+    background: white;
+    color: black;
     border-color: var(--primary);
 }
 
@@ -128,6 +83,7 @@
     background: hsl(from var(--primary) h s calc(l - 5));
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    color: white;
 }
 
 /* Form Styles */
@@ -205,11 +161,7 @@ textarea.form-input {
 }
 
 /* Dark Mode Support */
-@media (prefers-color-scheme: dark) {
-    .page-container {
-        background: hsl(222.2 84% 4.9%);
-    }
-}
+
 
 [data-theme="dark"] .page-container {
     background: hsl(222.2 84% 4.9%);

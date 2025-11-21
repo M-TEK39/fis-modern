@@ -16,6 +16,7 @@
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     border: 1px solid transparent;
     position: relative;
+    
 }
 
 .nav-item:hover:not(.disabled) {
@@ -25,6 +26,7 @@
 .nav-item.active {
     background: var(--fis-accent-soft);
     font-weight: 600;
+    
 }
 
 .nav-item.active::before {
@@ -37,6 +39,7 @@
     height: 70%;
     background: var(--fis-accent);
     border-radius: 0 2px 2px 0;
+    margin-right: 2px;
 }
 
 .nav-item.disabled {

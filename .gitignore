@@ -14,6 +14,7 @@ node_modules
 .venv
 .claude
 .dockerignore
+docker-compose*.yml
 
 # Local Markdown files
 *.md

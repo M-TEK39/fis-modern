@@ -10,7 +10,7 @@
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
-            <i class="bx bx-car-mechanic"></i>
+            <i class="bx bxs-car-mechanic"></i>
             Vehicle Master
         </h1>
         <p class="page-description">Manage fleet vehicles, registrations, and vehicle information</p>
@@ -37,7 +37,7 @@
             @if (!string.IsNullOrWhiteSpace(_searchQuery))
             {
                 <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
-                    <i class="bx bx-x"></i>
+                    <i class="bx bx-x" style="margin-left:-10px; margin-top: -10px"></i>
                 </button>
             }
         </div>
@@ -59,7 +59,7 @@
             @if (!_hasSearched)
             {
                 <button class="btn btn-primary" @onclick="NavigateToCreate">
-                    <i class="bx bx-plus"></i>
+                    <i class="bx bx-plus" style="margin-top: 10px; font-size: 30px;"></i>
                     Add Vehicle
                 </button>
             }

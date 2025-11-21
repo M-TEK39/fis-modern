@@ -593,8 +593,12 @@ public class ReportingService : IReportingService
             TotalCost = totalCost,
             AverageCostPerService = serviceCount > 0 ? totalCost / serviceCount : 0,
             TotalServices = serviceCount,
-            FirstServiceDate = maintenanceRecords.Any() ? maintenanceRecords.Min(m => m.MaintenanceDate) : (DateTime?)null,
-            LastServiceDate = maintenanceRecords.Any() ? maintenanceRecords.Max(m => m.MaintenanceDate) : (DateTime?)null,
+            FirstServiceDate = maintenanceRecords.Any()
+                ? maintenanceRecords.Min(m => m.MaintenanceDate)
+                : (DateTime?)null,
+            LastServiceDate = maintenanceRecords.Any()
+                ? maintenanceRecords.Max(m => m.MaintenanceDate)
+                : (DateTime?)null,
             ServiceIntervalDays = 90, // TODO: Calculate from service history
             ServiceIntervalKm = 10000, // TODO: Calculate from service history
             PreferredServiceProvider =
@@ -804,17 +808,19 @@ public class ReportingService : IReportingService
             UsedKilometers = 0, // TODO: Calculate from trips
             RemainingKilometers = (contract.monthly_km ?? 0) - 0,
             Status = "Active", // Default status as schema doesn't contain status field
-            RelatedTrips = relatedTrips.Select(t => new TripSummaryLine
-            {
-                TripId = t.trip_authority_code, // Using trip_authority_code as ID
-                Date = t.issue_date,
-                StartOdometer = 0, // Trip entity doesn't have start_odo_meter
-                EndOdometer = t.end_odo_meter ?? 0,
-                Distance = t.end_odo_meter ?? 0, // Can't calculate distance without start odometer
-                DriverName = string.Empty, // TODO: Join with driver
-                VehicleRegistration = string.Empty, // TODO: Join with vehicle
-                Purpose = t.trip_reason ?? string.Empty,
-            }).ToList(),
+            RelatedTrips = relatedTrips
+                .Select(t => new TripSummaryLine
+                {
+                    TripId = t.trip_authority_code, // Using trip_authority_code as ID
+                    Date = t.issue_date,
+                    StartOdometer = 0, // Trip entity doesn't have start_odo_meter
+                    EndOdometer = t.end_odo_meter ?? 0,
+                    Distance = t.end_odo_meter ?? 0, // Can't calculate distance without start odometer
+                    DriverName = string.Empty, // TODO: Join with driver
+                    VehicleRegistration = string.Empty, // TODO: Join with vehicle
+                    Purpose = t.trip_reason ?? string.Empty,
+                })
+                .ToList(),
         };
     }
 
@@ -1018,7 +1024,7 @@ public class ReportingService : IReportingService
         // return await page.PdfDataAsync();
 
         await Task.CompletedTask; // Make method properly async
-        
+
         // For now, return HTML as bytes (placeholder)
         return Encoding.UTF8.GetBytes(htmlContent);
     }
@@ -1093,7 +1099,7 @@ public class ReportingService : IReportingService
         _logger.LogInformation("Retrieving report definition: {ReportName}", reportName);
 
         await Task.CompletedTask; // Make method properly async
-        
+
         var definition = _availableReports.FirstOrDefault(r =>
             r.ReportName.Equals(reportName, StringComparison.OrdinalIgnoreCase)
         );
