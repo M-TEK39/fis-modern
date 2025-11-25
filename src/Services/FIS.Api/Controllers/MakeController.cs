@@ -24,13 +24,18 @@ public class MakeController : ControllerBase
     /// Get all vehicle makes
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Make>>> GetMakes()
+    public async Task<ActionResult<IEnumerable<MakeResponseDto>>> GetMakes()
     {
         try
         {
             var makes = await _makeRepository.GetAllMakesAsync();
+            var makeResponse = makes.Select(m => new MakeResponseDto
+            {
+                make_code = m.make_code,
+                make_description = m.make_description
+            });
             _logger.LogInformation("Retrieved {Count} makes", makes.Count());
-            return Ok(makes);
+            return Ok(makeResponse);
         }
         catch (Exception ex)
         {
@@ -43,7 +48,7 @@ public class MakeController : ControllerBase
     /// Get a make by code
     /// </summary>
     [HttpGet("{makeCode}")]
-    public async Task<ActionResult<Make>> GetMake(short makeCode)
+    public async Task<ActionResult<MakeResponseDto>> GetMake(short makeCode)
     {
         try
         {
@@ -55,8 +60,14 @@ public class MakeController : ControllerBase
                 return NotFound();
             }
 
+            var makeResponse = new MakeResponseDto
+            {
+                make_code = make.make_code,
+                make_description = make.make_description
+            };
+
             _logger.LogInformation("Retrieved make with code {MakeCode}", makeCode);
-            return Ok(make);
+            return Ok(makeResponse);
         }
         catch (Exception ex)
         {
@@ -69,14 +80,19 @@ public class MakeController : ControllerBase
     /// Search makes by name or code
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<Make>>> SearchMakes([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<MakeResponseDto>>> SearchMakes([FromQuery] string? searchTerm)
     {
         try
         {
             var makes = await _makeRepository.SearchMakesAsync(searchTerm ?? "");
+            var makeResponse = makes.Select(m => new MakeResponseDto
+            {
+                make_code = m.make_code,
+                make_description = m.make_description
+            });
             _logger.LogInformation("Found {Count} makes matching search term '{SearchTerm}'", 
                 makes.Count(), searchTerm);
-            return Ok(makes);
+            return Ok(makeResponse);
         }
         catch (Exception ex)
         {
@@ -89,7 +105,7 @@ public class MakeController : ControllerBase
     /// Get make by name
     /// </summary>
     [HttpGet("name/{makeName}")]
-    public async Task<ActionResult<Make>> GetMakeByName(string makeName)
+    public async Task<ActionResult<MakeResponseDto>> GetMakeByName(string makeName)
     {
         try
         {
@@ -101,8 +117,14 @@ public class MakeController : ControllerBase
                 return NotFound();
             }
 
+            var makeResponse = new MakeResponseDto
+            {
+                make_code = make.make_code,
+                make_description = make.make_description
+            };
+
             _logger.LogInformation("Retrieved make with name {MakeName}", makeName);
-            return Ok(make);
+            return Ok(makeResponse);
         }
         catch (Exception ex)
         {
@@ -115,7 +137,7 @@ public class MakeController : ControllerBase
     /// Create a new make
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<Make>> CreateMake([FromBody] CreateMakeDto createMakeDto)
+    public async Task<ActionResult<MakeResponseDto>> CreateMake([FromBody] CreateMakeDto createMakeDto)
     {
         try
         {
@@ -131,12 +153,19 @@ public class MakeController : ControllerBase
             };
 
             var createdMake = await _makeRepository.CreateAsync(make);
+            
+            var makeResponse = new MakeResponseDto
+            {
+                make_code = createdMake.make_code,
+                make_description = createdMake.make_description
+            };
+            
             _logger.LogInformation("Created new make with code {MakeCode}", createdMake.make_code);
             
             return CreatedAtAction(
                 nameof(GetMake), 
                 new { makeCode = createdMake.make_code }, 
-                createdMake);
+                makeResponse);
         }
         catch (Exception ex)
         {
@@ -149,7 +178,7 @@ public class MakeController : ControllerBase
     /// Update an existing make
     /// </summary>
     [HttpPut("{makeCode}")]
-    public async Task<ActionResult<Make>> UpdateMake(short makeCode, [FromBody] Make make)
+    public async Task<ActionResult<MakeResponseDto>> UpdateMake(short makeCode, [FromBody] Make make)
     {
         try
         {
@@ -170,9 +199,16 @@ public class MakeController : ControllerBase
             }
 
             var updatedMake = await _makeRepository.UpdateAsync(make);
+            
+            var makeResponse = new MakeResponseDto
+            {
+                make_code = updatedMake.make_code,
+                make_description = updatedMake.make_description
+            };
+            
             _logger.LogInformation("Updated make with code {MakeCode}", makeCode);
             
-            return Ok(updatedMake);
+            return Ok(makeResponse);
         }
         catch (Exception ex)
         {

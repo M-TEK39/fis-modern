@@ -1,0 +1,104 @@
+@page "/third-party"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Third Party Rentals - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-building-house"></i>
+            Third Party Rentals
+        </h1>
+        <p class="page-description">Third party rental summary. Static entries until API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadRentals">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading rentals...</p>
+        </div>
+    }
+    else if (_rentals.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-building-house"></i>
+            <h3>No rental records</h3>
+            <p>Awaiting third party rental API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_rentals.Count Rental(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Rental #</th>
+                            <th>Provider</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Start</th>
+                            <th>End</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rental in _rentals)
+                        {
+                            <tr>
+                                <td>@rental.Number</td>
+                                <td>@rental.Provider</td>
+                                <td>@rental.Vehicle</td>
+                                <td><span class="badge">@rental.Status</span></td>
+                                <td>@rental.Start.ToString("yyyy-MM-dd")</td>
+                                <td>@rental.End.ToString("yyyy-MM-dd")</td>
+                                <td>@rental.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<RentalItem> _rentals = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRentals();
+    }
+
+    private Task LoadRentals()
+    {
+        _loading = true;
+
+        _rentals =
+        [
+            new("TPR-2401-001", "Provider A", "ABC123GP", "Active", new DateTime(2025, 01, 10), new DateTime(2025, 02, 10), "Short-term replacement."),
+            new("TPR-2401-002", "Provider B", "JKL456GP", "Pending Return", new DateTime(2024, 12, 15), new DateTime(2025, 01, 15), "Return scheduled."),
+            new("TPR-2312-007", "Provider C", "MNO789GP", "Closed", new DateTime(2024, 12, 01), new DateTime(2024, 12, 20), "Closed and reconciled."),
+            new("TPR-2311-004", "Provider A", "PQR321GP", "Closed", new DateTime(2024, 11, 05), new DateTime(2024, 11, 25), "Legacy rental reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record RentalItem(string Number, string Provider, string Vehicle, string Status, DateTime Start, DateTime End, string Notes);
+}

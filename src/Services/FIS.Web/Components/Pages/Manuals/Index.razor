@@ -1,0 +1,103 @@
+@page "/manuals"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Manuals - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-book"></i>
+            Manuals
+        </h1>
+        <p class="page-description">Legacy manuals library. Static links until API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadManuals">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading manuals...</p>
+        </div>
+    }
+    else if (_manuals.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-book-open"></i>
+            <h3>No manuals found</h3>
+            <p>Awaiting API integration. Provide manual endpoints when ready.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_manuals.Count Manual(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Description</th>
+                            <th>Link</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var manual in _manuals)
+                        {
+                            <tr>
+                                <td>@manual.Title</td>
+                                <td>@manual.Description</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <a class="btn-icon btn-icon-view" href="@manual.Path" target="_blank" rel="noopener noreferrer" title="Open manual">
+                                            <i class="bx bx-link-external"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<ManualItem> _manuals = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadManuals();
+    }
+
+    private Task LoadManuals()
+    {
+        _loading = true;
+
+        _manuals =
+        [
+            new("Electronic Logsheet and Trip Authority Training Manual", "/Docs/Electronic Log Sheet and Trip Authority Training Manual.doc", "Step-by-step user training for the electronic logsheet workflow."),
+            new("Manual: Updating Trip Authorities", "/Docs/doc/Updating Trip Authorities Manual2.htm", "Procedural guide for updating existing trip authority records."),
+            new("Procedures Manual (Chauffeur Driven Service)", "/private_hire/Procedures_manual.htm", "Procedures governing the chauffeur driven service."),
+            new("Manuals Library (Legacy)", "/Manuals/Allmanuals.htm", "Consolidated library of system manuals and references."),
+            new("Manual for Changing Password", "/Docs/Implementation of User Admin on GGMT system.doc", "Guidance on rotating passwords inside the legacy User Admin module.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record ManualItem(string Title, string Path, string Description);
+}

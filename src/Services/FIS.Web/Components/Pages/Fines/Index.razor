@@ -1,0 +1,104 @@
+@page "/fines"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Fines - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-receipt"></i>
+            Fines
+        </h1>
+        <p class="page-description">Legacy fines list. Static entries until fines API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadFines">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading fines...</p>
+        </div>
+    }
+    else if (_fines.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-receipt"></i>
+            <h3>No fines recorded</h3>
+            <p>Awaiting fines API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_fines.Count Fine(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Fine #</th>
+                            <th>Driver / Vehicle</th>
+                            <th>Issued</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                            <th>Due</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var fine in _fines)
+                        {
+                            <tr>
+                                <td>@fine.Number</td>
+                                <td>@fine.DriverOrVehicle</td>
+                                <td>@fine.IssuedOn.ToString("yyyy-MM-dd")</td>
+                                <td>@fine.Amount.ToString("C")</td>
+                                <td><span class="badge">@fine.Status</span></td>
+                                <td>@fine.DueDate.ToString("yyyy-MM-dd")</td>
+                                <td>@fine.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<FineItem> _fines = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFines();
+    }
+
+    private Task LoadFines()
+    {
+        _loading = true;
+
+        _fines =
+        [
+            new("FN-2401-001", "Driver: S. Nkosi / ABC123GP", new DateTime(2025, 01, 08), 750m, "Open", new DateTime(2025, 02, 07), "Speeding notice awaiting payment."),
+            new("FN-2401-002", "Vehicle: JKL456GP", new DateTime(2025, 01, 05), 500m, "In Dispute", new DateTime(2025, 02, 04), "Dispute submitted via legacy fines workflow."),
+            new("FN-2312-015", "Driver: M. Dlamini / MNO789GP", new DateTime(2024, 12, 12), 1200m, "Closed", new DateTime(2025, 01, 11), "Settled; receipt logged."),
+            new("FN-2311-010", "Vehicle: PQR321GP", new DateTime(2024, 11, 21), 950m, "Open", new DateTime(2024, 12, 21), "Reminder issued.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record FineItem(string Number, string DriverOrVehicle, DateTime IssuedOn, decimal Amount, string Status, DateTime DueDate, string Notes);
+}

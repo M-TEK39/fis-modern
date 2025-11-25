@@ -1,0 +1,100 @@
+@page "/tracking"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Tracking - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-radar"></i>
+            Tracking
+        </h1>
+        <p class="page-description">Vehicle tracking snapshot. Static entries until tracking API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadTracking">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading tracking data...</p>
+        </div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-radar"></i>
+            <h3>No tracking records</h3>
+            <p>Awaiting tracking API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_items.Count Tracking item(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Last Signal</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr>
+                                <td>@item.Vehicle</td>
+                                <td>@item.LastSignal.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td><span class="badge">@item.Status</span></td>
+                                <td>@item.Location</td>
+                                <td>@item.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<TrackingItem> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTracking();
+    }
+
+    private Task LoadTracking()
+    {
+        _loading = true;
+
+        _items =
+        [
+            new("ABC123GP", new DateTime(2025, 01, 12, 9, 30, 0), "Online", "Depot North", "Normal signal."),
+            new("JKL456GP", new DateTime(2025, 01, 12, 8, 50, 0), "Offline", "Last known: Route N1", "Signal dropped; investigate."),
+            new("MNO789GP", new DateTime(2025, 01, 11, 17, 15, 0), "Online", "Depot South", "Stable."),
+            new("PQR321GP", new DateTime(2025, 01, 10, 12, 05, 0), "Online", "Depot West", "Legacy reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record TrackingItem(string Vehicle, DateTime LastSignal, string Status, string Location, string Notes);
+}

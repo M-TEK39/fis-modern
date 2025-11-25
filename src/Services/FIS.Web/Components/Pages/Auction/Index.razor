@@ -1,0 +1,102 @@
+@page "/auction"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Auction - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-dollar"></i>
+            Auction
+        </h1>
+        <p class="page-description">Legacy auction overview. Static entries until API is provided.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadAuctions">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading auctions...</p>
+        </div>
+    }
+    else if (_auctions.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-archive"></i>
+            <h3>No auction entries</h3>
+            <p>Awaiting auction API. Provide endpoints and fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_auctions.Count Auction(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Location</th>
+                            <th>Units</th>
+                            <th>Status</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var auction in _auctions)
+                        {
+                            <tr>
+                                <td>@auction.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@auction.Location</td>
+                                <td>@auction.Units</td>
+                                <td>
+                                    <span class="badge">@auction.Status</span>
+                                </td>
+                                <td>@auction.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<AuctionItem> _auctions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuctions();
+    }
+
+    private Task LoadAuctions()
+    {
+        _loading = true;
+
+        _auctions =
+        [
+            new(new DateTime(2025, 01, 12), "Central Yard", 12, "Scheduled", "Pool vehicles scheduled for disposal."),
+            new(new DateTime(2025, 02, 05), "Depot South", 8, "Scheduled", "Units with mileage above threshold."),
+            new(new DateTime(2024, 11, 20), "Online", 15, "Completed", "Completed auction—awaiting reconciliation."),
+            new(new DateTime(2024, 10, 10), "Depot North", 6, "Completed", "Legacy auction record for reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record AuctionItem(DateTime Date, string Location, int Units, string Status, string Notes);
+}

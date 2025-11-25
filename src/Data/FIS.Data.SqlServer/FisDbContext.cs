@@ -51,6 +51,22 @@ public class FisDbContext : DbContext
     public DbSet<FIS.Core.Domain.Entities.Financial.Invoice> Invoices { get; set; } = null!;
     public DbSet<FIS.Core.Domain.Entities.Financial.InvoiceItem> InvoiceItems { get; set; } = null!;
 
+    // Operations entities (Fleet management operations)
+    public DbSet<Auction> Auctions { get; set; } = null!;
+    public DbSet<CallCentre> CallCentres { get; set; } = null!;
+    public DbSet<Clearance> Clearances { get; set; } = null!;
+    public DbSet<Fine> Fines { get; set; } = null!;
+    public DbSet<Logbook> Logbooks { get; set; } = null!;
+    public DbSet<Logsheet> Logsheets { get; set; } = null!;
+    public DbSet<Loss> Losses { get; set; } = null!;
+    public DbSet<FIS.Core.Domain.Entities.Monitor> Monitors { get; set; } = null!;
+    public DbSet<Taxi> Taxis { get; set; } = null!;
+    public DbSet<Towing> Towings { get; set; } = null!;
+    // TripAuthority removed - conflicts with Trip entity (both map to trip_authorities table)
+    public DbSet<VehicleOrder> VehicleOrders { get; set; } = null!;
+    public DbSet<VehiclePhoto> VehiclePhotos { get; set; } = null!;
+    public DbSet<Workshop> Workshops { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

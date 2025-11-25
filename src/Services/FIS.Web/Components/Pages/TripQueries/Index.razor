@@ -1,0 +1,100 @@
+@page "/trip-query"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Trip Queries - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-question-mark"></i>
+            Trip Queries
+        </h1>
+        <p class="page-description">Legacy trip queries list. Static entries until API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadQueries">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading trip queries...</p>
+        </div>
+    }
+    else if (_queries.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-question-mark"></i>
+            <h3>No trip queries</h3>
+            <p>Awaiting trip query API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_queries.Count Query record(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Query #</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var query in _queries)
+                        {
+                            <tr>
+                                <td>@query.Number</td>
+                                <td>@query.Vehicle</td>
+                                <td><span class="badge">@query.Status</span></td>
+                                <td>@query.Created.ToString("yyyy-MM-dd")</td>
+                                <td>@query.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<TripQueryItem> _queries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQueries();
+    }
+
+    private Task LoadQueries()
+    {
+        _loading = true;
+
+        _queries =
+        [
+            new("TQ-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Awaiting response."),
+            new("TQ-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Investigating mileage variance."),
+            new("TQ-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 16), "Closed after verification."),
+            new("TQ-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 25), "Legacy reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record TripQueryItem(string Number, string Vehicle, string Status, DateTime Created, string Notes);
+}

@@ -1,0 +1,104 @@
+@page "/licenses"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject IJSRuntime JS
+
+<PageTitle>Licenses - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bxs-user-badge"></i>
+            Licenses
+        </h1>
+        <p class="page-description">Driver/vehicle license summary. Static entries until license API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadLicenses">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading licenses...</p>
+        </div>
+    }
+    else if (_licenses.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bxs-user-badge"></i>
+            <h3>No licenses found</h3>
+            <p>Awaiting license API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_licenses.Count License(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>License #</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Expiry</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var license in _licenses)
+                        {
+                            <tr>
+                                <td>@license.LicenceCode</td>
+                                <td>@license.Description</td>
+                                <td><span class="badge">@license.Status</span></td>
+                                <td>@license.ExpiryDate?.ToString("yyyy-MM-dd")</td>
+                                <td></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@inject LicenseApiService LicenseService
+
+@code {
+    private bool _loading = true;
+    private List<LicenseDto> _licenses = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLicenses();
+    }
+
+    private async Task LoadLicenses()
+    {
+        _loading = true;
+
+        try
+        {
+            _licenses = await LicenseService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading licenses: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

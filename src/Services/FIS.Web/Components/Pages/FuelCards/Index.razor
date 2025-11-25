@@ -1,0 +1,106 @@
+@page "/fuel-cards"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject IJSRuntime JS
+
+<PageTitle>Fuel Cards - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-credit-card"></i>
+            Fuel Cards
+        </h1>
+        <p class="page-description">Fuel card register (live from FleetManagement).</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadCards">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading fuel cards...</p>
+        </div>
+    }
+    else if (_cards.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-credit-card"></i>
+            <h3>No fuel cards</h3>
+            <p>Awaiting fuel card API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_cards.Count Card(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Card</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Issued</th>
+                            <th>Returned</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var card in _cards)
+                        {
+                            <tr>
+                                <td>@card.CardNumber</td>
+                                <td>@card.Vehicle</td>
+                                <td><span class="badge">@card.Status</span></td>
+                                <td>@card.IssueDate?.ToString("yyyy-MM-dd")</td>
+                                <td>@card.ReturnDate?.ToString("yyyy-MM-dd")</td>
+                                <td>@card.VehicleCode</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@inject FleetManagementApiService FleetService
+
+@code {
+    private bool _loading = true;
+    private List<FuelCardAllocationReportDto> _cards = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCards();
+    }
+
+    private async Task LoadCards()
+    {
+        _loading = true;
+
+        try
+        {
+            _cards = await FleetService.GetFuelCardAllocationAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading fuel cards: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

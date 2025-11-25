@@ -27,12 +27,17 @@ public class TypeController : ControllerBase
     /// </summary>
     /// <returns>List of all vehicle types</returns>
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TypeEntity>>> GetAllTypes()
+    public async Task<ActionResult<IEnumerable<TypeResponseDto>>> GetAllTypes()
     {
         try
         {
             var types = await _typeRepository.GetAllTypesAsync();
-            return Ok(types);
+            var typeDtos = types.Select(t => new TypeResponseDto
+            {
+                type_code = t.type_code,
+                type_description = t.type_description
+            });
+            return Ok(typeDtos);
         }
         catch (Exception ex)
         {
@@ -47,7 +52,7 @@ public class TypeController : ControllerBase
     /// <param name="id">The type code</param>
     /// <returns>Type details if found</returns>
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<TypeEntity>> GetType(short id)
+    public async Task<ActionResult<TypeResponseDto>> GetType(short id)
     {
         try
         {
@@ -56,7 +61,14 @@ public class TypeController : ControllerBase
             {
                 return NotFound($"Type with code {id} not found");
             }
-            return Ok(type);
+            
+            var typeDto = new TypeResponseDto
+            {
+                type_code = type.type_code,
+                type_description = type.type_description
+            };
+            
+            return Ok(typeDto);
         }
         catch (Exception ex)
         {

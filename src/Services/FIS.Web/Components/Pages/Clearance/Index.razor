@@ -1,0 +1,102 @@
+@page "/clearance"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Clearance - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-shield-quarter"></i>
+            Clearance
+        </h1>
+        <p class="page-description">Legacy clearance queue. Static entries until clearance API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadClearances">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading clearance records...</p>
+        </div>
+    }
+    else if (_clearances.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-shield"></i>
+            <h3>No clearance records</h3>
+            <p>Awaiting clearance API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_clearances.Count Clearance record(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Registration</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _clearances)
+                        {
+                            <tr>
+                                <td>@item.Reference</td>
+                                <td>@item.Registration</td>
+                                <td>@item.Type</td>
+                                <td><span class="badge">@item.Status</span></td>
+                                <td>@item.UpdatedOn.ToString("yyyy-MM-dd")</td>
+                                <td>@item.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<ClearanceItem> _clearances = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClearances();
+    }
+
+    private Task LoadClearances()
+    {
+        _loading = true;
+
+        _clearances =
+        [
+            new("CLR-2401-001", "ABC123GP", "Vehicle Disposal", "Pending", new DateTime(2025, 01, 12), "Awaiting documentation from depot."),
+            new("CLR-2401-002", "JKL456GP", "Merchant Import", "In Progress", new DateTime(2025, 01, 11), "Merch import initiated (legacy Clearimp)."),
+            new("CLR-2312-015", "MNO789GP", "Clearance Update", "Completed", new DateTime(2024, 12, 15), "Completed via legacy MNT_Clearance_Update."),
+            new("CLR-2311-008", "PQR321GP", "Vehicle Verification", "Completed", new DateTime(2024, 11, 20), "Cleared and archived.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record ClearanceItem(string Reference, string Registration, string Type, string Status, DateTime UpdatedOn, string Notes);
+}

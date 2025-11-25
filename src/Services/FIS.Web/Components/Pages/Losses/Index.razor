@@ -1,0 +1,102 @@
+@page "/losses"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Losses - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-x-circle"></i>
+            Losses
+        </h1>
+        <p class="page-description">Losses summary (legacy). Static entries until losses API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadLosses">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading losses...</p>
+        </div>
+    }
+    else if (_losses.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-x-circle"></i>
+            <h3>No losses recorded</h3>
+            <p>Awaiting losses API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_losses.Count Loss(es)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Loss #</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Amount</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var loss in _losses)
+                        {
+                            <tr>
+                                <td>@loss.Number</td>
+                                <td>@loss.Category</td>
+                                <td><span class="badge">@loss.Status</span></td>
+                                <td>@loss.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@loss.Amount.ToString("C")</td>
+                                <td>@loss.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<LossItem> _losses = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLosses();
+    }
+
+    private Task LoadLosses()
+    {
+        _loading = true;
+
+        _losses =
+        [
+            new("LS-2401-001", "Accident", "Open", new DateTime(2025, 01, 12), 15000m, "Awaiting assessment."),
+            new("LS-2401-002", "Theft", "In Progress", new DateTime(2025, 01, 09), 22000m, "Claim submitted."),
+            new("LS-2312-010", "Write-off", "Closed", new DateTime(2024, 12, 05), 180000m, "Settled and closed."),
+            new("LS-2311-006", "Damage", "Closed", new DateTime(2024, 11, 18), 9500m, "Repair completed.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record LossItem(string Number, string Category, string Status, DateTime Date, decimal Amount, string Notes);
+}

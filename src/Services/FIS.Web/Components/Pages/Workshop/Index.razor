@@ -1,0 +1,102 @@
+@page "/workshop"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Workshop - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-wrench"></i>
+            Workshop
+        </h1>
+        <p class="page-description">Workshop tasks summary. Static entries until workshop API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadTasks">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading workshop tasks...</p>
+        </div>
+    }
+    else if (_tasks.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-wrench"></i>
+            <h3>No workshop tasks</h3>
+            <p>Awaiting workshop API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_tasks.Count Task(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Task #</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Assigned</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var task in _tasks)
+                        {
+                            <tr>
+                                <td>@task.Number</td>
+                                <td>@task.Vehicle</td>
+                                <td><span class="badge">@task.Status</span></td>
+                                <td>@task.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@task.AssignedTo</td>
+                                <td>@task.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<WorkshopTask> _tasks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTasks();
+    }
+
+    private Task LoadTasks()
+    {
+        _loading = true;
+
+        _tasks =
+        [
+            new("WS-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Tech A", "Initial diagnostics."),
+            new("WS-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Tech B", "Waiting for parts."),
+            new("WS-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 15), "Tech A", "Completed; documented."),
+            new("WS-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 25), "Tech C", "Legacy reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record WorkshopTask(string Number, string Vehicle, string Status, DateTime Date, string AssignedTo, string Notes);
+}

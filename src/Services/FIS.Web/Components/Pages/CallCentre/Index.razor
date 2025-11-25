@@ -1,0 +1,104 @@
+@page "/call-centre"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Call Centre - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-phone-call"></i>
+            Call Centre
+        </h1>
+        <p class="page-description">Call centre log summary. Static entries until API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadCalls">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading calls...</p>
+        </div>
+    }
+    else if (_calls.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-phone"></i>
+            <h3>No call records</h3>
+            <p>Awaiting call centre API. Provide endpoints and fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_calls.Count Call(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Caller</th>
+                            <th>Reason</th>
+                            <th>Status</th>
+                            <th>Assigned To</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var call in _calls)
+                        {
+                            <tr>
+                                <td>@call.ReceivedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@call.Caller</td>
+                                <td>@call.Reason</td>
+                                <td>
+                                    <span class="badge">@call.Status</span>
+                                </td>
+                                <td>@call.AssignedTo</td>
+                                <td>@call.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<CallEntry> _calls = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCalls();
+    }
+
+    private Task LoadCalls()
+    {
+        _loading = true;
+
+        _calls =
+        [
+            new(new DateTime(2025, 01, 12, 9, 15, 0), "Depot North", "Accident reporting", "Open", "Agent A", "Submitted initial accident form."),
+            new(new DateTime(2025, 01, 12, 10, 05, 0), "Driver: M. Dlamini", "Log sheet correction", "In Progress", "Agent B", "Awaiting supporting documents."),
+            new(new DateTime(2025, 01, 11, 15, 40, 0), "Dept: Facilities", "Trip authority query", "Closed", "Agent A", "Resolved; authority updated."),
+            new(new DateTime(2025, 01, 10, 11, 20, 0), "Client: External", "Towing request", "Open", "Agent C", "Dispatched vendor; awaiting completion.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record CallEntry(DateTime ReceivedAt, string Caller, string Reason, string Status, string AssignedTo, string Notes);
+}

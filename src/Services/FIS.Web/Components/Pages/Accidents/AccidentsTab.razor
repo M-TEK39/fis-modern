@@ -36,7 +36,7 @@
             @if (SearchTerm?.Length == 0)
             {
                 <button class="btn btn-primary" @onclick="OnAddAccident">
-                    <i class="bx bx-plus"></i>
+                    <i class="bx bx-plus plus-icon"></i>
                     Report New Accident
                 </button>
             }
@@ -95,15 +95,12 @@
                                     <div class="table-actions">
                                         <button class="btn-icon btn-icon-view" @onclick="() => OnView.InvokeAsync(accident)" title="View Details">
                                             <i class="bx bx-show"></i>
-                                            <span>View</span>
                                         </button>
                                         <button class="btn-icon btn-icon-edit" @onclick="() => OnEdit.InvokeAsync(accident)" title="Edit">
                                             <i class="bx bx-edit"></i>
-                                            <span>Edit</span>
                                         </button>
                                         <button class="btn-icon btn-icon-delete" @onclick="() => OnDelete.InvokeAsync(accident)" title="Delete">
                                             <i class="bx bx-trash"></i>
-                                            <span>Delete</span>
                                         </button>
                                     </div>
                                 </td>

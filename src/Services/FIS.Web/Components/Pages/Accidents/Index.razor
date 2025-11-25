@@ -1,144 +1,139 @@
 @page "/accidents"
+@rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@using AccidentDto = FIS.Web.Models.AccidentDto
 @inject AccidentApiService AccidentApiService
 @inject VehicleApiService VehicleApiService
 @inject DriverApiService DriverApiService
-@inject DepartmentApiService DepartmentApiService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Accidents - Fleet Information System</PageTitle>
 
-<div class="page-container">
-    <div class="page-header">
-        <div class="page-title-section">
-            <h1>
-                <i class="bx bxs-car-crash"></i>
-                Accident Management
-            </h1>
-            <p>Manage vehicle accidents, track claims, and generate reports</p>
-        </div>
-        <div class="page-actions">
-            <button class="btn btn-primary" @onclick="ShowAddAccidentForm">
-                <i class="bx bx-plus"></i>
-                Report Accident
-            </button>
-        </div>
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bxs-car-crash"></i>
+            Accident Management
+        </h1>
+        <p class="page-description">Manage vehicle accidents, track claims, and generate reports</p>
     </div>
-
-    <div class="tab-container">
-        <div class="tab-header">
-            <button class="tab-button @(ActiveTab == "accidents" ? "active" : "")" @onclick="@(() => SetActiveTab("accidents"))">
-                <i class="bx bx-list-ul"></i>
-                Accidents
-            </button>
-            <button class="tab-button @(ActiveTab == "claims" ? "active" : "")" @onclick="@(() => SetActiveTab("claims"))">
-                <i class="bx bx-money"></i>
-                Claims & Costs
-            </button>
-            <button class="tab-button @(ActiveTab == "reports" ? "active" : "")" @onclick="@(() => SetActiveTab("reports"))">
-                <i class="bx bx-file"></i>
-                Reports
-            </button>
-        </div>
-
-        <div class="tab-content">
-            <!-- Debug: Current tab = @ActiveTab -->
-            @if (ActiveTab == "accidents")
-            {
-                <AccidentsTab 
-                    FilteredAccidents="FilteredAccidents"
-                    Loading="Loading"
-                    SearchTerm="SearchTerm"
-                    OnSearchChange="HandleSearchChange"
-                    OnAddAccident="ShowAddAccidentForm"
-                    OnRefresh="LoadAccidents"
-                    OnView="ViewAccident"
-                    OnEdit="EditAccident"
-                    OnDelete="DeleteAccident" />
-            }
-            else if (ActiveTab == "claims")
-            {
-                <ClaimsTab 
-                    Loading="Loading"
-                    ClaimsSummary="ClaimsSummary"
-                    RecentHighValueClaims="GetHighValueClaims()"
-                    OnRefresh="LoadClaimsData" />
-            }
-            else if (ActiveTab == "reports")
-            {
-                <ReportsTab 
-                    RecentReports="RecentReports"
-                    GeneratingReport="GeneratingReport"
-                    OnRefreshReports="LoadRecentReports"
-                    OnGenerateReport="GenerateReport"
-                    OnConfigureReport="ConfigureReport"
-                    OnDownloadReport="DownloadReport"
-                    OnDeleteReport="DeleteReport" />
-            }
-        </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" @onclick="ShowAddAccidentDialog">
+            <i class="bx bx-plus"></i>
+            Report Accident
+        </button>
     </div>
-
-    @if (ShowAccidentForm)
-    {
-        <!-- Debug: ShowAccidentForm = @ShowAccidentForm -->
-        <Modal IsVisible="ShowAccidentForm" 
-               Title="@(SelectedAccident == null ? "Report New Accident" : "Edit Accident")" 
-               Size="Modal.ModalSize.Large"
-               OnCancel="HideAccidentForm">
-            <ChildContent>
-                <AccidentForm 
-                    Accident="SelectedAccident ?? new AccidentDto()"
-                    AvailableVehicles="Vehicles"
-                    AvailableDrivers="Drivers"
-                    IsEditMode="@(SelectedAccident != null)"
-                    IsSaving="false"
-                    OnSave="SaveAccidentFromForm"
-                    OnCancel="HideAccidentForm" />
-            </ChildContent>
-        </Modal>
-    }
-
-    @if (ShowDeleteConfirmation)
-    {
-        <ConfirmationModal 
-            IsVisible="ShowDeleteConfirmation"
-            Title="Delete Accident"
-            Message="@($"Are you sure you want to delete accident {AccidentToDelete?.accident_reference}? This action cannot be undone.")"
-            ConfirmText="Delete"
-            CancelText="Cancel"
-            OnConfirm="ConfirmDelete"
-            OnCancel="CancelDelete" />
-    }
 </div>
 
+<div class="page-content">
+    <div class="tabs">
+        <button class="tab @(_activeTab == "accidents" ? "active" : "")" @onclick='() => SetActiveTab("accidents")'>
+            <i class="bx bx-list-ul"></i>
+            Accidents
+        </button>
+        <button class="tab @(_activeTab == "claims" ? "active" : "")" @onclick='() => SetActiveTab("claims")'>
+            <i class="bx bx-money"></i>
+            Claims & Costs
+        </button>
+        <button class="tab @(_activeTab == "reports" ? "active" : "")" @onclick='() => SetActiveTab("reports")'>
+            <i class="bx bx-file"></i>
+            Reports
+        </button>
+    </div>
+
+    <div class="tab-content">
+        @if (_activeTab == "accidents")
+        {
+            <AccidentsTab
+                FilteredAccidents="_filteredAccidents"
+                Loading="_loading"
+                SearchTerm="_searchTerm"
+                OnSearchChange="HandleSearchChange"
+                OnAddAccident="ShowAddAccidentDialog"
+                OnRefresh="LoadAccidents"
+                OnView="ViewAccident"
+                OnEdit="EditAccident"
+                OnDelete="DeleteAccident" />
+        }
+        else if (_activeTab == "claims")
+        {
+            <ClaimsTab
+                Loading="_loading"
+                ClaimsSummary="_claimsSummary"
+                RecentHighValueClaims="GetHighValueClaims()"
+                OnRefresh="LoadClaimsData" />
+        }
+        else if (_activeTab == "reports")
+        {
+            <ReportsTab
+                RecentReports="_recentReports"
+                GeneratingReport="_generatingReport"
+                OnRefreshReports="LoadRecentReports"
+                OnGenerateReport="GenerateReport"
+                OnConfigureReport="ConfigureReport"
+                OnDownloadReport="DownloadReport"
+                OnDeleteReport="DeleteReport" />
+        }
+    </div>
+</div>
+
+@if (_showAccidentForm)
+{
+    <Modal IsVisible="_showAccidentForm"
+           Title="@(_selectedAccident == null ? "Report New Accident" : "Edit Accident")"
+           Size="Modal.ModalSize.Large"
+           ShowFooter="false"
+           ShowCloseButton="true"
+           OnCancel="HideAccidentDialog">
+        <ChildContent>
+            <AccidentForm
+                Accident="_selectedAccident ?? new AccidentDto()"
+                AvailableVehicles="_vehicles"
+                AvailableDrivers="_drivers"
+                IsEditMode="@(_selectedAccident != null)"
+                IsSaving="_isSaving"
+                OnSave="SaveAccident"
+                OnCancel="HideAccidentDialog" />
+        </ChildContent>
+    </Modal>
+}
+
+@if (_showDeleteConfirmation)
+{
+    <ConfirmationModal
+        IsVisible="_showDeleteConfirmation"
+        Title="Delete Accident"
+        Message="@($"Are you sure you want to delete accident {_accidentToDelete?.accident_reference}? This action cannot be undone.")"
+        ConfirmText="Delete"
+        CancelText="Cancel"
+        IsDeleting="_isDeleting"
+        OnConfirm="ConfirmDelete"
+        OnCancel="CancelDelete" />
+}
+
 @code {
-    // State management
-    private string ActiveTab = "accidents";
-    private bool Loading = true;
-    private bool GeneratingReport = false;
-    private bool ShowAccidentForm = false;
-    private bool ShowDeleteConfirmation = false;
-    private string SearchTerm = "";
+    // State management - using standard C# naming conventions
+    private string _activeTab = "accidents";
+    private bool _loading = true;
+    private bool _generatingReport = false;
+    private bool _showAccidentForm = false;
+    private bool _showDeleteConfirmation = false;
+    private bool _isSaving = false;
+    private bool _isDeleting = false;
+    private string _searchTerm = "";
 
     // Data collections
-    private List<AccidentDto> AllAccidents = new();
-    private List<AccidentDto> FilteredAccidents = new();
-    private List<VehicleDto> Vehicles = new();
-    private List<DriverDto> Drivers = new();
-    private List<DepartmentDto> Departments = new();
-    private List<ReportDto> RecentReports = new();
-    private ClaimsSummaryDto ClaimsSummary = new();
+    private List<AccidentDto> _allAccidents = new();
+    private List<AccidentDto> _filteredAccidents = new();
+    private List<VehicleDto> _vehicles = new();
+    private List<DriverDto> _drivers = new();
+    private List<ReportDto> _recentReports = new();
+    private ClaimsSummaryDto _claimsSummary = new();
 
     // Selected items
-    private AccidentDto? SelectedAccident = null;
-    private AccidentDto? AccidentToDelete = null;
-
-    // Component references (not needed for new modal pattern)
-    // private Modal? AccidentModal;
-    // private ConfirmationModal? DeleteModal;
+    private AccidentDto? _selectedAccident = null;
+    private AccidentDto? _accidentToDelete = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -147,14 +142,13 @@
 
     private async Task LoadInitialData()
     {
-        Loading = true;
+        _loading = true;
         try
         {
             await Task.WhenAll(
                 LoadAccidents(),
                 LoadVehicles(),
                 LoadDrivers(),
-                LoadDepartments(),
                 LoadClaimsData(),
                 LoadRecentReports()
             );
@@ -165,7 +159,7 @@
         }
         finally
         {
-            Loading = false;
+            _loading = false;
         }
     }
 
@@ -173,13 +167,14 @@
     {
         try
         {
-            // Mock data for now - replace with actual API calls when available
-            AllAccidents = new List<AccidentDto>
+            // Mock data - replace with actual API calls when available
+            _allAccidents = new List<AccidentDto>
             {
-                new AccidentDto 
-                { 
-                    accident_reference = "ACC-2024-001", 
-                    accident_date = DateTime.Now.AddDays(-5), 
+                new AccidentDto
+                {
+                    accident_code = 1,
+                    accident_reference = "ACC-2024-001",
+                    accident_date = DateTime.Now.AddDays(-5),
                     vehicle_registration = "GP123ABC",
                     vehicle_description = "Toyota Camry 2020",
                     accident_location = "Main Road, Johannesburg",
@@ -189,10 +184,11 @@
                     status = "Completed",
                     description = "Minor fender bender in parking lot"
                 },
-                new AccidentDto 
-                { 
-                    accident_reference = "ACC-2024-002", 
-                    accident_date = DateTime.Now.AddDays(-12), 
+                new AccidentDto
+                {
+                    accident_code = 2,
+                    accident_reference = "ACC-2024-002",
+                    accident_date = DateTime.Now.AddDays(-12),
                     vehicle_registration = "GP456DEF",
                     vehicle_description = "Ford Ranger 2019",
                     accident_location = "Highway N1, Pretoria",
@@ -215,8 +211,7 @@
     {
         try
         {
-            // Mock data for now - replace with actual API calls when available
-            Vehicles = new List<VehicleDto>
+            _vehicles = new List<VehicleDto>
             {
                 new VehicleDto { vmf_code = 1, registration_number = "GP123ABC", model_name = "Toyota Camry 2020" },
                 new VehicleDto { vmf_code = 2, registration_number = "GP456DEF", model_name = "Ford Ranger 2019" },
@@ -233,8 +228,7 @@
     {
         try
         {
-            // Mock data for now - replace with actual API calls when available
-            Drivers = new List<DriverDto>
+            _drivers = new List<DriverDto>
             {
                 new DriverDto { site_driver_code = 1, driver_firstname = "John", driver_surname = "Doe", site_name = "Main Office" },
                 new DriverDto { site_driver_code = 2, driver_firstname = "Jane", driver_surname = "Smith", site_name = "Regional Office" },
@@ -247,41 +241,22 @@
         }
     }
 
-    private async Task LoadDepartments()
-    {
-        try
-        {
-            // Mock data for now - replace with actual API calls when available
-            Departments = new List<DepartmentDto>
-            {
-                new DepartmentDto { department_code = 1, department_description = "IT Department" },
-                new DepartmentDto { department_code = 2, department_description = "Finance Department" },
-                new DepartmentDto { department_code = 3, department_description = "Operations Department" }
-            };
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading departments: {ex.Message}");
-        }
-    }
-
     private async Task LoadClaimsData()
     {
         try
         {
-            // Mock data for now - replace with actual API calls
-            ClaimsSummary = new ClaimsSummaryDto
+            _claimsSummary = new ClaimsSummaryDto
             {
-                TotalClaims = AllAccidents.Count,
-                TotalRepairCosts = AllAccidents.Sum(a => a.cost_of_repair ?? 0),
-                TotalThirdPartyClaims = AllAccidents.Sum(a => a.third_party_claim ?? 0),
-                PendingClaims = AllAccidents.Count(a => a.status == "Pending" || a.status == "Under Investigation"),
+                TotalClaims = _allAccidents.Count,
+                TotalRepairCosts = _allAccidents.Sum(a => a.cost_of_repair ?? 0),
+                TotalThirdPartyClaims = _allAccidents.Sum(a => a.third_party_claim ?? 0),
+                PendingClaims = _allAccidents.Count(a => a.status == "Pending" || a.status == "Under Investigation"),
                 CostByCategory = new Dictionary<string, decimal>
                 {
-                    ["Minor Damage"] = AllAccidents.Where(a => a.severity == "Minor").Sum(a => a.cost_of_repair ?? 0),
-                    ["Moderate Damage"] = AllAccidents.Where(a => a.severity == "Moderate").Sum(a => a.cost_of_repair ?? 0),
-                    ["Major Damage"] = AllAccidents.Where(a => a.severity == "Major").Sum(a => a.cost_of_repair ?? 0),
-                    ["Total Loss"] = AllAccidents.Where(a => a.severity == "Total Loss").Sum(a => a.cost_of_repair ?? 0)
+                    ["Minor Damage"] = _allAccidents.Where(a => a.severity == "Minor").Sum(a => a.cost_of_repair ?? 0),
+                    ["Moderate Damage"] = _allAccidents.Where(a => a.severity == "Moderate").Sum(a => a.cost_of_repair ?? 0),
+                    ["Major Damage"] = _allAccidents.Where(a => a.severity == "Major").Sum(a => a.cost_of_repair ?? 0),
+                    ["Total Loss"] = _allAccidents.Where(a => a.severity == "Total Loss").Sum(a => a.cost_of_repair ?? 0)
                 },
                 MonthlyTrend = new Dictionary<string, decimal>
                 {
@@ -304,8 +279,7 @@
     {
         try
         {
-            // Mock data for now - replace with actual API calls
-            RecentReports = new List<ReportDto>
+            _recentReports = new List<ReportDto>
             {
                 new() { Name = "Accident Summary - November 2025", GeneratedDate = DateTime.Now.AddDays(-1), FileSize = "2.4 MB" },
                 new() { Name = "Cost Analysis - Q4 2025", GeneratedDate = DateTime.Now.AddDays(-3), FileSize = "1.8 MB" },
@@ -318,23 +292,21 @@
         }
     }
 
-    private async Task SetActiveTab(string tab)
+    private void SetActiveTab(string tab)
     {
-        ActiveTab = tab;
-        await JSRuntime.InvokeVoidAsync("console.log", $"Active tab changed to: {tab}");
-        await InvokeAsync(StateHasChanged);
+        _activeTab = tab;
     }
 
     private void ApplySearchFilter()
     {
-        if (string.IsNullOrWhiteSpace(SearchTerm))
+        if (string.IsNullOrWhiteSpace(_searchTerm))
         {
-            FilteredAccidents = AllAccidents.ToList();
+            _filteredAccidents = _allAccidents.ToList();
         }
         else
         {
-            var searchLower = SearchTerm.ToLower();
-            FilteredAccidents = AllAccidents.Where(a =>
+            var searchLower = _searchTerm.ToLower();
+            _filteredAccidents = _allAccidents.Where(a =>
                 a.accident_reference.ToLower().Contains(searchLower) ||
                 a.vehicle_registration.ToLower().Contains(searchLower) ||
                 a.accident_location.ToLower().Contains(searchLower) ||
@@ -345,102 +317,94 @@
 
     private async Task HandleSearchChange(string searchTerm)
     {
-        SearchTerm = searchTerm;
+        _searchTerm = searchTerm;
         ApplySearchFilter();
         await InvokeAsync(StateHasChanged);
     }
 
     private List<AccidentDto> GetHighValueClaims()
     {
-        return AllAccidents
+        return _allAccidents
             .Where(a => (a.cost_of_repair ?? 0) + (a.third_party_claim ?? 0) > 10000)
             .OrderByDescending(a => (a.cost_of_repair ?? 0) + (a.third_party_claim ?? 0))
             .ToList();
     }
 
     // Accident management
-    private async Task ShowAddAccidentForm()
+    private void ShowAddAccidentDialog()
     {
-        await JSRuntime.InvokeVoidAsync("console.log", "ShowAddAccidentForm called");
-        SelectedAccident = null;
-        ShowAccidentForm = true;
-        await JSRuntime.InvokeVoidAsync("console.log", $"ShowAccidentForm set to: {ShowAccidentForm}");
+        _selectedAccident = null;
+        _showAccidentForm = true;
+    }
+
+    private void ViewAccident(AccidentDto accident)
+    {
+        _selectedAccident = accident;
+        _showAccidentForm = true;
+    }
+
+    private void EditAccident(AccidentDto accident)
+    {
+        _selectedAccident = accident;
+        _showAccidentForm = true;
+    }
+
+    private async Task SaveAccident()
+    {
+        _isSaving = true;
         await InvokeAsync(StateHasChanged);
-    }
 
-    private async Task ViewAccident(AccidentDto accident)
-    {
-        SelectedAccident = accident;
-        ShowAccidentForm = true;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task EditAccident(AccidentDto accident)
-    {
-        SelectedAccident = accident;
-        ShowAccidentForm = true;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private async Task SaveAccidentFromForm()
-    {
-        // This method is called from the form, but we need the accident data
-        // For now, we'll handle this in the AccidentForm component itself
-        await HideAccidentForm();
-    }
-
-    private async Task SaveAccident(AccidentDto accident)
-    {
         try
         {
-            if (SelectedAccident == null)
+            await Task.Delay(500); // Simulate API call
+
+            if (_selectedAccident == null)
             {
-                // Mock create - assign a new ID
-                accident.accident_code = AllAccidents.Count + 1;
-                AllAccidents.Add(accident);
+                await JSRuntime.InvokeVoidAsync("alert", "New accident would be created here (API not yet implemented)");
             }
             else
             {
-                // Mock update - find and replace
-                var index = AllAccidents.FindIndex(a => a.accident_code == accident.accident_code);
-                if (index >= 0)
-                {
-                    AllAccidents[index] = accident;
-                }
+                await JSRuntime.InvokeVoidAsync("alert", "Accident would be updated here (API not yet implemented)");
             }
-            
-            await HideAccidentForm();
+
+            await HideAccidentDialog();
             await LoadAccidents();
-            await JSRuntime.InvokeVoidAsync("alert", "Accident saved successfully!");
         }
         catch (Exception ex)
         {
             await JSRuntime.InvokeVoidAsync("alert", $"Error saving accident: {ex.Message}");
         }
+        finally
+        {
+            _isSaving = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
-    private async Task HideAccidentForm()
+    private async Task HideAccidentDialog()
     {
-        ShowAccidentForm = false;
-        SelectedAccident = null;
+        _showAccidentForm = false;
+        _selectedAccident = null;
         await InvokeAsync(StateHasChanged);
     }
 
-    private async Task DeleteAccident(AccidentDto accident)
+    private void DeleteAccident(AccidentDto accident)
     {
-        AccidentToDelete = accident;
-        ShowDeleteConfirmation = true;
-        await InvokeAsync(StateHasChanged);
+        _accidentToDelete = accident;
+        _showDeleteConfirmation = true;
     }
 
     private async Task ConfirmDelete()
     {
-        if (AccidentToDelete != null)
+        if (_accidentToDelete != null)
         {
+            _isDeleting = true;
+            await InvokeAsync(StateHasChanged);
+
             try
             {
-                // Mock delete - remove from list
-                AllAccidents.RemoveAll(a => a.accident_code == AccidentToDelete.accident_code);
+                await Task.Delay(500); // Simulate API call
+                _allAccidents.RemoveAll(a => a.accident_code == _accidentToDelete.accident_code);
                 await CancelDelete();
                 await LoadAccidents();
                 await JSRuntime.InvokeVoidAsync("alert", "Accident deleted successfully!");
@@ -449,20 +413,25 @@
             {
                 await JSRuntime.InvokeVoidAsync("alert", $"Error deleting accident: {ex.Message}");
             }
+            finally
+            {
+                _isDeleting = false;
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
     private async Task CancelDelete()
     {
-        ShowDeleteConfirmation = false;
-        AccidentToDelete = null;
+        _showDeleteConfirmation = false;
+        _accidentToDelete = null;
         await InvokeAsync(StateHasChanged);
     }
 
     // Report management
     private async Task GenerateReport(ReportsTab.ReportType reportType)
     {
-        GeneratingReport = true;
+        _generatingReport = true;
         await InvokeAsync(StateHasChanged);
 
         try
@@ -477,7 +446,7 @@
         }
         finally
         {
-            GeneratingReport = false;
+            _generatingReport = false;
             await InvokeAsync(StateHasChanged);
         }
     }

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using FIS.Web.Models;
+using System.Text.Json;
 
 namespace FIS.Web.Services;
 
@@ -31,8 +32,41 @@ public class VehicleApiService
             var response = await _httpClient.GetAsync(query);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<PagedResult<VehicleDto>>();
-            return result ?? new PagedResult<VehicleDto>();
+            var content = await response.Content.ReadAsStringAsync();
+            var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            try
+            {
+                var paged = JsonSerializer.Deserialize<PagedResult<VehicleDto>>(content, jsonOptions);
+                if (paged is not null)
+                {
+                    return paged;
+                }
+            }
+            catch (JsonException)
+            {
+                // fallback below
+            }
+
+            try
+            {
+                var list = JsonSerializer.Deserialize<List<VehicleDto>>(content, jsonOptions) ?? new List<VehicleDto>();
+                return new PagedResult<VehicleDto>
+                {
+                    Data = list,
+                    TotalCount = list.Count,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize
+                };
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Error deserializing vehicles response: {Content}", content);
+                return new PagedResult<VehicleDto>();
+            }
         }
         catch (Exception ex)
         {

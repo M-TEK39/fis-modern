@@ -1,0 +1,100 @@
+@page "/vehicle-photos"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Vehicle Photos - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-image"></i>
+            Vehicle Photos
+        </h1>
+        <p class="page-description">Photo references. Static entries until vehicle photos API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadPhotos">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading vehicle photos...</p>
+        </div>
+    }
+    else if (_photos.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-image"></i>
+            <h3>No vehicle photos</h3>
+            <p>Awaiting vehicle photos API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_photos.Count Photo reference(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var photo in _photos)
+                        {
+                            <tr>
+                                <td>@photo.Vehicle</td>
+                                <td>@photo.Type</td>
+                                <td><span class="badge">@photo.Status</span></td>
+                                <td>@photo.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@photo.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<PhotoItem> _photos = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPhotos();
+    }
+
+    private Task LoadPhotos()
+    {
+        _loading = true;
+
+        _photos =
+        [
+            new("ABC123GP", "Front/Side", "Available", new DateTime(2025, 01, 12), "Captured on intake."),
+            new("JKL456GP", "Damage", "Pending Review", new DateTime(2025, 01, 10), "Awaiting assessor review."),
+            new("MNO789GP", "Full Set", "Available", new DateTime(2024, 12, 18), "Stored in archive."),
+            new("PQR321GP", "Front/Side", "Available", new DateTime(2024, 11, 25), "Legacy reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record PhotoItem(string Vehicle, string Type, string Status, DateTime Date, string Notes);
+}

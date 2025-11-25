@@ -79,6 +79,22 @@ builder.Services.AddScoped<IPrivateHireRepository, PrivateHireRepository>();
 builder.Services.AddScoped<ILocationRepository, LocationRepository>();
 builder.Services.AddScoped<IMaintenanceRecordRepository, MaintenanceRecordRepository>();
 
+// Operations repositories (Fleet management operations)
+builder.Services.AddScoped<IAuctionRepository, AuctionRepository>();
+builder.Services.AddScoped<ICallCentreRepository, CallCentreRepository>();
+builder.Services.AddScoped<IClearanceRepository, ClearanceRepository>();
+builder.Services.AddScoped<IFineRepository, FineRepository>();
+builder.Services.AddScoped<ILogbookRepository, LogbookRepository>();
+builder.Services.AddScoped<ILogsheetRepository, LogsheetRepository>();
+builder.Services.AddScoped<ILossRepository, LossRepository>();
+builder.Services.AddScoped<IMonitorRepository, MonitorRepository>();
+builder.Services.AddScoped<ITaxiRepository, TaxiRepository>();
+builder.Services.AddScoped<ITowingRepository, TowingRepository>();
+// TripAuthorityRepository removed - conflicts with existing Trip entity
+builder.Services.AddScoped<IVehicleOrderRepository, VehicleOrderRepository>();
+builder.Services.AddScoped<IVehiclePhotoRepository, VehiclePhotoRepository>();
+builder.Services.AddScoped<IWorkshopRepository, WorkshopRepository>();
+
 // Financial system repositories - temporarily disabled for debugging
 //builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 //builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>();

@@ -1,0 +1,102 @@
+@page "/monitor"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Monitor - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-line-chart"></i>
+            Monitor
+        </h1>
+        <p class="page-description">Consumption/monitoring snapshot (legacy). Static entries until monitor API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadMonitor">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading monitor data...</p>
+        </div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-line-chart"></i>
+            <h3>No monitor data</h3>
+            <p>Awaiting monitor API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_items.Count Monitor item(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Vehicle</th>
+                            <th>Value</th>
+                            <th>Status</th>
+                            <th>Updated</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr>
+                                <td>@item.Metric</td>
+                                <td>@item.Vehicle</td>
+                                <td>@item.Value</td>
+                                <td><span class="badge">@item.Status</span></td>
+                                <td>@item.UpdatedOn.ToString("yyyy-MM-dd")</td>
+                                <td>@item.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<MonitorItem> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMonitor();
+    }
+
+    private Task LoadMonitor()
+    {
+        _loading = true;
+
+        _items =
+        [
+            new("Fuel Consumption", "ABC123GP", "8.9 L/100km", "Within Range", new DateTime(2025, 01, 12), "Data from consumption detail."),
+            new("Fuel Consumption", "JKL456GP", "11.2 L/100km", "Above Threshold", new DateTime(2025, 01, 11), "Investigate driver behavior."),
+            new("Mileage Split", "MNO789GP", "1,240 km", "Reviewed", new DateTime(2025, 01, 10), "Split validated."),
+            new("Odometer Variance", "PQR321GP", "35 km variance", "Pending", new DateTime(2025, 01, 09), "Awaiting confirmation.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record MonitorItem(string Metric, string Vehicle, string Value, string Status, DateTime UpdatedOn, string Notes);
+}

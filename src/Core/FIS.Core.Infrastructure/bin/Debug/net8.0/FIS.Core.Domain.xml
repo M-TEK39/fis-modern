@@ -541,6 +541,726 @@
             Maps to legacy snake_case structure with relationships to vehicles and service providers
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Auction">
+            <summary>
+            Auction Entity - Vehicle auction management
+            Maps to legacy 'auction' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.auction_code">
+            <summary>
+            Primary key - Auction code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.vmf_code">
+            <summary>
+            Foreign key to vehicle table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.auction_number">
+            <summary>
+            Auction reference number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.camp">
+            <summary>
+            Auction camp/location
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.lot">
+            <summary>
+            Lot number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.auction_garage">
+            <summary>
+            Auction garage code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.auth_number">
+            <summary>
+            Authorization number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.auth_date">
+            <summary>
+            Authorization date
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.auction_km">
+            <summary>
+            Vehicle odometer reading at auction
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.garage_owner">
+            <summary>
+            Garage owner details
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.reason_sold">
+            <summary>
+            Reason vehicle was sold
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.estimate_amount">
+            <summary>
+            Estimated auction amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.reserve_amount">
+            <summary>
+            Reserve amount (minimum bid)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.sold_id">
+            <summary>
+            Sold identifier/status
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.remark">
+            <summary>
+            Auction remarks/notes
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auction.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.CallCentre">
+            <summary>
+            CallCentre Entity - Call centre incident management
+            Maps to legacy 'Call_centre' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Call_centre_code">
+            <summary>
+            Primary key - Call centre code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.vmf_code">
+            <summary>
+            Foreign key to vehicle table (nullable)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Call_time">
+            <summary>
+            Time of the call
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Call_date">
+            <summary>
+            Date of the call
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Capture_name">
+            <summary>
+            Name of person who captured the call
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.User_access_code">
+            <summary>
+            User access code (foreign key to user)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Caller_name">
+            <summary>
+            Name of the caller
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_name">
+            <summary>
+            Driver name
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_persalno">
+            <summary>
+            Driver personnel number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_Licno">
+            <summary>
+            Driver license number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.GG_number">
+            <summary>
+            GG number (fleet identifier)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_base_station">
+            <summary>
+            Driver base station
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_Site">
+            <summary>
+            Driver site code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_tel">
+            <summary>
+            Driver telephone number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Driver_cell">
+            <summary>
+            Driver cell phone number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.CallCentre.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Clearance">
+            <summary>
+            Clearance Entity - Vehicle clearance management
+            Maps to legacy 'clearance' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.clearance_code">
+            <summary>
+            Primary key - Clearance code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.vmf_code">
+            <summary>
+            Foreign key to vehicle table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.clearance_number">
+            <summary>
+            Clearance reference number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.Clearance_date">
+            <summary>
+            Date of clearance
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.Merchant_code">
+            <summary>
+            Merchant code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.Clearance_amount">
+            <summary>
+            Clearance amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.clearance_comment">
+            <summary>
+            Clearance comments/notes
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.clearance_kilo">
+            <summary>
+            Vehicle odometer reading at clearance
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Clearance.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Fine">
+            <summary>
+            Fine Entity - Traffic fine/penalty management
+            Maps to legacy 'Fines' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Fine_code">
+            <summary>
+            Primary key - Fine code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.vmf_code">
+            <summary>
+            Foreign key to vehicle table (nullable)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Offence_date">
+            <summary>
+            Date of the offence
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Offence_reference">
+            <summary>
+            Offence reference number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Offence_issuer">
+            <summary>
+            Authority/person who issued the fine
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Fine_amount">
+            <summary>
+            Fine amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Appear_date">
+            <summary>
+            Court appearance date
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Receive_gg_date">
+            <summary>
+            Date fine was received by fleet management
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Notify_dept_date">
+            <summary>
+            Date department was notified
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Site_code">
+            <summary>
+            Site code where vehicle is assigned
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Offence_name">
+            <summary>
+            Name/description of the offence
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Fine_pay_date">
+            <summary>
+            Date fine was paid
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Withdraw_date">
+            <summary>
+            Date fine was withdrawn
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Pay_due_date">
+            <summary>
+            Payment due date
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Issuer_notify_date">
+            <summary>
+            Date issuer was notified
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Fine.Site">
+            <summary>
+            Associated site
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Logbook">
+            <summary>
+            Logbook Entity - Vehicle logbook management
+            Maps to legacy 'logbook' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.logbookcode">
+            <summary>
+            Primary key - Logbook code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.vmf_code">
+            <summary>
+            Foreign key to vehicle table (nullable)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.begin_num">
+            <summary>
+            Beginning logbook number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.end_num">
+            <summary>
+            Ending logbook number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.handout_date">
+            <summary>
+            Date logbook was handed out
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.site_code">
+            <summary>
+            Site code where logbook was issued
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.lb_receiver_name">
+            <summary>
+            Name of logbook receiver
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.lb_tel_num">
+            <summary>
+            Telephone number of receiver
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.lb_comment">
+            <summary>
+            Logbook comments/notes
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logbook.Site">
+            <summary>
+            Associated site
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Logsheet">
+            <summary>
+            Logsheet Entity - Monthly vehicle usage tracking
+            Maps to legacy 'Logsheets' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.log_code">
+            <summary>
+            Primary key - Log code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.vmf_code">
+            <summary>
+            Foreign key to vehicle table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.start_odo">
+            <summary>
+            Starting odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.end_odo">
+            <summary>
+            Ending odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.month">
+            <summary>
+            Month for this logsheet
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.site_code">
+            <summary>
+            Site code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.rek_num">
+            <summary>
+            Requisition number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.days_used">
+            <summary>
+            Number of days vehicle was used
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.bund_num">
+            <summary>
+            Bundle number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Logsheet.Site">
+            <summary>
+            Associated site
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Loss">
+            <summary>
+            Loss Entity - Vehicle loss/theft management
+            Maps to legacy 'losses' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.loss_code">
+            <summary>
+            Primary key - Loss code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.vmf_code">
+            <summary>
+            Foreign key to vehicle table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.loss_date">
+            <summary>
+            Date of loss
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.loss_reference">
+            <summary>
+            Loss reference number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.loss_type_code">
+            <summary>
+            Type of loss (theft, damage, etc.)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.site_code">
+            <summary>
+            Site code where loss occurred
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.dept_contact">
+            <summary>
+            Department contact person
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.loss_amount">
+            <summary>
+            Loss amount (value)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.dept_claim">
+            <summary>
+            Department claim amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.sapd">
+            <summary>
+            SAPD (South African Police Department) reference
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.inspector">
+            <summary>
+            Inspector name
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.case_number">
+            <summary>
+            Case number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Loss.Site">
+            <summary>
+            Associated site
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Monitor">
+            <summary>
+            Monitor Entity - Fleet monitoring and inquiry tracking
+            Maps to legacy 'Monitor' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.monitor_code">
+            <summary>
+            Primary key - Monitor code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.vmf_code">
+            <summary>
+            Foreign key to vehicle table (nullable)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Capture_dat">
+            <summary>
+            Capture date
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.User_access_code">
+            <summary>
+            User access code (foreign key to user)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Inquiry_type">
+            <summary>
+            Type of inquiry
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Inquiry_Desc">
+            <summary>
+            Inquiry description
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Driver_name">
+            <summary>
+            Driver name
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Driver_persalno">
+            <summary>
+            Driver personnel number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Driver_Site">
+            <summary>
+            Driver site code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Monitor.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Taxi">
+            <summary>
+            Taxi Entity - Taxi/contracted vehicle request management
+            Maps to legacy 'Taxis' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.request_id">
+            <summary>
+            Primary key - Request ID
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.rek_num">
+            <summary>
+            Requisition number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.contractor_id">
+            <summary>
+            Contractor ID
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.vmf_code">
+            <summary>
+            Vehicle code (as string in legacy system)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.department_code">
+            <summary>
+            Department code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.site_code">
+            <summary>
+            Site code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.date_required">
+            <summary>
+            Date taxi is required
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.time_required">
+            <summary>
+            Time taxi is required
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.vehicle_type_code">
+            <summary>
+            Vehicle type code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.official">
+            <summary>
+            Official/passenger name
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.rank">
+            <summary>
+            Official rank/position
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.address_1">
+            <summary>
+            Destination address line 1
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.address_2">
+            <summary>
+            Destination address line 2
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.address_3">
+            <summary>
+            Destination address line 3
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.flight">
+            <summary>
+            Flight information (if applicable)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.Department">
+            <summary>
+            Associated department
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Taxi.Site">
+            <summary>
+            Associated site
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Towing">
+            <summary>
+            Towing Entity - Vehicle towing request management
+            Maps to legacy 'Towing' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Towing_code">
+            <summary>
+            Primary key - Towing code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.vmf_code">
+            <summary>
+            Foreign key to vehicle table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Call_refer">
+            <summary>
+            Call reference number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Tow_request_date">
+            <summary>
+            Date towing was requested
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Tow_request_time">
+            <summary>
+            Time towing was requested
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Tow_location_start">
+            <summary>
+            Location where vehicle needs to be towed from
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Vehicle_problem">
+            <summary>
+            Description of vehicle problem
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Keys">
+            <summary>
+            Key availability/location
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Site_code">
+            <summary>
+            Site code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Vehicle">
+            <summary>
+            Associated vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Towing.Site">
+            <summary>
+            Associated site
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.TripDriver">
             <summary>
             TripDriver Entity - Legacy compatibility for trip_driver table

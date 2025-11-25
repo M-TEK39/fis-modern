@@ -3,6 +3,32 @@ using FIS.Web.Models;
 
 namespace FIS.Web.Services;
 
+// Internal API response models for mapping
+internal class ApiMakeResponse
+{
+    public short make_code { get; set; }
+    public string make_description { get; set; } = string.Empty;
+}
+
+internal class ApiModelResponse
+{
+    public short model_code { get; set; }
+    public short make_code { get; set; }
+    public string model_description { get; set; } = string.Empty;
+}
+
+internal class ApiVehicleTypeResponse
+{
+    public short type_code { get; set; }
+    public string type_description { get; set; } = string.Empty;
+}
+
+internal class ApiFuelTypeResponse
+{
+    public short fuel_type_code { get; set; }
+    public string fuel_description { get; set; } = string.Empty;
+}
+
 public class ReferenceDataApiService
 {
     private readonly HttpClient _httpClient;
@@ -19,8 +45,15 @@ public class ReferenceDataApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<MakeDto>>("api/makes");
-            return result ?? new List<MakeDto>();
+            // Define inline class for API response mapping
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiMakeResponse>>("api/make");
+            if (apiResponse == null) return new List<MakeDto>();
+            
+            return apiResponse.Select(make => new MakeDto
+            {
+                make_code = make.make_code,
+                make_name = make.make_description
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -33,7 +66,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<MakeDto>($"api/makes/{makeCode}");
+            var apiResponse = await _httpClient.GetFromJsonAsync<ApiMakeResponse>($"api/make/{makeCode}");
+            if (apiResponse == null) return null;
+            
+            return new MakeDto
+            {
+                make_code = apiResponse.make_code,
+                make_name = apiResponse.make_description
+            };
         }
         catch (Exception ex)
         {
@@ -46,7 +86,13 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/makes", make);
+            // Map MakeDto to CreateMakeDto for API
+            var createMakeDto = new
+            {
+                make_description = make.make_name
+            };
+            
+            var response = await _httpClient.PostAsJsonAsync("api/make", createMakeDto);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -60,7 +106,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/makes/{makeCode}", make);
+            // Map MakeDto to Make entity for API
+            var makeEntity = new
+            {
+                make_code = (short)makeCode,
+                make_description = make.make_name
+            };
+            
+            var response = await _httpClient.PutAsJsonAsync($"api/make/{makeCode}", makeEntity);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -74,7 +127,7 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/makes/{makeCode}");
+            var response = await _httpClient.DeleteAsync($"api/make/{makeCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -89,8 +142,15 @@ public class ReferenceDataApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<ModelDto>>("api/models");
-            return result ?? new List<ModelDto>();
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiModelResponse>>("api/model");
+            if (apiResponse == null) return new List<ModelDto>();
+            
+            return apiResponse.Select(model => new ModelDto
+            {
+                model_code = model.model_code,
+                make_code = model.make_code,
+                model_name = model.model_description
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -103,7 +163,15 @@ public class ReferenceDataApiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<ModelDto>($"api/models/{modelCode}");
+            var apiResponse = await _httpClient.GetFromJsonAsync<ApiModelResponse>($"api/model/{modelCode}");
+            if (apiResponse == null) return null;
+            
+            return new ModelDto
+            {
+                model_code = apiResponse.model_code,
+                make_code = apiResponse.make_code,
+                model_name = apiResponse.model_description
+            };
         }
         catch (Exception ex)
         {
@@ -116,7 +184,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/models", model);
+            // Map ModelDto to API expected format
+            var createModelDto = new
+            {
+                make_code = model.make_code,
+                model_description = model.model_name
+            };
+            
+            var response = await _httpClient.PostAsJsonAsync("api/model", createModelDto);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -130,7 +205,15 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/models/{modelCode}", model);
+            // Map ModelDto to Model entity for API
+            var modelEntity = new
+            {
+                model_code = (short)modelCode,
+                make_code = model.make_code,
+                model_description = model.model_name
+            };
+            
+            var response = await _httpClient.PutAsJsonAsync($"api/model/{modelCode}", modelEntity);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -144,7 +227,7 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/models/{modelCode}");
+            var response = await _httpClient.DeleteAsync($"api/model/{modelCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -159,8 +242,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<VehicleTypeDto>>("api/types");
-            return result ?? new List<VehicleTypeDto>();
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiVehicleTypeResponse>>("api/type");
+            if (apiResponse == null) return new List<VehicleTypeDto>();
+            
+            return apiResponse.Select(type => new VehicleTypeDto
+            {
+                type_code = type.type_code,
+                type_name = type.type_description
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -173,7 +262,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<VehicleTypeDto>($"api/types/{typeCode}");
+            var apiResponse = await _httpClient.GetFromJsonAsync<ApiVehicleTypeResponse>($"api/type/{typeCode}");
+            if (apiResponse == null) return null;
+            
+            return new VehicleTypeDto
+            {
+                type_code = apiResponse.type_code,
+                type_name = apiResponse.type_description
+            };
         }
         catch (Exception ex)
         {
@@ -186,7 +282,13 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/types", type);
+            // Map VehicleTypeDto to API expected format
+            var createTypeDto = new
+            {
+                type_description = type.type_name
+            };
+            
+            var response = await _httpClient.PostAsJsonAsync("api/type", createTypeDto);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -200,7 +302,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/types/{typeCode}", type);
+            // Map VehicleTypeDto to Type entity for API
+            var typeEntity = new
+            {
+                type_code = (short)typeCode,
+                type_description = type.type_name
+            };
+            
+            var response = await _httpClient.PutAsJsonAsync($"api/type/{typeCode}", typeEntity);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -214,7 +323,7 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/types/{typeCode}");
+            var response = await _httpClient.DeleteAsync($"api/type/{typeCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -229,8 +338,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<FuelTypeDto>>("api/fueltypes");
-            return result ?? new List<FuelTypeDto>();
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiFuelTypeResponse>>("api/fueltype");
+            if (apiResponse == null) return new List<FuelTypeDto>();
+            
+            return apiResponse.Select(fuelType => new FuelTypeDto
+            {
+                fuel_type_code = fuelType.fuel_type_code,
+                fuel_type_name = fuelType.fuel_description
+            }).ToList();
         }
         catch (Exception ex)
         {
@@ -243,7 +358,14 @@ public class ReferenceDataApiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<FuelTypeDto>($"api/fueltypes/{fuelTypeCode}");
+            var apiResponse = await _httpClient.GetFromJsonAsync<ApiFuelTypeResponse>($"api/fueltype/{fuelTypeCode}");
+            if (apiResponse == null) return null;
+            
+            return new FuelTypeDto
+            {
+                fuel_type_code = apiResponse.fuel_type_code,
+                fuel_type_name = apiResponse.fuel_description
+            };
         }
         catch (Exception ex)
         {
@@ -256,7 +378,13 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/fueltypes", fuelType);
+            // Map FuelTypeDto to API expected format
+            var createFuelTypeDto = new
+            {
+                fuel_description = fuelType.fuel_type_name
+            };
+            
+            var response = await _httpClient.PostAsJsonAsync("api/fueltype", createFuelTypeDto);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -270,9 +398,16 @@ public class ReferenceDataApiService
     {
         try
         {
+            // Map FuelTypeDto to FuelType entity for API
+            var fuelTypeEntity = new
+            {
+                fuel_type_code = (short)fuelTypeCode,
+                fuel_description = fuelType.fuel_type_name
+            };
+            
             var response = await _httpClient.PutAsJsonAsync(
-                $"api/fueltypes/{fuelTypeCode}",
-                fuelType
+                $"api/fueltype/{fuelTypeCode}",
+                fuelTypeEntity
             );
             return response.IsSuccessStatusCode;
         }
@@ -287,7 +422,7 @@ public class ReferenceDataApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/fueltypes/{fuelTypeCode}");
+            var response = await _httpClient.DeleteAsync($"api/fueltype/{fuelTypeCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

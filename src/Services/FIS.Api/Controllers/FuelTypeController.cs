@@ -25,12 +25,17 @@ namespace FIS.Api.Controllers
         /// </summary>
         /// <returns>List of all fuel types</returns>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<FuelTypeEntity>>> GetAllFuelTypes()
+        public async Task<ActionResult<IEnumerable<FuelTypeResponseDto>>> GetAllFuelTypes()
         {
             try
             {
                 var fuelTypes = await _fuelTypeRepository.GetAllFuelTypesAsync();
-                return Ok(fuelTypes);
+                var fuelTypeDtos = fuelTypes.Select(ft => new FuelTypeResponseDto
+                {
+                    fuel_type_code = ft.fuel_type_code,
+                    fuel_description = ft.fuel_description
+                });
+                return Ok(fuelTypeDtos);
             }
             catch (Exception ex)
             {
@@ -44,7 +49,7 @@ namespace FIS.Api.Controllers
         /// <param name="id">The fuel type code</param>
         /// <returns>The fuel type if found</returns>
         [HttpGet("{id}")]
-        public async Task<ActionResult<FuelTypeEntity>> GetFuelType(short id)
+        public async Task<ActionResult<FuelTypeResponseDto>> GetFuelType(short id)
         {
             try
             {
@@ -53,7 +58,14 @@ namespace FIS.Api.Controllers
                 {
                     return NotFound($"Fuel type with code {id} not found");
                 }
-                return Ok(fuelType);
+                
+                var fuelTypeDto = new FuelTypeResponseDto
+                {
+                    fuel_type_code = fuelType.fuel_type_code,
+                    fuel_description = fuelType.fuel_description
+                };
+                
+                return Ok(fuelTypeDto);
             }
             catch (Exception ex)
             {

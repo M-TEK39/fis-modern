@@ -29,11 +29,10 @@
     else if (_users.Count == 0)
     {
         <div class="empty-state">
-            <i class="bx bxs-user-plus"></i>
             <h3>No users found</h3>
             <p>Get started by adding your first system user</p>
             <button class="btn btn-primary" @onclick="ShowAddDialog">
-                <i class="bx bx-plus"></i>
+                <i class="bx bx-plus plus-icon"></i>
                 Add User
             </button>
         </div>
@@ -43,10 +42,7 @@
         <div class="table-container">
             <div class="table-header">
                 <div class="table-controls">
-                    <button class="btn btn-primary" @onclick="ShowAddDialog">
-                        <i class="bx bx-plus"></i>
-                        Add User
-                    </button>
+                   
                 </div>
             </div>
             <div class="table-wrapper">

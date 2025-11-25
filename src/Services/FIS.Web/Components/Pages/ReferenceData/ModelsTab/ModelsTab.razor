@@ -18,7 +18,7 @@ else if (_models.Count == 0)
         <h3>No models found</h3>
         <p>Get started by adding your first vehicle model</p>
         <button class="btn btn-primary" @onclick="ShowAddDialog">
-            <i class="bx bx-plus"></i>
+            <i class="bx bx-plus plus-icon"></i>
             Add Model
         </button>
     </div>
@@ -53,11 +53,9 @@ else
                                 <div class="table-actions">
                                     <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(model)" title="Edit">
                                         <i class="bx bx-edit"></i>
-                                        <span>Edit</span>
                                     </button>
                                     <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(model)" title="Delete">
                                         <i class="bx bx-trash"></i>
-                                        <span>Delete</span>
                                     </button>
                                 </div>
                             </td>
@@ -75,8 +73,22 @@ else
        OnSubmit="SaveModel"
        IsSaving="_saving">
     <div class="form-field">
+        <label class="form-label">Model Code <span class="required">*</span></label>
+        <input type="number" class="form-input" @bind="_currentModel.model_code" />
+    </div>
+    <div class="form-field">
         <label class="form-label">Model Name <span class="required">*</span></label>
         <input type="text" class="form-input" @bind="_currentModel.model_name" placeholder="e.g., Corolla" />
+    </div>
+    <div class="form-field">
+        <label class="form-label">Make <span class="required">*</span></label>
+        <select class="form-input" @bind="_currentModel.make_code">
+            <option value="">Select make</option>
+            @foreach (var make in _makes)
+            {
+                <option value="@make.make_code">@make.make_name (@make.make_code)</option>
+            }
+        </select>
     </div>
 </Modal>
 
@@ -91,6 +103,7 @@ else
 
 @code {
     private List<ModelDto> _models = new();
+    private List<MakeDto> _makes = new();
     private ModelDto _currentModel = new();
     private bool _loading = true;
     private bool _showDialog = false;
@@ -101,6 +114,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         await LoadModels();
+        _makes = await RefDataService.GetMakesAsync();
     }
 
     private async Task LoadModels()

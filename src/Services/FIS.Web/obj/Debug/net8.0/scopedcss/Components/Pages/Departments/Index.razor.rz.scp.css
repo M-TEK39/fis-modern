@@ -1,4 +1,5 @@
-/* Department Management Styles */
+/* Departments/Index.razor.css - Component-specific styles only */
+/* Global styles (btn, modal, form, etc.) are in app.css */
 
 .dept-grid[b-p5rga6s556] {
     display: grid;
@@ -73,20 +74,6 @@
 .dept-info i[b-p5rga6s556] {
     font-size: 1.125rem;
     color: var(--fis-accent);
-}
-
-.modal-large[b-p5rga6s556] {
-    max-width: 700px;
-}
-
-.form-field-full[b-p5rga6s556] {
-    grid-column: 1 / -1;
-}
-
-.form-input[rows][b-p5rga6s556] {
-    resize: vertical;
-    font-family: inherit;
-    min-height: 80px;
 }
 
 @media (max-width: 768px) {

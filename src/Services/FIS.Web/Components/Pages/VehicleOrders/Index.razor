@@ -1,0 +1,102 @@
+@page "/vehicle-orders"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Vehicle Orders - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-cart"></i>
+            Vehicle Orders
+        </h1>
+        <p class="page-description">Vehicle order summary. Static entries until API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadOrders">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading vehicle orders...</p>
+        </div>
+    }
+    else if (_orders.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-cart"></i>
+            <h3>No vehicle orders</h3>
+            <p>Awaiting vehicle order API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_orders.Count Order(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Order #</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Ordered</th>
+                            <th>Expected</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var order in _orders)
+                        {
+                            <tr>
+                                <td>@order.Number</td>
+                                <td>@order.Vehicle</td>
+                                <td><span class="badge">@order.Status</span></td>
+                                <td>@order.Ordered.ToString("yyyy-MM-dd")</td>
+                                <td>@order.Expected.ToString("yyyy-MM-dd")</td>
+                                <td>@order.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<VehicleOrderItem> _orders = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+
+    private Task LoadOrders()
+    {
+        _loading = true;
+
+        _orders =
+        [
+            new("VO-2401-001", "ABC123GP", "Ordered", new DateTime(2025, 01, 12), new DateTime(2025, 02, 15), "Awaiting delivery."),
+            new("VO-2401-002", "JKL456GP", "Pending Approval", new DateTime(2025, 01, 09), new DateTime(2025, 02, 10), "Approval in progress."),
+            new("VO-2312-006", "MNO789GP", "Delivered", new DateTime(2024, 12, 05), new DateTime(2024, 12, 20), "Delivered to depot."),
+            new("VO-2311-004", "PQR321GP", "Cancelled", new DateTime(2024, 11, 18), new DateTime(2024, 12, 01), "Cancelled by request.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record VehicleOrderItem(string Number, string Vehicle, string Status, DateTime Ordered, DateTime Expected, string Notes);
+}

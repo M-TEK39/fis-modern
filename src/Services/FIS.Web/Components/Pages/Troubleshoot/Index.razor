@@ -1,0 +1,102 @@
+@page "/troubleshoot"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Troubleshoot - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-wrench"></i>
+            Troubleshoot
+        </h1>
+        <p class="page-description">Legacy troubleshoot queue. Static entries until troubleshoot API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadTickets">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading tickets...</p>
+        </div>
+    }
+    else if (_tickets.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-wrench"></i>
+            <h3>No tickets</h3>
+            <p>Awaiting troubleshoot API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_tickets.Count Ticket(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Ticket #</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Opened</th>
+                            <th>Assigned</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ticket in _tickets)
+                        {
+                            <tr>
+                                <td>@ticket.Number</td>
+                                <td>@ticket.Category</td>
+                                <td><span class="badge">@ticket.Status</span></td>
+                                <td>@ticket.Opened.ToString("yyyy-MM-dd")</td>
+                                <td>@ticket.AssignedTo</td>
+                                <td>@ticket.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<TroubleshootItem> _tickets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTickets();
+    }
+
+    private Task LoadTickets()
+    {
+        _loading = true;
+
+        _tickets =
+        [
+            new("TS-2401-001", "Login", "Open", new DateTime(2025, 01, 12), "Support A", "User unable to login."),
+            new("TS-2401-002", "Reporting", "In Progress", new DateTime(2025, 01, 10), "Support B", "Report timeout investigation."),
+            new("TS-2312-008", "Data", "Closed", new DateTime(2024, 12, 14), "Support A", "Resolved data correction."),
+            new("TS-2311-005", "UI", "Closed", new DateTime(2024, 11, 20), "Support C", "Archived reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record TroubleshootItem(string Number, string Category, string Status, DateTime Opened, string AssignedTo, string Notes);
+}

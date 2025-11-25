@@ -3,8 +3,8 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@inject VehicleApiService VehicleService
-@inject DriverApiService DriverService
+@inject TripApiService TripService
+@inject IJSRuntime JS
 
 <PageTitle>Trip Management - Fleet Information System</PageTitle>
 
@@ -17,9 +17,9 @@
         <p class="page-description">Manage vehicle trips, assignments, and trip records</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-primary" @onclick="ShowAddDialog">
-            <i class="bx bx-plus"></i>
-            Create Trip
+        <button class="btn btn-secondary" @onclick="RefreshData">
+            <i class="bx bx-refresh"></i>
+            Refresh
         </button>
     </div>
 </div>
@@ -58,9 +58,9 @@
             <p>@(_searchTerm?.Length > 0 ? "No trips match your search criteria" : "Get started by creating your first trip")</p>
             @if (_searchTerm?.Length == 0)
             {
-                <button class="btn btn-primary" @onclick="ShowAddDialog">
-                    <i class="bx bx-plus"></i>
-                    Create Trip
+                <button class="btn btn-secondary" @onclick="RefreshData">
+                    <i class="bx bx-refresh"></i>
+                    Refresh
                 </button>
             }
         </div>
@@ -81,49 +81,29 @@
                     <thead>
                         <tr>
                             <th>Trip ID</th>
+                            <th>Contract</th>
                             <th>Vehicle</th>
                             <th>Driver</th>
-                            <th>Destination</th>
                             <th>Trip Date</th>
                             <th>Status</th>
-                            <th>Distance (km)</th>
-                            <th>Actions</th>
+                            <th>Notes</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var trip in _filteredTrips)
                         {
                             <tr>
-                                <td class="trip-id">@trip.trip_id</td>
-                                <td class="vehicle-info">
-                                    <span class="vehicle-reg">@trip.vehicle_registration</span>
-                                    <span class="vehicle-details">@trip.vehicle_make @trip.vehicle_model</span>
-                                </td>
-                                <td class="driver-info">@trip.driver_name</td>
-                                <td class="destination">@trip.destination</td>
-                                <td class="trip-date">@trip.trip_date.ToString("dd MMM yyyy")</td>
+                                <td class="trip-id">@trip.TripId</td>
+                                <td>@trip.ContractCode</td>
+                                <td>@trip.VmfCode</td>
+                                <td>@trip.DriverId</td>
+                                <td class="trip-date">@trip.TripDate.ToString("yyyy-MM-dd")</td>
                                 <td class="status">
-                                    <span class="status-badge @GetStatusClass(trip.status)">
-                                        @trip.status
+                                    <span class="status-badge @GetStatusClass(trip.Status ?? "")">
+                                        @trip.Status
                                     </span>
                                 </td>
-                                <td class="distance">@trip.distance_km?.ToString("N1")</td>
-                                <td class="actions-column">
-                                    <div class="table-actions">
-                                        <button class="btn-icon btn-icon-view" @onclick="() => ViewTrip(trip)" title="View Details">
-                                            <i class="bx bx-show"></i>
-                                            <span>View</span>
-                                        </button>
-                                        <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(trip)" title="Edit">
-                                            <i class="bx bx-edit"></i>
-                                            <span>Edit</span>
-                                        </button>
-                                        <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(trip)" title="Delete">
-                                            <i class="bx bx-trash"></i>
-                                            <span>Delete</span>
-                                        </button>
-                                    </div>
-                                </td>
+                                <td>@trip.Notes</td>
                             </tr>
                         }
                     </tbody>
@@ -133,80 +113,10 @@
     }
 </div>
 
-<Modal IsVisible="_showDialog"
-       Title="@(_isEdit ? "Edit Trip" : "Create Trip")"
-       OnCancel="HideDialog"
-       OnSubmit="SaveTrip"
-       IsSaving="_saving">
-    <div class="form-grid">
-        <div class="form-field">
-            <label class="form-label">Destination <span class="required">*</span></label>
-            <input type="text" @bind="_currentTrip.destination" class="form-input" placeholder="Enter destination" />
-        </div>
-        <div class="form-field">
-            <label class="form-label">Vehicle Registration <span class="required">*</span></label>
-            <select @bind="_currentTrip.vehicle_registration" class="form-input">
-                <option value="">Select Vehicle</option>
-                @foreach (var vehicle in _vehicles)
-                {
-                    <option value="@vehicle.registration_number">@vehicle.registration_number - @vehicle.make_name @vehicle.model_name</option>
-                }
-            </select>
-        </div>
-        <div class="form-field">
-            <label class="form-label">Driver <span class="required">*</span></label>
-            <select @bind="_currentTrip.driver_name" class="form-input">
-                <option value="">Select Driver</option>
-                @foreach (var driver in _drivers)
-                {
-                    <option value="@driver.driver_name">@driver.driver_name</option>
-                }
-            </select>
-        </div>
-        <div class="form-field">
-            <label class="form-label">Trip Date <span class="required">*</span></label>
-            <input type="date" @bind="_currentTrip.trip_date" class="form-input" />
-        </div>
-        <div class="form-field">
-            <label class="form-label">Purpose</label>
-            <textarea @bind="_currentTrip.purpose" class="form-input" rows="2" placeholder="Enter trip purpose"></textarea>
-        </div>
-        <div class="form-field">
-            <label class="form-label">Distance (km)</label>
-            <input type="number" step="0.1" @bind="_currentTrip.distance_km" class="form-input" placeholder="0.0" />
-        </div>
-        <div class="form-field">
-            <label class="form-label">Status</label>
-            <select @bind="_currentTrip.status" class="form-input">
-                <option value="Planned">Planned</option>
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-            </select>
-        </div>
-    </div>
-</Modal>
-
-<ConfirmationModal IsVisible="_showDeleteConfirm"
-                  Title="Confirm Delete"
-                  OnCancel="HideDeleteDialog"
-                  OnConfirm="DeleteTrip"
-                  IsDeleting="false">
-    <p>Are you sure you want to delete the trip to <strong>@_currentTrip.destination</strong>?</p>
-    <p class="warning-text">This action cannot be undone.</p>
-</ConfirmationModal>
-
 @code {
-    private List<TripDto> _trips = new();
-    private List<TripDto> _filteredTrips = new();
-    private List<VehicleDto> _vehicles = new();
-    private List<DriverDto> _drivers = new();
-    private TripDto _currentTrip = new();
+    private List<FIS.Web.Services.TripDto> _trips = new();
+    private List<FIS.Web.Services.TripDto> _filteredTrips = new();
     private bool _loading = true;
-    private bool _showDialog = false;
-    private bool _showDeleteConfirm = false;
-    private bool _isEdit = false;
-    private bool _saving = false;
     private string _searchTerm = "";
 
     protected override async Task OnInitializedAsync()
@@ -219,25 +129,12 @@
         _loading = true;
         try
         {
-            // Small delay to simulate async operation
-            await Task.Delay(100);
-            
-            // Placeholder implementation - replace with actual API calls when TripApiService exists
-            _trips = new List<TripDto>();
-            
-            // Load vehicles and drivers from existing services
-            // _vehicles = await VehicleService.GetVehiclesAsync();
-            // _drivers = await DriverService.GetDriversAsync();
-            _vehicles = new List<VehicleDto>();
-            _drivers = new List<DriverDto>();
-            
-            // Apply filters
+            _trips = await TripService.GetRecentAsync();
             ApplySearchFilter();
         }
         catch (Exception ex)
         {
-            // Log error
-            Console.WriteLine($"Error loading trip data: {ex.Message}");
+            await JS.InvokeVoidAsync("console.error", $"Error loading trip data: {ex.Message}");
         }
         finally
         {
@@ -255,10 +152,13 @@
         else
         {
             var searchLower = _searchTerm.ToLower();
-            _filteredTrips = _trips.Where(t => 
-                t.destination.ToLower().Contains(searchLower) ||
-                t.vehicle_registration.ToLower().Contains(searchLower) ||
-                t.driver_name.ToLower().Contains(searchLower)
+            _filteredTrips = _trips.Where(t =>
+                (t.Status ?? "").ToLower().Contains(searchLower) ||
+                (t.Notes ?? "").ToLower().Contains(searchLower) ||
+                t.TripId.ToString().Contains(searchLower) ||
+                t.ContractCode.ToString().Contains(searchLower) ||
+                t.VmfCode.ToString().Contains(searchLower) ||
+                (t.DriverId?.ToString() ?? "").Contains(searchLower)
             ).ToList();
         }
     }
@@ -282,101 +182,6 @@
         await LoadData();
     }
 
-    private void ShowAddDialog()
-    {
-        _currentTrip = new TripDto 
-        { 
-            trip_date = DateTime.Today,
-            status = "Planned"
-        };
-        _isEdit = false;
-        _showDialog = true;
-    }
-
-    private void ShowEditDialog(TripDto trip)
-    {
-        _currentTrip = new TripDto
-        {
-            trip_id = trip.trip_id,
-            destination = trip.destination,
-            vehicle_registration = trip.vehicle_registration,
-            driver_name = trip.driver_name,
-            trip_date = trip.trip_date,
-            purpose = trip.purpose,
-            distance_km = trip.distance_km,
-            status = trip.status
-        };
-        _isEdit = true;
-        _showDialog = true;
-    }
-
-    private void ViewTrip(TripDto trip)
-    {
-        // Navigate to trip details view
-        // Navigation.NavigateTo($"/trips/{trip.trip_id}");
-    }
-
-    private void HideDialog()
-    {
-        _showDialog = false;
-        _currentTrip = new();
-    }
-
-    private async Task SaveTrip()
-    {
-        _saving = true;
-        try
-        {
-            if (_isEdit)
-            {
-                // await TripService.UpdateTripAsync(_currentTrip);
-            }
-            else
-            {
-                // await TripService.CreateTripAsync(_currentTrip);
-            }
-            
-            HideDialog();
-            await LoadData();
-        }
-        catch (Exception ex)
-        {
-            // Handle error
-            Console.WriteLine($"Error saving trip: {ex.Message}");
-        }
-        finally
-        {
-            _saving = false;
-        }
-    }
-
-    private void ShowDeleteDialog(TripDto trip)
-    {
-        _currentTrip = trip;
-        _showDeleteConfirm = true;
-    }
-
-    private void HideDeleteDialog()
-    {
-        _showDeleteConfirm = false;
-        _currentTrip = new();
-    }
-
-    private async Task DeleteTrip()
-    {
-        try
-        {
-            // await TripService.DeleteTripAsync(_currentTrip.trip_id);
-            HideDeleteDialog();
-            await LoadData();
-        }
-        catch (Exception ex)
-        {
-            // Handle error
-            Console.WriteLine($"Error deleting trip: {ex.Message}");
-        }
-    }
-
     private string GetStatusClass(string status)
     {
         return status?.ToLower() switch
@@ -387,31 +192,5 @@
             "cancelled" => "status-danger",
             _ => "status-default"
         };
-    }
-
-    public class TripDto
-    {
-        public int trip_id { get; set; }
-        public string destination { get; set; } = "";
-        public string vehicle_registration { get; set; } = "";
-        public string driver_name { get; set; } = "";
-        public DateTime trip_date { get; set; }
-        public string purpose { get; set; } = "";
-        public decimal? distance_km { get; set; }
-        public string status { get; set; } = "Planned";
-        public string vehicle_make { get; set; } = "";
-        public string vehicle_model { get; set; } = "";
-    }
-
-    public class VehicleDto
-    {
-        public string registration_number { get; set; } = "";
-        public string make_name { get; set; } = "";
-        public string model_name { get; set; } = "";
-    }
-
-    public class DriverDto
-    {
-        public string driver_name { get; set; } = "";
     }
 }

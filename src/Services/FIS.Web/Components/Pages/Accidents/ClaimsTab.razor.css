@@ -1,3 +1,6 @@
+/* Claims Tab - Component-Specific Styles Only */
+/* Common elements (buttons, forms, loading states) are in app.css */
+
 .claims-tab {
     display: flex;
     flex-direction: column;
@@ -16,117 +19,13 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode claims header */
-@media (prefers-color-scheme: dark) {
-    .claims-header h3 {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .claims-header h3 {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .filter-controls {
     display: flex;
     gap: 1rem;
     align-items: center;
-}
-
-.form-select {
-    padding: 0.5rem 0.75rem;
-    border: 2px solid var(--border, #e5e7eb);
-    border-radius: 6px;
-    background-color: var(--background, white);
-    color: var(--foreground, #374151);
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-/* Dark mode select */
-@media (prefers-color-scheme: dark) {
-    .form-select {
-        background-color: var(--background, #0f172a);
-        border-color: var(--border, #334155);
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .form-select {
-    background-color: var(--background, #0f172a);
-    border-color: var(--border, #334155);
-    color: var(--foreground, #f1f5f9);
-}
-
-.form-select:focus {
-    outline: none;
-    border-color: var(--primary, #3b82f6);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Dark mode select focus */
-@media (prefers-color-scheme: dark) {
-    .form-select:focus {
-        border-color: var(--primary, #60a5fa);
-        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-    }
-}
-
-[data-theme="dark"] .form-select:focus {
-    border-color: var(--primary, #60a5fa);
-    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-}
-
-.loading-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem;
-    color: var(--muted-foreground, #6b7280);
-}
-
-/* Dark mode loading */
-@media (prefers-color-scheme: dark) {
-    .loading-state {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .loading-state {
-    color: var(--muted-foreground, #94a3b8);
-}
-
-.spinner {
-    width: 2rem;
-    height: 2rem;
-    border: 2px solid var(--border, #e5e7eb);
-    border-top: 2px solid var(--primary, #3b82f6);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
-}
-
-/* Dark mode spinner */
-@media (prefers-color-scheme: dark) {
-    .spinner {
-        border-color: var(--border, #334155);
-        border-top-color: var(--primary, #60a5fa);
-    }
-}
-
-[data-theme="dark"] .spinner {
-    border-color: var(--border, #334155);
-    border-top-color: var(--primary, #60a5fa);
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
 
 .summary-grid {
@@ -140,45 +39,17 @@
     align-items: center;
     gap: 1rem;
     padding: 1.5rem;
-    background: var(--card, white);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 8px;
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode summary card */
-@media (prefers-color-scheme: dark) {
-    .summary-card {
-        background: var(--card, #1e293b);
-        border-color: var(--border, #334155);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
-    }
-}
-
-[data-theme="dark"] .summary-card {
-    background: var(--card, #1e293b);
-    border-color: var(--border, #334155);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: var(--fis-shadow);
 }
 
 .summary-card:hover {
-    border-color: var(--border-hover, #d1d5db);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-color: var(--fis-accent);
+    box-shadow: var(--fis-shadow-lg);
     transform: translateY(-1px);
-}
-
-/* Dark mode summary card hover */
-@media (prefers-color-scheme: dark) {
-    .summary-card:hover {
-        border-color: var(--border-hover, #475569);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-    }
-}
-
-[data-theme="dark"] .summary-card:hover {
-    border-color: var(--border-hover, #475569);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
 }
 
 .card-icon {
@@ -192,66 +63,23 @@
 }
 
 .total-claims .card-icon {
-    background-color: var(--info-background, #dbeafe);
-    color: var(--info, #2563eb);
+    background-color: hsl(221.2 83.2% 53.3% / 0.15);
+    color: hsl(221.2 83.2% 53.3%);
 }
 
 .repair-costs .card-icon {
-    background-color: var(--warning-background, #fef3c7);
-    color: var(--warning, #d97706);
+    background-color: hsl(47.9 95.8% 53.1% / 0.15);
+    color: hsl(47.9 95.8% 53.1%);
 }
 
 .third-party .card-icon {
-    background-color: var(--destructive-background, #fee2e2);
-    color: var(--destructive, #dc2626);
+    background-color: hsl(0 84.2% 60.2% / 0.15);
+    color: hsl(0 84.2% 60.2%);
 }
 
 .pending .card-icon {
-    background-color: var(--secondary-background, #f3e8ff);
-    color: var(--secondary, #9333ea);
-}
-
-/* Dark mode card icons */
-@media (prefers-color-scheme: dark) {
-    .total-claims .card-icon {
-        background-color: rgba(59, 130, 246, 0.2);
-        color: #60a5fa;
-    }
-    
-    .repair-costs .card-icon {
-        background-color: rgba(245, 158, 11, 0.2);
-        color: #fbbf24;
-    }
-    
-    .third-party .card-icon {
-        background-color: rgba(239, 68, 68, 0.2);
-        color: #f87171;
-    }
-    
-    .pending .card-icon {
-        background-color: rgba(147, 51, 234, 0.2);
-        color: #c084fc;
-    }
-}
-
-[data-theme="dark"] .total-claims .card-icon {
-    background-color: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
-}
-
-[data-theme="dark"] .repair-costs .card-icon {
-    background-color: rgba(245, 158, 11, 0.2);
-    color: #fbbf24;
-}
-
-[data-theme="dark"] .third-party .card-icon {
-    background-color: rgba(239, 68, 68, 0.2);
-    color: #f87171;
-}
-
-[data-theme="dark"] .pending .card-icon {
-    background-color: rgba(147, 51, 234, 0.2);
-    color: #c084fc;
+    background-color: hsl(271.5 81.3% 55.9% / 0.15);
+    color: hsl(271.5 81.3% 55.9%);
 }
 
 .card-content {
@@ -262,57 +90,25 @@
     margin: 0 0 0.25rem 0;
     font-size: 0.875rem;
     font-weight: 500;
-    color: var(--muted-foreground, #6b7280);
+    color: var(--fis-muted-text);
     text-transform: uppercase;
     letter-spacing: 0.025em;
-}
-
-/* Dark mode card content */
-@media (prefers-color-scheme: dark) {
-    .card-content h4 {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .card-content h4 {
-    color: var(--muted-foreground, #94a3b8);
 }
 
 .card-value {
     margin: 0 0 0.25rem 0;
     font-size: 1.875rem;
     font-weight: 700;
-    color: var(--foreground, #1f2937);
+    color: var(--fis-text);
     line-height: 1;
-}
-
-/* Dark mode card value */
-@media (prefers-color-scheme: dark) {
-    .card-value {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .card-value {
-    color: var(--foreground, #f1f5f9);
 }
 
 .card-subtitle {
     font-size: 0.75rem;
-    color: var(--muted-foreground, #9ca3af);
+    color: var(--fis-muted-text);
 }
 
-/* Dark mode card subtitle */
-@media (prefers-color-scheme: dark) {
-    .card-subtitle {
-        color: var(--muted-foreground, #6b7280);
-    }
-}
-
-[data-theme="dark"] .card-subtitle {
-    color: var(--muted-foreground, #6b7280);
-}
-
+/* Claims Breakdown Section */
 .claims-breakdown {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -320,44 +116,18 @@
 }
 
 .breakdown-section {
-    background: var(--card, white);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 8px;
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     padding: 1.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode breakdown section */
-@media (prefers-color-scheme: dark) {
-    .breakdown-section {
-        background: var(--card, #1e293b);
-        border-color: var(--border, #334155);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
-    }
-}
-
-[data-theme="dark"] .breakdown-section {
-    background: var(--card, #1e293b);
-    border-color: var(--border, #334155);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: var(--fis-shadow);
 }
 
 .breakdown-section h4 {
     margin: 0 0 1rem 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode breakdown title */
-@media (prefers-color-scheme: dark) {
-    .breakdown-section h4 {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .breakdown-section h4 {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .breakdown-chart {
@@ -375,37 +145,15 @@
 .breakdown-bar {
     flex: 1;
     height: 8px;
-    background-color: var(--muted, #f3f4f6);
+    background-color: var(--fis-muted);
     border-radius: 4px;
     overflow: hidden;
 }
 
-/* Dark mode breakdown bar */
-@media (prefers-color-scheme: dark) {
-    .breakdown-bar {
-        background-color: var(--muted, #334155);
-    }
-}
-
-[data-theme="dark"] .breakdown-bar {
-    background-color: var(--muted, #334155);
-}
-
 .breakdown-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--primary, #3b82f6), var(--primary-dark, #1d4ed8));
+    background: linear-gradient(90deg, var(--fis-accent), var(--fis-accent-dark));
     transition: width 0.3s ease;
-}
-
-/* Dark mode breakdown fill */
-@media (prefers-color-scheme: dark) {
-    .breakdown-fill {
-        background: linear-gradient(90deg, var(--primary, #60a5fa), var(--primary-dark, #3b82f6));
-    }
-}
-
-[data-theme="dark"] .breakdown-fill {
-    background: linear-gradient(90deg, var(--primary, #60a5fa), var(--primary-dark, #3b82f6));
 }
 
 .breakdown-details {
@@ -417,36 +165,15 @@
 }
 
 .breakdown-label {
-    color: var(--muted-foreground, #6b7280);
-}
-
-/* Dark mode breakdown label */
-@media (prefers-color-scheme: dark) {
-    .breakdown-label {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .breakdown-label {
-    color: var(--muted-foreground, #94a3b8);
+    color: var(--fis-muted-text);
 }
 
 .breakdown-value {
     font-weight: 600;
-    color: var(--foreground, #1f2937);
+    color: var(--fis-text);
 }
 
-/* Dark mode breakdown value */
-@media (prefers-color-scheme: dark) {
-    .breakdown-value {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .breakdown-value {
-    color: var(--foreground, #f1f5f9);
-}
-
+/* Trend Chart */
 .trend-chart {
     display: flex;
     align-items: end;
@@ -466,116 +193,47 @@
 .trend-bar {
     width: 100%;
     height: 80px;
-    background-color: var(--muted, #f3f4f6);
+    background-color: var(--fis-muted);
     border-radius: 4px 4px 0 0;
     overflow: hidden;
     display: flex;
     align-items: end;
 }
 
-/* Dark mode trend bar */
-@media (prefers-color-scheme: dark) {
-    .trend-bar {
-        background-color: var(--muted, #334155);
-    }
-}
-
-[data-theme="dark"] .trend-bar {
-    background-color: var(--muted, #334155);
-}
-
 .trend-fill {
     width: 100%;
-    background: linear-gradient(0deg, var(--primary, #3b82f6), var(--primary-light, #60a5fa));
+    background: linear-gradient(0deg, var(--fis-accent), var(--fis-accent-soft));
     transition: height 0.3s ease;
     min-height: 2px;
 }
 
-/* Dark mode trend fill */
-@media (prefers-color-scheme: dark) {
-    .trend-fill {
-        background: linear-gradient(0deg, var(--primary, #60a5fa), var(--primary-light, #93c5fd));
-    }
-}
-
-[data-theme="dark"] .trend-fill {
-    background: linear-gradient(0deg, var(--primary, #60a5fa), var(--primary-light, #93c5fd));
-}
-
 .trend-label {
     font-size: 0.75rem;
-    color: var(--muted-foreground, #6b7280);
+    color: var(--fis-muted-text);
     text-align: center;
-}
-
-/* Dark mode trend label */
-@media (prefers-color-scheme: dark) {
-    .trend-label {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .trend-label {
-    color: var(--muted-foreground, #94a3b8);
 }
 
 .trend-value {
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--foreground, #1f2937);
+    color: var(--fis-text);
     text-align: center;
 }
 
-/* Dark mode trend value */
-@media (prefers-color-scheme: dark) {
-    .trend-value {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .trend-value {
-    color: var(--foreground, #f1f5f9);
-}
-
+/* Recent Claims List */
 .recent-claims {
-    background: var(--card, white);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 8px;
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     padding: 1.5rem;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode recent claims */
-@media (prefers-color-scheme: dark) {
-    .recent-claims {
-        background: var(--card, #1e293b);
-        border-color: var(--border, #334155);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
-    }
-}
-
-[data-theme="dark"] .recent-claims {
-    background: var(--card, #1e293b);
-    border-color: var(--border, #334155);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: var(--fis-shadow);
 }
 
 .recent-claims h4 {
     margin: 0 0 1rem 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode recent claims title */
-@media (prefers-color-scheme: dark) {
-    .recent-claims h4 {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .recent-claims h4 {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .claims-list {
@@ -589,39 +247,15 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    background-color: var(--muted, #f9fafb);
-    border: 1px solid var(--border, #f3f4f6);
-    border-radius: 6px;
+    background-color: var(--fis-muted);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     transition: all 0.2s ease;
 }
 
-/* Dark mode claim item */
-@media (prefers-color-scheme: dark) {
-    .claim-item {
-        background-color: var(--muted, #0f172a);
-        border-color: var(--border, #334155);
-    }
-}
-
-[data-theme="dark"] .claim-item {
-    background-color: var(--muted, #0f172a);
-    border-color: var(--border, #334155);
-}
-
 .claim-item:hover {
-    background-color: var(--muted-hover, #f3f4f6);
+    background-color: var(--fis-hover);
     transform: translateY(-1px);
-}
-
-/* Dark mode claim item hover */
-@media (prefers-color-scheme: dark) {
-    .claim-item:hover {
-        background-color: var(--muted-hover, #1e293b);
-    }
-}
-
-[data-theme="dark"] .claim-item:hover {
-    background-color: var(--muted-hover, #1e293b);
 }
 
 .claim-info {
@@ -637,34 +271,12 @@
 
 .claim-ref {
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode claim ref */
-@media (prefers-color-scheme: dark) {
-    .claim-ref {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .claim-ref {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .claim-date {
     font-size: 0.875rem;
-    color: var(--muted-foreground, #6b7280);
-}
-
-/* Dark mode claim date */
-@media (prefers-color-scheme: dark) {
-    .claim-date {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .claim-date {
-    color: var(--muted-foreground, #94a3b8);
+    color: var(--fis-muted-text);
 }
 
 .claim-details {
@@ -676,33 +288,11 @@
 
 .claim-vehicle {
     font-weight: 500;
-    color: var(--primary, #3b82f6);
-}
-
-/* Dark mode claim vehicle */
-@media (prefers-color-scheme: dark) {
-    .claim-vehicle {
-        color: var(--primary, #60a5fa);
-    }
-}
-
-[data-theme="dark"] .claim-vehicle {
-    color: var(--primary, #60a5fa);
+    color: var(--fis-accent);
 }
 
 .claim-location {
-    color: var(--muted-foreground, #6b7280);
-}
-
-/* Dark mode claim location */
-@media (prefers-color-scheme: dark) {
-    .claim-location {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .claim-location {
-    color: var(--muted-foreground, #94a3b8);
+    color: var(--fis-muted-text);
 }
 
 .claim-costs {
@@ -720,53 +310,20 @@
 
 .cost-label {
     font-size: 0.75rem;
-    color: var(--muted-foreground, #6b7280);
+    color: var(--fis-muted-text);
     text-transform: uppercase;
     letter-spacing: 0.025em;
 }
 
-/* Dark mode cost label */
-@media (prefers-color-scheme: dark) {
-    .cost-label {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .cost-label {
-    color: var(--muted-foreground, #94a3b8);
-}
-
 .cost-value {
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode cost value */
-@media (prefers-color-scheme: dark) {
-    .cost-value {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .cost-value {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .empty-claims {
     text-align: center;
     padding: 2rem;
-    color: var(--muted-foreground, #6b7280);
-}
-
-/* Dark mode empty claims */
-@media (prefers-color-scheme: dark) {
-    .empty-claims {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .empty-claims {
-    color: var(--muted-foreground, #94a3b8);
+    color: var(--fis-muted-text);
 }
 
 .empty-claims p {
@@ -774,36 +331,7 @@
     font-style: italic;
 }
 
-/* Button styles */
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-}
-
-.btn-secondary {
-    background-color: var(--secondary, #6b7280);
-    color: white;
-}
-
-.btn-secondary:hover {
-    background-color: var(--secondary, #4b5563);
-}
-
-.btn-sm {
-    padding: 0.5rem 1rem;
-    font-size: 0.75rem;
-}
-
-/* Responsive design */
+/* Responsive */
 @media (max-width: 768px) {
     .claims-header {
         flex-direction: column;

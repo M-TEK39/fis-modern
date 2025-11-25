@@ -35,7 +35,7 @@
             <h3>No drivers found</h3>
             <p>Get started by adding your first authorized driver</p>
             <button class="btn btn-primary" @onclick="ShowAddDialog">
-                <i class="bx bx-plus"></i>
+                <i class="bx bx-plus plus-icon"></i>
                 Add Driver
             </button>
         </div>
@@ -54,11 +54,9 @@
                         <div class="driver-actions">
                             <button class="btn-icon btn-edit" @onclick="() => ShowEditDialog(driver)" title="Edit Driver">
                                 <i class="bx bx-edit"></i>
-                                <span class="btn-text">Edit</span>
                             </button>
                             <button class="btn-icon btn-delete" @onclick="() => ShowDeleteDialog(driver)" title="Delete Driver">
                                 <i class="bx bx-trash"></i>
-                                <span class="btn-text">Delete</span>
                             </button>
                         </div>
                     </div>

@@ -1,3 +1,6 @@
+/* Reports Tab - Component-Specific Styles Only */
+/* Common elements (buttons, loading states) are in app.css */
+
 .reports-tab {
     display: flex;
     flex-direction: column;
@@ -16,18 +19,7 @@
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode reports header */
-@media (prefers-color-scheme: dark) {
-    .reports-header h3 {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .reports-header h3 {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .reports-actions {
@@ -44,46 +36,18 @@
 .report-card {
     display: flex;
     flex-direction: column;
-    background: var(--card, white);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 8px;
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     padding: 1.5rem;
     transition: all 0.2s ease;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-}
-
-/* Dark mode report card */
-@media (prefers-color-scheme: dark) {
-    .report-card {
-        background: var(--card, #1e293b);
-        border-color: var(--border, #334155);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
-    }
-}
-
-[data-theme="dark"] .report-card {
-    background: var(--card, #1e293b);
-    border-color: var(--border, #334155);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    box-shadow: var(--fis-shadow);
 }
 
 .report-card:hover {
-    border-color: var(--border-hover, #d1d5db);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-color: var(--fis-accent);
+    box-shadow: var(--fis-shadow-lg);
     transform: translateY(-1px);
-}
-
-/* Dark mode report card hover */
-@media (prefers-color-scheme: dark) {
-    .report-card:hover {
-        border-color: var(--border-hover, #475569);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
-    }
-}
-
-[data-theme="dark"] .report-card:hover {
-    border-color: var(--border-hover, #475569);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
 }
 
 .report-icon {
@@ -92,24 +56,11 @@
     justify-content: center;
     width: 3rem;
     height: 3rem;
-    background-color: var(--info-background, #dbeafe);
-    color: var(--info, #2563eb);
+    background-color: hsl(221.2 83.2% 53.3% / 0.15);
+    color: hsl(221.2 83.2% 53.3%);
     border-radius: 8px;
     font-size: 1.5rem;
     margin-bottom: 1rem;
-}
-
-/* Dark mode report icon */
-@media (prefers-color-scheme: dark) {
-    .report-icon {
-        background-color: rgba(59, 130, 246, 0.2);
-        color: #60a5fa;
-    }
-}
-
-[data-theme="dark"] .report-icon {
-    background-color: rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
 }
 
 .report-content {
@@ -121,36 +72,14 @@
     margin: 0 0 0.5rem 0;
     font-size: 1rem;
     font-weight: 600;
-    color: var(--foreground, #1f2937);
-}
-
-/* Dark mode report content title */
-@media (prefers-color-scheme: dark) {
-    .report-content h4 {
-        color: var(--foreground, #f1f5f9);
-    }
-}
-
-[data-theme="dark"] .report-content h4 {
-    color: var(--foreground, #f1f5f9);
+    color: var(--fis-text);
 }
 
 .report-content p {
     margin: 0 0 1rem 0;
     font-size: 0.875rem;
-    color: var(--muted-foreground, #6b7280);
+    color: var(--fis-muted-text);
     line-height: 1.5;
-}
-
-/* Dark mode report content text */
-@media (prefers-color-scheme: dark) {
-    .report-content p {
-        color: var(--muted-foreground, #94a3b8);
-    }
-}
-
-[data-theme="dark"] .report-content p {
-    color: var(--muted-foreground, #94a3b8);
 }
 
 .report-meta {
@@ -164,34 +93,11 @@
     align-items: center;
     gap: 0.5rem;
     font-size: 0.75rem;
-    color: var(--muted-foreground, #9ca3af);
-}
-
-/* Dark mode meta item */
-@media (prefers-color-scheme: dark) {
-    .meta-item {
-        color: var(--muted-foreground, #6b7280);
-    }
-}
-
-[data-theme="dark"] .meta-item {
-    color: var(--muted-foreground, #6b7280);
+    color: var(--fis-muted-text);
 }
 
 .meta-item i {
     font-size: 0.875rem;
-    color: var(--muted-foreground, #d1d5db);
-}
-
-/* Dark mode meta item icon */
-@media (prefers-color-scheme: dark) {
-    .meta-item i {
-        color: var(--muted-foreground, #64748b);
-    }
-}
-
-[data-theme="dark"] .meta-item i {
-    color: var(--muted-foreground, #64748b);
 }
 
 .report-actions {
@@ -206,11 +112,11 @@
     gap: 0.5rem;
     padding: 0.75rem 1rem;
     border: none;
-    border-radius: 6px;
+    border-radius: 0.5rem;
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     min-height: 2.5rem;
 }
 
@@ -221,43 +127,29 @@
 
 .btn-report-primary {
     flex: 1;
-    background-color: #3b82f6;
-    color: white;
+    background-color: var(--fis-accent);
+    color: var(--fis-surface);
 }
 
 .btn-report-primary:hover:not(:disabled) {
-    background-color: #2563eb;
+    background-color: var(--fis-accent-dark);
 }
 
 .btn-report-secondary {
     width: 2.5rem;
-    background-color: #f3f4f6;
-    color: #6b7280;
+    background-color: var(--fis-accent-soft);
+    color: var(--fis-text);
 }
 
 .btn-report-secondary:hover {
-    background-color: #e5e7eb;
-    color: #374151;
+    background-color: var(--fis-hover);
 }
 
-.btn-spinner {
-    width: 1rem;
-    height: 1rem;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top: 2px solid white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
+/* Recent Reports Section */
 .recent-reports-section {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     padding: 1.5rem;
 }
 
@@ -265,7 +157,7 @@
     margin: 0 0 1rem 0;
     font-size: 1rem;
     font-weight: 600;
-    color: #1f2937;
+    color: var(--fis-text);
 }
 
 .recent-reports-list {
@@ -279,14 +171,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem;
-    background-color: #f9fafb;
-    border: 1px solid #f3f4f6;
-    border-radius: 6px;
+    background-color: var(--fis-muted);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.5rem;
     transition: all 0.2s ease;
 }
 
 .recent-report-item:hover {
-    background-color: #f3f4f6;
+    background-color: var(--fis-hover);
 }
 
 .report-info {
@@ -298,18 +190,18 @@
 
 .report-name {
     font-weight: 500;
-    color: #1f2937;
+    color: var(--fis-text);
     font-size: 0.875rem;
 }
 
 .report-details {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--fis-muted-text);
 }
 
 .report-size {
     font-size: 0.75rem;
-    color: #9ca3af;
+    color: var(--fis-muted-text);
     margin-right: 1rem;
 }
 
@@ -325,50 +217,21 @@
     width: 2rem;
     height: 2rem;
     background: none;
-    border: 1px solid #e5e7eb;
-    border-radius: 4px;
-    color: #6b7280;
+    border: 1px solid var(--fis-border);
+    border-radius: 0.375rem;
+    color: var(--fis-muted-text);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
     font-size: 0.875rem;
 }
 
 .btn-icon-sm:hover {
-    background-color: #f3f4f6;
-    border-color: #d1d5db;
-    color: #374151;
+    background-color: var(--fis-hover);
+    border-color: var(--fis-accent);
+    color: var(--fis-text);
 }
 
-/* Button styles */
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-decoration: none;
-}
-
-.btn-secondary {
-    background-color: #6b7280;
-    color: white;
-}
-
-.btn-secondary:hover {
-    background-color: #4b5563;
-}
-
-.btn-sm {
-    padding: 0.5rem 1rem;
-    font-size: 0.75rem;
-}
-
-/* Responsive design */
+/* Responsive */
 @media (max-width: 768px) {
     .reports-header {
         flex-direction: column;
@@ -408,25 +271,5 @@
     .report-size {
         margin-right: 0;
         text-align: center;
-    }
-}
-
-@media (max-width: 480px) {
-    .reports-grid {
-        grid-template-columns: 1fr;
-        gap: 1rem;
-    }
-
-    .report-card {
-        padding: 1rem;
-    }
-
-    .meta-item {
-        font-size: 0.6875rem;
-    }
-
-    .btn-report {
-        padding: 0.625rem 0.75rem;
-        font-size: 0.75rem;
     }
 }

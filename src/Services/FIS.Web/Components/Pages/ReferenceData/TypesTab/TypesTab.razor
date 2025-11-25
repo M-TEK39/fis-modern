@@ -18,7 +18,7 @@ else if (_vehicleTypes.Count == 0)
         <h3>No types found</h3>
         <p>Get started by adding your first vehicle type</p>
         <button class="btn btn-primary" @onclick="ShowAddDialog">
-            <i class="bx bx-plus"></i>
+            <i class="bx bx-plus plus-icon"></i>
             Add Type
         </button>
     </div>
@@ -51,11 +51,9 @@ else
                                 <div class="table-actions">
                                     <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(type)" title="Edit">
                                         <i class="bx bx-edit"></i>
-                                        <span>Edit</span>
                                     </button>
                                     <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(type)" title="Delete">
                                         <i class="bx bx-trash"></i>
-                                        <span>Delete</span>
                                     </button>
                                 </div>
                             </td>

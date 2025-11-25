@@ -18,7 +18,7 @@ public class DriverApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<DriverDto>>("api/drivers");
+            var result = await _httpClient.GetFromJsonAsync<List<DriverDto>>("api/Driver");
             return result ?? new List<DriverDto>();
         }
         catch (Exception ex)
@@ -32,7 +32,7 @@ public class DriverApiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<DriverDto>($"api/drivers/{driverCode}");
+            return await _httpClient.GetFromJsonAsync<DriverDto>($"api/Driver/{driverCode}");
         }
         catch (Exception ex)
         {
@@ -45,7 +45,7 @@ public class DriverApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/drivers", driver);
+            var response = await _httpClient.PostAsJsonAsync("api/Driver", driver);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -59,7 +59,7 @@ public class DriverApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/drivers/{driverCode}", driver);
+            var response = await _httpClient.PutAsJsonAsync($"api/Driver/{driverCode}", driver);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -73,7 +73,7 @@ public class DriverApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/drivers/{driverCode}");
+            var response = await _httpClient.DeleteAsync($"api/Driver/{driverCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

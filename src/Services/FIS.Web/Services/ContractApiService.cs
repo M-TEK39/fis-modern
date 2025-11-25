@@ -15,7 +15,7 @@ public class ContractApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/contracts");
+            var response = await _httpClient.GetAsync("api/Contracts");
             response.EnsureSuccessStatusCode();
             
             var contracts = await response.Content.ReadFromJsonAsync<List<ContractDto>>();
@@ -37,7 +37,7 @@ public class ContractApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/contracts/{contractId}");
+            var response = await _httpClient.GetAsync($"api/Contracts/{contractId}");
             response.EnsureSuccessStatusCode();
             
             return await response.Content.ReadFromJsonAsync<ContractDto>();
@@ -56,7 +56,7 @@ public class ContractApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/contracts", contract);
+            var response = await _httpClient.PostAsJsonAsync("api/Contracts", contract);
             response.EnsureSuccessStatusCode();
             
             var createdContract = await response.Content.ReadFromJsonAsync<ContractDto>();
@@ -72,7 +72,7 @@ public class ContractApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/contracts/{contractId}", contract);
+            var response = await _httpClient.PutAsJsonAsync($"api/Contracts/{contractId}", contract);
             response.EnsureSuccessStatusCode();
             
             var updatedContract = await response.Content.ReadFromJsonAsync<ContractDto>();
@@ -88,7 +88,7 @@ public class ContractApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/contracts/{contractId}");
+            var response = await _httpClient.DeleteAsync($"api/Contracts/{contractId}");
             response.EnsureSuccessStatusCode();
         }
         catch (HttpRequestException)

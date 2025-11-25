@@ -1,0 +1,102 @@
+@page "/towing"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Towing - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-anchor"></i>
+            Towing
+        </h1>
+        <p class="page-description">Towing requests summary. Static entries until towing API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadTows">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading towing records...</p>
+        </div>
+    }
+    else if (_tows.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-anchor"></i>
+            <h3>No towing records</h3>
+            <p>Awaiting towing API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_tows.Count Tow request(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Tow #</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                            <th>Vendor</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var tow in _tows)
+                        {
+                            <tr>
+                                <td>@tow.Number</td>
+                                <td>@tow.Vehicle</td>
+                                <td><span class="badge">@tow.Status</span></td>
+                                <td>@tow.Date.ToString("yyyy-MM-dd")</td>
+                                <td>@tow.Vendor</td>
+                                <td>@tow.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<TowItem> _tows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTows();
+    }
+
+    private Task LoadTows()
+    {
+        _loading = true;
+
+        _tows =
+        [
+            new("TOW-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Vendor A", "Dispatch initiated."),
+            new("TOW-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Vendor B", "En route."),
+            new("TOW-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 18), "Vendor A", "Completed."),
+            new("TOW-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 27), "Vendor C", "Archived reference.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record TowItem(string Number, string Vehicle, string Status, DateTime Date, string Vendor, string Notes);
+}

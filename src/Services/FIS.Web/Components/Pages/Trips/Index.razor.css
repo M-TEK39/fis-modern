@@ -1,9 +1,10 @@
-/* Trip Management Component Styles */
+/* Trips/Index.razor.css - Component-specific styles only */
+/* Global styles (btn, modal, form, table, etc.) are in app.css */
 
 .trip-id {
     font-family: 'Courier New', monospace;
     font-weight: bold;
-    color: var(--color-primary);
+    color: var(--fis-accent);
 }
 
 .vehicle-info {
@@ -14,17 +15,12 @@
 
 .vehicle-reg {
     font-weight: 600;
-    color: var(--color-text);
+    color: var(--fis-text);
 }
 
 .vehicle-details {
     font-size: 0.875rem;
-    color: var(--color-text-muted);
-}
-
-.driver-info {
-    font-weight: 500;
-    color: var(--color-text);
+    color: var(--fis-muted-text);
 }
 
 .destination {
@@ -35,8 +31,7 @@
 }
 
 .trip-date {
-    font-family: 'Segoe UI', sans-serif;
-    color: var(--color-text);
+    color: var(--fis-text);
 }
 
 .status {
@@ -87,60 +82,20 @@
 .distance {
     text-align: right;
     font-weight: 500;
-    color: var(--color-text);
+    color: var(--fis-text);
 }
 
 .btn-icon-view {
-    background-color: var(--color-info);
+    background-color: #3b82f6;
     color: white;
 }
 
 .btn-icon-view:hover {
-    background-color: var(--color-info-dark);
+    background-color: #2563eb;
     transform: translateY(-1px);
 }
 
-/* Form specific styling */
-.form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-}
-
-.form-grid .form-field:nth-child(5),
-.form-grid .form-field:nth-child(7) {
-    grid-column: span 2;
-}
-
 /* Responsive adjustments */
-@media (max-width: 768px) {
-    .form-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .form-grid .form-field {
-        grid-column: span 1 !important;
-    }
-    
-    .vehicle-info,
-    .destination {
-        max-width: none;
-    }
-}
-
-/* Empty state customization */
-.empty-state i.bx-trip {
-    font-size: 4rem;
-    color: var(--color-primary-light);
-}
-
-/* Search bar enhancements */
-.search-input-wrapper {
-    position: relative;
-    max-width: 500px;
-}
-
-/* Table responsive improvements */
 @media (max-width: 1024px) {
     .data-table th:nth-child(3),
     .data-table td:nth-child(3),
@@ -156,5 +111,10 @@
     .data-table th:nth-child(5),
     .data-table td:nth-child(5) {
         display: none;
+    }
+
+    .vehicle-info,
+    .destination {
+        max-width: none;
     }
 }

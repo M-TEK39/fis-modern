@@ -18,7 +18,7 @@ else if (_makes.Count == 0)
         <h3>No makes found</h3>
         <p>Get started by adding your first vehicle make</p>
         <button class="btn btn-primary" @onclick="ShowAddDialog">
-            <i class="bx bx-plus"></i>
+            <i class="bx bx-plus plus-icon"></i>
             Add Make
         </button>
     </div>
@@ -51,11 +51,10 @@ else
                                 <div class="table-actions">
                                     <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(make)" title="Edit">
                                         <i class="bx bx-edit"></i>
-                                        <span>Edit</span>
                                     </button>
-                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(make)" title="Delete">
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(make)"
+                                        title="Delete">
                                         <i class="bx bx-trash"></i>
-                                        <span>Delete</span>
                                     </button>
                                 </div>
                             </td>
@@ -67,22 +66,16 @@ else
     </div>
 }
 
-<Modal IsVisible="_showDialog"
-       Title="@(_isEdit ? "Edit Make" : "Add Make")"
-       OnCancel="HideDialog"
-       OnSubmit="SaveMake"
-       IsSaving="_saving">
+<Modal IsVisible="_showDialog" Title="@(_isEdit ? "Edit Make" : "Add Make")" OnCancel="HideDialog" OnSubmit="SaveMake"
+    IsSaving="_saving">
     <div class="form-field">
         <label class="form-label">Make Name <span class="required">*</span></label>
         <input type="text" @bind="_currentMake.make_name" class="form-input" placeholder="e.g., Toyota" />
     </div>
 </Modal>
 
-<ConfirmationModal IsVisible="_showDeleteConfirm"
-                  Title="Confirm Delete"
-                  OnCancel="HideDeleteDialog"
-                  OnConfirm="DeleteMake"
-                  IsDeleting="false">
+<ConfirmationModal IsVisible="_showDeleteConfirm" Title="Confirm Delete" OnCancel="HideDeleteDialog"
+    OnConfirm="DeleteMake" IsDeleting="false">
     <p>Are you sure you want to delete <strong>@_currentMake.make_name</strong>?</p>
     <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>

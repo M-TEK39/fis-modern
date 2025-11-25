@@ -34,6 +34,24 @@
             Update contract DTO
             </summary>
         </member>
+        <member name="T:FIS.Core.Application.Interfaces.IAuctionRepository">
+            <summary>
+            Repository interface for Auction entity operations
+            Provides contract for CRUD operations on vehicle auctions
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.ICallCentreRepository">
+            <summary>
+            Repository interface for CallCentre entity operations
+            Provides contract for CRUD operations on call centre incidents
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.IClearanceRepository">
+            <summary>
+            Repository interface for Clearance entity operations
+            Provides contract for CRUD operations on vehicle clearances
+            </summary>
+        </member>
         <member name="T:FIS.Core.Application.Interfaces.IContractService">
             <summary>
             Business service interface for contract/hire workflows
@@ -319,6 +337,12 @@
             Email service status and configuration
             </summary>
         </member>
+        <member name="T:FIS.Core.Application.Interfaces.IFineRepository">
+            <summary>
+            Repository interface for Fine entity operations
+            Provides contract for CRUD operations on traffic fines
+            </summary>
+        </member>
         <member name="T:FIS.Core.Application.Interfaces.IFuelTypeRepository">
             <summary>
             Repository interface for FuelType entity operations
@@ -447,6 +471,24 @@
         <member name="M:FIS.Core.Application.Interfaces.IJournalDetailService.DeleteJournalDetailAsync(System.Int32)">
             <summary>
             Delete a journal detail entry
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.ILogbookRepository">
+            <summary>
+            Repository interface for Logbook entity operations
+            Provides contract for CRUD operations on vehicle logbooks
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.ILogsheetRepository">
+            <summary>
+            Repository interface for Logsheet entity operations
+            Provides contract for CRUD operations on vehicle logsheets
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.ILossRepository">
+            <summary>
+            Repository interface for Loss entity operations
+            Provides contract for CRUD operations on vehicle losses
             </summary>
         </member>
         <member name="T:FIS.Core.Application.Interfaces.IMaintenanceService">
@@ -677,6 +719,12 @@
             </summary>
             <param name="triggerCode">The maintenance trigger code to delete</param>
         </member>
+        <member name="T:FIS.Core.Application.Interfaces.IMonitorRepository">
+            <summary>
+            Repository interface for Monitor entity operations
+            Provides contract for CRUD operations on fleet monitoring inquiries
+            </summary>
+        </member>
         <member name="T:FIS.Core.Application.Interfaces.IPdfGenerationService">
             <summary>
             Interface for PDF generation service.
@@ -810,6 +858,18 @@
         <member name="T:FIS.Core.Application.Interfaces.IDuplicatePreventionService">
             <summary>
             Service interface for duplicate prevention operations
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.ITaxiRepository">
+            <summary>
+            Repository interface for Taxi entity operations
+            Provides contract for CRUD operations on taxi requests
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.ITowingRepository">
+            <summary>
+            Repository interface for Towing entity operations
+            Provides contract for CRUD operations on towing requests
             </summary>
         </member>
         <member name="T:FIS.Core.Application.Interfaces.ITripService">

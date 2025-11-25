@@ -633,12 +633,12 @@
             Get models by engine type
             </summary>
         </member>
-        <member name="M:FIS.Api.Controllers.ModelController.CreateModel(FIS.Core.Domain.Entities.Model)">
+        <member name="M:FIS.Api.Controllers.ModelController.CreateModel(FIS.Api.DTOs.CreateModelDto)">
             <summary>
             Create a new model
             </summary>
         </member>
-        <member name="M:FIS.Api.Controllers.ModelController.UpdateModel(System.Int16,FIS.Core.Domain.Entities.Model)">
+        <member name="M:FIS.Api.Controllers.ModelController.UpdateModel(System.Int16,FIS.Api.DTOs.UpdateModelDto)">
             <summary>
             Update an existing model
             </summary>
@@ -646,6 +646,12 @@
         <member name="M:FIS.Api.Controllers.ModelController.DeleteModel(System.Int16)">
             <summary>
             Delete a model
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.ModelController.MapToDto(FIS.Core.Domain.Entities.Model)">
+            <summary>
+            Maps a Model entity to ModelResponseDto
+            Breaks circular reference by excluding navigation properties
             </summary>
         </member>
         <member name="T:FIS.Api.Controllers.NotificationController">
@@ -1248,6 +1254,18 @@
             Make description/name (Toyota, Ford, BMW, etc.)
             </summary>
         </member>
+        <member name="T:FIS.Api.DTOs.CreateModelDto">
+            <summary>
+            DTO for creating a new Model entity
+            Excludes auto-generated model_code
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.UpdateModelDto">
+            <summary>
+            DTO for updating an existing Model entity
+            Includes model_code for identification
+            </summary>
+        </member>
         <member name="T:FIS.Api.DTOs.CreateTypeDto">
             <summary>
             DTO for creating a new Type entity
@@ -1321,6 +1339,32 @@
         <member name="P:FIS.Api.DTOs.CreateUnitOfMeasureDto.unit_category">
             <summary>
             Unit category (Distance, Volume, Weight, etc.)
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.MakeResponseDto">
+            <summary>
+            DTO for Make responses - excludes navigation properties to prevent circular references
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.ModelResponseDto">
+            <summary>
+            DTO for Model responses - excludes navigation properties to prevent circular references
+            Includes all Model entity fields for complete data transfer
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.TypeResponseDto">
+            <summary>
+            DTO for Type responses - excludes navigation properties to prevent circular references
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.FuelTypeResponseDto">
+            <summary>
+            DTO for FuelType responses - excludes navigation properties to prevent circular references
+            </summary>
+        </member>
+        <member name="T:FIS.Api.DTOs.DepartmentResponseDto">
+            <summary>
+            DTO for Department responses - excludes navigation properties to prevent circular references
             </summary>
         </member>
         <member name="T:FIS.Api.Services.FuelCardManagementService">

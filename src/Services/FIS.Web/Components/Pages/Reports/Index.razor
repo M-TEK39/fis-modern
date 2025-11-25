@@ -1,0 +1,103 @@
+@page "/reports"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@using FIS.Web.Models
+
+<PageTitle>Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file-find"></i>
+            Reports
+        </h1>
+        <p class="page-description">Report catalog from /api/Report/available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadReports">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading reports...</p>
+        </div>
+    }
+    else if (_reports.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file-find"></i>
+            <h3>No reports listed</h3>
+            <p>Awaiting reports API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_reports.Count Report(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Generated</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var report in _reports)
+                        {
+                            <tr>
+                                <td>@report.Name</td>
+                                <td>@report.ReportType</td>
+                                <td>@report.GeneratedDate.ToString("yyyy-MM-dd")</td>
+                                <td>@report.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+@inject ReportCatalogApiService ReportService
+@inject IJSRuntime JS
+
+    private bool _loading = true;
+    private List<ReportDto> _reports = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReports();
+    }
+
+    private async Task LoadReports()
+    {
+        _loading = true;
+
+        try
+        {
+            _reports = await ReportService.GetAvailableAsync();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading reports: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

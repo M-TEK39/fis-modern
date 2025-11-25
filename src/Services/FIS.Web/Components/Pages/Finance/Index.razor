@@ -1,0 +1,100 @@
+@page "/finance"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Finance - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-wallet"></i>
+            Finance
+        </h1>
+        <p class="page-description">Legacy finance tasks overview. Static entries until finance API is available.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadFinanceTasks">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading finance tasks...</p>
+        </div>
+    }
+    else if (_tasks.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-wallet"></i>
+            <h3>No finance items</h3>
+            <p>Awaiting finance API. Provide endpoint/fields to replace static data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_tasks.Count Finance item(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Process</th>
+                            <th>Status</th>
+                            <th>Last Run</th>
+                            <th>Owner</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var task in _tasks)
+                        {
+                            <tr>
+                                <td>@task.Process</td>
+                                <td><span class="badge">@task.Status</span></td>
+                                <td>@task.LastRun.ToString("yyyy-MM-dd")</td>
+                                <td>@task.Owner</td>
+                                <td>@task.Notes</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<FinanceTask> _tasks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFinanceTasks();
+    }
+
+    private Task LoadFinanceTasks()
+    {
+        _loading = true;
+
+        _tasks =
+        [
+            new("Tariff Calculation", "Completed", new DateTime(2025, 01, 10), "Finance Ops", "Legacy tariff run aligned with tariff calculation service."),
+            new("Lease Billing Export", "Pending", new DateTime(2025, 01, 05), "Finance Ops", "Awaiting journal detail confirmation."),
+            new("Maintenance Cost Reconciliation", "In Progress", new DateTime(2025, 01, 11), "Finance Ops", "Matching maintenance values to overheads."),
+            new("Fuel Chargeback", "Scheduled", new DateTime(2025, 01, 15), "Finance Ops", "Prepared for next cycle export.")
+        ];
+
+        _loading = false;
+        return Task.CompletedTask;
+    }
+
+    private sealed record FinanceTask(string Process, string Status, DateTime LastRun, string Owner, string Notes);
+}
