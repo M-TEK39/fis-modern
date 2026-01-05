@@ -1,6 +1,9 @@
 @page "/workshop"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject WorkshopApiService WorkshopService
+@inject IJSRuntime JS
 
 <PageTitle>Workshop - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-wrench"></i>
             Workshop
         </h1>
-        <p class="page-description">Workshop tasks summary. Static entries until workshop API is available.</p>
+        <p class="page-description">Workshop tasks summary from /api/workshop.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadTasks">
@@ -82,21 +85,41 @@
         await LoadTasks();
     }
 
-    private Task LoadTasks()
+    private async Task LoadTasks()
     {
         _loading = true;
-
-        _tasks =
-        [
-            new("WS-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Tech A", "Initial diagnostics."),
-            new("WS-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Tech B", "Waiting for parts."),
-            new("WS-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 15), "Tech A", "Completed; documented."),
-            new("WS-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 25), "Tech C", "Legacy reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await WorkshopService.GetAllAsync<WorkshopDto>();
+            _tasks = apiItems.Select(w => new WorkshopTask(
+                Number: w.workshop_code.ToString(),
+                Vehicle: w.vmf_code?.ToString() ?? "Unknown",
+                Status: w.workshop_status ?? "Unknown",
+                Date: w.workshop_date ?? DateTime.MinValue,
+                AssignedTo: w.workshop_tech ?? "N/A",
+                Notes: w.workshop_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading workshop tasks: {ex.Message}");
+            _tasks = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record WorkshopTask(string Number, string Vehicle, string Status, DateTime Date, string AssignedTo, string Notes);
+
+    private sealed class WorkshopDto
+    {
+        public int workshop_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? workshop_status { get; set; }
+        public DateTime? workshop_date { get; set; }
+        public string? workshop_tech { get; set; }
+        public string? workshop_notes { get; set; }
+    }
 }

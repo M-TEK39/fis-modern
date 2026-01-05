@@ -1,6 +1,9 @@
 @page "/vehicle-verification"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject AssetVerificationApiService AssetVerificationService
+@inject IJSRuntime JS
 
 <PageTitle>Vehicle Asset Verification - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-clipboard"></i>
             Vehicle Asset Verification
         </h1>
-        <p class="page-description">Verification records. Static entries until verification API is available.</p>
+        <p class="page-description">Verification records from /api/assetverification.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadVerifications">
@@ -82,21 +85,43 @@
         await LoadVerifications();
     }
 
-    private Task LoadVerifications()
+    private async Task LoadVerifications()
     {
         _loading = true;
-
-        _verifications =
-        [
-            new("VER-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Auditor A", "Pending document upload."),
-            new("VER-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 09), "Auditor B", "Physical check scheduled."),
-            new("VER-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 16), "Auditor A", "Closed and archived."),
-            new("VER-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 25), "Auditor C", "Legacy reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await AssetVerificationService.GetAllAsync<AssetVerificationDto>();
+            _verifications = apiItems.Select(v => new VerificationItem(
+                Number: v.asset_verification_code.ToString(),
+                Vehicle: v.vehicle_reg_no ?? v.vmf_code?.ToString() ?? "Unknown",
+                Status: v.asset_verification_complete ? "Closed" : "Open",
+                Date: v.verification_date ?? DateTime.MinValue,
+                Verifier: v.responsible_manager ?? "N/A",
+                Notes: v.verified_notes ?? v.site_name ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading asset verifications: {ex.Message}");
+            _verifications = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record VerificationItem(string Number, string Vehicle, string Status, DateTime Date, string Verifier, string Notes);
+
+    private sealed class AssetVerificationDto
+    {
+        public int asset_verification_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? vehicle_reg_no { get; set; }
+        public string? site_name { get; set; }
+        public string? responsible_manager { get; set; }
+        public string? verified_notes { get; set; }
+        public bool asset_verification_complete { get; set; }
+        public DateTime? verification_date { get; set; }
+    }
 }

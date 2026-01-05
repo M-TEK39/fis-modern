@@ -1,6 +1,9 @@
 @page "/full-maintenance-lease"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject IJSRuntime JS
 
 <PageTitle>Full Maintenance Lease - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-cog"></i>
             Full Maintenance Lease
         </h1>
-        <p class="page-description">Maintenance lease summary. Static entries until FML API is available.</p>
+        <p class="page-description">Maintenance lease summary from /api/leasecontractterms.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadLeases">
@@ -82,21 +85,41 @@
         await LoadLeases();
     }
 
-    private Task LoadLeases()
+    private async Task LoadLeases()
     {
         _loading = true;
-
-        _leases =
-        [
-            new("FML-2401-001", "ABC123GP", "Active", new DateTime(2025, 01, 01), new DateTime(2026, 01, 01), "Yearly lease cycle."),
-            new("FML-2401-002", "JKL456GP", "Pending", new DateTime(2025, 02, 01), new DateTime(2026, 02, 01), "Pending activation."),
-            new("FML-2312-006", "MNO789GP", "Closed", new DateTime(2024, 01, 01), new DateTime(2024, 12, 31), "Completed cycle."),
-            new("FML-2311-004", "PQR321GP", "Closed", new DateTime(2024, 03, 01), new DateTime(2025, 02, 28), "Legacy reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var leases = await LeaseService.GetAllAsync<LeaseContractTermsDto>();
+            _leases = leases.Select(l => new FmlItem(
+                Number: l.leasecontract_code.ToString(),
+                Vehicle: l.vmf_code?.ToString() ?? "Unknown",
+                Status: l.lease_status ?? "Unknown",
+                Start: l.lease_startdate ?? DateTime.MinValue,
+                End: l.lease_enddate ?? DateTime.MinValue,
+                Notes: l.lease_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading leases: {ex.Message}");
+            _leases = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record FmlItem(string Number, string Vehicle, string Status, DateTime Start, DateTime End, string Notes);
+
+    private sealed class LeaseContractTermsDto
+    {
+        public int leasecontract_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? lease_status { get; set; }
+        public DateTime? lease_startdate { get; set; }
+        public DateTime? lease_enddate { get; set; }
+        public string? lease_notes { get; set; }
+    }
 }

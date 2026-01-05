@@ -1,6 +1,9 @@
 @page "/auction"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject AuctionApiService AuctionService
+@inject IJSRuntime JS
 
 <PageTitle>Auction - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-dollar"></i>
             Auction
         </h1>
-        <p class="page-description">Legacy auction overview. Static entries until API is provided.</p>
+        <p class="page-description">Auction overview from /api/auction.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadAuctions">
@@ -82,21 +85,41 @@
         await LoadAuctions();
     }
 
-    private Task LoadAuctions()
+    private async Task LoadAuctions()
     {
         _loading = true;
-
-        _auctions =
-        [
-            new(new DateTime(2025, 01, 12), "Central Yard", 12, "Scheduled", "Pool vehicles scheduled for disposal."),
-            new(new DateTime(2025, 02, 05), "Depot South", 8, "Scheduled", "Units with mileage above threshold."),
-            new(new DateTime(2024, 11, 20), "Online", 15, "Completed", "Completed auction—awaiting reconciliation."),
-            new(new DateTime(2024, 10, 10), "Depot North", 6, "Completed", "Legacy auction record for reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await AuctionService.GetAllAsync<AuctionDto>();
+            _auctions = apiItems.Select(a => new AuctionItem(
+                Date: a.auction_date ?? DateTime.MinValue,
+                Location: a.auction_location ?? "N/A",
+                Units: a.units_to_auction ?? 0,
+                Status: a.auction_status ?? "Unknown",
+                Notes: a.auction_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading auctions: {ex.Message}");
+            _auctions = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record AuctionItem(DateTime Date, string Location, int Units, string Status, string Notes);
+
+    private sealed class AuctionDto
+    {
+        public short auction_code { get; set; }
+        public int vmf_code { get; set; }
+        public DateTime? auction_date { get; set; }
+        public string? auction_location { get; set; }
+        public int? units_to_auction { get; set; }
+        public string? auction_status { get; set; }
+        public string? auction_notes { get; set; }
+    }
 }

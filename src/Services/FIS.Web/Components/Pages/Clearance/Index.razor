@@ -1,6 +1,9 @@
 @page "/clearance"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject ClearanceApiService ClearanceService
+@inject IJSRuntime JS
 
 <PageTitle>Clearance - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-shield-quarter"></i>
             Clearance
         </h1>
-        <p class="page-description">Legacy clearance queue. Static entries until clearance API is available.</p>
+        <p class="page-description">Clearance queue from /api/clearance.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadClearances">
@@ -82,21 +85,42 @@
         await LoadClearances();
     }
 
-    private Task LoadClearances()
+    private async Task LoadClearances()
     {
         _loading = true;
-
-        _clearances =
-        [
-            new("CLR-2401-001", "ABC123GP", "Vehicle Disposal", "Pending", new DateTime(2025, 01, 12), "Awaiting documentation from depot."),
-            new("CLR-2401-002", "JKL456GP", "Merchant Import", "In Progress", new DateTime(2025, 01, 11), "Merch import initiated (legacy Clearimp)."),
-            new("CLR-2312-015", "MNO789GP", "Clearance Update", "Completed", new DateTime(2024, 12, 15), "Completed via legacy MNT_Clearance_Update."),
-            new("CLR-2311-008", "PQR321GP", "Vehicle Verification", "Completed", new DateTime(2024, 11, 20), "Cleared and archived.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await ClearanceService.GetAllAsync<ClearanceDto>();
+            _clearances = apiItems.Select(c => new ClearanceItem(
+                Reference: c.clearance_code.ToString(),
+                Registration: c.registration_number ?? c.vmf_code?.ToString() ?? "Unknown",
+                Type: c.clearance_type ?? "Unknown",
+                Status: c.clearance_status ?? "Unknown",
+                UpdatedOn: c.clearance_date ?? DateTime.MinValue,
+                Notes: c.clearance_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading clearance: {ex.Message}");
+            _clearances = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record ClearanceItem(string Reference, string Registration, string Type, string Status, DateTime UpdatedOn, string Notes);
+
+    private sealed class ClearanceDto
+    {
+        public int clearance_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? registration_number { get; set; }
+        public string? clearance_type { get; set; }
+        public string? clearance_status { get; set; }
+        public DateTime? clearance_date { get; set; }
+        public string? clearance_notes { get; set; }
+    }
 }

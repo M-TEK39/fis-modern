@@ -1,6 +1,9 @@
 @page "/call-centre"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JS
 
 <PageTitle>Call Centre - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-phone-call"></i>
             Call Centre
         </h1>
-        <p class="page-description">Call centre log summary. Static entries until API is available.</p>
+        <p class="page-description">Call centre log summary from /api/callcentre.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadCalls">
@@ -84,21 +87,56 @@
         await LoadCalls();
     }
 
-    private Task LoadCalls()
+    private async Task LoadCalls()
     {
         _loading = true;
-
-        _calls =
-        [
-            new(new DateTime(2025, 01, 12, 9, 15, 0), "Depot North", "Accident reporting", "Open", "Agent A", "Submitted initial accident form."),
-            new(new DateTime(2025, 01, 12, 10, 05, 0), "Driver: M. Dlamini", "Log sheet correction", "In Progress", "Agent B", "Awaiting supporting documents."),
-            new(new DateTime(2025, 01, 11, 15, 40, 0), "Dept: Facilities", "Trip authority query", "Closed", "Agent A", "Resolved; authority updated."),
-            new(new DateTime(2025, 01, 10, 11, 20, 0), "Client: External", "Towing request", "Open", "Agent C", "Dispatched vendor; awaiting completion.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var items = await CallCentreService.GetAllAsync<CallCentreDto>();
+            _calls = items.Select(c =>
+            {
+                var date = c.Call_date ?? DateTime.MinValue;
+                var time = c.Call_time ?? DateTime.MinValue;
+                var received = date.Date.Add(time.TimeOfDay);
+                return new CallEntry(
+                    received,
+                    c.Caller_name ?? c.Driver_name ?? "Unknown",
+                    c.Capture_name ?? c.Driver_base_station ?? "N/A",
+                    c.Driver_tel ?? "Open",
+                    c.Driver_name ?? c.Capture_name ?? "Unassigned",
+                    c.Driver_Licno ?? c.GG_number ?? ""
+                );
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading call centre: {ex.Message}");
+            _calls = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record CallEntry(DateTime ReceivedAt, string Caller, string Reason, string Status, string AssignedTo, string Notes);
+
+    private sealed class CallCentreDto
+    {
+        public short Call_centre_code { get; set; }
+        public int? vmf_code { get; set; }
+        public DateTime? Call_time { get; set; }
+        public DateTime? Call_date { get; set; }
+        public string? Capture_name { get; set; }
+        public short? User_access_code { get; set; }
+        public string? Caller_name { get; set; }
+        public string? Driver_name { get; set; }
+        public string? Driver_persalno { get; set; }
+        public string? Driver_Licno { get; set; }
+        public string? GG_number { get; set; }
+        public string? Driver_base_station { get; set; }
+        public short? Driver_Site { get; set; }
+        public string? Driver_tel { get; set; }
+        public string? Driver_cell { get; set; }
+    }
 }

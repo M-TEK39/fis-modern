@@ -1,6 +1,9 @@
 @page "/towing"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TowingApiService TowingService
+@inject IJSRuntime JS
 
 <PageTitle>Towing - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-anchor"></i>
             Towing
         </h1>
-        <p class="page-description">Towing requests summary. Static entries until towing API is available.</p>
+        <p class="page-description">Towing requests summary from /api/towing.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadTows">
@@ -82,21 +85,42 @@
         await LoadTows();
     }
 
-    private Task LoadTows()
+    private async Task LoadTows()
     {
         _loading = true;
-
-        _tows =
-        [
-            new("TOW-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Vendor A", "Dispatch initiated."),
-            new("TOW-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Vendor B", "En route."),
-            new("TOW-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 18), "Vendor A", "Completed."),
-            new("TOW-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 27), "Vendor C", "Archived reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiTows = await TowingService.GetAllAsync<TowingDto>();
+            _tows = apiTows.Select(t => new TowItem(
+                Number: t.Call_refer?.ToString() ?? t.Towing_code.ToString(),
+                Vehicle: t.vmf_code.ToString(),
+                Status: t.Tow_completed_date.HasValue ? "Closed" : "Open",
+                Date: t.Tow_request_date ?? DateTime.MinValue,
+                Vendor: t.Tow_vendor ?? "N/A",
+                Notes: t.Notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading towing: {ex.Message}");
+            _tows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record TowItem(string Number, string Vehicle, string Status, DateTime Date, string Vendor, string Notes);
+
+    private sealed class TowingDto
+    {
+        public short Towing_code { get; set; }
+        public int vmf_code { get; set; }
+        public decimal? Call_refer { get; set; }
+        public DateTime? Tow_request_date { get; set; }
+        public DateTime? Tow_completed_date { get; set; }
+        public string? Tow_vendor { get; set; }
+        public string? Notes { get; set; }
+    }
 }

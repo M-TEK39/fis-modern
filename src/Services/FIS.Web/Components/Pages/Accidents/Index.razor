@@ -6,6 +6,7 @@
 @inject AccidentApiService AccidentApiService
 @inject VehicleApiService VehicleApiService
 @inject DriverApiService DriverApiService
+@inject ReportCatalogApiService ReportService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Accidents - Fleet Information System</PageTitle>
@@ -167,38 +168,7 @@
     {
         try
         {
-            // Mock data - replace with actual API calls when available
-            _allAccidents = new List<AccidentDto>
-            {
-                new AccidentDto
-                {
-                    accident_code = 1,
-                    accident_reference = "ACC-2024-001",
-                    accident_date = DateTime.Now.AddDays(-5),
-                    vehicle_registration = "GP123ABC",
-                    vehicle_description = "Toyota Camry 2020",
-                    accident_location = "Main Road, Johannesburg",
-                    severity = "Minor",
-                    cost_of_repair = 5500,
-                    third_party_claim = 0,
-                    status = "Completed",
-                    description = "Minor fender bender in parking lot"
-                },
-                new AccidentDto
-                {
-                    accident_code = 2,
-                    accident_reference = "ACC-2024-002",
-                    accident_date = DateTime.Now.AddDays(-12),
-                    vehicle_registration = "GP456DEF",
-                    vehicle_description = "Ford Ranger 2019",
-                    accident_location = "Highway N1, Pretoria",
-                    severity = "Moderate",
-                    cost_of_repair = 15000,
-                    third_party_claim = 8000,
-                    status = "Under Investigation",
-                    description = "Collision with another vehicle"
-                }
-            };
+            _allAccidents = await AccidentApiService.GetAccidentsAsync();
             ApplySearchFilter();
         }
         catch (Exception ex)
@@ -211,12 +181,8 @@
     {
         try
         {
-            _vehicles = new List<VehicleDto>
-            {
-                new VehicleDto { vmf_code = 1, registration_number = "GP123ABC", model_name = "Toyota Camry 2020" },
-                new VehicleDto { vmf_code = 2, registration_number = "GP456DEF", model_name = "Ford Ranger 2019" },
-                new VehicleDto { vmf_code = 3, registration_number = "GP789GHI", model_name = "Nissan Navara 2021" }
-            };
+            var pagedVehicles = await VehicleApiService.GetVehiclesAsync(pageNumber: 1, pageSize: 500);
+            _vehicles = pagedVehicles.Data;
         }
         catch (Exception ex)
         {
@@ -228,12 +194,7 @@
     {
         try
         {
-            _drivers = new List<DriverDto>
-            {
-                new DriverDto { site_driver_code = 1, driver_firstname = "John", driver_surname = "Doe", site_name = "Main Office" },
-                new DriverDto { site_driver_code = 2, driver_firstname = "Jane", driver_surname = "Smith", site_name = "Regional Office" },
-                new DriverDto { site_driver_code = 3, driver_firstname = "Mike", driver_surname = "Johnson", site_name = "Main Office" }
-            };
+            _drivers = await DriverApiService.GetDriversAsync();
         }
         catch (Exception ex)
         {
@@ -279,12 +240,7 @@
     {
         try
         {
-            _recentReports = new List<ReportDto>
-            {
-                new() { Name = "Accident Summary - November 2025", GeneratedDate = DateTime.Now.AddDays(-1), FileSize = "2.4 MB" },
-                new() { Name = "Cost Analysis - Q4 2025", GeneratedDate = DateTime.Now.AddDays(-3), FileSize = "1.8 MB" },
-                new() { Name = "Vehicle History - Fleet Analysis", GeneratedDate = DateTime.Now.AddDays(-7), FileSize = "3.1 MB" }
-            };
+            _recentReports = await ReportService.GetAvailableAsync();
         }
         catch (Exception ex)
         {
@@ -356,15 +312,19 @@
 
         try
         {
-            await Task.Delay(500); // Simulate API call
-
             if (_selectedAccident == null)
             {
-                await JSRuntime.InvokeVoidAsync("alert", "New accident would be created here (API not yet implemented)");
+                var newAccident = new AccidentDto
+                {
+                    accident_reference = $"ACC-{DateTime.Now:yyyyMMddHHmmss}",
+                    accident_date = DateTime.Now,
+                    status = "Pending"
+                };
+                await AccidentApiService.CreateAccidentAsync(newAccident);
             }
             else
             {
-                await JSRuntime.InvokeVoidAsync("alert", "Accident would be updated here (API not yet implemented)");
+                await AccidentApiService.UpdateAccidentAsync(_selectedAccident.accident_code, _selectedAccident);
             }
 
             await HideAccidentDialog();
@@ -403,11 +363,9 @@
 
             try
             {
-                await Task.Delay(500); // Simulate API call
-                _allAccidents.RemoveAll(a => a.accident_code == _accidentToDelete.accident_code);
+                await AccidentApiService.DeleteAccidentAsync(_accidentToDelete.accident_code);
                 await CancelDelete();
                 await LoadAccidents();
-                await JSRuntime.InvokeVoidAsync("alert", "Accident deleted successfully!");
             }
             catch (Exception ex)
             {
@@ -436,13 +394,12 @@
 
         try
         {
-            await Task.Delay(2000); // Simulate report generation
-            await JSRuntime.InvokeVoidAsync("alert", $"Report generated: {reportType}");
-            await LoadRecentReports();
+            // Map report types to available endpoints; for now refresh available list
+            _recentReports = await ReportService.GetAvailableAsync();
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error generating report: {ex.Message}");
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error generating report: {ex.Message}");
         }
         finally
         {

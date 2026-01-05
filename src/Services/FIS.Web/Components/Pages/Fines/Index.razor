@@ -1,6 +1,9 @@
 @page "/fines"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject FineApiService FineService
+@inject IJSRuntime JS
 
 <PageTitle>Fines - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-receipt"></i>
             Fines
         </h1>
-        <p class="page-description">Legacy fines list. Static entries until fines API is available.</p>
+        <p class="page-description">Traffic fine register from /api/fine.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadFines">
@@ -84,21 +87,47 @@
         await LoadFines();
     }
 
-    private Task LoadFines()
+    private async Task LoadFines()
     {
         _loading = true;
-
-        _fines =
-        [
-            new("FN-2401-001", "Driver: S. Nkosi / ABC123GP", new DateTime(2025, 01, 08), 750m, "Open", new DateTime(2025, 02, 07), "Speeding notice awaiting payment."),
-            new("FN-2401-002", "Vehicle: JKL456GP", new DateTime(2025, 01, 05), 500m, "In Dispute", new DateTime(2025, 02, 04), "Dispute submitted via legacy fines workflow."),
-            new("FN-2312-015", "Driver: M. Dlamini / MNO789GP", new DateTime(2024, 12, 12), 1200m, "Closed", new DateTime(2025, 01, 11), "Settled; receipt logged."),
-            new("FN-2311-010", "Vehicle: PQR321GP", new DateTime(2024, 11, 21), 950m, "Open", new DateTime(2024, 12, 21), "Reminder issued.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var fines = await FineService.GetAllAsync<FineDto>();
+            _fines = fines.Select(f => new FineItem(
+                Number: f.Offence_reference ?? $"F-{f.Fine_code}",
+                DriverOrVehicle: f.GG_number ?? $"vmf:{f.vmf_code?.ToString() ?? "-"}",
+                IssuedOn: f.Offence_date ?? DateTime.MinValue,
+                Amount: f.Fine_amount ?? 0m,
+                Status: f.Fine_pay_date.HasValue ? "Paid" : f.Pay_due_date.HasValue && f.Pay_due_date < DateTime.Today ? "Overdue" : "Open",
+                DueDate: f.Pay_due_date ?? f.Appear_date ?? f.Offence_date ?? DateTime.MinValue,
+                Notes: f.Offence_name ?? f.Offence_issuer ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading fines: {ex.Message}");
+            _fines = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record FineItem(string Number, string DriverOrVehicle, DateTime IssuedOn, decimal Amount, string Status, DateTime DueDate, string Notes);
+
+    private sealed class FineDto
+    {
+        public int Fine_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? GG_number { get; set; }
+        public DateTime? Offence_date { get; set; }
+        public string? Offence_reference { get; set; }
+        public string? Offence_issuer { get; set; }
+        public decimal? Fine_amount { get; set; }
+        public DateTime? Appear_date { get; set; }
+        public DateTime? Pay_due_date { get; set; }
+        public DateTime? Fine_pay_date { get; set; }
+        public string? Offence_name { get; set; }
+    }
 }

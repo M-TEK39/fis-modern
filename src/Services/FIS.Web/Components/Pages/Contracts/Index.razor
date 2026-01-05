@@ -29,7 +29,7 @@
     </div>
 
     <div class="page-content">
-        <ContractSearchBar SearchTerm="_searchTerm" OnSearchChange="OnSearchChange" />
+        <ContractSearchBar SearchTerm="" OnSearchChange="OnSearchChange" />
         
         <ContractsTable 
             Contracts="_filteredContracts"
@@ -49,6 +49,7 @@
     <Modal IsVisible="true" 
            Title="@(_showEditDialog ? "Edit Contract" : "New Contract")" 
            Size="Modal.ModalSize.Large"
+           IsSaving="_saving"
            OnCancel="CloseDialogs"
            OnSubmit="SaveContract">
         <ChildContent>
@@ -124,6 +125,7 @@
     private bool _loading = true;
     private bool _showAddDialog = false;
     private bool _showEditDialog = false;
+    private bool _saving = false;
     private string _searchTerm = "";
 
     // Data collections
@@ -145,60 +147,20 @@
         _loading = true;
         try
         {
-            // Mock data for now - replace with actual API calls when available
-            await Task.CompletedTask; // Remove this when replacing with real API calls
-            
-            _contracts = new List<ContractModel>
-            {
-                new() { 
-                    contract_id = 1, 
-                    contract_number = "CON-2024-001", 
-                    vehicle_registration = "GP123ABC",
-                    vehicle_make = "Toyota", 
-                    vehicle_model = "Camry 2020",
-                    Vehicle = new VehicleDto { registration_number = "GP123ABC", model_name = "Toyota Camry 2020" },
-                    department_name = "IT Department",
-                    Department = new DepartmentDto { department_code = 1, department_description = "IT Department" },
-                    start_date = DateTime.Now.AddMonths(-6), 
-                    end_date = DateTime.Now.AddMonths(6),
-                    monthly_cost = 8500,
-                    status = "Active"
-                },
-                new() { 
-                    contract_id = 2, 
-                    contract_number = "CON-2024-002", 
-                    vehicle_registration = "GP456DEF",
-                    vehicle_make = "Ford", 
-                    vehicle_model = "Ranger 2019",
-                    Vehicle = new VehicleDto { registration_number = "GP456DEF", model_name = "Ford Ranger 2019" },
-                    department_name = "Operations Department",
-                    Department = new DepartmentDto { department_code = 2, department_description = "Operations Department" },
-                    start_date = DateTime.Now.AddMonths(-12), 
-                    end_date = DateTime.Now.AddMonths(-2),
-                    monthly_cost = 12000,
-                    status = "Expired"
-                }
-            };
+            var contractsTask = ContractService.GetContractsAsync();
+            var vehiclesTask = VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 500);
+            var departmentsTask = DepartmentService.GetDepartmentsAsync();
 
-            _vehicles = new List<VehicleDto>
-            {
-                new() { vmf_code = 1, registration_number = "GP123ABC", model_name = "Toyota Camry 2020" },
-                new() { vmf_code = 2, registration_number = "GP456DEF", model_name = "Ford Ranger 2019" },
-                new() { vmf_code = 3, registration_number = "GP789GHI", model_name = "Nissan Navara 2021" }
-            };
+            await Task.WhenAll(contractsTask, vehiclesTask, departmentsTask);
 
-            _departments = new List<DepartmentDto>
-            {
-                new() { department_code = 1, department_description = "IT Department" },
-                new() { department_code = 2, department_description = "Operations Department" },
-                new() { department_code = 3, department_description = "Finance Department" }
-            };
+            _contracts = contractsTask.Result;
+            _vehicles = vehiclesTask.Result?.Data ?? new List<VehicleDto>();
+            _departments = departmentsTask.Result ?? new List<DepartmentDto>();
 
             FilterContracts();
         }
         catch (Exception ex)
         {
-            // Handle error
             Console.WriteLine($"Error loading data: {ex.Message}");
         }
         finally
@@ -274,40 +236,70 @@
         await LoadData();
     }
 
-    private void SaveContract()
+    private async Task SaveContract()
     {
+        _saving = true;
         try
         {
             if (_showAddDialog)
             {
-                // Mock create
-                _currentContract.contract_id = _contracts.Count + 1;
-                _contracts.Add(_currentContract);
+                var createDto = new ContractCreateDto
+                {
+                    contract_number = _currentContract.contract_number,
+                    vehicle_registration = _currentContract.vehicle_registration,
+                    department_code = _currentContract.department_code,
+                    contractor_name = _currentContract.contractor_name,
+                    start_date = _currentContract.start_date,
+                    end_date = _currentContract.end_date,
+                    monthly_cost = _currentContract.monthly_cost,
+                    status = _currentContract.status,
+                    contract_notes = _currentContract.contract_notes ?? string.Empty
+                };
+
+                await ContractService.CreateContractAsync(createDto);
             }
             else
             {
-                // Mock update
-                var index = _contracts.FindIndex(c => c.contract_id == _currentContract.contract_id);
-                if (index >= 0)
+                var updateDto = new ContractUpdateDto
                 {
-                    _contracts[index] = _currentContract;
-                }
+                    contract_number = _currentContract.contract_number,
+                    vehicle_registration = _currentContract.vehicle_registration,
+                    department_code = _currentContract.department_code,
+                    contractor_name = _currentContract.contractor_name,
+                    start_date = _currentContract.start_date,
+                    end_date = _currentContract.end_date,
+                    monthly_cost = _currentContract.monthly_cost,
+                    status = _currentContract.status,
+                    contract_notes = _currentContract.contract_notes ?? string.Empty
+                };
+
+                await ContractService.UpdateContractAsync(_currentContract.contract_id, updateDto);
             }
-            
-            FilterContracts();
+
+            await LoadData();
             CloseDialogs();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error saving contract: {ex.Message}");
         }
+        finally
+        {
+            _saving = false;
+        }
     }
 
-    private void ShowDeleteDialog(ContractModel contract)
+    private async Task ShowDeleteDialog(ContractModel contract)
     {
-        // Mock delete
-        _contracts.RemoveAll(c => c.contract_id == contract.contract_id);
-        FilterContracts();
+        try
+        {
+            await ContractService.DeleteContractAsync(contract.contract_id);
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting contract: {ex.Message}");
+        }
     }
 
     private void CloseDialogs()

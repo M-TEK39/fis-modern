@@ -10,7 +10,7 @@
             <i class="bx bx-wrench"></i>
             Troubleshoot
         </h1>
-        <p class="page-description">Legacy troubleshoot queue. Static entries until troubleshoot API is available.</p>
+        <p class="page-description">Legacy troubleshoot queue. No troubleshoot API available yet.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadTickets">
@@ -85,16 +85,15 @@
     private Task LoadTickets()
     {
         _loading = true;
-
-        _tickets =
-        [
-            new("TS-2401-001", "Login", "Open", new DateTime(2025, 01, 12), "Support A", "User unable to login."),
-            new("TS-2401-002", "Reporting", "In Progress", new DateTime(2025, 01, 10), "Support B", "Report timeout investigation."),
-            new("TS-2312-008", "Data", "Closed", new DateTime(2024, 12, 14), "Support A", "Resolved data correction."),
-            new("TS-2311-005", "UI", "Closed", new DateTime(2024, 11, 20), "Support C", "Archived reference.")
-        ];
-
-        _loading = false;
+        try
+        {
+            // No Troubleshoot API implemented yet; keep empty-state
+            _tickets = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
         return Task.CompletedTask;
     }
 

@@ -67,6 +67,19 @@ public class FisDbContext : DbContext
     public DbSet<VehiclePhoto> VehiclePhotos { get; set; } = null!;
     public DbSet<Workshop> Workshops { get; set; } = null!;
 
+    // Batch 3 entities (Accident management and vehicle tracking)
+    public DbSet<Accident> Accidents { get; set; } = null!;
+    public DbSet<Tracking> Trackings { get; set; } = null!;
+    public DbSet<VehicleAssessment> VehicleAssessments { get; set; } = null!;
+    public DbSet<VehicleDamage> VehicleDamages { get; set; } = null!;
+    public DbSet<TrafficDept> TrafficDepts { get; set; } = null!;
+
+    // Batch 4 entities (Asset verification, lease, bookings, suppliers)
+    public DbSet<AssetVerification> AssetVerifications { get; set; } = null!;
+    public DbSet<LeaseContractTerms> LeaseContractTerms { get; set; } = null!;
+    public DbSet<Booking> Bookings { get; set; } = null!;
+    public DbSet<Supplier> Suppliers { get; set; } = null!;
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

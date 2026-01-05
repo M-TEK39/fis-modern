@@ -1,6 +1,9 @@
 @page "/notice-management"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject NotificationApiService NotificationService
+@inject IJSRuntime JS
 
 <PageTitle>Notice Management - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-bell"></i>
             Notice Management
         </h1>
-        <p class="page-description">Legacy notices. Static entries until notice API is available.</p>
+        <p class="page-description">Notices/config from /api/notification.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadNotices">
@@ -82,20 +85,32 @@
         await LoadNotices();
     }
 
-    private Task LoadNotices()
+    private async Task LoadNotices()
     {
         _loading = true;
-
-        _notices =
-        [
-            new("NT-2401-001", "System", "Active", new DateTime(2025, 01, 12), "All Users", "Planned maintenance window."),
-            new("NT-2401-002", "Policy", "Active", new DateTime(2025, 01, 10), "Drivers", "Updated trip authority policy."),
-            new("NT-2312-006", "Alert", "Closed", new DateTime(2024, 12, 18), "Admins", "Completed incident review."),
-            new("NT-2311-004", "System", "Closed", new DateTime(2024, 11, 25), "All Users", "Legacy notice reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var status = await NotificationService.GetConfigStatusAsync();
+            _notices = new List<NoticeItem>
+            {
+                new NoticeItem(
+                    Number: "CONFIG",
+                    Category: "Email Service",
+                    Status: status == null ? "Unknown" : (status.SmtpConfigured == true ? "Configured" : "Not Configured"),
+                    Issued: DateTime.Now,
+                    Audience: "Admins",
+                    Notes: status == null ? "Unable to load notification status." : $"SMTP: {status.SmtpConfigured}, Templates: {status.TemplatesConfigured}")
+            };
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading notices: {ex.Message}");
+            _notices = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record NoticeItem(string Number, string Category, string Status, DateTime Issued, string Audience, string Notes);

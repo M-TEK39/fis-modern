@@ -1,6 +1,9 @@
 @page "/tracking"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TrackingApiService TrackingService
+@inject IJSRuntime JS
 
 <PageTitle>Tracking - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-radar"></i>
             Tracking
         </h1>
-        <p class="page-description">Vehicle tracking snapshot. Static entries until tracking API is available.</p>
+        <p class="page-description">Vehicle tracking snapshot from /api/tracking.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadTracking">
@@ -80,21 +83,41 @@
         await LoadTracking();
     }
 
-    private Task LoadTracking()
+    private async Task LoadTracking()
     {
         _loading = true;
-
-        _items =
-        [
-            new("ABC123GP", new DateTime(2025, 01, 12, 9, 30, 0), "Online", "Depot North", "Normal signal."),
-            new("JKL456GP", new DateTime(2025, 01, 12, 8, 50, 0), "Offline", "Last known: Route N1", "Signal dropped; investigate."),
-            new("MNO789GP", new DateTime(2025, 01, 11, 17, 15, 0), "Online", "Depot South", "Stable."),
-            new("PQR321GP", new DateTime(2025, 01, 10, 12, 05, 0), "Online", "Depot West", "Legacy reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await TrackingService.GetAllAsync<TrackingDto>();
+            _items = apiItems.Select(t => new TrackingItem(
+                Vehicle: t.GG_number ?? t.vmf_code?.ToString() ?? "Unknown",
+                LastSignal: t.Last_update ?? DateTime.MinValue,
+                Status: t.Tracking_status ?? "Unknown",
+                Location: t.Last_location ?? "N/A",
+                Notes: t.Notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading tracking data: {ex.Message}");
+            _items = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record TrackingItem(string Vehicle, DateTime LastSignal, string Status, string Location, string Notes);
+
+    private sealed class TrackingDto
+    {
+        public int tracking_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? GG_number { get; set; }
+        public DateTime? Last_update { get; set; }
+        public string? Tracking_status { get; set; }
+        public string? Last_location { get; set; }
+        public string? Notes { get; set; }
+    }
 }

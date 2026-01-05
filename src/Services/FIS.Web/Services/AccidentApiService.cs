@@ -15,7 +15,7 @@ public class AccidentApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/accidents");
+            var response = await _httpClient.GetAsync("api/Accident");
             response.EnsureSuccessStatusCode();
             
             var accidents = await response.Content.ReadFromJsonAsync<List<AccidentDto>>();
@@ -65,7 +65,7 @@ public class AccidentApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/accidents/{accidentId}");
+            var response = await _httpClient.GetAsync($"api/Accident/{accidentId}");
             response.EnsureSuccessStatusCode();
             
             return await response.Content.ReadFromJsonAsync<AccidentDto>();
@@ -84,7 +84,7 @@ public class AccidentApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/accidents", accident);
+            var response = await _httpClient.PostAsJsonAsync("api/Accident", accident);
             response.EnsureSuccessStatusCode();
             
             var createdAccident = await response.Content.ReadFromJsonAsync<AccidentDto>();
@@ -100,7 +100,7 @@ public class AccidentApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/accidents/{accidentId}", accident);
+            var response = await _httpClient.PutAsJsonAsync($"api/Accident/{accidentId}", accident);
             response.EnsureSuccessStatusCode();
             
             var updatedAccident = await response.Content.ReadFromJsonAsync<AccidentDto>();
@@ -116,7 +116,7 @@ public class AccidentApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/accidents/{accidentId}");
+            var response = await _httpClient.DeleteAsync($"api/Accident/{accidentId}");
             response.EnsureSuccessStatusCode();
         }
         catch (HttpRequestException)

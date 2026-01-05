@@ -1,6 +1,9 @@
 @page "/taxis"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TaxiApiService TaxiService
+@inject IJSRuntime JS
 
 <PageTitle>Taxis - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-taxi"></i>
             Taxis
         </h1>
-        <p class="page-description">Taxi records summary. Static entries until taxi API is available.</p>
+        <p class="page-description">Taxi records summary from /api/taxi.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadTaxis">
@@ -82,21 +85,41 @@
         await LoadTaxis();
     }
 
-    private Task LoadTaxis()
+    private async Task LoadTaxis()
     {
         _loading = true;
-
-        _taxis =
-        [
-            new("TX-2401-001", "Driver: S. Nkosi", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Pending posting."),
-            new("TX-2401-002", "Driver: M. Dlamini", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Awaiting journal detail."),
-            new("TX-2312-010", "Driver: P. Naidoo", "MNO789GP", "Closed", new DateTime(2024, 12, 18), "Posted to finance."),
-            new("TX-2311-007", "Driver: A. Smith", "PQR321GP", "Rebill Pending", new DateTime(2024, 11, 25), "Rebill workflow started.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await TaxiService.GetAllAsync<TaxiDto>();
+            _taxis = apiItems.Select(t => new TaxiItem(
+                Number: t.taxi_code.ToString(),
+                Driver: t.driver_name ?? "Unknown",
+                Vehicle: t.vmf_code?.ToString() ?? "Unknown",
+                Status: t.taxi_status ?? "Unknown",
+                Date: t.taxi_date ?? DateTime.MinValue,
+                Notes: t.taxi_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading taxis: {ex.Message}");
+            _taxis = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record TaxiItem(string Number, string Driver, string Vehicle, string Status, DateTime Date, string Notes);
+
+    private sealed class TaxiDto
+    {
+        public int taxi_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? driver_name { get; set; }
+        public string? taxi_status { get; set; }
+        public DateTime? taxi_date { get; set; }
+        public string? taxi_notes { get; set; }
+    }
 }

@@ -1,6 +1,9 @@
 @page "/log-sheets"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LogsheetApiService LogsheetService
+@inject IJSRuntime JS
 
 <PageTitle>Log Sheets - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-table"></i>
             Log Sheets
         </h1>
-        <p class="page-description">Log sheet summary. Static entries until log sheet API is available.</p>
+        <p class="page-description">Log sheet summary from /api/logsheet.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadLogSheets">
@@ -82,21 +85,44 @@
         await LoadLogSheets();
     }
 
-    private Task LoadLogSheets()
+    private async Task LoadLogSheets()
     {
         _loading = true;
-
-        _logSheets =
-        [
-            new(new DateTime(2025, 01, 12), "ABC123GP", 4, "Open", "Depot North", "Awaiting supervisor sign-off."),
-            new(new DateTime(2025, 01, 11), "JKL456GP", 3, "In Progress", "Depot South", "Pending odometer verification."),
-            new(new DateTime(2024, 12, 15), "MNO789GP", 5, "Closed", "Depot North", "Archived."),
-            new(new DateTime(2024, 11, 30), "PQR321GP", 2, "Closed", "Depot West", "Legacy log sheet reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var sheets = await LogsheetService.GetAllAsync<LogsheetDto>();
+            _logSheets = sheets.Select(s => new LogSheetItem(
+                Date: s.month,
+                Vehicle: s.vmf_code.ToString(),
+                TripCount: s.days_used ?? 0,
+                Status: s.end_odo > 0 ? "Closed" : "Open",
+                SubmittedBy: s.rek_num ?? $"Site {s.site_code}",
+                Notes: $"ODO {s.start_odo:F0}-{s.end_odo:F0}"
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading log sheets: {ex.Message}");
+            _logSheets = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record LogSheetItem(DateTime Date, string Vehicle, int TripCount, string Status, string SubmittedBy, string Notes);
+
+    private sealed class LogsheetDto
+    {
+        public int log_code { get; set; }
+        public int vmf_code { get; set; }
+        public double start_odo { get; set; }
+        public double end_odo { get; set; }
+        public DateTime month { get; set; }
+        public short site_code { get; set; }
+        public string? rek_num { get; set; }
+        public int? days_used { get; set; }
+        public int? bund_num { get; set; }
+    }
 }

@@ -1,6 +1,8 @@
 @page "/locations"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LocationApiService LocationService
 
 <div class="page-header">
     <div class="page-header-content">
@@ -127,47 +129,48 @@
 </ConfirmationModal>
 
 @code {
-    private List<LocationDto> _locations = new();
-    private LocationDto _currentLocation = new();
+    private List<LocationViewDto> _locations = new();
+    private LocationViewDto _currentLocation = new();
     private bool _loading = true;
     private bool _showDialog = false;
     private bool _showDeleteConfirm = false;
     private bool _isEdit = false;
     private bool _saving = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        LoadLocations();
+        await LoadLocations();
     }
 
-    private void LoadLocations()
+    private async Task LoadLocations()
     {
         _loading = true;
         try
         {
-            // Placeholder implementation until API is ready
-            _locations = new List<LocationDto>();
+            _locations = await LocationService.GetAllAsync();
         }
         catch
         {
-            _locations = new List<LocationDto>();
+            _locations = new List<LocationViewDto>();
         }
-        _loading = false;
-        StateHasChanged();
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void ShowAddDialog()
     {
-        _currentLocation = new LocationDto();
+        _currentLocation = new LocationViewDto();
         _isEdit = false;
         _showDialog = true;
     }
 
-    private void ShowEditDialog(LocationDto location)
+    private void ShowEditDialog(LocationViewDto location)
     {
-        _currentLocation = new LocationDto 
+        _currentLocation = new LocationViewDto 
         { 
-            Id = location.Id,
+            LocationId = location.LocationId,
             LocationName = location.LocationName,
             Address = location.Address,
             Latitude = location.Latitude,
@@ -177,7 +180,7 @@
         _showDialog = true;
     }
 
-    private void ShowDeleteDialog(LocationDto location)
+    private void ShowDeleteDialog(LocationViewDto location)
     {
         _currentLocation = location;
         _showDeleteConfirm = true;
@@ -197,27 +200,36 @@
     private async Task SaveLocation()
     {
         _saving = true;
-        // Placeholder implementation
-        await Task.Delay(500);
-        _saving = false;
+        try
+        {
+            if (_isEdit)
+            {
+                await LocationService.UpdateAsync(_currentLocation);
+            }
+            else
+            {
+                await LocationService.CreateAsync(_currentLocation);
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
         HideDialog();
-        LoadLocations();
+        await LoadLocations();
     }
 
     private async Task DeleteLocation()
     {
-        // Placeholder implementation
-        await Task.Delay(500);
+        try
+        {
+            await LocationService.DeleteAsync(_currentLocation.LocationId);
+        }
+        catch
+        {
+            // swallow for now
+        }
         HideDeleteDialog();
-        LoadLocations();
-    }
-
-    public class LocationDto
-    {
-        public int Id { get; set; }
-        public string? LocationName { get; set; }
-        public string? Address { get; set; }
-        public decimal? Latitude { get; set; }
-        public decimal? Longitude { get; set; }
+        await LoadLocations();
     }
 }

@@ -1,6 +1,10 @@
 @page "/trip-query"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject ReportCatalogApiService ReportService
+@inject IJSRuntime JS
 
 <PageTitle>Trip Queries - Fleet Information System</PageTitle>
 
@@ -10,7 +14,7 @@
             <i class="bx bx-question-mark"></i>
             Trip Queries
         </h1>
-        <p class="page-description">Legacy trip queries list. Static entries until API is available.</p>
+        <p class="page-description">Trip queries from report trip summary/detail APIs.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadQueries">
@@ -80,20 +84,31 @@
         await LoadQueries();
     }
 
-    private Task LoadQueries()
+    private async Task LoadQueries()
     {
         _loading = true;
-
-        _queries =
-        [
-            new("TQ-2401-001", "ABC123GP", "Open", new DateTime(2025, 01, 12), "Awaiting response."),
-            new("TQ-2401-002", "JKL456GP", "In Progress", new DateTime(2025, 01, 10), "Investigating mileage variance."),
-            new("TQ-2312-006", "MNO789GP", "Closed", new DateTime(2024, 12, 16), "Closed after verification."),
-            new("TQ-2311-004", "PQR321GP", "Closed", new DateTime(2024, 11, 25), "Legacy reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var summaries = await ReportService.GetTripSummaryAsync();
+            _queries = summaries
+                .Select(t => new TripQueryItem(
+                    Number: t.TripId.ToString(),
+                    Vehicle: t.VehicleRegistration ?? t.VmfCode?.ToString() ?? "Unknown",
+                    Status: t.Status ?? "Unknown",
+                    Created: t.TripDate ?? DateTime.MinValue,
+                    Notes: t.Notes ?? string.Empty
+                ))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading trip queries: {ex.Message}");
+            _queries = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record TripQueryItem(string Number, string Vehicle, string Status, DateTime Created, string Notes);

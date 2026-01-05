@@ -95,6 +95,19 @@ builder.Services.AddScoped<IVehicleOrderRepository, VehicleOrderRepository>();
 builder.Services.AddScoped<IVehiclePhotoRepository, VehiclePhotoRepository>();
 builder.Services.AddScoped<IWorkshopRepository, WorkshopRepository>();
 
+// Batch 3 repositories (Accident management and vehicle tracking)
+builder.Services.AddScoped<IAccidentRepository, AccidentRepository>();
+builder.Services.AddScoped<ITrackingRepository, TrackingRepository>();
+builder.Services.AddScoped<IVehicleAssessmentRepository, VehicleAssessmentRepository>();
+builder.Services.AddScoped<IVehicleDamageRepository, VehicleDamageRepository>();
+builder.Services.AddScoped<ITrafficDeptRepository, TrafficDeptRepository>();
+
+// Batch 4 repositories (Asset verification, lease, bookings, suppliers)
+builder.Services.AddScoped<IAssetVerificationRepository, AssetVerificationRepository>();
+builder.Services.AddScoped<ILeaseContractTermsRepository, LeaseContractTermsRepository>();
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+
 // Financial system repositories - temporarily disabled for debugging
 //builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 //builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>();

@@ -1,6 +1,9 @@
 @page "/log-books"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LogbookApiService LogbookService
+@inject IJSRuntime JS
 
 <PageTitle>Log Books - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-notepad"></i>
             Log Books
         </h1>
-        <p class="page-description">Log book summary. Static entries until log book API is available.</p>
+        <p class="page-description">Log book summary from /api/logbook.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadLogBooks">
@@ -82,21 +85,44 @@
         await LoadLogBooks();
     }
 
-    private Task LoadLogBooks()
+    private async Task LoadLogBooks()
     {
         _loading = true;
-
-        _logBooks =
-        [
-            new("ABC123GP", "Jan 2025", 18, "Open", new DateTime(2025, 01, 12), "Awaiting final sign-off."),
-            new("JKL456GP", "Jan 2025", 12, "In Progress", new DateTime(2025, 01, 11), "Data being captured."),
-            new("MNO789GP", "Dec 2024", 25, "Closed", new DateTime(2024, 12, 31), "Completed and archived."),
-            new("PQR321GP", "Nov 2024", 9, "Closed", new DateTime(2024, 11, 30), "Legacy entry reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var books = await LogbookService.GetAllAsync<LogbookDto>();
+            _logBooks = books.Select(b => new LogBookItem(
+                Vehicle: b.vmf_code?.ToString() ?? "N/A",
+                Period: b.handout_date?.ToString("yyyy-MM-dd") ?? "Unknown",
+                EntryCount: (b.end_num ?? string.Empty) == string.Empty || (b.begin_num ?? string.Empty) == string.Empty ? 0 : 1,
+                Status: b.lb_comment?.Length > 0 ? "Open" : "Captured",
+                UpdatedOn: b.handout_date ?? DateTime.MinValue,
+                Notes: b.lb_comment ?? b.lb_receiver_name ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading log books: {ex.Message}");
+            _logBooks = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record LogBookItem(string Vehicle, string Period, int EntryCount, string Status, DateTime UpdatedOn, string Notes);
+
+    private sealed class LogbookDto
+    {
+        public short logbookcode { get; set; }
+        public int? vmf_code { get; set; }
+        public string? begin_num { get; set; }
+        public string? end_num { get; set; }
+        public DateTime? handout_date { get; set; }
+        public short? site_code { get; set; }
+        public string? lb_receiver_name { get; set; }
+        public string? lb_tel_num { get; set; }
+        public string? lb_comment { get; set; }
+    }
 }

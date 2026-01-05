@@ -14,6 +14,27 @@ public class TariffApiService
         _logger = logger;
     }
 
+    public async Task<TariffResultDto?> GetContractTariffAsync(int contractCode, DateTime? checkDate = null, string tariffType = "Fixed")
+    {
+        try
+        {
+            var dateParam = checkDate?.ToString("o");
+            var url = $"api/Tariff/contract/{contractCode}";
+            if (dateParam != null)
+            {
+                url += $"?checkDate={Uri.EscapeDataString(dateParam)}&tariffType={Uri.EscapeDataString(tariffType)}";
+            }
+
+            var result = await _httpClient.GetFromJsonAsync<TariffResultDto>(url);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching contract tariff {ContractCode}", contractCode);
+            return null;
+        }
+    }
+
     public async Task<TariffResultDto?> CalculateAsync(TariffRequestDto request)
     {
         try
@@ -31,4 +52,4 @@ public class TariffApiService
 }
 
 public record TariffRequestDto(int ContractCode);
-public record TariffResultDto(decimal? Amount, string? Notes);
+public record TariffResultDto(decimal? Amount, string? Status, string? Notes);

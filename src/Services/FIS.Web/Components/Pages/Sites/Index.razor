@@ -1,6 +1,8 @@
 @page "/sites"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject SiteApiService SiteService
 
 <div class="page-header">
     <div class="page-header-content">
@@ -64,13 +66,13 @@
                         @foreach (var site in _sites)
                         {
                             <tr>
-                                <td>@site.site_code</td>
-                                <td>@site.site_description</td>
-                                <td>@site.site_address</td>
+                                <td>@site.SiteCode</td>
+                                <td>@site.Description</td>
+                                <td>@site.Address</td>
                                 <td>
-                                    @if (!string.IsNullOrEmpty(site.site_telephone))
+                                    @if (!string.IsNullOrEmpty(site.Telephone))
                                     {
-                                        <span>📞 @site.site_telephone</span>
+                                        <span>📞 @site.Telephone</span>
                                     }
                                 </td>
                                 <td class="actions-column">
@@ -102,15 +104,15 @@
     <div class="form-grid">
         <div class="form-field">
             <label class="form-label">Site Description <span class="required">*</span></label>
-            <input type="text" @bind="_currentSite.site_description" class="form-input" placeholder="Enter site name/description" />
+            <input type="text" @bind="_currentSite.Description" class="form-input" placeholder="Enter site name/description" />
         </div>
         <div class="form-field">
             <label class="form-label">Site Address</label>
-            <textarea @bind="_currentSite.site_address" class="form-input" rows="3" placeholder="Enter complete address"></textarea>
+            <textarea @bind="_currentSite.Address" class="form-input" rows="3" placeholder="Enter complete address"></textarea>
         </div>
         <div class="form-field">
             <label class="form-label">Telephone Number</label>
-            <input type="tel" @bind="_currentSite.site_telephone" class="form-input" placeholder="Enter contact number" />
+            <input type="tel" @bind="_currentSite.Telephone" class="form-input" placeholder="Enter contact number" />
         </div>
     </div>
 </Modal>
@@ -120,61 +122,73 @@
                   OnCancel="HideDeleteDialog"
                   OnConfirm="DeleteSite"
                   IsDeleting="false">
-    <p>Are you sure you want to delete <strong>@_currentSite.site_description</strong>?</p>
+    <p>Are you sure you want to delete <strong>@_currentSite.Description</strong>?</p>
     <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>
 
 @code {
-    private List<SiteDto> _sites = new();
-    private SiteDto _currentSite = new();
+    private List<SiteViewModel> _sites = new();
+    private SiteViewModel _currentSite = new();
     private bool _loading = true;
     private bool _showDialog = false;
     private bool _showDeleteConfirm = false;
     private bool _isEdit = false;
     private bool _saving = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        LoadSites();
+        await LoadSites();
     }
 
-    private void LoadSites()
+    private async Task LoadSites()
     {
         _loading = true;
         try
         {
-            // _sites = await SiteService.GetSitesAsync();
-            _sites = new List<SiteDto>(); // Placeholder until API is ready
+            var sites = await SiteService.GetAllAsync();
+            _sites = sites.Select(s => new SiteViewModel
+            {
+                SiteCode = s.SiteCode,
+                DepartmentCode = s.DepartmentCode,
+                Description = s.Description,
+                Address = CombineAddress(s),
+                Telephone = s.Telephone,
+                IsActive = s.SiteActive
+            }).ToList();
         }
         catch
         {
-            _sites = new List<SiteDto>();
+            _sites = new List<SiteViewModel>();
         }
-        _loading = false;
-        StateHasChanged();
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void ShowAddDialog()
     {
-        _currentSite = new SiteDto();
+        _currentSite = new SiteViewModel();
         _isEdit = false;
         _showDialog = true;
     }
 
-    private void ShowEditDialog(SiteDto site)
+    private void ShowEditDialog(SiteViewModel site)
     {
-        _currentSite = new SiteDto 
-        { 
-            site_code = site.site_code,
-            site_description = site.site_description,
-            site_address = site.site_address,
-            site_telephone = site.site_telephone
+        _currentSite = new SiteViewModel
+        {
+            SiteCode = site.SiteCode,
+            DepartmentCode = site.DepartmentCode,
+            Description = site.Description,
+            Address = site.Address,
+            Telephone = site.Telephone,
+            IsActive = site.IsActive
         };
         _isEdit = true;
         _showDialog = true;
     }
 
-    private void ShowDeleteDialog(SiteDto site)
+    private void ShowDeleteDialog(SiteViewModel site)
     {
         _currentSite = site;
         _showDeleteConfirm = true;
@@ -194,26 +208,66 @@
     private async Task SaveSite()
     {
         _saving = true;
-        // Placeholder implementation
-        await Task.Delay(500);
-        _saving = false;
-        HideDialog();
-        LoadSites();
+        try
+        {
+            var request = new SiteRequestDto
+            {
+                Description = _currentSite.Description ?? string.Empty,
+                Address1 = _currentSite.Address,
+                Telephone = _currentSite.Telephone,
+                DepartmentCode = _currentSite.DepartmentCode,
+                SiteActive = _currentSite.IsActive
+            };
+
+            if (_isEdit && _currentSite.SiteCode.HasValue)
+            {
+                await SiteService.UpdateAsync((short)_currentSite.SiteCode.Value, request);
+            }
+            else
+            {
+                await SiteService.CreateAsync(request);
+            }
+
+            await LoadSites();
+            HideDialog();
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private async Task DeleteSite()
     {
-        // Placeholder implementation
-        await Task.Delay(500);
-        HideDeleteDialog();
-        LoadSites();
+        try
+        {
+            if (_currentSite.SiteCode.HasValue)
+            {
+                await SiteService.DeleteAsync((short)_currentSite.SiteCode.Value);
+            }
+        }
+        finally
+        {
+            HideDeleteDialog();
+            await LoadSites();
+        }
     }
 
-    public class SiteDto
+    private static string? CombineAddress(SiteResponseDto dto)
     {
-        public int site_code { get; set; }
-        public string? site_description { get; set; }
-        public string? site_address { get; set; }
-        public string? site_telephone { get; set; }
+        var parts = new[] { dto.Address1, dto.Address2, dto.Address3 }
+            .Where(p => !string.IsNullOrWhiteSpace(p));
+        var combined = string.Join(", ", parts);
+        return string.IsNullOrWhiteSpace(combined) ? null : combined;
+    }
+
+    private class SiteViewModel
+    {
+        public int? SiteCode { get; set; }
+        public short? DepartmentCode { get; set; }
+        public string? Description { get; set; }
+        public string? Address { get; set; }
+        public string? Telephone { get; set; }
+        public bool IsActive { get; set; } = true;
     }
 }

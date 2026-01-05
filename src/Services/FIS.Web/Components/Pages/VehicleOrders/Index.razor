@@ -1,6 +1,9 @@
 @page "/vehicle-orders"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject VehicleOrderApiService VehicleOrderService
+@inject IJSRuntime JS
 
 <PageTitle>Vehicle Orders - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-cart"></i>
             Vehicle Orders
         </h1>
-        <p class="page-description">Vehicle order summary. Static entries until API is available.</p>
+        <p class="page-description">Vehicle order summary from /api/vehicleorder.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadOrders">
@@ -82,21 +85,41 @@
         await LoadOrders();
     }
 
-    private Task LoadOrders()
+    private async Task LoadOrders()
     {
         _loading = true;
-
-        _orders =
-        [
-            new("VO-2401-001", "ABC123GP", "Ordered", new DateTime(2025, 01, 12), new DateTime(2025, 02, 15), "Awaiting delivery."),
-            new("VO-2401-002", "JKL456GP", "Pending Approval", new DateTime(2025, 01, 09), new DateTime(2025, 02, 10), "Approval in progress."),
-            new("VO-2312-006", "MNO789GP", "Delivered", new DateTime(2024, 12, 05), new DateTime(2024, 12, 20), "Delivered to depot."),
-            new("VO-2311-004", "PQR321GP", "Cancelled", new DateTime(2024, 11, 18), new DateTime(2024, 12, 01), "Cancelled by request.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await VehicleOrderService.GetAllAsync<VehicleOrderDto>();
+            _orders = apiItems.Select(o => new VehicleOrderItem(
+                Number: o.vehicle_order_code.ToString(),
+                Vehicle: o.vmf_code?.ToString() ?? "Unknown",
+                Status: o.order_status ?? "Unknown",
+                Ordered: o.order_date ?? DateTime.MinValue,
+                Expected: o.delivery_date ?? o.order_date ?? DateTime.MinValue,
+                Notes: o.order_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading vehicle orders: {ex.Message}");
+            _orders = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record VehicleOrderItem(string Number, string Vehicle, string Status, DateTime Ordered, DateTime Expected, string Notes);
+
+    private sealed class VehicleOrderDto
+    {
+        public int vehicle_order_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? order_status { get; set; }
+        public DateTime? order_date { get; set; }
+        public DateTime? delivery_date { get; set; }
+        public string? order_notes { get; set; }
+    }
 }

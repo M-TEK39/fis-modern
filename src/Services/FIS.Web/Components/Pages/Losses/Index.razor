@@ -1,6 +1,9 @@
 @page "/losses"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LossApiService LossService
+@inject IJSRuntime JS
 
 <PageTitle>Losses - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-x-circle"></i>
             Losses
         </h1>
-        <p class="page-description">Losses summary (legacy). Static entries until losses API is available.</p>
+        <p class="page-description">Losses summary from /api/loss.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadLosses">
@@ -82,21 +85,42 @@
         await LoadLosses();
     }
 
-    private Task LoadLosses()
+    private async Task LoadLosses()
     {
         _loading = true;
-
-        _losses =
-        [
-            new("LS-2401-001", "Accident", "Open", new DateTime(2025, 01, 12), 15000m, "Awaiting assessment."),
-            new("LS-2401-002", "Theft", "In Progress", new DateTime(2025, 01, 09), 22000m, "Claim submitted."),
-            new("LS-2312-010", "Write-off", "Closed", new DateTime(2024, 12, 05), 180000m, "Settled and closed."),
-            new("LS-2311-006", "Damage", "Closed", new DateTime(2024, 11, 18), 9500m, "Repair completed.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await LossService.GetAllAsync<LossDto>();
+            _losses = apiItems.Select(l => new LossItem(
+                Number: l.loss_code.ToString(),
+                Category: l.loss_category ?? "N/A",
+                Status: l.loss_status ?? "Unknown",
+                Date: l.loss_date ?? DateTime.MinValue,
+                Amount: l.loss_amount ?? 0m,
+                Notes: l.loss_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading losses: {ex.Message}");
+            _losses = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record LossItem(string Number, string Category, string Status, DateTime Date, decimal Amount, string Notes);
+
+    private sealed class LossDto
+    {
+        public int loss_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? loss_category { get; set; }
+        public string? loss_status { get; set; }
+        public DateTime? loss_date { get; set; }
+        public decimal? loss_amount { get; set; }
+        public string? loss_notes { get; set; }
+    }
 }

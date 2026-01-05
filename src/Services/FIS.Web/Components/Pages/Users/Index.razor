@@ -1,6 +1,8 @@
 @page "/users"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject UserApiService UserService
 
 <div class="page-header">
     <div class="page-header-content">
@@ -41,19 +43,15 @@
     {
         <div class="table-container">
             <div class="table-header">
-                <div class="table-controls">
-                   
-                </div>
+                <span class="table-title">@_users.Count User(s)</span>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Username</th>
-                            <th>Full Name</th>
+                            <th>User Code</th>
                             <th>Email</th>
-                            <th>Department</th>
-                            <th>Active</th>
+                            <th>Telephone</th>
                             <th class="actions-column">Actions</th>
                         </tr>
                     </thead>
@@ -61,20 +59,9 @@
                         @foreach (var user in _users)
                         {
                             <tr>
-                                <td>
-                                    <div class="user-info">
-                                        <i class="bx bx-user"></i>
-                                        <span>@user.user_name</span>
-                                    </div>
-                                </td>
-                                <td>@($"{user.first_name} {user.last_name}")</td>
-                                <td>@user.email</td>
-                                <td>@(user.department_code?.ToString() ?? "No Department")</td>
-                                <td>
-                                    <span class="status-badge @(user.active ? "status-active" : "status-inactive")">
-                                        @(user.active ? "Active" : "Inactive")
-                                    </span>
-                                </td>
+                                <td>@user.UserAccessCode</td>
+                                <td>@user.Email</td>
+                                <td>@user.TelephoneNumber</td>
                                 <td class="actions-column">
                                     <div class="table-actions">
                                         <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(user)" title="Edit">
@@ -102,36 +89,12 @@
        OnCancel="HideDialog">
     <div class="form-grid">
         <div class="form-field">
-            <label class="form-label">Username <span class="required">*</span></label>
-            <input type="text" @bind="_currentUser.user_name" class="form-input" placeholder="Enter username" />
-        </div>
-        <div class="form-field">
-            <label class="form-label">First Name <span class="required">*</span></label>
-            <input type="text" @bind="_currentUser.first_name" class="form-input" placeholder="Enter first name" />
-        </div>
-        <div class="form-field">
-            <label class="form-label">Last Name <span class="required">*</span></label>
-            <input type="text" @bind="_currentUser.last_name" class="form-input" placeholder="Enter last name" />
-        </div>
-        <div class="form-field">
             <label class="form-label">Email Address</label>
-            <input type="email" @bind="_currentUser.email" class="form-input" placeholder="Enter email address" />
+            <input type="email" @bind="_currentUser.Email" class="form-input" placeholder="Enter email address" />
         </div>
         <div class="form-field">
-            <label class="form-label">Job Title</label>
-            <input type="text" @bind="_currentUser.job_title" class="form-input" placeholder="Enter job title" />
-        </div>
-        <div class="form-field">
-            <label class="form-label form-checkbox">
-                <input type="checkbox" @bind="_currentUser.admin" />
-                <span>Admin User</span>
-            </label>
-        </div>
-        <div class="form-field">
-            <label class="form-label form-checkbox">
-                <input type="checkbox" @bind="_currentUser.active" />
-                <span>Active User</span>
-            </label>
+            <label class="form-label">Telephone Number</label>
+            <input type="tel" @bind="_currentUser.TelephoneNumber" class="form-input" placeholder="Enter telephone number" />
         </div>
     </div>
 </Modal>
@@ -142,59 +105,13 @@
                   IsDeleting="_deleting"
                   OnConfirm="DeleteUser" 
                   OnCancel="HideDeleteDialog">
-    <p>Are you sure you want to delete <strong>@($"{_currentUser.first_name} {_currentUser.last_name}")</strong>?</p>
-    <p style="color: var(--fis-muted-text); font-size: 0.875rem; margin-top: 0.5rem;">This action cannot be undone.</p>
+    <p>Are you sure you want to delete user code <strong>@_currentUser.UserAccessCode</strong>?</p>
+    <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>
 
-@if (_showDeleteConfirm)
-{
-    <div class="modal-overlay">
-        <div class="modal-dialog">
-            <div class="modal-header">
-                <h3>Confirm Delete</h3>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete <strong>@($"{_currentUser.first_name} {_currentUser.last_name}")</strong>?</p>
-                <p class="warning-text">This action cannot be undone.</p>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" @onclick="HideDeleteDialog" disabled="@_deleting">Cancel</button>
-                <button class="btn btn-danger" @onclick="DeleteUser" disabled="@_deleting">
-                    @if (_deleting)
-                    {
-                        <span class="spinner-sm"></span>
-                        <span>Deleting...</span>
-                    }
-                    else
-                    {
-                        <i class="bx bx-trash"></i>
-                        <span>Delete</span>
-                    }
-                </button>
-            </div>
-        </div>
-    </div>
-}
-
 @code {
-    // User model for this component
-    public class User
-    {
-        public int user_code { get; set; }
-        public string user_name { get; set; } = string.Empty;
-        public string first_name { get; set; } = string.Empty;
-        public string last_name { get; set; } = string.Empty;
-        public string email { get; set; } = string.Empty;
-        public string job_title { get; set; } = string.Empty;
-        public int? department_code { get; set; }
-        public bool admin { get; set; }
-        public bool active { get; set; } = true;
-        public string? password { get; set; }
-        public DateTime? last_logon_date { get; set; }
-    }
-
-    private List<User> _users = new();
-    private User _currentUser = new();
+    private List<ApiUserViewModel> _users = new();
+    private ApiUserViewModel _currentUser = new();
     private bool _loading = true;
     private bool _showDialog = false;
     private bool _showDeleteConfirm = false;
@@ -202,54 +119,50 @@
     private bool _saving = false;
     private bool _deleting = false;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        LoadUsers();
+        await LoadUsers();
     }
 
-    private void LoadUsers()
+    private async Task LoadUsers()
     {
         _loading = true;
-        // TODO: Replace with actual API call when UserService is available
-        // _users = await UserService.GetUsersAsync();
-        
-        // Mock data for now
-        _users = new List<User>
+        try
         {
-            new() { user_code = 1, user_name = "admin", first_name = "Admin", last_name = "User", email = "admin@example.com", job_title = "System Administrator", admin = true, active = true },
-            new() { user_code = 2, user_name = "jsmith", first_name = "John", last_name = "Smith", email = "john.smith@example.com", job_title = "Fleet Manager", admin = false, active = true },
-            new() { user_code = 3, user_name = "mjones", first_name = "Mary", last_name = "Jones", email = "mary.jones@example.com", job_title = "Driver Coordinator", admin = false, active = false }
-        };
-        _loading = false;
-        StateHasChanged();
+            var users = await UserService.GetAllAsync();
+            _users = users.Select(u => new ApiUserViewModel
+            {
+                UserAccessCode = u.UserAccessCode,
+                Email = u.Email,
+                TelephoneNumber = u.TelephoneNumber
+            }).ToList();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void ShowAddDialog()
     {
-        _currentUser = new User();
+        _currentUser = new ApiUserViewModel();
         _isEdit = false;
         _showDialog = true;
     }
 
-    private void ShowEditDialog(User user)
+    private void ShowEditDialog(ApiUserViewModel user)
     {
-        _currentUser = new User
+        _currentUser = new ApiUserViewModel
         {
-            user_code = user.user_code,
-            user_name = user.user_name,
-            first_name = user.first_name,
-            last_name = user.last_name,
-            email = user.email,
-            job_title = user.job_title,
-            department_code = user.department_code,
-            admin = user.admin,
-            active = user.active
+            UserAccessCode = user.UserAccessCode,
+            Email = user.Email,
+            TelephoneNumber = user.TelephoneNumber
         };
         _isEdit = true;
         _showDialog = true;
     }
 
-    private void ShowDeleteDialog(User user)
+    private void ShowDeleteDialog(ApiUserViewModel user)
     {
         _currentUser = user;
         _showDeleteConfirm = true;
@@ -266,69 +179,51 @@
         _showDeleteConfirm = false;
     }
 
-    private void SaveUser()
+    private async Task SaveUser()
     {
         _saving = true;
-        bool success = true; // Mock success for now
-
-        if (_isEdit)
+        try
         {
-            // TODO: Replace with actual API call
-            // success = await UserService.UpdateUserAsync(_currentUser.user_code, _currentUser);
-            
-            // Mock update
-            var existingUser = _users.FirstOrDefault(u => u.user_code == _currentUser.user_code);
-            if (existingUser != null)
+            if (_isEdit && _currentUser.UserAccessCode.HasValue)
             {
-                existingUser.user_name = _currentUser.user_name;
-                existingUser.first_name = _currentUser.first_name;
-                existingUser.last_name = _currentUser.last_name;
-                existingUser.email = _currentUser.email;
-                existingUser.job_title = _currentUser.job_title;
-                existingUser.admin = _currentUser.admin;
-                existingUser.active = _currentUser.active;
+                await UserService.UpdateAsync(_currentUser.UserAccessCode.Value, _currentUser.Email, _currentUser.TelephoneNumber);
             }
-        }
-        else
-        {
-            // TODO: Replace with actual API call
-            // success = await UserService.CreateUserAsync(_currentUser);
-            
-            // Mock create
-            _currentUser.user_code = _users.Max(u => u.user_code) + 1;
-            _users.Add(_currentUser);
-        }
+            else
+            {
+                await UserService.CreateAsync(_currentUser.Email, _currentUser.TelephoneNumber);
+            }
 
-        _saving = false;
-
-        if (success)
-        {
+            await LoadUsers();
             HideDialog();
-            LoadUsers();
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 
-    private void DeleteUser()
+    private async Task DeleteUser()
     {
         _deleting = true;
-        
-        // TODO: Replace with actual API call
-        // var success = await UserService.DeleteUserAsync(_currentUser.user_code);
-        
-        // Mock delete
-        var userToRemove = _users.FirstOrDefault(u => u.user_code == _currentUser.user_code);
-        if (userToRemove != null)
+        try
         {
-            _users.Remove(userToRemove);
+            if (_currentUser.UserAccessCode.HasValue)
+            {
+                await UserService.DeleteAsync(_currentUser.UserAccessCode.Value);
+                await LoadUsers();
+            }
         }
-        var success = true; // Mock success
-        
-        _deleting = false;
-
-        if (success)
+        finally
         {
+            _deleting = false;
             HideDeleteDialog();
-            LoadUsers();
         }
+    }
+
+    private class ApiUserViewModel
+    {
+        public int? UserAccessCode { get; set; }
+        public string? Email { get; set; }
+        public string? TelephoneNumber { get; set; }
     }
 }

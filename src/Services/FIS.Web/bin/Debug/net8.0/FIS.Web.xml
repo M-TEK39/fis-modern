@@ -4,5 +4,11 @@
         <name>FIS.Web</name>
     </assembly>
     <members>
+        <member name="T:FIS.Web.Services.BaseApiService">
+            <summary>
+            Lightweight base class for simple CRUD-style API calls with case-insensitive JSON handling.
+            Components can supply their own DTO types when calling these methods.
+            </summary>
+        </member>
     </members>
 </doc>

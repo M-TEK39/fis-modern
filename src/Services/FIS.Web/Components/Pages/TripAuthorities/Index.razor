@@ -1,6 +1,11 @@
 @page "/trip-authorities"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject TripApiService TripService
+@inject TripDriverApiService TripDriverService
+@inject IJSRuntime JS
 
 <PageTitle>Trip Authorities - Fleet Information System</PageTitle>
 
@@ -10,7 +15,7 @@
             <i class="bx bx-clipboard"></i>
             Trip Authorities
         </h1>
-        <p class="page-description">Trip authority summary. Static entries until trip authority API is available.</p>
+        <p class="page-description">Trip authority summary from Trip and TripDriver APIs.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadTripAuthorities">
@@ -82,20 +87,36 @@
         await LoadTripAuthorities();
     }
 
-    private Task LoadTripAuthorities()
+    private async Task LoadTripAuthorities()
     {
         _loading = true;
+        try
+        {
+            var trips = await TripService.GetAllAsync();
+            var drivers = await TripDriverService.GetAllAsync();
 
-        _authorities =
-        [
-            new("TA-2401-001", "ABC123GP", "Active", new DateTime(2025, 01, 12), new DateTime(2025, 02, 12), "Issued for monthly trips."),
-            new("TA-2401-002", "JKL456GP", "Pending", new DateTime(2025, 01, 10), new DateTime(2025, 02, 10), "Awaiting approval."),
-            new("TA-2312-010", "MNO789GP", "Expired", new DateTime(2024, 12, 05), new DateTime(2025, 01, 05), "Expired; renewal needed."),
-            new("TA-2311-006", "PQR321GP", "Closed", new DateTime(2024, 11, 18), new DateTime(2024, 12, 18), "Closed; archived.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+            _authorities = trips.Select(t =>
+            {
+                var driverName = drivers.FirstOrDefault(d => d.DriverCode == t.DriverId)?.Notes ?? "N/A";
+                return new TripAuthorityItem(
+                    Number: t.TripId.ToString(),
+                    Vehicle: t.VmfCode.ToString(),
+                    Status: t.Status ?? "Unknown",
+                    Issued: t.TripDate,
+                    Expiry: t.TripDate.AddMonths(1),
+                    Notes: driverName ?? t.Notes ?? string.Empty
+                );
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading trip authorities: {ex.Message}");
+            _authorities = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record TripAuthorityItem(string Number, string Vehicle, string Status, DateTime Issued, DateTime Expiry, string Notes);

@@ -1,6 +1,9 @@
 @page "/monitor"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject MonitorApiService MonitorService
+@inject IJSRuntime JS
 
 <PageTitle>Monitor - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-line-chart"></i>
             Monitor
         </h1>
-        <p class="page-description">Consumption/monitoring snapshot (legacy). Static entries until monitor API is available.</p>
+        <p class="page-description">Consumption/monitoring snapshot from /api/monitor.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadMonitor">
@@ -82,21 +85,43 @@
         await LoadMonitor();
     }
 
-    private Task LoadMonitor()
+    private async Task LoadMonitor()
     {
         _loading = true;
-
-        _items =
-        [
-            new("Fuel Consumption", "ABC123GP", "8.9 L/100km", "Within Range", new DateTime(2025, 01, 12), "Data from consumption detail."),
-            new("Fuel Consumption", "JKL456GP", "11.2 L/100km", "Above Threshold", new DateTime(2025, 01, 11), "Investigate driver behavior."),
-            new("Mileage Split", "MNO789GP", "1,240 km", "Reviewed", new DateTime(2025, 01, 10), "Split validated."),
-            new("Odometer Variance", "PQR321GP", "35 km variance", "Pending", new DateTime(2025, 01, 09), "Awaiting confirmation.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await MonitorService.GetAllAsync<MonitorDto>();
+            _items = apiItems.Select(m => new MonitorItem(
+                Metric: m.monitor_category ?? "N/A",
+                Vehicle: m.GG_number ?? m.vmf_code?.ToString() ?? "Unknown",
+                Value: m.monitor_value ?? "N/A",
+                Status: m.monitor_severity ?? "N/A",
+                UpdatedOn: m.monitor_date ?? DateTime.MinValue,
+                Notes: m.monitor_notes ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading monitor items: {ex.Message}");
+            _items = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record MonitorItem(string Metric, string Vehicle, string Value, string Status, DateTime UpdatedOn, string Notes);
+
+    private sealed class MonitorDto
+    {
+        public int monitor_code { get; set; }
+        public int? vmf_code { get; set; }
+        public string? GG_number { get; set; }
+        public string? monitor_category { get; set; }
+        public string? monitor_value { get; set; }
+        public string? monitor_severity { get; set; }
+        public DateTime? monitor_date { get; set; }
+        public string? monitor_notes { get; set; }
+    }
 }

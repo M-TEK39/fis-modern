@@ -1,6 +1,9 @@
 @page "/vehicle-photos"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject VehiclePhotoApiService VehiclePhotoService
+@inject IJSRuntime JS
 
 <PageTitle>Vehicle Photos - Fleet Information System</PageTitle>
 
@@ -10,7 +13,7 @@
             <i class="bx bx-image"></i>
             Vehicle Photos
         </h1>
-        <p class="page-description">Photo references. Static entries until vehicle photos API is available.</p>
+        <p class="page-description">Photo references from /api/vehiclephoto.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadPhotos">
@@ -80,21 +83,39 @@
         await LoadPhotos();
     }
 
-    private Task LoadPhotos()
+    private async Task LoadPhotos()
     {
         _loading = true;
-
-        _photos =
-        [
-            new("ABC123GP", "Front/Side", "Available", new DateTime(2025, 01, 12), "Captured on intake."),
-            new("JKL456GP", "Damage", "Pending Review", new DateTime(2025, 01, 10), "Awaiting assessor review."),
-            new("MNO789GP", "Full Set", "Available", new DateTime(2024, 12, 18), "Stored in archive."),
-            new("PQR321GP", "Front/Side", "Available", new DateTime(2024, 11, 25), "Legacy reference.")
-        ];
-
-        _loading = false;
-        return Task.CompletedTask;
+        try
+        {
+            var apiItems = await VehiclePhotoService.GetAllAsync<VehiclePhotoDto>();
+            _photos = apiItems.Select(p => new PhotoItem(
+                Vehicle: p.VehicleMasterCode.ToString(),
+                Type: p.Orientation?.ToString() ?? "N/A",
+                Status: string.IsNullOrWhiteSpace(p.FileUrl) ? "Pending" : "Available",
+                Date: DateTime.MinValue,
+                Notes: p.Description ?? string.Empty
+            )).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading vehicle photos: {ex.Message}");
+            _photos = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed record PhotoItem(string Vehicle, string Type, string Status, DateTime Date, string Notes);
+
+    private sealed class VehiclePhotoDto
+    {
+        public int VehiclePhotoInfoCode { get; set; }
+        public int VehicleMasterCode { get; set; }
+        public string? FileUrl { get; set; }
+        public int? Orientation { get; set; }
+        public string? Description { get; set; }
+    }
 }
