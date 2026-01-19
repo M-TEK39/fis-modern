@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="../build/FIS.Web.props" />
-</Project>

@@ -1,11 +1,24 @@
 using FIS.Web.Components;
 using FIS.Web.Services;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Identity.Web;
+using Microsoft.Identity.Web.UI;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Configure Microsoft Entra ID authentication
+builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+    .AddMicrosoftIdentityWebApp(builder.Configuration.GetSection("AzureAd"));
+
+builder.Services.AddAuthorization();
+
+// Add controllers with views for Microsoft Identity UI (login/logout pages)
+builder.Services.AddControllersWithViews()
+    .AddMicrosoftIdentityUI();
 
 // Register API services
 builder.Services.AddHttpClient<VehicleApiService>(client =>
@@ -246,6 +259,13 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 app.UseAntiforgery();
+
+// Authentication & Authorization middleware
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Map Microsoft Identity UI controllers (for login/logout)
+app.MapControllers();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

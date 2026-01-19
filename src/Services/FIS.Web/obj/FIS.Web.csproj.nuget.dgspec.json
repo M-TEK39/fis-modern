@@ -51,6 +51,14 @@
               "target": "Package",
               "version": "[8.0.0, )"
             },
+            "Microsoft.Identity.Web": {
+              "target": "Package",
+              "version": "[4.3.0, )"
+            },
+            "Microsoft.Identity.Web.UI": {
+              "target": "Package",
+              "version": "[4.3.0, )"
+            },
             "Microsoft.SourceLink.GitHub": {
               "suppressParent": "All",
               "target": "Package",

@@ -24,6 +24,12 @@ backup
 fleet
 sources
 docs
+bin
+obj
+.vscode
+.idea
+.claude
+
 
 
 # Testing

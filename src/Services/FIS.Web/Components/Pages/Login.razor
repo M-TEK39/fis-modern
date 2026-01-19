@@ -1,0 +1,160 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Authorization
+
+<PageTitle>Login - FIS</PageTitle>
+
+<div class="login-container">
+    <div class="login-card">
+        <h1>Fleet Information System</h1>
+        <p class="subtitle">Sign in to continue</p>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="alert alert-success">
+                    <p>✓ You're already signed in as <strong>@context.User.Identity?.Name</strong></p>
+                    <a href="/" class="btn btn-primary">Go to Dashboard</a>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <div class="login-options">
+                    <a href="/MicrosoftIdentity/Account/SignIn" class="btn btn-microsoft">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
+                            <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+                            <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+                            <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+                            <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+                        </svg>
+                        Sign in with Microsoft
+                    </a>
+
+                    <div class="divider">
+                        <span>or</span>
+                    </div>
+
+                    <a href="/login/legacy" class="btn btn-legacy">
+                        Sign in with Legacy Account
+                    </a>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+<style>
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 80vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .login-card {
+        background: white;
+        padding: 3rem;
+        border-radius: 12px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        max-width: 400px;
+        width: 100%;
+        text-align: center;
+    }
+
+    .login-card h1 {
+        color: #333;
+        margin-bottom: 0.5rem;
+        font-size: 1.8rem;
+    }
+
+    .subtitle {
+        color: #666;
+        margin-bottom: 2rem;
+    }
+
+    .login-options {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.75rem 1.5rem;
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 500;
+        transition: all 0.2s;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-microsoft {
+        background: #2f2f2f;
+        color: white;
+        gap: 0.75rem;
+    }
+
+    .btn-microsoft:hover {
+        background: #1f1f1f;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .btn-legacy {
+        background: #f8f9fa;
+        color: #333;
+        border: 2px solid #dee2e6;
+    }
+
+    .btn-legacy:hover {
+        background: #e9ecef;
+        border-color: #adb5bd;
+    }
+
+    .btn-primary {
+        background: #667eea;
+        color: white;
+        margin-top: 1rem;
+    }
+
+    .btn-primary:hover {
+        background: #5568d3;
+    }
+
+    .divider {
+        display: flex;
+        align-items: center;
+        text-align: center;
+        margin: 1.5rem 0;
+    }
+
+    .divider::before,
+    .divider::after {
+        content: '';
+        flex: 1;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .divider span {
+        padding: 0 1rem;
+        color: #999;
+        font-size: 0.875rem;
+    }
+
+    .alert {
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+    }
+
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+</style>
+
+@code {
+    // No code needed - authentication is handled by Microsoft.Identity.Web
+}

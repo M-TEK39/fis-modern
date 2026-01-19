@@ -1,0 +1,65 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+
+<div class="user-profile">
+    <AuthorizeView>
+        <Authorized>
+            <div class="user-info">
+                <span class="user-name">@context.User.Identity?.Name</span>
+                <a href="/MicrosoftIdentity/Account/SignOut" class="btn-logout">Sign out</a>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <a href="/login" class="btn-login">Sign in</a>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
+
+<style>
+    .user-profile {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.5rem 1rem;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .user-name {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .btn-login,
+    .btn-logout {
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .btn-login {
+        background: #667eea;
+        color: white;
+    }
+
+    .btn-login:hover {
+        background: #5568d3;
+    }
+
+    .btn-logout {
+        background: #f8f9fa;
+        color: #666;
+        border: 1px solid #dee2e6;
+    }
+
+    .btn-logout:hover {
+        background: #e9ecef;
+        color: #333;
+    }
+</style>
