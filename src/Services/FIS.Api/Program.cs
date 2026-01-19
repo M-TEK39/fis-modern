@@ -1,18 +1,54 @@
+using System.Text;
+using AspNetCoreRateLimit;
 using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Application.Interfaces.Auth;
 using FIS.Core.Application.Services;
+using FIS.Core.Application.Services.Auth;
 using FIS.Core.Application.Services.Billing;
 using FIS.Core.Application.Services.Validation;
 using FIS.Core.Infrastructure.Interfaces;
 using FIS.Core.Infrastructure.Repositories;
 using FIS.Core.Infrastructure.Services;
 using FIS.Data.SqlServer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Web;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+
+// Configure CORS for network access
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowNetwork", policy =>
+    {
+        policy.WithOrigins(
+            // Localhost (backward compatibility)
+            "http://localhost:5268",
+            "https://localhost:7259",
+            "http://localhost:5010",
+            "https://localhost:7188",
+            // Network IP access (10.0.0.104)
+            "http://10.0.0.104:5268",
+            "https://10.0.0.104:7259",
+            "http://10.0.0.104:5010",
+            "https://10.0.0.104:7188"
+        )
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials();
+    });
+});
+
+// Configure rate limiting
+builder.Services.AddMemoryCache();
+builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+builder.Services.AddInMemoryRateLimiting();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
 // Configure Entity Framework
 builder.Services.AddDbContext<FisDbContext>(options =>
@@ -33,6 +69,73 @@ builder.Services.AddSwaggerGen(options =>
                 "Fleet Information System - Modern API with Legacy Database Compatibility",
         }
     );
+
+    // Add JWT Bearer authentication to Swagger
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below. Example: 'Bearer 12345abcdef'",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        Scheme = "Bearer"
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
+// Configure multi-scheme authentication (Entra ID + Legacy JWT)
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var jwtSecretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer("LegacyJWT", options =>
+    {
+        // Legacy JWT validation
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+            ClockSkew = TimeSpan.Zero
+        };
+    })
+    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+    {
+        // Microsoft Entra ID / Azure AD validation
+        options.Authority = $"{builder.Configuration["AzureAd:Instance"]}{builder.Configuration["AzureAd:TenantId"]}/v2.0";
+        options.Audience = builder.Configuration["AzureAd:ClientId"];
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true
+        };
+    });
+
+// Configure authorization to accept EITHER authentication scheme
+builder.Services.AddAuthorization(options =>
+{
+    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder("LegacyJWT", JwtBearerDefaults.AuthenticationScheme)
+        .RequireAuthenticatedUser()
+        .Build();
 });
 
 // Register business services
@@ -53,6 +156,9 @@ builder.Services.AddScoped<IContractValidationService, ContractValidationService
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<ITripService, TripService>();
 builder.Services.AddScoped<IMaintenanceService, MaintenanceService>();
+
+// Authentication services (Dual auth - Entra ID + Legacy JWT)
+builder.Services.AddScoped<IUserClaimsService, UserClaimsService>();
 
 // Register repositories
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
@@ -108,6 +214,9 @@ builder.Services.AddScoped<ILeaseContractTermsRepository, LeaseContractTermsRepo
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 
+// Authentication repositories (Dual auth - Entra ID + Legacy JWT)
+builder.Services.AddScoped<IEntraIdUserMappingRepository, EntraIdUserMappingRepository>();
+
 // Financial system repositories - temporarily disabled for debugging
 //builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 //builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>();
@@ -140,6 +249,17 @@ if (app.Environment.IsDevelopment())
 
 // Add security headers
 app.UseHttpsRedirection();
+
+// Rate limiting middleware (must be before CORS and routing)
+app.UseIpRateLimiting();
+
+// Enable CORS
+app.UseCors("AllowNetwork");
+
+// Authentication & Authorization middleware
+// CRITICAL ORDER: Must be after CORS, before MapControllers
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Add health check endpoints
 app.MapHealthChecks("/health");

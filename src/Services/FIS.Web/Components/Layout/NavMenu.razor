@@ -1,91 +1,135 @@
 ﻿@using Microsoft.AspNetCore.Components
+@rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Routing
 @implements IDisposable
 
 <nav class="legacy-nav" aria-label="Fleet navigation">
-    <ul class="nav-list">
-        @foreach (var item in NavigationItems)
-        {
-            <li class="@GetItemClasses(item)">
-                @if (item.Disabled)
-                {
-                    <span class="legacy-link disabled" role="link" aria-disabled="true">
-                        <i class="@item.Icon" style="margin-left: 4px; margin-top: 2px" aria-hidden="true"></i>
-                        <span class="legacy-label">@item.Title</span>
-                    </span>
-                }
-                else
-                {
-                    <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
-                        <i class="@item.Icon" style="margin-left: 8px;" aria-hidden="true"></i>
-                        <span class="legacy-label">@item.Title</span>
-                    </NavLink>
-                }
-            </li>
-        }
-    </ul>
+    @foreach (var group in NavigationGroups)
+    {
+        var expanded = IsGroupExpanded(group);
+        <div class="nav-group @(expanded ? "expanded" : "collapsed")">
+            <button class="nav-group-toggle"
+                    type="button"
+                    aria-expanded="@expanded"
+                    aria-controls="nav-group-@group.Id"
+                    @onclick="() => ToggleGroup(group.Id)">
+                <span class="nav-group-title">
+                    <i class="@group.Icon" aria-hidden="true"></i>
+                    <span>@group.Title</span>
+                </span>
+                <i class="bx bx-chevron-down nav-group-chevron @(expanded ? "expanded" : "")" aria-hidden="true"></i>
+            </button>
+
+            @if (expanded)
+            {
+                <ul id="nav-group-@group.Id" class="nav-list">
+                    @foreach (var item in group.Items)
+                    {
+                        <li class="@GetItemClasses(item)">
+                            @if (item.Disabled)
+                            {
+                                <span class="legacy-link disabled" role="link" aria-disabled="true">
+                                    <i class="@item.Icon" aria-hidden="true"></i>
+                                    <span class="legacy-label">@item.Title</span>
+                                </span>
+                            }
+                            else
+                            {
+                                <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
+                                    <i class="@item.Icon" aria-hidden="true"></i>
+                                    <span class="legacy-label">@item.Title</span>
+                                </NavLink>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    }
 </nav>
 
 @code {
     private sealed record NavItem(string Title, string Href, string Icon, bool Disabled = false, NavLinkMatch Match = NavLinkMatch.Prefix);
+    private sealed record NavGroup(string Id, string Title, string Icon, IReadOnlyList<NavItem> Items);
 
-    private static readonly IReadOnlyList<NavItem> NavigationItems =
+    private static readonly IReadOnlyList<NavGroup> NavigationGroups =
     [
-        new("Home", "/", "bx bx-home", Match: NavLinkMatch.All),
-        new("Manuals", "/manuals", "bx bx-book", Disabled: false),
-        new("Accidents", "/accidents", "bx bxs-car-crash", Disabled: false),
-        new("Auction", "/auction", "bx bx-dollar", Disabled: false),
-        new("Call Centre", "/call-centre", "bx bx-phone-call", Disabled: false),
-        new("Clearance", "/clearance", "bx bx-shield-quarter", Disabled: false),
-        new("Contracts", "/contracts", "bx bx-file", Disabled: false),
-        new("Finance", "/finance", "bx bx-wallet", Disabled: false),
-        new("Fines", "/fines", "bx bx-receipt", Disabled: false),
-        new("Fuel Cards", "/fuel-cards", "bx bx-credit-card", Disabled: false),
-        new("Job Cards", "/job-cards", "bx bx-id-card", Disabled: false),
-        new("Licenses", "/licenses", "bx bxs-user-badge", Disabled: false),
-        new("Log Books", "/log-books", "bx bx-notepad", Disabled: false),
-        new("Log Sheets", "/log-sheets", "bx bx-table", Disabled: false),
-        new("Losses", "/losses", "bx bx-x-circle", Disabled: false),
-        new("Monitor", "/monitor", "bx bx-line-chart", Disabled: false),
-        new("Private Hire", "/private-hire", "bx bx-car", Disabled: false),
-        new("Reports", "/reports", "bx bx-file-find", Disabled: false),
-        new("Driver & Authoriser Mgmt", "/drivers", "bx bx-id-card", Disabled: false),
-        new("Taxis", "/taxis", "bx bx-taxi", Disabled: false),
-        new("Third Party Rentals", "/third-party", "bx bx-building-house", Disabled: false),
-        new("Towing", "/towing", "bx bx-anchor", Disabled: false),
-        new("Tracking", "/tracking", "bx bx-radar", Disabled: false),
-        new("Trips", "/trips", "bx bx-navigation", Disabled: false),
-        new("Trip Authorities", "/trip-authorities", "bx bx-clipboard", Disabled: false),
-        new("Trip Queries", "/trip-query", "bx bx-question-mark", Disabled: false),
-        new("Troubleshoot", "/troubleshoot", "bx bx-wrench", Disabled: false),
-        new("Validation Data", "/reference-data", "bx bx-check-shield", Disabled: false),
-        new("Vehicle Asset Verification", "/vehicle-verification", "bx bx-clipboard", Disabled: false),
-        new("Vehicle Master", "/vehicles", "bx bx-car", Disabled: false),
-        new("Vehicle Orders", "/vehicle-orders", "bx bx-cart", Disabled: false),
-        new("Workshop", "/workshop", "bx bx-wrench", Disabled: false),
-        new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", Disabled: false),
-        new("Vehicle Photos", "/vehicle-photos", "bx bx-image", Disabled: false),
-        new("User Admin", "/users", "bx bx-user-circle", Disabled: false),
-        new("Notice Management", "/notice-management", "bx bx-bell", Disabled: false),
-        new("Change Password", "/change-password", "bx bx-lock", Disabled: false),
-        new("Change Password & Question", "/change-password-question", "bx bx-key", Disabled: false)
+        new("general", "General", "bx bx-grid-alt",
+        [
+            new("Home", "/", "bx bx-home", Match: NavLinkMatch.All),
+            new("Manuals", "/manuals", "bx bx-book", Disabled: false)
+        ]),
+        new("fleet-ops", "Fleet Operations", "bx bx-car",
+        [
+            new("Vehicle Master", "/vehicles", "bx bx-car", Disabled: false),
+            new("Vehicle Orders", "/vehicle-orders", "bx bx-cart", Disabled: false),
+            new("Vehicle Photos", "/vehicle-photos", "bx bx-image", Disabled: false),
+            new("Vehicle Asset Verification", "/vehicle-verification", "bx bx-clipboard", Disabled: false),
+            new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", Disabled: false),
+            new("Workshop", "/workshop", "bx bx-wrench", Disabled: false),
+            new("Job Cards", "/job-cards", "bx bx-id-card", Disabled: false),
+            new("Driver & Authoriser Mgmt", "/drivers", "bx bx-id-card", Disabled: false),
+            new("Validation Data", "/reference-data", "bx bx-check-shield", Disabled: false)
+        ]),
+        new("trips-hire", "Trips & Hire", "bx bx-navigation",
+        [
+            new("Trips", "/trips", "bx bx-navigation", Disabled: false),
+            new("Trip Authorities", "/trip-authorities", "bx bx-clipboard", Disabled: false),
+            new("Trip Queries", "/trip-query", "bx bx-question-mark", Disabled: false),
+            new("Private Hire", "/private-hire", "bx bx-car", Disabled: false),
+            new("Taxis", "/taxis", "bx bx-taxi", Disabled: false),
+            new("Third Party Rentals", "/third-party", "bx bx-building-house", Disabled: false)
+        ]),
+        new("incidents", "Incidents & Compliance", "bx bx-shield-quarter",
+        [
+            new("Accidents", "/accidents", "bx bxs-car-crash", Disabled: false),
+            new("Fines", "/fines", "bx bx-receipt", Disabled: false),
+            new("Licenses", "/licenses", "bx bxs-user-badge", Disabled: false),
+            new("Losses", "/losses", "bx bx-x-circle", Disabled: false),
+            new("Clearance", "/clearance", "bx bx-shield-quarter", Disabled: false)
+        ]),
+        new("finance", "Finance & Contracts", "bx bx-wallet",
+        [
+            new("Contracts", "/contracts", "bx bx-file", Disabled: false),
+            new("Finance", "/finance", "bx bx-wallet", Disabled: false),
+            new("Fuel Cards", "/fuel-cards", "bx bx-credit-card", Disabled: false),
+            new("Reports", "/reports", "bx bx-file-find", Disabled: false),
+            new("Auction", "/auction", "bx bx-dollar", Disabled: false)
+        ]),
+        new("logs", "Logs & Monitoring", "bx bx-pulse",
+        [
+            new("Log Books", "/log-books", "bx bx-notepad", Disabled: false),
+            new("Log Sheets", "/log-sheets", "bx bx-table", Disabled: false),
+            new("Monitor", "/monitor", "bx bx-line-chart", Disabled: false),
+            new("Tracking", "/tracking", "bx bx-radar", Disabled: false),
+            new("Towing", "/towing", "bx bx-anchor", Disabled: false)
+        ]),
+        new("admin", "Admin & Reference", "bx bx-user-circle",
+        [
+            new("Call Centre", "/call-centre", "bx bx-phone-call", Disabled: false),
+            new("Troubleshoot", "/troubleshoot", "bx bx-wrench", Disabled: false),
+            new("Notice Management", "/notice-management", "bx bx-bell", Disabled: false)
+        ])
     ];
 
     [Inject]
     private NavigationManager NavigationManager { get; set; } = default!;
 
     private string _currentPath = "/";
+    private readonly HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
         base.OnInitialized();
         UpdateCurrentPath();
+        InitializeExpandedGroups();
         NavigationManager.LocationChanged += HandleLocationChanged;
     }
 
     private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         UpdateCurrentPath();
+        ExpandActiveGroup();
         StateHasChanged();
     }
 
@@ -104,6 +148,44 @@
 
         var trimmed = path.Trim('/');
         return "/" + trimmed;
+    }
+
+    private void InitializeExpandedGroups()
+    {
+        _expandedGroups.Clear();
+        if (NavigationGroups.Count > 0)
+        {
+            _expandedGroups.Add(NavigationGroups[0].Id);
+        }
+
+        ExpandActiveGroup();
+    }
+
+    private void ExpandActiveGroup()
+    {
+        var activeGroup = NavigationGroups.FirstOrDefault(IsGroupActive);
+        if (activeGroup is not null)
+        {
+            _expandedGroups.Add(activeGroup.Id);
+        }
+    }
+
+    private bool IsGroupExpanded(NavGroup group)
+    {
+        return _expandedGroups.Contains(group.Id);
+    }
+
+    private void ToggleGroup(string groupId)
+    {
+        if (!_expandedGroups.Add(groupId))
+        {
+            _expandedGroups.Remove(groupId);
+        }
+    }
+
+    private bool IsGroupActive(NavGroup group)
+    {
+        return group.Items.Any(IsActive);
     }
 
     private string GetItemClasses(NavItem item)

@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FIS.Api.Controllers;

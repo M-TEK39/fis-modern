@@ -1,4 +1,5 @@
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -79,6 +80,9 @@ public class FisDbContext : DbContext
     public DbSet<LeaseContractTerms> LeaseContractTerms { get; set; } = null!;
     public DbSet<Booking> Bookings { get; set; } = null!;
     public DbSet<Supplier> Suppliers { get; set; } = null!;
+
+    // Authentication entities (Dual auth - Entra ID + Legacy JWT)
+    public DbSet<EntraIdUserMapping> EntraIdUserMappings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -262,6 +266,27 @@ public class FisDbContext : DbContext
 
             // Note: Model entity has maint_trigger_code foreign key field but no navigation property
             // This is intentional for legacy schema compatibility
+        });
+
+        // AUTHENTICATION CONFIGURATION - Entra ID User Mapping
+        modelBuilder.Entity<EntraIdUserMapping>(entity =>
+        {
+            // CRITICAL: Unique constraint on Entra ID Object ID
+            entity
+                .HasIndex(e => e.entra_object_id)
+                .IsUnique()
+                .HasDatabaseName("IX_EntraId_User_Mapping_ObjectId_Unique");
+
+            // Foreign key to TS_Users
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.user_access_code)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_EntraId_User_Mapping_User");
+
+            // Default value for created_date
+            entity.Property(e => e.created_date).HasDefaultValueSql("GETUTCDATE()");
         });
 
         // Configure schema

@@ -1,10 +1,12 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class AssetVerificationController : ControllerBase
 {
     private readonly IAssetVerificationRepository _repository;

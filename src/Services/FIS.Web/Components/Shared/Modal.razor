@@ -13,27 +13,88 @@
             </div>
             @if (ShowFooter)
             {
-                <form @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
-                    <div class="modal-body">
-                        @ChildContent
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsSaving">
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary" disabled="@IsSaving">
-                            @if (IsSaving)
-                            {
-                                <span class="spinner-sm"></span>
-                                <span>@(SaveText ?? "Saving...")</span>
-                            }
-                            else
-                            {
-                                <span>@(SubmitText ?? "Save")</span>
-                            }
-                        </button>
-                    </div>
-                </form>
+                if (EditContext is not null)
+                {
+                    <EditForm EditContext="EditContext" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                        @if (ShowValidationSummary)
+                        {
+                            <ValidationSummary class="validation-summary" />
+                        }
+                        <div class="modal-body">
+                            @ChildContent
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsSaving">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+                                @if (IsSaving)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>@(SaveText ?? "Saving...")</span>
+                                }
+                                else
+                                {
+                                    <span>@(SubmitText ?? "Save")</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                }
+                else if (Model is not null)
+                {
+                    <EditForm Model="Model" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                        @if (ShowValidationSummary)
+                        {
+                            <ValidationSummary class="validation-summary" />
+                        }
+                        <div class="modal-body">
+                            @ChildContent
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsSaving">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+                                @if (IsSaving)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>@(SaveText ?? "Saving...")</span>
+                                }
+                                else
+                                {
+                                    <span>@(SubmitText ?? "Save")</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                }
+                else
+                {
+                    <form @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
+                        <div class="modal-body">
+                            @ChildContent
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="OnCancel" disabled="@IsSaving">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+                                @if (IsSaving)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>@(SaveText ?? "Saving...")</span>
+                                }
+                                else
+                                {
+                                    <span>@(SubmitText ?? "Save")</span>
+                                }
+                            </button>
+                        </div>
+                    </form>
+                }
             }
             else
             {
@@ -54,6 +115,9 @@
     [Parameter] public bool ShowFooter { get; set; } = true;
     [Parameter] public bool ShowCloseButton { get; set; } = true;
     [Parameter] public ModalSize Size { get; set; } = ModalSize.Normal;
+    [Parameter] public object? Model { get; set; }
+    [Parameter] public EditContext? EditContext { get; set; }
+    [Parameter] public bool ShowValidationSummary { get; set; } = true;
     [Parameter] public EventCallback OnSubmit { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }

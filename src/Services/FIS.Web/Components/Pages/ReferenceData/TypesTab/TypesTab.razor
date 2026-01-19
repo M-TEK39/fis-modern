@@ -69,10 +69,12 @@ else
        Title="@(_isEdit ? "Edit Type" : "Add Type")"
        OnCancel="HideDialog"
        OnSubmit="SaveVehicleType"
-       IsSaving="_saving">
+       IsSaving="_saving"
+       Model="_currentVehicleType">
     <div class="form-field">
         <label class="form-label">Type Name <span class="required">*</span></label>
         <input type="text" class="form-input" @bind="_currentVehicleType.type_name" placeholder="e.g., Sedan" />
+        <ValidationMessage For="() => _currentVehicleType.type_name" />
     </div>
 </Modal>
 

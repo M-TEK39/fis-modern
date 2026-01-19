@@ -1,6 +1,7 @@
 using FIS.Api.DTOs;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Infrastructure.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FIS.Api.Controllers;
@@ -11,6 +12,7 @@ namespace FIS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class ContractStatusController : ControllerBase
 {
     private readonly IContractStatusRepository _contractStatusRepository;

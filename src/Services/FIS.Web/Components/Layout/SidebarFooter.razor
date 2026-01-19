@@ -1,0 +1,367 @@
+@rendermode InteractiveServer
+
+<div class="sidebar-footer">
+    <div class="sidebar-user" role="button" tabindex="0" @onclick="ToggleUserMenu">
+        <span class="sidebar-avatar" aria-hidden="true">JS</span>
+        <span class="sidebar-user-meta">
+            <span class="sidebar-user-name">Jordan Smith</span>
+            <span class="sidebar-user-role">Fleet Manager</span>
+        </span>
+        <button class="sidebar-notification" type="button" @onclick="ToggleNotifications" @onclick:stopPropagation="true">
+            <i class="bx bx-bell" aria-hidden="true"></i>
+            <span class="notification-count">3</span>
+        </button>
+    </div>
+
+</div>
+
+@if (_showUserMenu)
+{
+    <button class="overlay-scrim" type="button" @onclick="CloseOverlays" aria-label="Close menu"></button>
+    <div class="sidebar-user-menu" role="menu" aria-label="User menu">
+        <button class="sidebar-user-card" type="button" @onclick="OpenSettingsFromMenu">
+            <span class="sidebar-avatar">JS</span>
+            <div class="sidebar-user-meta">
+                <span class="sidebar-user-name">Jordan Smith</span>
+                <span class="sidebar-user-role">Fleet Manager</span>
+            </div>
+        </button>
+        <div class="sidebar-user-section">
+            <a class="sidebar-user-item" href="/terms" @onclick="CloseUserMenu">
+                <i class="bx bx-help-circle" aria-hidden="true"></i>
+                <span>Help</span>
+            </a>
+            <a class="sidebar-user-item" href="#" @onclick="CloseUserMenu">
+                <i class="bx bx-book" aria-hidden="true"></i>
+                <span>Docs</span>
+            </a>
+            <button class="sidebar-user-item" type="button" @onclick="OpenSettingsFromMenu">
+                <i class="bx bx-cog" aria-hidden="true"></i>
+                <span>Settings</span>
+            </button>
+        </div>
+        <div class="sidebar-user-section">
+            <a class="sidebar-user-item danger" href="#">
+                <i class="bx bx-log-out" aria-hidden="true"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </div>
+}
+
+@if (_showNotifications)
+{
+    <button class="overlay-scrim" type="button" @onclick="CloseOverlays" aria-label="Close notifications"></button>
+    <aside class="notification-sheet" role="dialog" aria-label="Notifications">
+        <div class="notification-sheet-header">
+            <div>
+                <h3>Notifications</h3>
+                <p>3 unread</p>
+            </div>
+            <button class="icon-button" type="button" @onclick="CloseNotifications" aria-label="Close notifications">
+                <i class="bx bx-x" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="notification-sheet-tabs">
+            <button class="tab-button active" type="button">All</button>
+            <button class="tab-button" type="button">Unread</button>
+        </div>
+        <div class="notification-list">
+            @foreach (var item in _notifications)
+            {
+                <div class="notification-item @(item.IsUnread ? "unread" : "")">
+                    <div class="notification-dot"></div>
+                    <div>
+                        <div class="notification-title">@item.Title</div>
+                        <div class="notification-meta">@item.Meta</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </aside>
+}
+
+@if (_showSettings)
+{
+    <button class="overlay-scrim" type="button" @onclick="CloseOverlays" aria-label="Close settings"></button>
+    <div class="settings-dialog" role="dialog" aria-label="Settings">
+        <div class="settings-dialog-header">
+            <div>
+                <h2>Settings</h2>
+                <p>Manage your preferences and admin tools</p>
+            </div>
+            <button class="icon-button" type="button" @onclick="CloseSettings" aria-label="Close settings">
+                <i class="bx bx-x" aria-hidden="true"></i>
+            </button>
+        </div>
+        <div class="settings-dialog-body">
+            <nav class="settings-sidebar">
+                @foreach (var navSection in _settingsSections)
+                {
+                    <button class="settings-nav-item @(navSection.Id == _activeSection ? "active" : "")"
+                            type="button"
+                            @onclick="() => SetActiveSection(navSection.Id)">
+                        <i class="@navSection.Icon" aria-hidden="true"></i>
+                        <span>@navSection.Title</span>
+                    </button>
+                }
+            </nav>
+            <div class="settings-content">
+                @if (_activeSection == "profile")
+                {
+                    <div class="settings-section">
+                        <h3>Profile</h3>
+                        <p>Update your name, role, and contact information.</p>
+                        <div class="settings-grid">
+                            <div>
+                                <label class="form-label">Full name</label>
+                                <input class="form-input" value="Jordan Smith" />
+                            </div>
+                            <div>
+                                <label class="form-label">Role</label>
+                                <input class="form-input" value="Fleet Manager" />
+                            </div>
+                            <div>
+                                <label class="form-label">Work email</label>
+                                <input class="form-input" value="j.smith@gpg.gov.za" />
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "preferences")
+                {
+                    <div class="settings-section">
+                        <h3>Preferences</h3>
+                        <p>Control how the dashboard behaves for your workflow.</p>
+                        <div class="settings-grid">
+                            <div>
+                                <label class="form-label">Default landing page</label>
+                                <select class="form-select">
+                                    <option>Fleet Operations</option>
+                                    <option>Trips & Hire</option>
+                                    <option>Finance & Contracts</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Density</label>
+                                <select class="form-select">
+                                    <option>Comfortable</option>
+                                    <option>Compact</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "notifications")
+                {
+                    <div class="settings-section">
+                        <h3>Notifications</h3>
+                        <p>Configure alert rules for incidents, approvals, and expiring documents.</p>
+                        <div class="settings-grid">
+                            <div>
+                                <label class="form-label">Email alerts</label>
+                                <select class="form-select">
+                                    <option>Immediate</option>
+                                    <option>Daily summary</option>
+                                    <option>Off</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">In-app alerts</label>
+                                <select class="form-select">
+                                    <option>All</option>
+                                    <option>Critical only</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "security")
+                {
+                    <div class="settings-section">
+                        <h3>Security</h3>
+                        <p>Review access, session, and audit requirements.</p>
+                        <div class="settings-card">
+                            <p>Multi-factor authentication is enforced by corporate policy.</p>
+                            <p>Session timeout: 30 minutes of inactivity.</p>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "appearance")
+                {
+                    <div class="settings-section">
+                        <h3>Appearance</h3>
+                        <p>Customize the look and feel for your workspace.</p>
+                        <div class="settings-grid">
+                            <div>
+                                <label class="form-label">Theme</label>
+                                <select class="form-select">
+                                    <option>System</option>
+                                    <option>Dark</option>
+                                    <option>Light</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Sidebar density</label>
+                                <select class="form-select">
+                                    <option>Standard</option>
+                                    <option>Condensed</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "user-admin")
+                {
+                    <div class="settings-section">
+                        <h3>User Administration</h3>
+                        <p>Manage roles, permissions, and access profiles.</p>
+                        <div class="settings-card">
+                            <p>Open the full User Admin screen for detailed management.</p>
+                            <a class="btn btn-secondary" href="/users">Open User Admin</a>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "passwords")
+                {
+                    <div class="settings-section">
+                        <h3>Change Password</h3>
+                        <p>Use the dedicated change password flow to update credentials.</p>
+                        <div class="settings-card">
+                            <a class="btn btn-secondary" href="/change-password">Open Change Password</a>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "passwords-question")
+                {
+                    <div class="settings-section">
+                        <h3>Password & Question</h3>
+                        <p>Update password recovery prompts and security questions.</p>
+                        <div class="settings-card">
+                            <a class="btn btn-secondary" href="/change-password-question">Open Password Questions</a>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "logs")
+                {
+                    <div class="settings-section">
+                        <h3>System Logs</h3>
+                        <p>Review activity and audit trails for compliance.</p>
+                        <div class="settings-card">
+                            <p>Log retention: 24 months.</p>
+                            <p>Export audit logs by month or department.</p>
+                        </div>
+                    </div>
+                }
+                else if (_activeSection == "reports")
+                {
+                    <div class="settings-section">
+                        <h3>System Reports</h3>
+                        <p>Configure automated operational and compliance reporting.</p>
+                        <div class="settings-card">
+                            <p>Weekly compliance digest: Mondays 06:00.</p>
+                            <p>Monthly fleet summary: 1st business day.</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed record NotificationItem(string Title, string Meta, bool IsUnread);
+    private sealed record SettingsSection(string Id, string Title, string Icon);
+
+    private bool _showNotifications;
+    private bool _showSettings;
+    private bool _showUserMenu;
+    private string _activeSection = "profile";
+
+    private readonly IReadOnlyList<NotificationItem> _notifications =
+    [
+        new("Accident report submitted", "Claim #AC-2198 · 2h ago", true),
+        new("Trip authority expiring", "Trip #TA-447 · Tomorrow", true),
+        new("Vehicle clearance approved", "Vehicle VMC-302 · 1 day ago", false),
+        new("Workshop job closed", "Job Card #JC-811 · 2 days ago", false)
+    ];
+
+    private readonly IReadOnlyList<SettingsSection> _settingsSections =
+    [
+        new("profile", "Profile", "bx bx-user"),
+        new("preferences", "Preferences", "bx bx-slider-alt"),
+        new("notifications", "Notifications", "bx bx-bell"),
+        new("security", "Security", "bx bx-lock-alt"),
+        new("appearance", "Appearance", "bx bx-palette"),
+        new("user-admin", "User Admin", "bx bx-user-circle"),
+        new("passwords", "Change Password", "bx bx-key"),
+        new("passwords-question", "Password & Question", "bx bx-shield"),
+        new("logs", "System Logs", "bx bx-file"),
+        new("reports", "System Reports", "bx bx-bar-chart-alt-2")
+    ];
+
+    private void ToggleUserMenu()
+    {
+        _showUserMenu = !_showUserMenu;
+        if (_showUserMenu)
+        {
+            _showNotifications = false;
+            _showSettings = false;
+        }
+    }
+
+    private void ToggleNotifications()
+    {
+        _showNotifications = !_showNotifications;
+        if (_showNotifications)
+        {
+            _showSettings = false;
+            _showUserMenu = false;
+        }
+    }
+
+    private void OpenSettings(string sectionId)
+    {
+        _activeSection = sectionId;
+        _showSettings = true;
+        _showNotifications = false;
+        _showUserMenu = false;
+    }
+
+    private void OpenSettingsFromMenu()
+    {
+        OpenSettings("profile");
+    }
+
+    private void OpenSettingsFromFooter()
+    {
+        OpenSettings("preferences");
+    }
+
+    private void SetActiveSection(string sectionId)
+    {
+        _activeSection = sectionId;
+    }
+
+    private void CloseNotifications()
+    {
+        _showNotifications = false;
+    }
+
+    private void CloseSettings()
+    {
+        _showSettings = false;
+    }
+
+    private void CloseUserMenu()
+    {
+        _showUserMenu = false;
+    }
+
+    private void CloseOverlays()
+    {
+        _showNotifications = false;
+        _showSettings = false;
+        _showUserMenu = false;
+    }
+}

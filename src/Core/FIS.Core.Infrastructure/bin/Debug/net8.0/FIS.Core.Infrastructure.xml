@@ -423,6 +423,12 @@
             Note: Interface expects string but entity uses int - convert accordingly
             </summary>
         </member>
+        <member name="T:FIS.Core.Infrastructure.Repositories.EntraIdUserMappingRepository">
+            <summary>
+            Repository implementation for EntraId_User_Mapping table.
+            Manages the bridge between Azure Entra ID users and legacy TS_Users.
+            </summary>
+        </member>
         <member name="T:FIS.Core.Infrastructure.Repositories.FuelTypeRepository">
             <summary>
             Repository implementation for FuelType entity operations

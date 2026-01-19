@@ -100,17 +100,20 @@
            Size="Modal.ModalSize.Large"
            SubmitText="@(_isEdit ? "Update" : "Create")"
            IsSaving="_saving"
+           Model="_currentDriver"
            OnSubmit="SaveDriver" 
            OnCancel="HideDialog">
         <div class="form-grid">
             <div class="form-field">
                 <label class="form-label">Surname <span class="required">*</span></label>
                 <input type="text" class="form-input" @bind="_currentDriver.driver_surname" />
+                <ValidationMessage For="() => _currentDriver.driver_surname" />
             </div>
 
             <div class="form-field">
                 <label class="form-label">First Name <span class="required">*</span></label>
                 <input type="text" class="form-input" @bind="_currentDriver.driver_firstname" />
+                <ValidationMessage For="() => _currentDriver.driver_firstname" />
             </div>
 
             <div class="form-field">
@@ -136,6 +139,7 @@
             <div class="form-field">
                 <label class="form-label">Site Code <span class="required">*</span></label>
                 <input type="number" class="form-input" @bind="_currentDriver.site_code" />
+                <ValidationMessage For="() => _currentDriver.site_code" />
             </div>
 
             <div class="form-field">

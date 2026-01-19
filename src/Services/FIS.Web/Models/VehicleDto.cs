@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace FIS.Web.Models;
 
 public record VehicleDto
@@ -6,32 +8,49 @@ public record VehicleDto
     public int vmf_code { get; set; }
     
     // Core Vehicle Info - Required
+    [Range(1, short.MaxValue, ErrorMessage = "Model code is required.")]
     public short model_code { get; set; }
     public string? model_name { get; set; }
+    [Range(1, short.MaxValue, ErrorMessage = "Type code is required.")]
     public short type_code { get; set; }
     public string? type_name { get; set; }
+    [Range(1, short.MaxValue, ErrorMessage = "Vehicle status code is required.")]
     public short vehicle_status_code { get; set; }
     public string? status_description { get; set; }
+    [Range(1, short.MaxValue, ErrorMessage = "Location code is required.")]
     public short location_code { get; set; }
     public string? location_description { get; set; }
     
     // Identification
+    [Required]
     public string? fleet_number { get; set; }
+    [Required]
     public string? registration_number { get; set; }
     public string? asset_number { get; set; }
+    [Required]
     public string? engine_number_1 { get; set; }
+    [Required]
     public string? chassis_number { get; set; }
     
     // Dates & Odometer - Required
+    [Required]
     public DateTime? take_on_date { get; set; }
+    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "Take on odometer is required.")]
     public int? take_on_odo { get; set; }
+    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "Current odometer is required.")]
     public int? current_odo { get; set; }
     public int? odo_adjustment { get; set; }
     public DateTime? odo_update_date { get; set; }
     
     // Specifications
+    [Required]
+    [Range(1, int.MaxValue, ErrorMessage = "Tare is required.")]
     public int? tare { get; set; }
     public int? gvm { get; set; }
+    [Required]
+    [Range(1, short.MaxValue, ErrorMessage = "Year manufactured is required.")]
     public short? year_manufactured { get; set; }
     public string? optional_extras { get; set; }
     public string? colour { get; set; }
@@ -80,4 +99,3 @@ public record PagedResult<T>
     public int PageSize { get; set; }
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
 }
-

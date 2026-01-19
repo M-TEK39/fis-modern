@@ -51,12 +51,14 @@
            Size="Modal.ModalSize.Large"
            IsSaving="_saving"
            OnCancel="CloseDialogs"
-           OnSubmit="SaveContract">
+           OnSubmit="SaveContract"
+           Model="_currentContract">
         <ChildContent>
             <div class="form-grid">
                 <div class="form-group">
                     <label>Contract Number</label>
                     <input type="text" @bind="_currentContract.contract_number" class="form-input" placeholder="Enter contract number" />
+                    <ValidationMessage For="() => _currentContract.contract_number" />
                 </div>
                 
                 <div class="form-group">
@@ -68,6 +70,7 @@
                             <option value="@vehicle.registration_number">@vehicle.registration_number - @vehicle.model_name</option>
                         }
                     </select>
+                    <ValidationMessage For="() => _currentContract.vehicle_registration" />
                 </div>
                 
                 <div class="form-group">
@@ -79,16 +82,19 @@
                             <option value="@dept.department_code">@dept.department_description</option>
                         }
                     </select>
+                    <ValidationMessage For="() => _currentContract.department_code" />
                 </div>
                 
                 <div class="form-group">
                     <label>Contractor Name</label>
                     <input type="text" @bind="_currentContract.contractor_name" class="form-input" placeholder="Enter contractor name" />
+                    <ValidationMessage For="() => _currentContract.contractor_name" />
                 </div>
                 
                 <div class="form-group">
                     <label>Start Date</label>
                     <input type="date" @bind="_currentContract.start_date" class="form-input" />
+                    <ValidationMessage For="() => _currentContract.start_date" />
                 </div>
                 
                 <div class="form-group">
@@ -109,6 +115,7 @@
                         <option value="Expired">Expired</option>
                         <option value="Pending">Pending</option>
                     </select>
+                    <ValidationMessage For="() => _currentContract.status" />
                 </div>
                 
                 <div class="form-group form-group-full">

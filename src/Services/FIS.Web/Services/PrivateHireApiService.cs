@@ -1,4 +1,5 @@
 using FIS.Web.Models;
+using System.ComponentModel.DataAnnotations;
 
 namespace FIS.Web.Services;
 
@@ -186,12 +187,17 @@ public class PrivateHireApiService
 public class PrivateHireVehicleDto
 {
     public int vehicle_id { get; set; }
+    [Required]
     public string registration_number { get; set; } = "";
+    [Required]
     public string make_model { get; set; } = "";
+    [Range(1, int.MaxValue, ErrorMessage = "Contractor is required.")]
     public int contractor_id { get; set; }
     public string contractor_name { get; set; } = "";
+    [Range(1, int.MaxValue, ErrorMessage = "Department is required.")]
     public int department_code { get; set; }
     public string department_name { get; set; } = "";
+    [Required]
     public DateTime? hire_start_date { get; set; }
     public DateTime? hire_end_date { get; set; }
     public decimal? monthly_rate { get; set; }
@@ -202,9 +208,14 @@ public class PrivateHireVehicleDto
 public class PrivateHireContractorDto
 {
     public int contractor_id { get; set; }
+    [Required]
     public string company_name { get; set; } = "";
+    [Required]
     public string contact_person { get; set; } = "";
+    [Required]
+    [Phone]
     public string phone { get; set; } = "";
+    [EmailAddress]
     public string email { get; set; } = "";
     public string business_registration { get; set; } = "";
     public string address { get; set; } = "";

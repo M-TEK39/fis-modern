@@ -1,5 +1,6 @@
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TypeEntity = FIS.Data.Entities.Type;
 

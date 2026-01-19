@@ -71,14 +71,17 @@ else
        Title="@(_isEdit ? "Edit Model" : "Add Model")"
        OnCancel="HideDialog"
        OnSubmit="SaveModel"
-       IsSaving="_saving">
+       IsSaving="_saving"
+       Model="_currentModel">
     <div class="form-field">
         <label class="form-label">Model Code <span class="required">*</span></label>
         <input type="number" class="form-input" @bind="_currentModel.model_code" />
+        <ValidationMessage For="() => _currentModel.model_code" />
     </div>
     <div class="form-field">
         <label class="form-label">Model Name <span class="required">*</span></label>
         <input type="text" class="form-input" @bind="_currentModel.model_name" placeholder="e.g., Corolla" />
+        <ValidationMessage For="() => _currentModel.model_name" />
     </div>
     <div class="form-field">
         <label class="form-label">Make <span class="required">*</span></label>
@@ -89,6 +92,7 @@ else
                 <option value="@make.make_code">@make.make_name (@make.make_code)</option>
             }
         </select>
+        <ValidationMessage For="() => _currentModel.make_code" />
     </div>
 </Modal>
 

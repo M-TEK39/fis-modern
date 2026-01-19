@@ -4,6 +4,24 @@
         <name>FIS.Api</name>
     </assembly>
     <members>
+        <member name="T:FIS.Api.Controllers.AuthTestController">
+            <summary>
+            TEMPORARY: Test endpoint to generate JWT tokens for Swagger testing
+            DELETE THIS CONTROLLER IN PRODUCTION
+            </summary>
+        </member>
+        <member name="M:FIS.Api.Controllers.AuthTestController.GenerateTestToken(System.Int32)">
+            <summary>
+            Generate a test JWT token for Swagger testing
+            </summary>
+            <param name="userAccessCode">Optional user_access_code (default: 1)</param>
+            <returns>JWT token valid for 8 hours</returns>
+        </member>
+        <member name="M:FIS.Api.Controllers.AuthTestController.WhoAmI">
+            <summary>
+            Check if current user is authenticated
+            </summary>
+        </member>
         <member name="T:FIS.Api.Controllers.ContractsController">
             <summary>
             Contract/Hire management API endpoints

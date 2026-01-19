@@ -30,6 +30,7 @@
             <div class="form-card-body">
                 <EditForm Model="@_vehicle" OnValidSubmit="HandleSubmit">
                     <DataAnnotationsValidator />
+                    <ValidationSummary class="validation-summary" />
 
                     <div class="form-section">
                         <h3 class="form-section-title">
@@ -40,21 +41,25 @@
                             <div class="form-field">
                                 <label class="form-label">Model Code <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.model_code" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.model_code" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Type Code <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.type_code" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.type_code" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Vehicle Status Code <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.vehicle_status_code" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.vehicle_status_code" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Location Code <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.location_code" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.location_code" />
                             </div>
                         </div>
                     </div>
@@ -68,11 +73,13 @@
                             <div class="form-field">
                                 <label class="form-label">Fleet Number (GG) <span class="required">*</span></label>
                                 <InputText @bind-Value="_vehicle.fleet_number" class="form-input" placeholder="e.g., GG123" />
+                                <ValidationMessage For="() => _vehicle.fleet_number" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Registration Number (GP) <span class="required">*</span></label>
                                 <InputText @bind-Value="_vehicle.registration_number" class="form-input" placeholder="e.g., GP123ABC" />
+                                <ValidationMessage For="() => _vehicle.registration_number" />
                             </div>
 
                             <div class="form-field">
@@ -83,11 +90,13 @@
                             <div class="form-field">
                                 <label class="form-label">Engine Number <span class="required">*</span></label>
                                 <InputText @bind-Value="_vehicle.engine_number_1" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.engine_number_1" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Chassis Number <span class="required">*</span></label>
                                 <InputText @bind-Value="_vehicle.chassis_number" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.chassis_number" />
                             </div>
                         </div>
                     </div>
@@ -101,16 +110,19 @@
                             <div class="form-field">
                                 <label class="form-label">Take On Date <span class="required">*</span></label>
                                 <InputDate @bind-Value="_vehicle.take_on_date" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.take_on_date" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Take On Odo (km) <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.take_on_odo" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.take_on_odo" />
                             </div>
 
                             <div class="form-field">
                                 <label class="form-label">Current Odo (km) <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.current_odo" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.current_odo" />
                             </div>
 
                             <div class="form-field">
@@ -129,6 +141,7 @@
                             <div class="form-field">
                                 <label class="form-label">Year Manufactured <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.year_manufactured" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.year_manufactured" />
                             </div>
 
                             <div class="form-field">
@@ -144,6 +157,7 @@
                             <div class="form-field">
                                 <label class="form-label">Tare (kg) <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.tare" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.tare" />
                             </div>
 
                             <div class="form-field">

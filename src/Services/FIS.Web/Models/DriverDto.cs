@@ -1,13 +1,18 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace FIS.Web.Models;
 
 public record DriverDto
 {
     public int site_driver_code { get; set; }
+    [Range(1, int.MaxValue, ErrorMessage = "Site code is required.")]
     public int site_code { get; set; }
     public string? site_name { get; set; }
     public int driver_licence_type_id { get; set; }
     public string? licence_type_name { get; set; }
+    [Required]
     public string? driver_surname { get; set; }
+    [Required]
     public string? driver_firstname { get; set; }
     public string? driver_SA_id { get; set; }
     public string? driver_passportnumber { get; set; }

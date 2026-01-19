@@ -1,8 +1,11 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace FIS.Web.Models;
 
 public record DepartmentDto
 {
     public int department_code { get; set; }
+    [Required]
     public string? department_description { get; set; }
     public string? contact_person { get; set; }
     public string? telephone { get; set; }

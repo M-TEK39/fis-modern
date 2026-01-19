@@ -1,5 +1,6 @@
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 

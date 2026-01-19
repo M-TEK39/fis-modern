@@ -1,5 +1,6 @@
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using FuelTypeEntity = FIS.Data.Entities.FuelType;
 

@@ -67,35 +67,19 @@ else
 
 @if (_showDialog)
 {
-    <div class="modal-overlay">
-        <div class="modal-dialog">
-            <div class="modal-header">
-                <h3>@(_isEdit ? "Edit Fuel Type" : "Add Fuel Type")</h3>
-            </div>
-            <form @onsubmit="SaveFuelType" @onsubmit:preventDefault="true">
-                <div class="modal-body">
-                    <div class="form-field">
-                        <label class="form-label">Fuel Type Name <span class="required">*</span></label>
-                        <input type="text" class="form-input" @bind="_currentFuelType.fuel_type_name" placeholder="e.g., Diesel" />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" @onclick="HideDialog" disabled="@_saving">Cancel</button>
-                    <button type="submit" class="btn btn-primary" disabled="@_saving">
-                        @if (_saving)
-                        {
-                            <span class="spinner-sm"></span>
-                            <span>Saving...</span>
-                        }
-                        else
-                        {
-                            <span>@(_isEdit ? "Update" : "Create")</span>
-                        }
-                    </button>
-                </div>
-            </form>
+    <Modal IsVisible="_showDialog"
+           Title="@(_isEdit ? "Edit Fuel Type" : "Add Fuel Type")"
+           OnCancel="HideDialog"
+           OnSubmit="SaveFuelType"
+           SubmitText="@(_isEdit ? "Update" : "Create")"
+           IsSaving="_saving"
+           Model="_currentFuelType">
+        <div class="form-field">
+            <label class="form-label">Fuel Type Name <span class="required">*</span></label>
+            <input type="text" class="form-input" @bind="_currentFuelType.fuel_type_name" placeholder="e.g., Diesel" />
+            <ValidationMessage For="() => _currentFuelType.fuel_type_name" />
         </div>
-    </div>
+    </Modal>
 }
 
 @if (_showDeleteConfirm)

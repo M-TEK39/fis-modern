@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FIS.Api.Controllers;
@@ -48,6 +49,7 @@ public class DriverDto
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class DriverController : ControllerBase
 {
     private readonly IDriverRepository _driverRepository;

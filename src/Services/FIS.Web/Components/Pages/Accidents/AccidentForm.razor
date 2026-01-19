@@ -1,29 +1,33 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 
-<div class="accident-form">
-    <div class="form-header">
-        <h3>@(IsEditMode ? "Edit Accident Report" : "Report New Accident")</h3>
-        <div class="form-actions">
-            <button type="button" class="btn btn-secondary" @onclick="OnCancel">
-                <i class="bx bx-x"></i>
-                Cancel
-            </button>
-            <button type="button" class="btn btn-primary" @onclick="OnSave" disabled="@IsSaving">
-                @if (IsSaving)
-                {
-                    <div class="btn-spinner"></div>
-                }
-                else
-                {
-                    <i class="bx bx-save"></i>
-                }
-                @(IsEditMode ? "Update" : "Save")
-            </button>
-        </div>
-    </div>
+<EditForm Model="Accident" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary class="validation-summary" />
 
-    <div class="form-content">
+    <div class="accident-form">
+        <div class="form-header">
+            <h3>@(IsEditMode ? "Edit Accident Report" : "Report New Accident")</h3>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" @onclick="OnCancel">
+                    <i class="bx bx-x"></i>
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" disabled="@IsSaving">
+                    @if (IsSaving)
+                    {
+                        <div class="btn-spinner"></div>
+                    }
+                    else
+                    {
+                        <i class="bx bx-save"></i>
+                    }
+                    @(IsEditMode ? "Update" : "Save")
+                </button>
+            </div>
+        </div>
+
+        <div class="form-content">
         <div class="form-section">
             <h4>Accident Details</h4>
             <div class="form-grid">
@@ -46,6 +50,7 @@
                         class="form-input" 
                         @bind="Accident.accident_date" 
                         required />
+                    <ValidationMessage For="() => Accident.accident_date" />
                 </div>
 
                 <div class="form-group">
@@ -57,6 +62,7 @@
                             <option value="@vehicle.vmf_code">@vehicle.registration_number - @(vehicle.model_name ?? "Unknown")</option>
                         }
                     </select>
+                    <ValidationMessage For="() => Accident.vehicle_id" />
                 </div>
 
                 <div class="form-group">
@@ -84,6 +90,7 @@
                         @bind="Accident.accident_location" 
                         placeholder="Street address or description of location"
                         required />
+                    <ValidationMessage For="() => Accident.accident_location" />
                 </div>
 
                 <div class="form-group form-group-full">
@@ -95,6 +102,7 @@
                         rows="4"
                         placeholder="Provide detailed description of how the accident occurred"
                         required></textarea>
+                    <ValidationMessage For="() => Accident.accident_description" />
                 </div>
 
                 <div class="form-group">
@@ -106,6 +114,7 @@
                         <option value="Major">Major</option>
                         <option value="Total Loss">Total Loss</option>
                     </select>
+                    <ValidationMessage For="() => Accident.severity" />
                 </div>
 
                 <div class="form-group">
@@ -238,8 +247,9 @@
                 </div>
             </div>
         </div>
+        </div>
     </div>
-</div>
+</EditForm>
 
 @code {
     [Parameter] public AccidentDto Accident { get; set; } = new();
@@ -249,4 +259,9 @@
     [Parameter] public bool IsSaving { get; set; }
     [Parameter] public EventCallback OnSave { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task HandleValidSubmit()
+    {
+        await OnSave.InvokeAsync();
+    }
 }

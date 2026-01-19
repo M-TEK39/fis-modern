@@ -34,6 +34,43 @@
             Update contract DTO
             </summary>
         </member>
+        <member name="T:FIS.Core.Application.Interfaces.Auth.IUserClaimsService">
+            <summary>
+            Service for enriching Entra ID tokens with legacy FIS user claims.
+            Bridges modern Azure Entra ID authentication with legacy TS_Users permissions.
+            </summary>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.Auth.IUserClaimsService.GetClaimsAsync(System.String)">
+            <summary>
+            Retrieves FIS-specific claims for an Entra ID user.
+            Claims are sourced from TS_Users table via EntraId_User_Mapping bridge.
+            </summary>
+            <param name="entraObjectId">Azure Entra ID Object ID (GUID from token)</param>
+            <returns>
+            Collection of claims including:
+            - user_access_code (legacy user ID)
+            - site_code (user's site)
+            - department_code (user's department)
+            - admin_level (permission level)
+            - user_type (user classification)
+            </returns>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.Auth.IUserClaimsService.CreateOrUpdateMappingAsync(System.String,System.Int32)">
+            <summary>
+            Creates or updates the mapping between an Entra ID user and a legacy FIS user.
+            Used during user onboarding to enterprise SSO.
+            </summary>
+            <param name="entraObjectId">Azure Entra ID Object ID</param>
+            <param name="userAccessCode">Legacy TS_Users.user_access_code</param>
+            <returns>True if mapping was created/updated successfully</returns>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.Auth.IUserClaimsService.IsMappedAsync(System.String)">
+            <summary>
+            Checks if an Entra ID user has been mapped to a legacy FIS user.
+            </summary>
+            <param name="entraObjectId">Azure Entra ID Object ID</param>
+            <returns>True if mapping exists</returns>
+        </member>
         <member name="T:FIS.Core.Application.Interfaces.IAuctionRepository">
             <summary>
             Repository interface for Auction entity operations
@@ -336,6 +373,58 @@
             <summary>
             Email service status and configuration
             </summary>
+        </member>
+        <member name="T:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository">
+            <summary>
+            Repository for managing EntraId_User_Mapping table.
+            Handles the bridge between Azure Entra ID users and legacy TS_Users.
+            </summary>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.GetByEntraObjectIdAsync(System.String)">
+            <summary>
+            Retrieves mapping by Entra ID Object ID.
+            </summary>
+            <param name="entraObjectId">Azure Entra ID Object ID (GUID)</param>
+            <returns>Mapping if found, null otherwise</returns>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.GetByUserAccessCodeAsync(System.Int32)">
+            <summary>
+            Retrieves mapping by legacy user access code.
+            </summary>
+            <param name="userAccessCode">TS_Users.user_access_code</param>
+            <returns>Mapping if found, null otherwise</returns>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.CreateAsync(FIS.Core.Domain.Entities.Auth.EntraIdUserMapping)">
+            <summary>
+            Creates a new mapping between Entra ID user and legacy user.
+            </summary>
+            <param name="mapping">Mapping to create</param>
+            <returns>Created mapping with generated ID</returns>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.UpdateAsync(FIS.Core.Domain.Entities.Auth.EntraIdUserMapping)">
+            <summary>
+            Updates an existing mapping.
+            </summary>
+            <param name="mapping">Mapping to update</param>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.DeleteAsync(System.Int32)">
+            <summary>
+            Deletes a mapping (for unmapping users).
+            </summary>
+            <param name="mappingId">Mapping ID to delete</param>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.ExistsAsync(System.String)">
+            <summary>
+            Checks if a mapping exists for an Entra ID Object ID.
+            </summary>
+            <param name="entraObjectId">Azure Entra ID Object ID</param>
+            <returns>True if mapping exists</returns>
+        </member>
+        <member name="M:FIS.Core.Application.Interfaces.IEntraIdUserMappingRepository.GetAllAsync">
+            <summary>
+            Retrieves all mappings (for admin purposes).
+            </summary>
+            <returns>All EntraId-User mappings</returns>
         </member>
         <member name="T:FIS.Core.Application.Interfaces.IFineRepository">
             <summary>
@@ -1834,6 +1923,12 @@
             <param name="vmfCode">Vehicle identifier</param>
             <param name="parameterYear">Tariff parameter year</param>
             <returns>True if tariff exists, false otherwise</returns>
+        </member>
+        <member name="T:FIS.Core.Application.Services.Auth.UserClaimsService">
+            <summary>
+            Service for enriching Entra ID tokens with legacy FIS user claims.
+            Bridges modern Azure Entra ID authentication with legacy TS_Users permissions.
+            </summary>
         </member>
         <member name="T:FIS.Core.Application.Services.Billing.IBillingService">
             <summary>

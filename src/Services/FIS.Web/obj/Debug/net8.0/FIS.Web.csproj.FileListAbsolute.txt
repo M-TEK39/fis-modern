@@ -47,3 +47,4 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/FIS.Web.pdb
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/FIS.Web.genruntimeconfig.cache
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/ref/FIS.Web.dll
+/home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/appsettings.Production.json

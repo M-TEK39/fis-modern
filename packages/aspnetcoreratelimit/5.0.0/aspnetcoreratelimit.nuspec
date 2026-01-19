@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>AspNetCoreRateLimit</id>
+    <version>5.0.0</version>
+    <authors>Stefan Prodan, Cristi Pufu</authors>
+    <projectUrl>https://github.com/stefanprodan/AspNetCoreRateLimit</projectUrl>
+    <description>ASP.NET Core rate limiting middleware</description>
+    <tags>aspnetcore rate-limit throttle</tags>
+    <repository type="git" url="https://github.com/stefanprodan/AspNetCoreRateLimit" commit="4a7b74e0bc0b6678190dfe4388f6079e44eafee9" />
+    <dependencies>
+      <group targetFramework="net6.0">
+        <dependency id="Microsoft.Extensions.Caching.Abstractions" version="6.0.0" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Logging.Abstractions" version="6.0.3" exclude="Build,Analyzers" />
+        <dependency id="Microsoft.Extensions.Options" version="6.0.0" exclude="Build,Analyzers" />
+        <dependency id="Newtonsoft.Json" version="13.0.2" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+    <frameworkReferences>
+      <group targetFramework="net6.0">
+        <frameworkReference name="Microsoft.AspNetCore.App" />
+      </group>
+    </frameworkReferences>
+  </metadata>
+</package>

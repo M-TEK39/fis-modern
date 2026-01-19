@@ -1,16 +1,23 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace FIS.Web.Models;
 
 public class AccidentDto
 {
     public int accident_code { get; set; }
     public string accident_reference { get; set; } = "";
+    [Required]
     public DateTime accident_date { get; set; }
+    [Required(ErrorMessage = "Vehicle is required.")]
     public int? vehicle_id { get; set; }  // For form binding
     public string vehicle_registration { get; set; } = "";
     public string vehicle_description { get; set; } = "";
     public int? driver_id { get; set; }  // For form binding
+    [Required]
     public string accident_location { get; set; } = "";
+    [Required]
     public string accident_description { get; set; } = "";  // Added
+    [Required]
     public string severity { get; set; } = "";
     public decimal? cost_of_repair { get; set; }
     public decimal? third_party_claim { get; set; }

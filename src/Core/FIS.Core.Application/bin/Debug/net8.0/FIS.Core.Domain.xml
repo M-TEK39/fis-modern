@@ -47,6 +47,34 @@
             Represents vehicle maintenance records
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Auth.EntraIdUserMapping">
+            <summary>
+            Bridge table linking Azure Entra ID users to legacy TS_Users records.
+            Enables dual authentication (Entra ID SSO + Legacy JWT) during migration.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.EntraIdUserMapping.mapping_id">
+            <summary>
+            Primary key - auto-incrementing identity
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.EntraIdUserMapping.entra_object_id">
+            <summary>
+            Azure Entra ID Object ID (GUID from Entra ID token)
+            Format: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.EntraIdUserMapping.user_access_code">
+            <summary>
+            Foreign key to TS_Users.user_access_code
+            Links Entra ID identity to legacy FIS user account
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.EntraIdUserMapping.created_date">
+            <summary>
+            Timestamp when mapping was created
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Contract">
             <summary>
             Contract Entity - EXACT legacy schema match for contract table

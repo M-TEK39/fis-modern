@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.ComponentModel.DataAnnotations;
 
 namespace FIS.Web.Services;
 
@@ -147,6 +148,7 @@ public class LocationApiService
 public class LocationViewDto
 {
     public int LocationId { get; set; }
+    [Required]
     public string? LocationName { get; set; }
     public string? Address { get; set; }
     public decimal? Latitude { get; set; }

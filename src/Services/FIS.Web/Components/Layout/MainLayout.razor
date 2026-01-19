@@ -1,14 +1,19 @@
 ﻿@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Routing
 
 <div class="legacy-shell">
     <aside class="legacy-sidebar" aria-label="Primary navigation">
-        <div class="legacy-brand">
+        <NavLink class="legacy-brand legacy-brand-link" href="/" Match="NavLinkMatch.All">
             <p class="brand-line">Gauteng Provincial Government</p>
             <p class="brand-line strong">g-FleeT Management</p>
             <p class="brand-caption">Fleet Information System</p>
+        </NavLink>
+
+        <div class="legacy-nav-container">
+            <NavMenu />
         </div>
 
-        <NavMenu />
+        <SidebarFooter />
     </aside>
 
     <div class="legacy-main">

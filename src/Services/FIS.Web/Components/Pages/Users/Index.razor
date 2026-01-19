@@ -1,5 +1,6 @@
 @page "/users"
 @rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject UserApiService UserService
@@ -85,16 +86,19 @@
        Title="@(_isEdit ? "Edit User" : "Add User")" 
        SubmitText="@(_isEdit ? "Update" : "Create")"
        IsSaving="_saving"
+       Model="_currentUser"
        OnSubmit="SaveUser" 
        OnCancel="HideDialog">
     <div class="form-grid">
         <div class="form-field">
             <label class="form-label">Email Address</label>
             <input type="email" @bind="_currentUser.Email" class="form-input" placeholder="Enter email address" />
+            <ValidationMessage For="() => _currentUser.Email" />
         </div>
         <div class="form-field">
             <label class="form-label">Telephone Number</label>
             <input type="tel" @bind="_currentUser.TelephoneNumber" class="form-input" placeholder="Enter telephone number" />
+            <ValidationMessage For="() => _currentUser.TelephoneNumber" />
         </div>
     </div>
 </Modal>
@@ -223,7 +227,11 @@
     private class ApiUserViewModel
     {
         public int? UserAccessCode { get; set; }
+        [Required]
+        [EmailAddress]
         public string? Email { get; set; }
+        [Required]
+        [Phone]
         public string? TelephoneNumber { get; set; }
     }
 }

@@ -1,5 +1,6 @@
 @page "/sites"
 @rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject SiteApiService SiteService
@@ -100,11 +101,13 @@
        Title="@(_isEdit ? "Edit Site" : "Add Site")"
        OnCancel="HideDialog"
        OnSubmit="SaveSite"
+       Model="_currentSite"
        IsSaving="_saving">
     <div class="form-grid">
         <div class="form-field">
             <label class="form-label">Site Description <span class="required">*</span></label>
             <input type="text" @bind="_currentSite.Description" class="form-input" placeholder="Enter site name/description" />
+            <ValidationMessage For="() => _currentSite.Description" />
         </div>
         <div class="form-field">
             <label class="form-label">Site Address</label>
@@ -265,6 +268,7 @@
     {
         public int? SiteCode { get; set; }
         public short? DepartmentCode { get; set; }
+        [Required]
         public string? Description { get; set; }
         public string? Address { get; set; }
         public string? Telephone { get; set; }

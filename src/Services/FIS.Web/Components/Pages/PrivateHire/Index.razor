@@ -285,15 +285,18 @@
        Title="@(_isEditVehicle ? "Edit Private Hire Vehicle" : "New Private Hire Vehicle")"
        OnCancel="HideVehicleDialog"
        OnSubmit="SaveVehicle"
-       IsSaving="_savingVehicle">
+       IsSaving="_savingVehicle"
+       Model="_currentVehicle">
     <div class="form-grid">
         <div class="form-field">
             <label class="form-label">Registration Number <span class="required">*</span></label>
             <input type="text" @bind="_currentVehicle.registration_number" class="form-input" placeholder="Enter registration" />
+            <ValidationMessage For="() => _currentVehicle.registration_number" />
         </div>
         <div class="form-field">
             <label class="form-label">Make & Model <span class="required">*</span></label>
             <input type="text" @bind="_currentVehicle.make_model" class="form-input" placeholder="e.g., Toyota Corolla" />
+            <ValidationMessage For="() => _currentVehicle.make_model" />
         </div>
         <div class="form-field">
             <label class="form-label">Contractor <span class="required">*</span></label>
@@ -304,6 +307,7 @@
                     <option value="@contractor.contractor_id">@contractor.company_name</option>
                 }
             </select>
+            <ValidationMessage For="() => _currentVehicle.contractor_id" />
         </div>
         <div class="form-field">
             <label class="form-label">Department <span class="required">*</span></label>
@@ -314,10 +318,12 @@
                     <option value="@dept.department_code">@dept.department_description</option>
                 }
             </select>
+            <ValidationMessage For="() => _currentVehicle.department_code" />
         </div>
         <div class="form-field">
             <label class="form-label">Hire Start Date <span class="required">*</span></label>
             <input type="date" @bind="_currentVehicle.hire_start_date" class="form-input" />
+            <ValidationMessage For="() => _currentVehicle.hire_start_date" />
         </div>
         <div class="form-field">
             <label class="form-label">Hire End Date</label>
@@ -348,19 +354,23 @@
        Title="@(_isEditContractor ? "Edit Contractor" : "New Contractor")"
        OnCancel="HideContractorDialog"
        OnSubmit="SaveContractor"
-       IsSaving="_savingContractor">
+       IsSaving="_savingContractor"
+       Model="_currentContractor">
     <div class="form-grid">
         <div class="form-field">
             <label class="form-label">Company Name <span class="required">*</span></label>
             <input type="text" @bind="_currentContractor.company_name" class="form-input" placeholder="Enter company name" />
+            <ValidationMessage For="() => _currentContractor.company_name" />
         </div>
         <div class="form-field">
             <label class="form-label">Contact Person <span class="required">*</span></label>
             <input type="text" @bind="_currentContractor.contact_person" class="form-input" placeholder="Contact person name" />
+            <ValidationMessage For="() => _currentContractor.contact_person" />
         </div>
         <div class="form-field">
             <label class="form-label">Phone <span class="required">*</span></label>
             <input type="tel" @bind="_currentContractor.phone" class="form-input" placeholder="Phone number" />
+            <ValidationMessage For="() => _currentContractor.phone" />
         </div>
         <div class="form-field">
             <label class="form-label">Email</label>

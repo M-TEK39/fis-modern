@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using MonitorEntity = FIS.Core.Domain.Entities.Monitor;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FIS.Api.Controllers;

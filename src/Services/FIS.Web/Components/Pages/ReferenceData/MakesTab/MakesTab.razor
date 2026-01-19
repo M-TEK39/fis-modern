@@ -67,10 +67,11 @@ else
 }
 
 <Modal IsVisible="_showDialog" Title="@(_isEdit ? "Edit Make" : "Add Make")" OnCancel="HideDialog" OnSubmit="SaveMake"
-    IsSaving="_saving">
+    IsSaving="_saving" Model="_currentMake">
     <div class="form-field">
         <label class="form-label">Make Name <span class="required">*</span></label>
         <input type="text" @bind="_currentMake.make_name" class="form-input" placeholder="e.g., Toyota" />
+        <ValidationMessage For="() => _currentMake.make_name" />
     </div>
 </Modal>
 

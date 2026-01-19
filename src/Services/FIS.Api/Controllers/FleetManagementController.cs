@@ -1,4 +1,5 @@
 using FIS.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FIS.Api.Controllers;
@@ -17,6 +18,7 @@ namespace FIS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class FleetManagementController : ControllerBase
 {
     private readonly FuelCardManagementService _fuelCardService;
