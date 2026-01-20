@@ -11,6 +11,7 @@ namespace FIS.Api.Controllers
     /// Provides REST endpoints for vehicle fuel type management
     /// </summary>
     [ApiController]
+    [Authorize]
     [Route("api/[controller]")]
     public class FuelTypeController : ControllerBase
     {

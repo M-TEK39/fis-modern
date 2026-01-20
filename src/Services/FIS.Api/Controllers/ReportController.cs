@@ -9,6 +9,7 @@ namespace FIS.Api.Controllers;
 /// Provides vehicle, financial, maintenance, and trip reports with export capabilities
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class ReportController : ControllerBase

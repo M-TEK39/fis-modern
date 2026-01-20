@@ -1,0 +1,103 @@
+@page "/login/legacy"
+@rendermode InteractiveServer
+@layout FIS.Web.Components.Layout.AuthLayout
+@using System.ComponentModel.DataAnnotations
+@using FIS.Web.Services
+@inject FIS.Web.Services.AuthApiService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Legacy Sign In - Fleet Information System</PageTitle>
+
+<div class="auth-card auth-card-wide">
+    <div class="auth-header">
+        <h1>Legacy Sign In</h1>
+        <p>Use your legacy fleet credentials to access the system.</p>
+    </div>
+
+    <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="validation-summary" />
+
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="auth-error">
+                <i class="bx bx-error-circle"></i>
+                <span>@_errorMessage</span>
+            </div>
+        }
+
+        <div class="form-grid auth-form">
+            <div class="form-field">
+                <label class="form-label">Username</label>
+                <InputText class="form-input" @bind-Value="_model.Username" placeholder="User access code or email" />
+                <ValidationMessage For="() => _model.Username" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Password</label>
+                <InputText class="form-input" @bind-Value="_model.Password" type="password" placeholder="Enter your password" />
+                <ValidationMessage For="() => _model.Password" />
+            </div>
+        </div>
+
+        <div class="auth-actions">
+            <button type="submit" class="btn btn-primary auth-btn" disabled="@_isSubmitting">
+                @if (_isSubmitting)
+                {
+                    <span class="spinner-sm"></span>
+                    <span>Signing in...</span>
+                }
+                else
+                {
+                    <span>Sign In</span>
+                }
+            </button>
+            <button type="button" class="btn btn-secondary auth-btn auth-outline" @onclick="GoBack">
+                Back to Sign In Options
+            </button>
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private bool _isSubmitting;
+    private string? _errorMessage;
+    private readonly LegacyLoginModel _model = new();
+
+    private async Task HandleSubmit()
+    {
+        _errorMessage = null;
+        _isSubmitting = true;
+
+        try
+        {
+            await AuthService.LoginAsync(new LegacyLoginRequest
+            {
+                Username = _model.Username,
+                Password = _model.Password
+            });
+
+            Navigation.NavigateTo("/home");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/login");
+    }
+
+    private class LegacyLoginModel
+    {
+        [Required]
+        public string Username { get; set; } = "";
+        [Required]
+        public string Password { get; set; } = "";
+    }
+}

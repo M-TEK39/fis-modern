@@ -9,6 +9,7 @@ namespace FIS.Api.Controllers;
 /// API Controller for vehicle maintenance record operations
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class MaintenanceRecordController : ControllerBase
 {

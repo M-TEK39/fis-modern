@@ -21,6 +21,7 @@ public class UserDto
 }
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class UserController : ControllerBase
 {

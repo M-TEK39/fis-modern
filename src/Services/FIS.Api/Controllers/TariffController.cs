@@ -9,6 +9,7 @@ namespace FIS.Api.Controllers;
 /// Provides access to the comprehensive tariff calculation system
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
 public class TariffController : ControllerBase

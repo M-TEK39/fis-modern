@@ -9,6 +9,7 @@ namespace FIS.Api.Controllers;
 /// API Controller for trip driver assignment operations
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class TripDriverController : ControllerBase
 {

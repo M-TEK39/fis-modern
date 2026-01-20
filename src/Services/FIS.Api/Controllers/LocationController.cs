@@ -9,6 +9,7 @@ namespace FIS.Api.Controllers;
 /// API Controller for location management operations
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class LocationController : ControllerBase
 {

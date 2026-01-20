@@ -30,6 +30,10 @@ obj
 .idea
 .claude
 
+# files
+appsettings*.json
+*.log
+
 
 
 # Testing

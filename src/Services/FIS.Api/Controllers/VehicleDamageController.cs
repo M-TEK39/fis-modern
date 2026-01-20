@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class VehicleDamageController : ControllerBase
 {

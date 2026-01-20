@@ -399,6 +399,112 @@ textarea.form-input:focus,
     margin-top: 0.35rem;
 }
 
+/* ----------------------------------------
+   Auth Pages
+   ---------------------------------------- */
+.auth-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background:
+        radial-gradient(circle at top, rgba(79, 140, 255, 0.14), transparent 55%),
+        radial-gradient(circle at bottom, rgba(22, 26, 34, 0.8), transparent 65%),
+        var(--fis-app-bg);
+}
+
+.auth-main {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.auth-card {
+    width: min(420px, 90vw);
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 1.25rem;
+    padding: 2rem;
+    box-shadow: var(--fis-shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    text-align: center;
+}
+
+.auth-card-wide {
+    width: min(560px, 90vw);
+    text-align: left;
+}
+
+.auth-logo {
+    width: 180px;
+    margin: 0 auto;
+    border-radius: 0.75rem;
+    border: 1px solid var(--fis-border);
+    box-shadow: var(--fis-shadow);
+}
+
+.auth-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.auth-header p {
+    margin: 0.5rem 0 0;
+    color: var(--fis-muted-text);
+    font-size: 0.9rem;
+}
+
+.auth-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.auth-btn {
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.auth-outline {
+    background: transparent;
+}
+
+.auth-footnote {
+    font-size: 0.75rem;
+    color: var(--fis-muted-text);
+}
+
+.auth-form {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+.auth-error {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.6rem;
+    border: 1px solid var(--fis-error);
+    background: var(--fis-error-bg);
+    color: var(--fis-text);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 640px) {
+    .auth-card {
+        padding: 1.5rem;
+    }
+}
+
 .warning-text {
     color: var(--fis-muted-text);
     font-size: 0.875rem;

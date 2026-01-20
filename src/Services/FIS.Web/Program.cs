@@ -134,6 +134,11 @@ builder.Services.AddHttpClient<UserApiService>(client =>
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);
 });
+builder.Services.AddHttpClient<AuthApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddHttpClient<SiteApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");

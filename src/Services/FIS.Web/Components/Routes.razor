@@ -1,33 +1,15 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
-                    @if (context.User?.Identity?.IsAuthenticated != true)
-                    {
-                        <RedirectToLogin />
-                    }
-                    else
-                    {
-                        <p role="alert">You are not authorized to access this page.</p>
-                    }
+                    <p role="alert">Access denied. Please <a href="/login">sign in</a> to continue.</p>
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
     </Router>
 </CascadingAuthenticationState>
-
-@code {
-    private class RedirectToLogin : ComponentBase
-    {
-        [Inject] private NavigationManager Navigation { get; set; } = default!;
-
-        protected override void OnInitialized()
-        {
-            Navigation.NavigateTo("/login", forceLoad: true);
-        }
-    }
-}

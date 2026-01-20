@@ -11,6 +11,7 @@ namespace FIS.Api.Controllers;
 /// Provides endpoints for managing vehicle types/classifications
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("api/[controller]")]
 public class TypeController : ControllerBase
 {
