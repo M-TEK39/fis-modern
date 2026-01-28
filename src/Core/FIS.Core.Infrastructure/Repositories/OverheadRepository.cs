@@ -62,7 +62,7 @@ public class OverheadRepository : IOverheadRepository
     /// <summary>
     /// Create new overhead.
     /// </summary>
-    public async Task<Overhead> CreateAsync(Overhead overhead)
+    public async Task<Overhead> CreateAsync(Overhead overhead, int currentUserId)
     {
         overhead.CaptureDate = DateTime.Now;
         _context.Set<Overhead>().Add(overhead);
@@ -73,18 +73,25 @@ public class OverheadRepository : IOverheadRepository
     /// <summary>
     /// Update existing overhead.
     /// </summary>
-    public async Task<Overhead> UpdateAsync(Overhead overhead)
+    public async Task<Overhead> UpdateAsync(Overhead overhead, int currentUserId)
     {
+        if (overhead == null)
+            throw new ArgumentNullException(nameof(overhead));
+
+        var existing = await _context.Set<Overhead>().FindAsync(overhead.OverheadId);
+        if (existing == null)
+            throw new InvalidOperationException($"Overhead with OverheadId {overhead.OverheadId} not found");
+
         overhead.ModifiedDate = DateTime.Now;
-        _context.Set<Overhead>().Update(overhead);
+        _context.Entry(existing).CurrentValues.SetValues(overhead);
         await _context.SaveChangesAsync();
-        return overhead;
+        return existing;
     }
 
     /// <summary>
     /// Delete overhead.
     /// </summary>
-    public async Task DeleteAsync(int overheadId)
+    public async Task DeleteAsync(int overheadId, int currentUserId)
     {
         var overhead = await GetByIdAsync(overheadId);
         if (overhead != null)

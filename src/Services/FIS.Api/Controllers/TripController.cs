@@ -53,7 +53,7 @@ public class TripDto
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class TripController : ControllerBase
+public class TripController : BaseApiController
 {
     private readonly ITripService _tripService;
     private readonly ILogger<TripController> _logger;

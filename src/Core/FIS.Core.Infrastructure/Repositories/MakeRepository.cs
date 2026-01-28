@@ -67,12 +67,16 @@ public class MakeRepository : IMakeRepository
     /// <summary>
     /// Create a new make
     /// </summary>
-    public async Task<Make> CreateAsync(Make make)
+    public async Task<Make> CreateAsync(Make make, int currentUserId)
     {
         if (make == null)
             throw new ArgumentNullException(nameof(make));
 
-        _context.Makes.Add(make);
+        // Auto-populate audit fields
+            make.date_created = DateTime.UtcNow;
+            make.is_deleted = false;
+            
+            _context.Makes.Add(make);
         await _context.SaveChangesAsync();
         return make;
     }
@@ -80,25 +84,34 @@ public class MakeRepository : IMakeRepository
     /// <summary>
     /// Update an existing make
     /// </summary>
-    public async Task<Make> UpdateAsync(Make make)
+    public async Task<Make> UpdateAsync(Make make, int currentUserId)
     {
         if (make == null)
             throw new ArgumentNullException(nameof(make));
 
-        _context.Entry(make).State = EntityState.Modified;
+        // Find the tracked entity (if any) and update its properties
+        var existingMake = await _context.Makes.FindAsync(make.make_code);
+        if (existingMake == null)
+            throw new InvalidOperationException($"Make with code {make.make_code} not found");
+
+        // Update properties of the tracked entity
+        existingMake.make_description = make.make_description;
+
         await _context.SaveChangesAsync();
-        return make;
+        return existingMake;
     }
 
     /// <summary>
     /// Delete a make
     /// </summary>
-    public async Task DeleteAsync(short makeCode)
+    public async Task DeleteAsync(short makeCode, int currentUserId)
     {
         var make = await GetByIdAsync(makeCode);
         if (make != null)
         {
-            _context.Makes.Remove(make);
+            // Soft delete instead of hard delete
+                make.is_deleted = true;
+                make.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

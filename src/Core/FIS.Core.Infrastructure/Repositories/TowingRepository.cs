@@ -48,21 +48,28 @@ public class TowingRepository : ITowingRepository
             .ToListAsync();
     }
 
-    public async Task<Towing> CreateAsync(Towing towing)
+    public async Task<Towing> CreateAsync(Towing towing, int currentUserId)
     {
         await _context.Set<Towing>().AddAsync(towing);
         await _context.SaveChangesAsync();
         return towing;
     }
 
-    public async Task<Towing> UpdateAsync(Towing towing)
+    public async Task<Towing> UpdateAsync(Towing towing, int currentUserId)
     {
-        _context.Set<Towing>().Update(towing);
+        if (towing == null)
+            throw new ArgumentNullException(nameof(towing));
+
+        var existing = await _context.Set<Towing>().FindAsync(towing.Towing_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Towing with Towing_code {towing.Towing_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(towing);
         await _context.SaveChangesAsync();
-        return towing;
+        return existing;
     }
 
-    public async Task DeleteAsync(short towingCode)
+    public async Task DeleteAsync(short towingCode, int currentUserId)
     {
         var towing = await GetByIdAsync(towingCode);
         if (towing != null)

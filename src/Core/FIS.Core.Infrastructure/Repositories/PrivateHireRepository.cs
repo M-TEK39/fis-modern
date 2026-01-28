@@ -20,7 +20,8 @@ public class PrivateHireRepository : IPrivateHireRepository
     public async Task<PrivateHire?> GetByIdAsync(int privateHireCode)
     {
         return await _context.PrivateHires
-            .FirstOrDefaultAsync(ph => ph.PHV_code == privateHireCode);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(ph => ph.PHV_code == privateHireCode);
     }
 
     public async Task<IEnumerable<PrivateHire>> GetByVehicleAsync(int vmfCode)
@@ -46,25 +47,38 @@ public class PrivateHireRepository : IPrivateHireRepository
             .ToListAsync();
     }
 
-    public async Task<PrivateHire> CreateAsync(PrivateHire privateHire)
+    public async Task<PrivateHire> CreateAsync(PrivateHire privateHire, int currentUserId)
     {
-        _context.PrivateHires.Add(privateHire);
+        // Auto-populate audit fields
+            privateHire.date_created = DateTime.UtcNow;
+            privateHire.is_deleted = false;
+            
+            _context.PrivateHires.Add(privateHire);
         await _context.SaveChangesAsync();
         return privateHire;
     }
 
-    public async Task UpdateAsync(PrivateHire privateHire)
+    public async Task UpdateAsync(PrivateHire privateHire, int currentUserId)
     {
-        _context.Entry(privateHire).State = EntityState.Modified;
+        if (privateHire == null)
+            throw new ArgumentNullException(nameof(privateHire));
+
+        var existing = await _context.PrivateHires.FindAsync(privateHire.PHV_code);
+        if (existing == null)
+            throw new InvalidOperationException($"PrivateHire with PHV_code {privateHire.PHV_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(privateHire);
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(int privateHireCode)
+    public async Task DeleteAsync(int privateHireCode, int currentUserId)
     {
         var privateHire = await GetByIdAsync(privateHireCode);
         if (privateHire != null)
         {
-            _context.PrivateHires.Remove(privateHire);
+            // Soft delete instead of hard delete
+                privateHire.is_deleted = true;
+                privateHire.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

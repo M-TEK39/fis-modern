@@ -11,7 +11,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class LocationController : ControllerBase
+public class LocationController : BaseApiController
 {
     private readonly ILocationRepository _locationRepository;
     private readonly ILogger<LocationController> _logger;
@@ -32,6 +32,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var locations = await _locationRepository.GetAllLocationsAsync();
             _logger.LogInformation("Retrieved {Count} active locations", locations.Count());
             return Ok(locations);
@@ -51,6 +53,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var location = await _locationRepository.GetByIdAsync(locationId);
             if (location == null)
             {
@@ -76,6 +80,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var location = await _locationRepository.GetByNameAsync(locationName);
             if (location == null)
             {
@@ -102,6 +108,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var locations = await _locationRepository.GetByCountryAsync(country);
             _logger.LogInformation("Found {Count} locations in country '{Country}'", locations.Count(), country);
             return Ok(locations);
@@ -121,6 +129,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var locations = await _locationRepository.GetByProvinceAsync(province);
             _logger.LogInformation("Found {Count} locations in province '{Province}'", locations.Count(), province);
             return Ok(locations);
@@ -140,6 +150,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var locations = await _locationRepository.SearchLocationsAsync(searchTerm ?? "");
             _logger.LogInformation("Found {Count} locations matching search term '{SearchTerm}'", 
                 locations.Count(), searchTerm);
@@ -160,6 +172,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             // Check if location name already exists
             var existingLocation = await _locationRepository.GetByNameAsync(location.LocationName);
             if (existingLocation != null)
@@ -169,7 +183,7 @@ public class LocationController : ControllerBase
             }
 
             location.IsActive = true;
-            var createdLocation = await _locationRepository.CreateAsync(location);
+            var createdLocation = await _locationRepository.CreateAsync(location, currentUserId);
             _logger.LogInformation("Created location {LocationId}: {LocationName}", 
                 createdLocation.LocationId, createdLocation.LocationName);
             
@@ -191,6 +205,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (locationId != location.LocationId)
             {
                 return BadRequest("Location ID mismatch");
@@ -215,7 +231,7 @@ public class LocationController : ControllerBase
                 }
             }
 
-            await _locationRepository.UpdateAsync(location);
+            await _locationRepository.UpdateAsync(location, currentUserId);
             _logger.LogInformation("Updated location {LocationId}: {LocationName}", locationId, location.LocationName);
             
             return Ok(location);
@@ -235,6 +251,8 @@ public class LocationController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingLocation = await _locationRepository.GetByIdAsync(locationId);
             if (existingLocation == null)
             {
@@ -242,7 +260,7 @@ public class LocationController : ControllerBase
                 return NotFound($"Location with ID {locationId} not found");
             }
 
-            await _locationRepository.DeleteAsync(locationId); // This performs soft delete
+            await _locationRepository.DeleteAsync(locationId, currentUserId); // This performs soft delete
             _logger.LogInformation("Soft deleted location {LocationId}: {LocationName}", 
                 locationId, existingLocation.LocationName);
             

@@ -40,19 +40,19 @@ namespace FIS.Core.Application.Interfaces
         /// </summary>
         /// <param name="fuelType">The fuel type entity to create</param>
         /// <returns>The created fuel type entity</returns>
-        Task<FuelTypeEntity> CreateAsync(FuelTypeEntity fuelType);
+        Task<FuelTypeEntity> CreateAsync(FuelTypeEntity fuelType, int currentUserId);
 
         /// <summary>
         /// Updates an existing fuel type
         /// </summary>
         /// <param name="fuelType">The fuel type entity to update</param>
         /// <returns>The updated fuel type entity</returns>
-        Task<FuelTypeEntity> UpdateAsync(FuelTypeEntity fuelType);
+        Task<FuelTypeEntity> UpdateAsync(FuelTypeEntity fuelType, int currentUserId);
 
         /// <summary>
         /// Deletes a fuel type by its code
         /// </summary>
         /// <param name="fuelTypeCode">The fuel type code to delete</param>
-        Task DeleteAsync(short fuelTypeCode);
+        Task DeleteAsync(short fuelTypeCode, int currentUserId);
     }
 }

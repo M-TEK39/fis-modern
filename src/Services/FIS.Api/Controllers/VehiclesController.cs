@@ -12,7 +12,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class VehiclesController : ControllerBase
+public class VehiclesController : BaseApiController
 {
     private readonly IVehicleRepository _vehicleRepository;
     private readonly VehicleService _vehicleService;
@@ -181,77 +181,176 @@ public class VehiclesController : ControllerBase
             return StatusCode(500, "An error occurred while retrieving service alerts");
         }
     }
+
+    /// <summary>
+    /// Create a new vehicle
+    /// </summary>
+    [HttpPost]
+    public async Task<ActionResult<Vehicle>> CreateVehicle([FromBody] VehicleCreationApiRequest request)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+            
+            var vehicle = new Vehicle
+            {
+                fleet_number = request.fleet_number,
+                registration_number = request.registration_number,
+                location_code = request.location_code,
+                model_code = request.model_code,
+                type_code = request.type_code,
+                vehicle_status_code = request.vehicle_status_code,
+                colour = request.colour,
+                chassis_number = request.chassis_number,
+                engine_number_1 = request.engine_number_1,
+                take_on_date = request.take_on_date ?? DateTime.UtcNow,
+                take_on_odo = request.take_on_odo,
+                current_odo = request.current_odo,
+                tare = request.tare,
+                gvm = request.gvm,
+                year_manufactured = request.year_manufactured,
+                purchase_date = request.purchase_date,
+                purchase_amount = request.purchase_amount,
+                date_created = DateTime.UtcNow,
+                created_by_user_code = currentUserId,
+                is_deleted = false
+            };
+
+            var created = await _vehicleRepository.CreateAsync(vehicle, currentUserId);
+            _logger.LogInformation("Created vehicle with vmf_code {VmfCode}", created.vmf_code);
+            
+            return CreatedAtAction(nameof(GetVehicle), new { vmfCode = created.vmf_code }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating vehicle");
+            return StatusCode(500, "An error occurred while creating the vehicle");
+        }
+    }
+
+    /// <summary>
+    /// Update an existing vehicle
+    /// </summary>
+    [HttpPut("{vmfCode}")]
+    public async Task<ActionResult<Vehicle>> UpdateVehicle(int vmfCode, [FromBody] VehicleUpdateApiRequest request)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+            
+            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            if (existing == null)
+            {
+                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+            }
+
+            // Update fields (only if provided)
+            existing.fleet_number = request.fleet_number ?? existing.fleet_number;
+            existing.registration_number = request.registration_number ?? existing.registration_number;
+            existing.location_code = request.location_code ?? existing.location_code;
+            existing.model_code = request.model_code ?? existing.model_code;
+            existing.type_code = request.type_code ?? existing.type_code;
+            existing.vehicle_status_code = request.vehicle_status_code ?? existing.vehicle_status_code;
+            existing.colour = request.colour ?? existing.colour;
+            existing.chassis_number = request.chassis_number ?? existing.chassis_number;
+            existing.engine_number_1 = request.engine_number_1 ?? existing.engine_number_1;
+            existing.take_on_odo = request.take_on_odo ?? existing.take_on_odo;
+            existing.current_odo = request.current_odo ?? existing.current_odo;
+            existing.tare = request.tare ?? existing.tare;
+            existing.gvm = request.gvm ?? existing.gvm;
+            existing.year_manufactured = request.year_manufactured ?? existing.year_manufactured;
+            existing.date_updated = DateTime.UtcNow;
+            existing.modified_by_user_code = currentUserId;
+
+            await _vehicleRepository.UpdateAsync(existing, currentUserId);
+            _logger.LogInformation("Updated vehicle with vmf_code {VmfCode}", vmfCode);
+            
+            return Ok(existing);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "An error occurred while updating the vehicle");
+        }
+    }
+
+    /// <summary>
+    /// Delete a vehicle (soft delete)
+    /// </summary>
+    [HttpDelete("{vmfCode}")]
+    public async Task<ActionResult> DeleteVehicle(int vmfCode)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+            
+            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            if (existing == null)
+            {
+                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+            }
+
+            await _vehicleRepository.DeleteAsync(vmfCode, currentUserId);
+            _logger.LogInformation("Deleted vehicle with vmf_code {VmfCode}", vmfCode);
+            
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "An error occurred while deleting the vehicle");
+        }
+    }
 }
 
 /// <summary>
-/// API request for creating a new vehicle
+/// API request for creating a new vehicle - uses snake_case to match frontend VehicleDto
 /// </summary>
 public class VehicleCreationApiRequest
 {
-    /// <summary>
-    /// Fleet number (unique identifier for the vehicle)
-    /// </summary>
+    public short model_code { get; set; } = 1;
+    public short type_code { get; set; } = 1;
+    public short vehicle_status_code { get; set; } = 1;
+    public short location_code { get; set; } = 1;
+    
     [Required]
-    [StringLength(20)]
-    public string FleetNumber { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Vehicle registration number
-    /// </summary>
+    public string? fleet_number { get; set; }
+    
     [Required]
-    [StringLength(20)]
-    public string RegistrationNumber { get; set; } = string.Empty;
+    public string? registration_number { get; set; }
+    
+    public string? engine_number_1 { get; set; }
+    public string? chassis_number { get; set; }
+    public DateTime? take_on_date { get; set; }
+    public int take_on_odo { get; set; }
+    public int current_odo { get; set; }
+    public int? tare { get; set; }
+    public int? gvm { get; set; }
+    public short? year_manufactured { get; set; }
+    public string? colour { get; set; }
+    public DateTime? purchase_date { get; set; }
+    public decimal? purchase_amount { get; set; }
+}
 
-    /// <summary>
-    /// Site code where vehicle will be based
-    /// </summary>
-    [Required]
-    public int SiteCode { get; set; }
-
-    /// <summary>
-    /// Vehicle model code (optional - defaults to 1)
-    /// </summary>
-    public short? ModelCode { get; set; }
-
-    /// <summary>
-    /// Vehicle type code (optional - defaults to 1)
-    /// </summary>
-    public short? TypeCode { get; set; }
-
-    /// <summary>
-    /// Year of manufacture
-    /// </summary>
-    [Range(1900, 2030)]
-    public int? Year { get; set; }
-
-    /// <summary>
-    /// Initial mileage/odometer reading
-    /// </summary>
-    [Range(0, int.MaxValue)]
-    public int? InitialMileage { get; set; }
-
-    /// <summary>
-    /// Chassis number
-    /// </summary>
-    [StringLength(50)]
-    public string? ChassisNumber { get; set; }
-
-    /// <summary>
-    /// Engine number
-    /// </summary>
-    [StringLength(50)]
-    public string? EngineNumber { get; set; }
-
-    /// <summary>
-    /// Purchase date
-    /// </summary>
-    public DateTime? PurchaseDate { get; set; }
-
-    /// <summary>
-    /// Purchase amount
-    /// </summary>
-    [Range(0, double.MaxValue)]
-    public decimal? PurchaseAmount { get; set; }
+/// <summary>
+/// API request for updating an existing vehicle - uses snake_case to match frontend VehicleDto
+/// </summary>
+public class VehicleUpdateApiRequest
+{
+    public short? model_code { get; set; }
+    public short? type_code { get; set; }
+    public short? vehicle_status_code { get; set; }
+    public short? location_code { get; set; }
+    public string? fleet_number { get; set; }
+    public string? registration_number { get; set; }
+    public string? engine_number_1 { get; set; }
+    public string? chassis_number { get; set; }
+    public int? take_on_odo { get; set; }
+    public int? current_odo { get; set; }
+    public int? tare { get; set; }
+    public int? gvm { get; set; }
+    public short? year_manufactured { get; set; }
+    public string? colour { get; set; }
 }
 
 /// <summary>

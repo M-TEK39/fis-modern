@@ -1,15 +1,69 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <CascadingAuthenticationState>
-    <Router AppAssembly="typeof(Program).Assembly">
+    <Router AppAssembly="typeof(Program).Assembly" OnNavigateAsync="GuardNavigation">
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
-                    <p role="alert">Access denied. Please <a href="/login">sign in</a> to continue.</p>
+                    @{
+                        // Redirect to login if not authenticated
+                        if (context.User?.Identity?.IsAuthenticated != true)
+                        {
+                            Navigation.NavigateTo("/login", forceLoad: true);
+                        }
+                        else
+                        {
+                            <p role="alert">Access denied. You don't have permission to view this page.</p>
+                        }
+                    }
                 </NotAuthorized>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         </Found>
     </Router>
 </CascadingAuthenticationState>
+
+@code {
+    private static readonly HashSet<string> PublicRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "login",
+        "login/legacy",
+        "login-old",
+        "terms",
+        "signin-oidc",
+        "microsoftidentity/account/signin",
+        "microsoftidentity/account/signout",
+        "signedout",
+        "logout"
+    };
+
+    private static bool IsPublicRoute(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var normalized = path.Trim('/').ToLowerInvariant();
+        return PublicRoutes.Contains(normalized);
+    }
+
+    private async Task GuardNavigation(NavigationContext context)
+    {
+        if (IsPublicRoute(context.Path))
+        {
+            return;
+        }
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (authState.User.Identity?.IsAuthenticated == true)
+        {
+            return;
+        }
+
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+}

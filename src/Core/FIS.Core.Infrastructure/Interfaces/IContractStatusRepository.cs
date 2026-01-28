@@ -59,19 +59,19 @@ public interface IContractStatusRepository
     /// </summary>
     /// <param name="status">The contract status entity to create</param>
     /// <returns>The created contract status with generated ID</returns>
-    Task<ContractStatus> CreateAsync(ContractStatus status);
+    Task<ContractStatus> CreateAsync(ContractStatus status, int currentUserId);
 
     /// <summary>
     /// Update an existing contract status
     /// </summary>
     /// <param name="status">The contract status entity to update</param>
     /// <returns>The updated contract status entity</returns>
-    Task<ContractStatus> UpdateAsync(ContractStatus status);
+    Task<ContractStatus> UpdateAsync(ContractStatus status, int currentUserId);
 
     /// <summary>
     /// Delete a contract status by status code
     /// </summary>
     /// <param name="statusCode">The status code to delete</param>
     /// <returns>True if deleted, false if not found</returns>
-    Task<bool> DeleteAsync(short statusCode);
+    Task<bool> DeleteAsync(short statusCode, int currentUserId);
 }

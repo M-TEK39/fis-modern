@@ -1,11 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "nUxZqCcSnNyc8p/CjaPCCnYg77byrTPRVVfjCjmkNBdywo5z9pM855PJmdOKfMFK+peykrit/nzQvKzpbMxRoA==",
+  "dgSpecHash": "tu2jiLCv8d8bnAx1vXh5/SVNKqa5EmWcfRG0wkzT4+oXB2B2crw8iY2m1QFDtvfmmXS5Bs/xxETHj9+xJlUJNw==",
   "success": true,
   "projectFilePath": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
   "expectedPackageFiles": [
     "/home/dev/work/fis-modern/packages/azure.core/1.38.0/azure.core.1.38.0.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/azure.identity/1.11.4/azure.identity.1.11.4.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/bcrypt.net-next/4.0.3/bcrypt.net-next.4.0.3.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/microsoft.bcl.asyncinterfaces/1.1.1/microsoft.bcl.asyncinterfaces.1.1.1.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/microsoft.build.tasks.git/1.1.1/microsoft.build.tasks.git.1.1.1.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/microsoft.csharp/4.5.0/microsoft.csharp.4.5.0.nupkg.sha512",

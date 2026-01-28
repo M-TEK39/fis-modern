@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers
     [ApiController]
     [Authorize]
     [Route("api/[controller]")]
-    public class MaintenanceTriggerController : ControllerBase
+    public class MaintenanceTriggerController : BaseApiController
     {
         private readonly IMaintenanceTriggerRepository _maintenanceTriggerRepository;
 
@@ -31,6 +31,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var triggers = await _maintenanceTriggerRepository.GetAllMaintenanceTriggersAsync();
                 return Ok(triggers);
             }
@@ -50,6 +52,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var trigger = await _maintenanceTriggerRepository.GetByIdAsync(id);
                 if (trigger == null)
                 {
@@ -73,6 +77,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var trigger = await _maintenanceTriggerRepository.GetByDescriptionAsync(description);
                 if (trigger == null)
                 {
@@ -96,6 +102,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var trigger = await _maintenanceTriggerRepository.GetByTriggerIdAsync(triggerId);
                 if (trigger == null)
                 {
@@ -119,6 +127,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var triggers = await _maintenanceTriggerRepository.SearchMaintenanceTriggersAsync(searchTerm);
                 return Ok(triggers);
             }
@@ -138,6 +148,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
@@ -150,7 +162,7 @@ namespace FIS.Api.Controllers
                     trigger_id = createMaintenanceTriggerDto.trigger_id
                 };
 
-                var createdTrigger = await _maintenanceTriggerRepository.CreateAsync(trigger);
+                var createdTrigger = await _maintenanceTriggerRepository.CreateAsync(trigger, currentUserId);
                 return CreatedAtAction(nameof(GetMaintenanceTrigger), new { id = createdTrigger.maint_trigger_code }, createdTrigger);
             }
             catch (Exception ex)
@@ -170,6 +182,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 if (id != trigger.maint_trigger_code)
                 {
                     return BadRequest("Maintenance trigger code mismatch");
@@ -186,7 +200,7 @@ namespace FIS.Api.Controllers
                     return NotFound($"Maintenance trigger with code {id} not found");
                 }
 
-                var updatedTrigger = await _maintenanceTriggerRepository.UpdateAsync(trigger);
+                var updatedTrigger = await _maintenanceTriggerRepository.UpdateAsync(trigger, currentUserId);
                 return Ok(updatedTrigger);
             }
             catch (Exception ex)
@@ -205,13 +219,15 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var existingTrigger = await _maintenanceTriggerRepository.GetByIdAsync(id);
                 if (existingTrigger == null)
                 {
                     return NotFound($"Maintenance trigger with code {id} not found");
                 }
 
-                await _maintenanceTriggerRepository.DeleteAsync(id);
+                await _maintenanceTriggerRepository.DeleteAsync(id, currentUserId);
                 return NoContent();
             }
             catch (Exception ex)

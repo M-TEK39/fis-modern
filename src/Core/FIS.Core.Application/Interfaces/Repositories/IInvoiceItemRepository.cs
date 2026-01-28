@@ -33,14 +33,14 @@ public interface IInvoiceItemRepository
     /// </summary>
     /// <param name="invoiceItem">Invoice item to update</param>
     /// <returns>Updated invoice item</returns>
-    Task<InvoiceItem> UpdateAsync(InvoiceItem invoiceItem);
+    Task<InvoiceItem> UpdateAsync(InvoiceItem invoiceItem, int currentUserId);
 
     /// <summary>
     /// Delete an invoice item by ID.
     /// </summary>
     /// <param name="id">Invoice item identifier</param>
     /// <returns>True if deleted</returns>
-    Task<bool> DeleteAsync(int id);
+    Task<bool> DeleteAsync(int id, int currentUserId);
 
     /// <summary>
     /// Get all items for a specific invoice.

@@ -51,20 +51,20 @@ public interface IVehicleTariffRepository
     /// </summary>
     /// <param name="vehicleTariff">Vehicle tariff to create</param>
     /// <returns>Created vehicle tariff</returns>
-    Task<VehicleTariff> CreateAsync(VehicleTariff vehicleTariff);
+    Task<VehicleTariff> CreateAsync(VehicleTariff vehicleTariff, int currentUserId);
 
     /// <summary>
     /// Update existing vehicle tariff.
     /// </summary>
     /// <param name="vehicleTariff">Vehicle tariff to update</param>
     /// <returns>Updated vehicle tariff</returns>
-    Task<VehicleTariff> UpdateAsync(VehicleTariff vehicleTariff);
+    Task<VehicleTariff> UpdateAsync(VehicleTariff vehicleTariff, int currentUserId);
 
     /// <summary>
     /// Delete vehicle tariff.
     /// </summary>
     /// <param name="vehicleTariffCode">Vehicle tariff identifier</param>
-    Task DeleteAsync(int vehicleTariffCode);
+    Task DeleteAsync(int vehicleTariffCode, int currentUserId);
 
     /// <summary>
     /// Delete all vehicle tariffs for a parameter year.

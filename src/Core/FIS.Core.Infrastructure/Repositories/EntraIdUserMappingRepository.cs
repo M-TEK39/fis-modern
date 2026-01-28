@@ -32,20 +32,28 @@ public class EntraIdUserMappingRepository : IEntraIdUserMappingRepository
             .FirstOrDefaultAsync(m => m.user_access_code == userAccessCode);
     }
 
-    public async Task<EntraIdUserMapping> CreateAsync(EntraIdUserMapping mapping)
+    public async Task<EntraIdUserMapping> CreateAsync(EntraIdUserMapping mapping, int currentUserId)
     {
-        _context.EntraIdUserMappings.Add(mapping);
+            
+            _context.EntraIdUserMappings.Add(mapping);
         await _context.SaveChangesAsync();
         return mapping;
     }
 
-    public async Task UpdateAsync(EntraIdUserMapping mapping)
+    public async Task UpdateAsync(EntraIdUserMapping mapping, int currentUserId)
     {
-        _context.EntraIdUserMappings.Update(mapping);
+        if (mapping == null)
+            throw new ArgumentNullException(nameof(mapping));
+
+        var existing = await _context.EntraIdUserMappings.FindAsync(mapping.mapping_id);
+        if (existing == null)
+            throw new InvalidOperationException($"EntraIdUserMapping with mapping_id {mapping.mapping_id} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(mapping);
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(int mappingId)
+    public async Task DeleteAsync(int mappingId, int currentUserId)
     {
         var mapping = await _context.EntraIdUserMappings.FindAsync(mappingId);
         if (mapping != null)

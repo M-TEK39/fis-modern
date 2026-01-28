@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class TrackingController : ControllerBase
+public class TrackingController : BaseApiController
 {
     private readonly ITrackingRepository _repository;
     private readonly ILogger<TrackingController> _logger;
@@ -26,11 +26,11 @@ public class TrackingController : ControllerBase
     public async Task<ActionResult<IEnumerable<Tracking>>> GetActive() { try { return Ok(await _repository.GetActiveTrackingAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPost]
-    public async Task<ActionResult<Tracking>> Create([FromBody] Tracking item) { try { var created = await _repository.CreateAsync(item); return CreatedAtAction(nameof(GetById), new { id = created.track_code }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<Tracking>> Create([FromBody] Tracking item) { try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.track_code }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<Tracking>> Update(short id, [FromBody] Tracking item) { try { if (id != item.track_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<Tracking>> Update(short id, [FromBody] Tracking item) { try { if (id != item.track_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> Delete(short id) { try { await _repository.DeleteAsync(id); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult> Delete(short id) { try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 }

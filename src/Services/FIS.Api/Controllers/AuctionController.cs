@@ -8,7 +8,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class AuctionController : ControllerBase
+public class AuctionController : BaseApiController
 {
     private readonly IAuctionRepository _repository;
     private readonly ILogger<AuctionController> _logger;
@@ -69,7 +69,7 @@ public class AuctionController : ControllerBase
     {
         try
         {
-            var created = await _repository.CreateAsync(item);
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
             return CreatedAtAction(nameof(GetById), new { id = created.auction_code }, created);
         }
         catch (Exception ex)
@@ -87,7 +87,7 @@ public class AuctionController : ControllerBase
             if (id != item.auction_code)
                 return BadRequest("ID mismatch");
 
-            var updated = await _repository.UpdateAsync(item);
+            var updated = await _repository.UpdateAsync(item, GetCurrentUserId());
             return Ok(updated);
         }
         catch (Exception ex)
@@ -102,7 +102,7 @@ public class AuctionController : ControllerBase
     {
         try
         {
-            await _repository.DeleteAsync(id);
+            await _repository.DeleteAsync(id, GetCurrentUserId());
             return NoContent();
         }
         catch (Exception ex)

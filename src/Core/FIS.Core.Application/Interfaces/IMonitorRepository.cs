@@ -12,8 +12,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<MonitorEntity>> GetAllAsync();
         Task<IEnumerable<MonitorEntity>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<MonitorEntity>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
-        Task<MonitorEntity> CreateAsync(MonitorEntity monitor);
-        Task<MonitorEntity> UpdateAsync(MonitorEntity monitor);
-        Task DeleteAsync(short monitorCode);
+        Task<MonitorEntity> CreateAsync(MonitorEntity monitor, int currentUserId);
+        Task<MonitorEntity> UpdateAsync(MonitorEntity monitor, int currentUserId);
+        Task DeleteAsync(short monitorCode, int currentUserId);
     }
 }

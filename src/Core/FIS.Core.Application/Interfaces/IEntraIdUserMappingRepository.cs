@@ -27,19 +27,19 @@ public interface IEntraIdUserMappingRepository
     /// </summary>
     /// <param name="mapping">Mapping to create</param>
     /// <returns>Created mapping with generated ID</returns>
-    Task<EntraIdUserMapping> CreateAsync(EntraIdUserMapping mapping);
+    Task<EntraIdUserMapping> CreateAsync(EntraIdUserMapping mapping, int currentUserId);
 
     /// <summary>
     /// Updates an existing mapping.
     /// </summary>
     /// <param name="mapping">Mapping to update</param>
-    Task UpdateAsync(EntraIdUserMapping mapping);
+    Task UpdateAsync(EntraIdUserMapping mapping, int currentUserId);
 
     /// <summary>
     /// Deletes a mapping (for unmapping users).
     /// </summary>
     /// <param name="mappingId">Mapping ID to delete</param>
-    Task DeleteAsync(int mappingId);
+    Task DeleteAsync(int mappingId, int currentUserId);
 
     /// <summary>
     /// Checks if a mapping exists for an Entra ID Object ID.

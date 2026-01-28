@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class UnitOfMeasureController : ControllerBase
+public class UnitOfMeasureController : BaseApiController
 {
     private readonly IUnitOfMeasureRepository _unitOfMeasureRepository;
     private readonly ILogger<UnitOfMeasureController> _logger;
@@ -33,6 +33,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var units = await _unitOfMeasureRepository.GetAllUnitsAsync();
             return Ok(units);
         }
@@ -53,6 +55,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var unit = await _unitOfMeasureRepository.GetByIdAsync(unitCode);
             if (unit == null)
                 return NotFound($"Unit of measure with code {unitCode} not found");
@@ -76,6 +80,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var unit = await _unitOfMeasureRepository.GetByDescriptionAsync(description);
             if (unit == null)
                 return NotFound($"Unit of measure with description '{description}' not found");
@@ -99,6 +105,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var unit = await _unitOfMeasureRepository.GetByAbbreviationAsync(abbreviation);
             if (unit == null)
                 return NotFound($"Unit of measure with abbreviation '{abbreviation}' not found");
@@ -122,6 +130,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var units = await _unitOfMeasureRepository.GetByCategoryAsync(category);
             return Ok(units);
         }
@@ -142,6 +152,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var units = await _unitOfMeasureRepository.SearchUnitsAsync(searchTerm);
             return Ok(units);
         }
@@ -162,6 +174,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -172,7 +186,7 @@ public class UnitOfMeasureController : ControllerBase
                 unit_category = createUnitDto.unit_category
             };
 
-            var createdUnit = await _unitOfMeasureRepository.CreateAsync(unit);
+            var createdUnit = await _unitOfMeasureRepository.CreateAsync(unit, currentUserId);
             return CreatedAtAction(nameof(GetUnit), new { unitCode = createdUnit.unit_of_measure_code }, createdUnit);
         }
         catch (Exception ex)
@@ -193,6 +207,8 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (unitCode != unit.unit_of_measure_code)
                 return BadRequest("Unit code in URL does not match unit code in body");
 
@@ -200,7 +216,7 @@ public class UnitOfMeasureController : ControllerBase
             if (existingUnit == null)
                 return NotFound($"Unit of measure with code {unitCode} not found");
 
-            var updatedUnit = await _unitOfMeasureRepository.UpdateAsync(unit);
+            var updatedUnit = await _unitOfMeasureRepository.UpdateAsync(unit, currentUserId);
             return Ok(updatedUnit);
         }
         catch (Exception ex)
@@ -220,7 +236,9 @@ public class UnitOfMeasureController : ControllerBase
     {
         try
         {
-            var deleted = await _unitOfMeasureRepository.DeleteAsync(unitCode);
+            int currentUserId = GetCurrentUserId();
+
+            var deleted = await _unitOfMeasureRepository.DeleteAsync(unitCode, currentUserId);
             if (!deleted)
                 return NotFound($"Unit of measure with code {unitCode} not found");
 

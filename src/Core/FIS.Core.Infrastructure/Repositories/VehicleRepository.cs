@@ -24,7 +24,8 @@ public class VehicleRepository : IVehicleRepository
     public async Task<Vehicle?> GetByIdAsync(int vmfCode)
     {
         return await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
     }
 
     /// <summary>
@@ -36,7 +37,8 @@ public class VehicleRepository : IVehicleRepository
             return null;
 
         return await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.fleet_number == fleetNumber);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(v => v.fleet_number == fleetNumber);
     }
 
     /// <summary>
@@ -48,7 +50,8 @@ public class VehicleRepository : IVehicleRepository
             return null;
 
         return await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.registration_number == registrationNumber);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(v => v.registration_number == registrationNumber);
     }
 
     /// <summary>
@@ -109,12 +112,16 @@ public class VehicleRepository : IVehicleRepository
     /// <summary>
     /// Create a new vehicle
     /// </summary>
-    public async Task<Vehicle> CreateAsync(Vehicle vehicle)
+    public async Task<Vehicle> CreateAsync(Vehicle vehicle, int currentUserId)
     {
         if (vehicle == null)
             throw new ArgumentNullException(nameof(vehicle));
 
-        _context.Vehicles.Add(vehicle);
+        // Auto-populate audit fields
+            vehicle.date_created = DateTime.UtcNow;
+            vehicle.is_deleted = false;
+            
+            _context.Vehicles.Add(vehicle);
         await _context.SaveChangesAsync();
         return vehicle;
     }
@@ -122,12 +129,16 @@ public class VehicleRepository : IVehicleRepository
     /// <summary>
     /// Update an existing vehicle
     /// </summary>
-    public async Task UpdateAsync(Vehicle vehicle)
+    public async Task UpdateAsync(Vehicle vehicle, int currentUserId)
     {
         if (vehicle == null)
             throw new ArgumentNullException(nameof(vehicle));
 
-        _context.Entry(vehicle).State = EntityState.Modified;
+        var existing = await _context.Vehicles.FindAsync(vehicle.vmf_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Vehicle with vmf_code {vehicle.vmf_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(vehicle);
         await _context.SaveChangesAsync();
     }
 
@@ -136,7 +147,7 @@ public class VehicleRepository : IVehicleRepository
     /// In legacy systems, this might be a soft delete (status change)
     /// rather than hard delete
     /// </summary>
-    public async Task DeleteAsync(int vmfCode)
+    public async Task DeleteAsync(int vmfCode, int currentUserId)
     {
         var vehicle = await GetByIdAsync(vmfCode);
         if (vehicle != null)
@@ -144,7 +155,9 @@ public class VehicleRepository : IVehicleRepository
             // Legacy systems often use soft delete
             // For now, we'll do hard delete, but this could be changed
             // to vehicle.status = "DELETED" for soft delete
-            _context.Vehicles.Remove(vehicle);
+            // Soft delete instead of hard delete
+                vehicle.is_deleted = true;
+                vehicle.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

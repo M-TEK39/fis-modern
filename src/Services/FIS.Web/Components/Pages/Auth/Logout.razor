@@ -1,0 +1,87 @@
+@page "/logout"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using FIS.Web.Services
+@attribute [AllowAnonymous]
+@layout FIS.Web.Components.Layout.AuthLayout
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject AuthApiService AuthService
+
+<PageTitle>Signing Out...</PageTitle>
+
+<div class="logout-container">
+    <div class="logout-card">
+        <div class="spinner"></div>
+        <h3>Signing you out...</h3>
+        <p>Please wait while we clear your session.</p>
+    </div>
+</div>
+
+<style>
+    .logout-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: #f8f9fa;
+    }
+
+    .logout-card {
+        background: white;
+        padding: 3rem;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        max-width: 400px;
+    }
+
+    .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1.5rem;
+    }
+
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    h3 {
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+
+    p {
+        color: #666;
+        margin: 0;
+    }
+</style>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        // Check if user is authenticated via Entra ID (has specific Entra ID claims)
+        var isEntraIdUser = user.HasClaim(c => c.Type == "preferred_username") || 
+                           user.HasClaim(c => c.Type == "http://schemas.microsoft.com/identity/claims/objectidentifier");
+
+        if (isEntraIdUser)
+        {
+            // Entra ID user - redirect to Microsoft logout
+            Navigation.NavigateTo("/Account/Logout", forceLoad: true);
+        }
+        else
+        {
+            // JWT user - clear token and redirect to login
+            await AuthService.LogoutAsync();
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+}

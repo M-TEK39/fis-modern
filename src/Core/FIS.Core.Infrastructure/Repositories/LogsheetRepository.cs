@@ -51,21 +51,28 @@ public class LogsheetRepository : ILogsheetRepository
             .ToListAsync();
     }
 
-    public async Task<Logsheet> CreateAsync(Logsheet logsheet)
+    public async Task<Logsheet> CreateAsync(Logsheet logsheet, int currentUserId)
     {
         await _context.Set<Logsheet>().AddAsync(logsheet);
         await _context.SaveChangesAsync();
         return logsheet;
     }
 
-    public async Task<Logsheet> UpdateAsync(Logsheet logsheet)
+    public async Task<Logsheet> UpdateAsync(Logsheet logsheet, int currentUserId)
     {
-        _context.Set<Logsheet>().Update(logsheet);
+        if (logsheet == null)
+            throw new ArgumentNullException(nameof(logsheet));
+
+        var existing = await _context.Set<Logsheet>().FindAsync(logsheet.log_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Logsheet with log_code {logsheet.log_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(logsheet);
         await _context.SaveChangesAsync();
-        return logsheet;
+        return existing;
     }
 
-    public async Task DeleteAsync(int logCode)
+    public async Task DeleteAsync(int logCode, int currentUserId)
     {
         var logsheet = await GetByIdAsync(logCode);
         if (logsheet != null)

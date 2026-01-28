@@ -23,7 +23,9 @@ public class SiteRepository : ISiteRepository
     /// </summary>
     public async Task<Site?> GetByIdAsync(int siteCode)
     {
-        return await _context.Sites.FirstOrDefaultAsync(s => s.Site_code == siteCode);
+        return await _context.Sites
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(s => s.Site_code == siteCode);
     }
 
     /// <summary>
@@ -34,7 +36,9 @@ public class SiteRepository : ISiteRepository
         if (string.IsNullOrWhiteSpace(siteName))
             return null;
 
-        return await _context.Sites.FirstOrDefaultAsync(s => s.description == siteName);
+        return await _context.Sites
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(s => s.description == siteName);
     }
 
     /// <summary>
@@ -43,7 +47,8 @@ public class SiteRepository : ISiteRepository
     /// </summary>
     public async Task<IEnumerable<Site>> GetActiveSitesAsync()
     {
-        return await _context.Sites.OrderBy(s => s.description).ToListAsync();
+        return await _context.Sites
+                .Where(x => !x.is_deleted).OrderBy(s => s.description).ToListAsync();
     }
 
     /// <summary>
@@ -70,12 +75,16 @@ public class SiteRepository : ISiteRepository
     /// <summary>
     /// Create a new site
     /// </summary>
-    public async Task<Site> CreateAsync(Site site)
+    public async Task<Site> CreateAsync(Site site, int currentUserId)
     {
         if (site == null)
             throw new ArgumentNullException(nameof(site));
 
-        _context.Sites.Add(site);
+        // Auto-populate audit fields
+            site.date_created = DateTime.UtcNow;
+            site.is_deleted = false;
+            
+            _context.Sites.Add(site);
         await _context.SaveChangesAsync();
         return site;
     }
@@ -83,24 +92,30 @@ public class SiteRepository : ISiteRepository
     /// <summary>
     /// Update an existing site
     /// </summary>
-    public async Task UpdateAsync(Site site)
+    public async Task UpdateAsync(Site site, int currentUserId)
     {
         if (site == null)
             throw new ArgumentNullException(nameof(site));
 
-        _context.Entry(site).State = EntityState.Modified;
+        var existing = await _context.Sites.FindAsync(site.Site_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Site with Site_code {site.Site_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(site);
         await _context.SaveChangesAsync();
     }
 
     /// <summary>
     /// Delete a site by site code
     /// </summary>
-    public async Task DeleteAsync(int siteCode)
+    public async Task DeleteAsync(int siteCode, int currentUserId)
     {
         var site = await GetByIdAsync(siteCode);
         if (site != null)
         {
-            _context.Sites.Remove(site);
+            // Soft delete instead of hard delete
+                site.is_deleted = true;
+                site.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

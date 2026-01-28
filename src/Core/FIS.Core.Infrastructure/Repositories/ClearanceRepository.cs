@@ -36,21 +36,28 @@ public class ClearanceRepository : IClearanceRepository
             .ToListAsync();
     }
 
-    public async Task<Clearance> CreateAsync(Clearance clearance)
+    public async Task<Clearance> CreateAsync(Clearance clearance, int currentUserId)
     {
         await _context.Set<Clearance>().AddAsync(clearance);
         await _context.SaveChangesAsync();
         return clearance;
     }
 
-    public async Task<Clearance> UpdateAsync(Clearance clearance)
+    public async Task<Clearance> UpdateAsync(Clearance clearance, int currentUserId)
     {
-        _context.Set<Clearance>().Update(clearance);
+        if (clearance == null)
+            throw new ArgumentNullException(nameof(clearance));
+
+        var existing = await _context.Set<Clearance>().FindAsync(clearance.clearance_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Clearance with clearance_code {clearance.clearance_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(clearance);
         await _context.SaveChangesAsync();
-        return clearance;
+        return existing;
     }
 
-    public async Task DeleteAsync(int clearanceCode)
+    public async Task DeleteAsync(int clearanceCode, int currentUserId)
     {
         var clearance = await GetByIdAsync(clearanceCode);
         if (clearance != null)

@@ -64,7 +64,7 @@ public class ContractService : IContractService
             contract.locked_for_transfer = false;
 
             // Create contract
-            var createdContract = await _contractRepository.CreateAsync(contract);
+            var createdContract = await _contractRepository.CreateAsync(contract, 1);
 
             _logger.LogInformation("Contract created successfully: {ContractCode} for vehicle {VmfCode}",
                 createdContract.contract_code, createdContract.vmf_code);
@@ -250,7 +250,7 @@ public class ContractService : IContractService
                     _logger.LogError(journalEx, "Error processing journal rebill for contract {ContractCode}", contract.contract_code);
                 }
 
-                await _contractRepository.UpdateAsync(contract);
+                await _contractRepository.UpdateAsync(contract, 1);
             }
             else if (changeTracker.DoUpdate)
             {
@@ -290,7 +290,7 @@ public class ContractService : IContractService
                     _logger.LogError(journalEx, "Error updating journal for contract {ContractCode}", contract.contract_code);
                 }
 
-                await _contractRepository.UpdateAsync(contract);
+                await _contractRepository.UpdateAsync(contract, 1);
             }
             else if (changeTracker.DoReversal)
             {
@@ -350,7 +350,7 @@ public class ContractService : IContractService
                 return ContractOperationResult.ValidationFailed(validationResult);
             }
 
-            await _contractRepository.UpdateAsync(contract);
+            await _contractRepository.UpdateAsync(contract, 1);
 
             _logger.LogInformation("Contract target return date extended successfully: {ContractCode}", contractCode);
 
@@ -437,7 +437,7 @@ public class ContractService : IContractService
             contract.still_current = "N";
             contract.Notes = $"CANCELLED: {cancellationReason ?? "No reason provided"}";
 
-            await _contractRepository.UpdateAsync(contract);
+            await _contractRepository.UpdateAsync(contract, 1);
 
             _logger.LogInformation("Contract cancelled successfully: {ContractCode}", contractCode);
 

@@ -47,21 +47,28 @@ public class CallCentreRepository : ICallCentreRepository
             .ToListAsync();
     }
 
-    public async Task<CallCentre> CreateAsync(CallCentre callCentre)
+    public async Task<CallCentre> CreateAsync(CallCentre callCentre, int currentUserId)
     {
         await _context.Set<CallCentre>().AddAsync(callCentre);
         await _context.SaveChangesAsync();
         return callCentre;
     }
 
-    public async Task<CallCentre> UpdateAsync(CallCentre callCentre)
+    public async Task<CallCentre> UpdateAsync(CallCentre callCentre, int currentUserId)
     {
-        _context.Set<CallCentre>().Update(callCentre);
+        if (callCentre == null)
+            throw new ArgumentNullException(nameof(callCentre));
+
+        var existing = await _context.Set<CallCentre>().FindAsync(callCentre.Call_centre_code);
+        if (existing == null)
+            throw new InvalidOperationException($"CallCentre with Call_centre_code {callCentre.Call_centre_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(callCentre);
         await _context.SaveChangesAsync();
-        return callCentre;
+        return existing;
     }
 
-    public async Task DeleteAsync(short callCentreCode)
+    public async Task DeleteAsync(short callCentreCode, int currentUserId)
     {
         var callCentre = await GetByIdAsync(callCentreCode);
         if (callCentre != null)

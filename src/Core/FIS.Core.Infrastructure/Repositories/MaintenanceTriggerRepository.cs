@@ -26,6 +26,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<MaintenanceTriggerEntity?> GetByIdAsync(short triggerCode)
         {
             return await _context.MaintenanceTriggers
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(mt => mt.maint_trigger_code == triggerCode);
         }
 
@@ -37,6 +38,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<MaintenanceTriggerEntity?> GetByDescriptionAsync(string description)
         {
             return await _context.MaintenanceTriggers
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(mt => mt.description.ToLower() == description.ToLower());
         }
 
@@ -48,6 +50,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<MaintenanceTriggerEntity?> GetByTriggerIdAsync(string triggerId)
         {
             return await _context.MaintenanceTriggers
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(mt => mt.trigger_id == triggerId);
         }
 
@@ -58,6 +61,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<IEnumerable<MaintenanceTriggerEntity>> GetAllMaintenanceTriggersAsync()
         {
             return await _context.MaintenanceTriggers
+                .Where(x => !x.is_deleted)
                 .OrderBy(mt => mt.description)
                 .ToListAsync();
         }
@@ -79,9 +83,15 @@ namespace FIS.Core.Infrastructure.Repositories
         /// Creates a new maintenance trigger
         /// </summary>
         /// <param name="maintenanceTrigger">The maintenance trigger entity to create</param>
+        /// <param name="currentUserId">The ID of the user performing the action</param>
         /// <returns>The created maintenance trigger entity</returns>
-        public async Task<MaintenanceTriggerEntity> CreateAsync(MaintenanceTriggerEntity maintenanceTrigger)
+        public async Task<MaintenanceTriggerEntity> CreateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId)
         {
+            // Auto-populate audit fields
+            maintenanceTrigger.date_created = DateTime.UtcNow;
+            maintenanceTrigger.created_by_user_code = currentUserId;
+            maintenanceTrigger.is_deleted = false;
+            
             _context.MaintenanceTriggers.Add(maintenanceTrigger);
             await _context.SaveChangesAsync();
             return maintenanceTrigger;
@@ -91,24 +101,43 @@ namespace FIS.Core.Infrastructure.Repositories
         /// Updates an existing maintenance trigger
         /// </summary>
         /// <param name="maintenanceTrigger">The maintenance trigger entity to update</param>
+        /// <param name="currentUserId">The ID of the user performing the action</param>
         /// <returns>The updated maintenance trigger entity</returns>
-        public async Task<MaintenanceTriggerEntity> UpdateAsync(MaintenanceTriggerEntity maintenanceTrigger)
+        public async Task<MaintenanceTriggerEntity> UpdateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId)
         {
-            _context.Entry(maintenanceTrigger).State = EntityState.Modified;
+            if (maintenanceTrigger == null)
+                throw new ArgumentNullException(nameof(maintenanceTrigger));
+
+            var existing = await _context.MaintenanceTriggers.FindAsync(maintenanceTrigger.maint_trigger_code);
+            if (existing == null)
+                throw new InvalidOperationException($"MaintenanceTrigger with maint_trigger_code {maintenanceTrigger.maint_trigger_code} not found");
+
+            // Preserve creation audit fields
+            maintenanceTrigger.date_created = existing.date_created;
+            maintenanceTrigger.created_by_user_code = existing.created_by_user_code;
+            // Set update audit fields
+            maintenanceTrigger.date_updated = DateTime.UtcNow;
+            maintenanceTrigger.modified_by_user_code = currentUserId;
+            
+            _context.Entry(existing).CurrentValues.SetValues(maintenanceTrigger);
             await _context.SaveChangesAsync();
-            return maintenanceTrigger;
+            return existing;
         }
 
         /// <summary>
         /// Deletes a maintenance trigger by its code
         /// </summary>
         /// <param name="triggerCode">The maintenance trigger code to delete</param>
-        public async Task DeleteAsync(short triggerCode)
+        /// <param name="currentUserId">The ID of the user performing the action</param>
+        public async Task DeleteAsync(short triggerCode, int currentUserId)
         {
             var maintenanceTrigger = await _context.MaintenanceTriggers.FindAsync(triggerCode);
             if (maintenanceTrigger != null)
             {
-                _context.MaintenanceTriggers.Remove(maintenanceTrigger);
+                // Soft delete instead of hard delete
+                maintenanceTrigger.is_deleted = true;
+                maintenanceTrigger.date_updated = DateTime.UtcNow;
+                maintenanceTrigger.modified_by_user_code = currentUserId;
                 await _context.SaveChangesAsync();
             }
         }

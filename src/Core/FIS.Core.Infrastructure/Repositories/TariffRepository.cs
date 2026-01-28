@@ -83,7 +83,7 @@ public class TariffRepository : ITariffRepository
     /// <summary>
     /// Create new tariff.
     /// </summary>
-    public async Task<Tariff> CreateAsync(Tariff tariff)
+    public async Task<Tariff> CreateAsync(Tariff tariff, int currentUserId)
     {
         tariff.date_created = DateTime.Now;
         _context.Set<Tariff>().Add(tariff);
@@ -94,18 +94,25 @@ public class TariffRepository : ITariffRepository
     /// <summary>
     /// Update existing tariff.
     /// </summary>
-    public async Task<Tariff> UpdateAsync(Tariff tariff)
+    public async Task<Tariff> UpdateAsync(Tariff tariff, int currentUserId)
     {
+        if (tariff == null)
+            throw new ArgumentNullException(nameof(tariff));
+
+        var existing = await _context.Set<Tariff>().FindAsync(tariff.tariff_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Tariff with tariff_code {tariff.tariff_code} not found");
+
         tariff.date_modified = DateTime.Now;
-        _context.Set<Tariff>().Update(tariff);
+        _context.Entry(existing).CurrentValues.SetValues(tariff);
         await _context.SaveChangesAsync();
-        return tariff;
+        return existing;
     }
 
     /// <summary>
     /// Delete tariff.
     /// </summary>
-    public async Task DeleteAsync(int tariffCode)
+    public async Task DeleteAsync(int tariffCode, int currentUserId)
     {
         var tariff = await GetByIdAsync(tariffCode);
         if (tariff != null)

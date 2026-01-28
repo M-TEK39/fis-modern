@@ -11,7 +11,7 @@ public class VehicleDamageRepository : IVehicleDamageRepository
     public async Task<IEnumerable<VehicleDamage>> GetAllAsync() { return await _context.Set<VehicleDamage>().Include(d => d.Vehicle).Include(d => d.ModifiedByUser).ToListAsync(); }
     public async Task<IEnumerable<VehicleDamage>> GetByVehicleAsync(int vmfCode) { return await _context.Set<VehicleDamage>().Where(d => d.vmf_code == vmfCode).Include(d => d.Vehicle).Include(d => d.ModifiedByUser).ToListAsync(); }
     public async Task<IEnumerable<VehicleDamage>> GetByStatusAsync(string status) { return await _context.Set<VehicleDamage>().Where(d => d.damage_status == status).Include(d => d.Vehicle).Include(d => d.ModifiedByUser).ToListAsync(); }
-    public async Task<VehicleDamage> CreateAsync(VehicleDamage damage) { _context.Set<VehicleDamage>().Add(damage); await _context.SaveChangesAsync(); return damage; }
-    public async Task<VehicleDamage> UpdateAsync(VehicleDamage damage) { _context.Set<VehicleDamage>().Update(damage); await _context.SaveChangesAsync(); return damage; }
-    public async Task DeleteAsync(short damageId) { var damage = await GetByIdAsync(damageId); if (damage != null) { _context.Set<VehicleDamage>().Remove(damage); await _context.SaveChangesAsync(); } }
+    public async Task<VehicleDamage> CreateAsync(VehicleDamage damage, int currentUserId) { _context.Set<VehicleDamage>().Add(damage); await _context.SaveChangesAsync(); return damage; }
+    public async Task<VehicleDamage> UpdateAsync(VehicleDamage damage, int currentUserId) { if (damage == null) throw new ArgumentNullException(nameof(damage)); var existing = await _context.Set<VehicleDamage>().FindAsync(damage.damage_id); if (existing == null) throw new InvalidOperationException($"VehicleDamage with damage_id {damage.damage_id} not found"); _context.Entry(existing).CurrentValues.SetValues(damage); await _context.SaveChangesAsync(); return existing; }
+    public async Task DeleteAsync(short damageId, int currentUserId) { var damage = await GetByIdAsync(damageId); if (damage != null) { _context.Set<VehicleDamage>().Remove(damage); await _context.SaveChangesAsync(); } }
 }

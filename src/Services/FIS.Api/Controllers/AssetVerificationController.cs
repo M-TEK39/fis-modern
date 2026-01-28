@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class AssetVerificationController : ControllerBase
+public class AssetVerificationController : BaseApiController
 {
     private readonly IAssetVerificationRepository _repository;
     private readonly ILogger<AssetVerificationController> _logger;
@@ -29,11 +29,11 @@ public class AssetVerificationController : ControllerBase
     public async Task<ActionResult<IEnumerable<AssetVerification>>> GetByStatus(string status) { try { return Ok(await _repository.GetByStatusAsync(status)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPost]
-    public async Task<ActionResult<AssetVerification>> Create([FromBody] AssetVerification item) { try { var created = await _repository.CreateAsync(item); return CreatedAtAction(nameof(GetById), new { id = created.asset_verification_code }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<AssetVerification>> Create([FromBody] AssetVerification item) { try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.asset_verification_code }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<AssetVerification>> Update(int id, [FromBody] AssetVerification item) { try { if (id != item.asset_verification_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<AssetVerification>> Update(int id, [FromBody] AssetVerification item) { try { if (id != item.asset_verification_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> Delete(int id) { try { await _repository.DeleteAsync(id); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult> Delete(int id) { try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 }

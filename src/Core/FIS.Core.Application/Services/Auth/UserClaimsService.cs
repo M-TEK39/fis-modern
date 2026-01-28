@@ -76,7 +76,7 @@ public class UserClaimsService : IUserClaimsService
                 // Update existing mapping
                 existingMapping.user_access_code = userAccessCode;
                 existingMapping.created_date = DateTime.UtcNow; // Update timestamp
-                await _mappingRepository.UpdateAsync(existingMapping);
+                await _mappingRepository.UpdateAsync(existingMapping, 1); // TODO: Pass actual user ID from JWT
             }
             else
             {
@@ -87,7 +87,7 @@ public class UserClaimsService : IUserClaimsService
                     user_access_code = userAccessCode,
                     created_date = DateTime.UtcNow
                 };
-                await _mappingRepository.CreateAsync(newMapping);
+                await _mappingRepository.CreateAsync(newMapping, 1); // TODO: Pass actual user ID from JWT
             }
 
             return true;

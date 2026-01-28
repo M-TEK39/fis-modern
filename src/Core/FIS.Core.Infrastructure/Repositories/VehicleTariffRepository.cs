@@ -75,7 +75,7 @@ public class VehicleTariffRepository : IVehicleTariffRepository
     /// <summary>
     /// Create new vehicle tariff.
     /// </summary>
-    public async Task<VehicleTariff> CreateAsync(VehicleTariff vehicleTariff)
+    public async Task<VehicleTariff> CreateAsync(VehicleTariff vehicleTariff, int currentUserId)
     {
         vehicleTariff.calculation_date = DateTime.Now;
         _context.Set<VehicleTariff>().Add(vehicleTariff);
@@ -86,18 +86,25 @@ public class VehicleTariffRepository : IVehicleTariffRepository
     /// <summary>
     /// Update existing vehicle tariff.
     /// </summary>
-    public async Task<VehicleTariff> UpdateAsync(VehicleTariff vehicleTariff)
+    public async Task<VehicleTariff> UpdateAsync(VehicleTariff vehicleTariff, int currentUserId)
     {
+        if (vehicleTariff == null)
+            throw new ArgumentNullException(nameof(vehicleTariff));
+
+        var existing = await _context.Set<VehicleTariff>().FindAsync(vehicleTariff.vehicle_tariff_code);
+        if (existing == null)
+            throw new InvalidOperationException($"VehicleTariff with vehicle_tariff_code {vehicleTariff.vehicle_tariff_code} not found");
+
         vehicleTariff.calculation_date = DateTime.Now;
-        _context.Set<VehicleTariff>().Update(vehicleTariff);
+        _context.Entry(existing).CurrentValues.SetValues(vehicleTariff);
         await _context.SaveChangesAsync();
-        return vehicleTariff;
+        return existing;
     }
 
     /// <summary>
     /// Delete vehicle tariff.
     /// </summary>
-    public async Task DeleteAsync(int vehicleTariffCode)
+    public async Task DeleteAsync(int vehicleTariffCode, int currentUserId)
     {
         var vehicleTariff = await GetByIdAsync(vehicleTariffCode);
         if (vehicleTariff != null)

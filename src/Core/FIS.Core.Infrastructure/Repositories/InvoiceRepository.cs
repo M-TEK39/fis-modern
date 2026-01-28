@@ -62,14 +62,18 @@ public class InvoiceRepository : IInvoiceRepository
     /// </summary>
     /// <param name="invoice">Invoice to update</param>
     /// <returns>Updated invoice</returns>
-    public async Task<Invoice> UpdateAsync(Invoice invoice)
+    public async Task<Invoice> UpdateAsync(Invoice invoice, int currentUserId)
     {
         if (invoice == null)
             throw new ArgumentNullException(nameof(invoice));
 
-        _context.Invoices.Update(invoice);
+        var existing = await _context.Invoices.FindAsync(invoice.invoice_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Invoice with invoice_code {invoice.invoice_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(invoice);
         await _context.SaveChangesAsync();
-        return invoice;
+        return existing;
     }
 
     /// <summary>
@@ -77,13 +81,15 @@ public class InvoiceRepository : IInvoiceRepository
     /// </summary>
     /// <param name="id">Invoice identifier</param>
     /// <returns>True if deleted</returns>
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, int currentUserId)
     {
         var invoice = await _context.Invoices.FindAsync(id);
         if (invoice == null)
             return false;
 
-        _context.Invoices.Remove(invoice);
+        // Soft delete instead of hard delete
+                invoice.is_deleted = true;
+                invoice.date_updated = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return true;
     }

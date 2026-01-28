@@ -12,8 +12,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Loss>> GetAllAsync();
         Task<IEnumerable<Loss>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<Loss>> GetBySiteAsync(short siteCode);
-        Task<Loss> CreateAsync(Loss loss);
-        Task<Loss> UpdateAsync(Loss loss);
-        Task DeleteAsync(short lossCode);
+        Task<Loss> CreateAsync(Loss loss, int currentUserId);
+        Task<Loss> UpdateAsync(Loss loss, int currentUserId);
+        Task DeleteAsync(short lossCode, int currentUserId);
     }
 }

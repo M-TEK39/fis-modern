@@ -1,18 +1,30 @@
 using System.Net.Http.Json;
 using FIS.Web.Models;
 using System.Text.Json;
+using System.Net.Http.Headers;
 
 namespace FIS.Web.Services;
 
 public class VehicleApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<VehicleApiService> _logger;
 
-    public VehicleApiService(HttpClient httpClient, ILogger<VehicleApiService> logger)
+    public VehicleApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthorizationHeader()
+    {
+        if (_tokenService.IsTokenValid && !string.IsNullOrEmpty(_tokenService.Token))
+        {
+            _httpClient.DefaultRequestHeaders.Authorization = 
+                new AuthenticationHeaderValue("Bearer", _tokenService.Token);
+        }
     }
 
     public async Task<PagedResult<VehicleDto>> GetVehiclesAsync(
@@ -23,6 +35,8 @@ public class VehicleApiService
     {
         try
         {
+            AddAuthorizationHeader();
+            
             var query = $"api/vehicles?pageNumber={pageNumber}&pageSize={pageSize}";
             if (!string.IsNullOrWhiteSpace(search))
             {

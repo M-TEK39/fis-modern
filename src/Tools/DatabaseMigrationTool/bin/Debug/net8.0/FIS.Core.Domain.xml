@@ -75,6 +75,12 @@
             Timestamp when mapping was created
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Auth.LegacyUserCredential">
+            <summary>
+            Legacy User Credential Entity
+            Stores password hashes for legacy JWT authentication
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Contract">
             <summary>
             Contract Entity - EXACT legacy schema match for contract table
@@ -1404,6 +1410,12 @@
         <member name="P:FIS.Core.Domain.Entities.Model.class_code">
             <summary>
             Vehicle class code
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Model.type_code">
+            <summary>
+            Vehicle type code (NEW: User-approved schema extension)
+            Links to type table for vehicle categorization
             </summary>
         </member>
         <member name="P:FIS.Core.Domain.Entities.Model.model_description">

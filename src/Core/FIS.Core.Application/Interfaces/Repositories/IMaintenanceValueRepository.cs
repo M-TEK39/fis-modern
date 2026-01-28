@@ -49,20 +49,20 @@ public interface IMaintenanceValueRepository
     /// </summary>
     /// <param name="maintenanceValue">Maintenance value to create</param>
     /// <returns>Created maintenance value</returns>
-    Task<MaintenanceValue> CreateAsync(MaintenanceValue maintenanceValue);
+    Task<MaintenanceValue> CreateAsync(MaintenanceValue maintenanceValue, int currentUserId);
 
     /// <summary>
     /// Update existing maintenance value.
     /// </summary>
     /// <param name="maintenanceValue">Maintenance value to update</param>
     /// <returns>Updated maintenance value</returns>
-    Task<MaintenanceValue> UpdateAsync(MaintenanceValue maintenanceValue);
+    Task<MaintenanceValue> UpdateAsync(MaintenanceValue maintenanceValue, int currentUserId);
 
     /// <summary>
     /// Delete maintenance value.
     /// </summary>
     /// <param name="maintenanceValueId">Maintenance value identifier</param>
-    Task DeleteAsync(int maintenanceValueId);
+    Task DeleteAsync(int maintenanceValueId, int currentUserId);
 
     /// <summary>
     /// Delete all maintenance values for a tariff parameter year.

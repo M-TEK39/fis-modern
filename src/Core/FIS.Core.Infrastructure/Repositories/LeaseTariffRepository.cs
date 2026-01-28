@@ -94,7 +94,7 @@ public class LeaseTariffRepository : ILeaseTariffRepository
     /// <summary>
     /// Create new lease tariff.
     /// </summary>
-    public async Task<LeaseTariff> CreateAsync(LeaseTariff leaseTariff)
+    public async Task<LeaseTariff> CreateAsync(LeaseTariff leaseTariff, int currentUserId)
     {
         leaseTariff.date_created = DateTime.Now;
         _context.Set<LeaseTariff>().Add(leaseTariff);
@@ -105,18 +105,25 @@ public class LeaseTariffRepository : ILeaseTariffRepository
     /// <summary>
     /// Update existing lease tariff.
     /// </summary>
-    public async Task<LeaseTariff> UpdateAsync(LeaseTariff leaseTariff)
+    public async Task<LeaseTariff> UpdateAsync(LeaseTariff leaseTariff, int currentUserId)
     {
+        if (leaseTariff == null)
+            throw new ArgumentNullException(nameof(leaseTariff));
+
+        var existing = await _context.Set<LeaseTariff>().FindAsync(leaseTariff.lease_tariff_code);
+        if (existing == null)
+            throw new InvalidOperationException($"LeaseTariff with lease_tariff_code {leaseTariff.lease_tariff_code} not found");
+
         leaseTariff.date_updated = DateTime.Now;
-        _context.Set<LeaseTariff>().Update(leaseTariff);
+        _context.Entry(existing).CurrentValues.SetValues(leaseTariff);
         await _context.SaveChangesAsync();
-        return leaseTariff;
+        return existing;
     }
 
     /// <summary>
     /// Delete lease tariff.
     /// </summary>
-    public async Task DeleteAsync(int leaseTariffCode)
+    public async Task DeleteAsync(int leaseTariffCode, int currentUserId)
     {
         var leaseTariff = await GetByIdAsync(leaseTariffCode);
         if (leaseTariff != null)

@@ -46,20 +46,20 @@ public interface ITariffParameterRepository
     /// </summary>
     /// <param name="tariffParameter">Tariff parameter to create</param>
     /// <returns>Created tariff parameter</returns>
-    Task<TariffParameter> CreateAsync(TariffParameter tariffParameter);
+    Task<TariffParameter> CreateAsync(TariffParameter tariffParameter, int currentUserId);
 
     /// <summary>
     /// Update existing tariff parameter.
     /// </summary>
     /// <param name="tariffParameter">Tariff parameter to update</param>
     /// <returns>Updated tariff parameter</returns>
-    Task<TariffParameter> UpdateAsync(TariffParameter tariffParameter);
+    Task<TariffParameter> UpdateAsync(TariffParameter tariffParameter, int currentUserId);
 
     /// <summary>
     /// Delete tariff parameter.
     /// </summary>
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
-    Task DeleteAsync(int tariffParameterId);
+    Task DeleteAsync(int tariffParameterId, int currentUserId);
 
     /// <summary>
     /// Check if tariff parameter exists for a year.

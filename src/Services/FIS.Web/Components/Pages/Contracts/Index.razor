@@ -3,316 +3,500 @@
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@using ContractModel = FIS.Web.Models.ContractDto
 @inject VehicleApiService VehicleService
-@inject DepartmentApiService DepartmentService
 @inject ContractApiService ContractService
+@inject SiteApiService SiteService
+@inject NavigationManager Navigation
 
-<PageTitle>Contract Management - Fleet Information System</PageTitle>
+<PageTitle>Vehicle Contract Master - Fleet Information System</PageTitle>
+<a id="PageTop"></a>
 
 <div class="page-container">
     <div class="page-header">
         <div class="page-title-section">
             <h1>
                 <i class="bx bx-file"></i>
-                Contract Management
+                Vehicle Contract Master
             </h1>
-            <p>Manage vehicle contracts, assignments, and contract maintenance</p>
+            <p>Vehicle contract maintenance aligned to the legacy workflow.</p>
         </div>
         <div class="page-actions">
-            <button class="btn btn-primary" @onclick="ShowAddDialog">
-                <i class="bx bx-plus"></i>
-                New Contract
-            </button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoContractsMenu">Contracts Menu</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
         </div>
     </div>
 
     <div class="page-content">
-        <ContractSearchBar SearchTerm="" OnSearchChange="OnSearchChange" />
-        
-        <ContractsTable 
-            Contracts="_filteredContracts"
-            Loading="_loading"
-            HasSearchTerm="@(!string.IsNullOrWhiteSpace(_searchTerm))"
-            OnAddContract="ShowAddDialog"
-            OnRefresh="RefreshData"
-            OnView="ViewContract"
-            OnEdit="ShowEditDialog"
-            OnDelete="ShowDeleteDialog" />
+        <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleContractsInfo">
+                    <span>Contracts Information / Help</span>
+                    <i class="bx @(_showContractsInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showContractsInfo)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <span class="menu-item-disabled">Contracts Information / Help</span>
+                            <span class="menu-item-badge">Coming soon</span>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleContractMaintenance">
+                    <span>Contract Maintenance</span>
+                    <i class="bx @(_showContractMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showContractMaintenance)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/contracts">1) Vehicle Contract Maintenance</a>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-disabled">2) Vehicle Contract Back Date Requests - Approval</span>
+                            <span class="menu-item-badge">Coming soon</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-disabled">3) Vehicle Contract History Backdating</span>
+                            <span class="menu-item-badge">Coming soon</span>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleContractBookings">
+                    <span>Vehicle Bookings</span>
+                    <i class="bx @(_showContractBookings ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showContractBookings)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <span class="menu-item-disabled">1) Vehicle Bookings</span>
+                            <span class="menu-item-badge">Coming soon</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="form-card-header">
+                <h2>Vehicle Contract Maintenance</h2>
+                <p>Search for a vehicle, terminate the current contract, and open a new one.</p>
+            </div>
+            <div class="form-card-body">
+                <div class="form-section">
+                    <h3 class="form-section-title">
+                        <i class="bx bx-search"></i>
+                        Search Vehicle
+                    </h3>
+                    <div class="form-grid">
+                        <div class="form-field form-group-full">
+                            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.75rem;">
+                                <label class="form-label" style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+                                    <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
+                                    GG
+                                </label>
+                                <label class="form-label" style="margin:0; display:flex; align-items:center; gap:0.4rem;">
+                                    <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
+                                    GP Number
+                                </label>
+                                <input type="text" class="form-input" style="max-width:240px;" placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")" @bind="_searchQuery" @bind:event="oninput" />
+                                <button class="btn btn-primary" type="button" @onclick="SearchVehicle" disabled="@_searching">
+                                    @if (_searching)
+                                    {
+                                        <span class="spinner-sm"></span>
+                                        <span>Searching...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Submit</span>
+                                    }
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(_searchError))
+                            {
+                                <span class="form-error">@_searchError</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                @if (_selectedVehicle != null)
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-car"></i>
+                            Vehicle Details
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">GG Number</label>
+                                <input class="form-input" value="@_selectedVehicle.fleet_number" disabled />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">GP Number</label>
+                                <input class="form-input" value="@_selectedVehicle.registration_number" disabled />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Make & Model</label>
+                                <input class="form-input" value="@_selectedVehicle.model_name" disabled />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Status</label>
+                                <input class="form-input" value="@_selectedVehicle.status_description" disabled />
+                            </div>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <button class="btn btn-primary" type="button" @onclick="OpenNewContract" disabled="@_showContractForm">
+                                Terminate Current Contract AND Open New One
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                @if (_showContractForm)
+                {
+                    <EditForm Model="_contract" OnValidSubmit="SaveContract">
+                        <DataAnnotationsValidator />
+
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-clipboard"></i>
+                                Contract Details
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Site <span class="required">*</span></label>
+                                    <select class="form-select" @bind="_contract.SiteCode">
+                                        <option value="0">Select Site...</option>
+                                        @foreach (var site in _sites)
+                                        {
+                                            <option value="@site.SiteCode">@site.Description</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Contract Type</label>
+                                    <select class="form-select" @bind="_contract.ContractType">
+                                        @foreach (var contractType in _contractTypes)
+                                        {
+                                            <option value="@contractType">@contractType</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-calendar"></i>
+                                Dates & Odometer
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Start Date <span class="required">*</span></label>
+                                    <InputDate @bind-Value="_contract.StartDate" class="form-input" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Target Return Date</label>
+                                    <InputDate @bind-Value="_contract.TargetReturnDate" class="form-input" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Start Odometer</label>
+                                    <InputNumber @bind-Value="_contract.StartOdometer" class="form-input" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-id-card"></i>
+                                Receiver & Codes
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Receiver ID</label>
+                                    <InputText @bind-Value="_contract.ReceiverId" class="form-input" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Responsibility Code</label>
+                                    <InputText @bind-Value="_contract.ResponsibilityCode" class="form-input" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Objective Code</label>
+                                    <InputText @bind-Value="_contract.ObjectiveCode" class="form-input" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Project Code</label>
+                                    <InputText @bind-Value="_contract.ProjectCode" class="form-input" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-check"></i>
+                                Authorization & Notes
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Authorization (Z186)</label>
+                                    <InputText @bind-Value="_contract.AuthorizationNumber" class="form-input" />
+                                </div>
+
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Notes</label>
+                                    <textarea class="form-input" rows="3" @bind="_contract.Notes"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-shield-quarter"></i>
+                                Approval Workflow
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field form-group-full">
+                                    <div class="alert alert-info">
+                                        <i class="bx bx-info-circle"></i>
+                                        <span>Contract approval and backdating authorization are UI-only pending backend endpoints.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn btn-secondary" type="button" @onclick="CancelContract">Cancel</button>
+                            <button class="btn btn-primary" type="submit" disabled="@_savingContract">
+                                @if (_savingContract)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>Saving...</span>
+                                }
+                                else
+                                {
+                                    <span>Save Contract</span>
+                                }
+                            </button>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_contractError))
+                        {
+                            <div class="alert alert-error">
+                                <i class="bx bx-error-circle"></i>
+                                <span>@_contractError</span>
+                            </div>
+                        }
+                    </EditForm>
+                }
+            </div>
+        </div>
     </div>
 </div>
-
-@* Modal for Add/Edit Contract *@
-@if (_showAddDialog || _showEditDialog)
-{
-    <Modal IsVisible="true" 
-           Title="@(_showEditDialog ? "Edit Contract" : "New Contract")" 
-           Size="Modal.ModalSize.Large"
-           IsSaving="_saving"
-           OnCancel="CloseDialogs"
-           OnSubmit="SaveContract"
-           Model="_currentContract">
-        <ChildContent>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>Contract Number</label>
-                    <input type="text" @bind="_currentContract.contract_number" class="form-input" placeholder="Enter contract number" />
-                    <ValidationMessage For="() => _currentContract.contract_number" />
-                </div>
-                
-                <div class="form-group">
-                    <label>Vehicle</label>
-                    <select @bind="_currentContract.vehicle_registration" class="form-input">
-                        <option value="">Select Vehicle</option>
-                        @foreach (var vehicle in _vehicles)
-                        {
-                            <option value="@vehicle.registration_number">@vehicle.registration_number - @vehicle.model_name</option>
-                        }
-                    </select>
-                    <ValidationMessage For="() => _currentContract.vehicle_registration" />
-                </div>
-                
-                <div class="form-group">
-                    <label>Department</label>
-                    <select @bind="_currentContract.department_code" class="form-input">
-                        <option value="0">Select Department</option>
-                        @foreach (var dept in _departments)
-                        {
-                            <option value="@dept.department_code">@dept.department_description</option>
-                        }
-                    </select>
-                    <ValidationMessage For="() => _currentContract.department_code" />
-                </div>
-                
-                <div class="form-group">
-                    <label>Contractor Name</label>
-                    <input type="text" @bind="_currentContract.contractor_name" class="form-input" placeholder="Enter contractor name" />
-                    <ValidationMessage For="() => _currentContract.contractor_name" />
-                </div>
-                
-                <div class="form-group">
-                    <label>Start Date</label>
-                    <input type="date" @bind="_currentContract.start_date" class="form-input" />
-                    <ValidationMessage For="() => _currentContract.start_date" />
-                </div>
-                
-                <div class="form-group">
-                    <label>End Date</label>
-                    <input type="date" @bind="_currentContract.end_date" class="form-input" />
-                </div>
-                
-                <div class="form-group">
-                    <label>Monthly Cost (R)</label>
-                    <input type="number" step="0.01" @bind="_currentContract.monthly_cost" class="form-input" placeholder="0.00" />
-                </div>
-                
-                <div class="form-group">
-                    <label>Status</label>
-                    <select @bind="_currentContract.status" class="form-input">
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                        <option value="Expired">Expired</option>
-                        <option value="Pending">Pending</option>
-                    </select>
-                    <ValidationMessage For="() => _currentContract.status" />
-                </div>
-                
-                <div class="form-group form-group-full">
-                    <label>Contract Notes</label>
-                    <textarea @bind="_currentContract.contract_notes" class="form-input" rows="3" placeholder="Enter contract notes or special terms"></textarea>
-                </div>
-            </div>
-        </ChildContent>
-    </Modal>
-}
+<a id="PageBottom"></a>
 
 @code {
-    // State management
-    private bool _loading = true;
-    private bool _showAddDialog = false;
-    private bool _showEditDialog = false;
-    private bool _saving = false;
-    private string _searchTerm = "";
+    private bool _showContractsInfo = true;
+    private bool _showContractMaintenance = true;
+    private bool _showContractBookings;
 
-    // Data collections
-    private List<ContractModel> _contracts = new();
-    private List<ContractModel> _filteredContracts = new();
-    private List<VehicleDto> _vehicles = new();
-    private List<DepartmentDto> _departments = new();
-    
-    // Current contract for add/edit
-    private ContractModel _currentContract = new();
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _searching;
+    private string? _searchError;
+    private VehicleDto? _selectedVehicle;
+
+    private bool _showContractForm;
+    private bool _savingContract;
+    private string? _contractError;
+
+    private List<SiteResponseDto> _sites = new();
+    private readonly List<string> _contractTypes = new() { "Daily", "Monthly", "Relief", "Lease" };
+
+    private ContractFormModel _contract = new();
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadData();
+        await LoadSites();
     }
 
-    private async Task LoadData()
+    private async Task LoadSites()
     {
-        _loading = true;
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private void ToggleContractsInfo()
+    {
+        _showContractsInfo = !_showContractsInfo;
+    }
+
+    private void ToggleContractMaintenance()
+    {
+        _showContractMaintenance = !_showContractMaintenance;
+    }
+
+    private void ToggleContractBookings()
+    {
+        _showContractBookings = !_showContractBookings;
+    }
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+    }
+
+    private async Task SearchVehicle()
+    {
+        _searchError = null;
+        _selectedVehicle = null;
+        _showContractForm = false;
+
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _searchError = "Enter a GG or GP number to search.";
+            return;
+        }
+
+        _searching = true;
         try
         {
-            var contractsTask = ContractService.GetContractsAsync();
-            var vehiclesTask = VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 500);
-            var departmentsTask = DepartmentService.GetDepartmentsAsync();
+            var result = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: _searchQuery.Trim());
+            var query = _searchQuery.Trim();
 
-            await Task.WhenAll(contractsTask, vehiclesTask, departmentsTask);
+            _selectedVehicle = _searchType == "GG"
+                ? result.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
+                : result.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
 
-            _contracts = contractsTask.Result;
-            _vehicles = vehiclesTask.Result?.Data ?? new List<VehicleDto>();
-            _departments = departmentsTask.Result ?? new List<DepartmentDto>();
+            if (_selectedVehicle == null)
+            {
+                _searchError = "Vehicle not found.";
+                return;
+            }
 
-            FilterContracts();
+            _contract = new ContractFormModel
+            {
+                VmfCode = _selectedVehicle.vmf_code,
+                StartDate = DateTime.Today,
+                StartOdometer = _selectedVehicle.current_odo,
+                ContractType = _contractTypes.First()
+            };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading data: {ex.Message}");
+            _searchError = $"Search failed: {ex.Message}";
         }
         finally
         {
-            _loading = false;
+            _searching = false;
         }
     }
 
-    private async Task OnSearchChange(string searchTerm)
+    private void OpenNewContract()
     {
-        _searchTerm = searchTerm;
-        FilterContracts();
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private void FilterContracts()
-    {
-        if (string.IsNullOrWhiteSpace(_searchTerm))
-        {
-            _filteredContracts = _contracts.ToList();
-        }
-        else
-        {
-            var searchLower = _searchTerm.ToLower();
-            _filteredContracts = _contracts.Where(c =>
-                c.contract_number.ToLower().Contains(searchLower) ||
-                c.vehicle_registration.ToLower().Contains(searchLower) ||
-                c.department_name.ToLower().Contains(searchLower) ||
-                (c.contractor_name?.ToLower().Contains(searchLower) == true)
-            ).ToList();
-        }
-    }
-
-    private void ShowAddDialog()
-    {
-        _currentContract = new ContractModel 
-        { 
-            start_date = DateTime.Today,
-            status = "Active"
-        };
-        _showAddDialog = true;
-    }
-
-    private void ShowEditDialog(ContractModel contract)
-    {
-        _currentContract = new ContractModel
-        {
-            contract_id = contract.contract_id,
-            contract_number = contract.contract_number,
-            vehicle_registration = contract.vehicle_registration,
-            vehicle_make = contract.vehicle_make,
-            vehicle_model = contract.vehicle_model,
-            department_code = contract.department_code,
-            department_name = contract.department_name,
-            contractor_name = contract.contractor_name,
-            start_date = contract.start_date,
-            end_date = contract.end_date,
-            monthly_cost = contract.monthly_cost,
-            status = contract.status,
-            contract_notes = contract.contract_notes ?? ""
-        };
-        _showEditDialog = true;
-    }
-
-    private void ViewContract(ContractModel contract)
-    {
-        // For now, just edit
-        ShowEditDialog(contract);
-    }
-
-    private async Task RefreshData()
-    {
-        await LoadData();
+        _contractError = null;
+        _showContractForm = true;
     }
 
     private async Task SaveContract()
     {
-        _saving = true;
+        _savingContract = true;
+        _contractError = null;
+
         try
         {
-            if (_showAddDialog)
+            if (_contract.SiteCode <= 0)
             {
-                var createDto = new ContractCreateDto
-                {
-                    contract_number = _currentContract.contract_number,
-                    vehicle_registration = _currentContract.vehicle_registration,
-                    department_code = _currentContract.department_code,
-                    contractor_name = _currentContract.contractor_name,
-                    start_date = _currentContract.start_date,
-                    end_date = _currentContract.end_date,
-                    monthly_cost = _currentContract.monthly_cost,
-                    status = _currentContract.status,
-                    contract_notes = _currentContract.contract_notes ?? string.Empty
-                };
+                _contractError = "Site is required.";
+                return;
+            }
 
-                await ContractService.CreateContractAsync(createDto);
+            if (_contract.VmfCode <= 0)
+            {
+                _contractError = "Select a vehicle before saving a contract.";
+                return;
+            }
+
+            var request = new HireContractRequestDto
+            {
+                VmfCode = _contract.VmfCode,
+                SiteCode = _contract.SiteCode,
+                StartOdometer = _contract.StartOdometer,
+                DriverId = _contract.ReceiverId,
+                Notes = _contract.Notes,
+                TargetReturnDate = _contract.TargetReturnDate
+            };
+
+            var success = await ContractService.HireContractAsync(request);
+            if (!success)
+            {
+                _contractError = "Failed to save contract. Please check required fields or active contract status.";
             }
             else
             {
-                var updateDto = new ContractUpdateDto
-                {
-                    contract_number = _currentContract.contract_number,
-                    vehicle_registration = _currentContract.vehicle_registration,
-                    department_code = _currentContract.department_code,
-                    contractor_name = _currentContract.contractor_name,
-                    start_date = _currentContract.start_date,
-                    end_date = _currentContract.end_date,
-                    monthly_cost = _currentContract.monthly_cost,
-                    status = _currentContract.status,
-                    contract_notes = _currentContract.contract_notes ?? string.Empty
-                };
-
-                await ContractService.UpdateContractAsync(_currentContract.contract_id, updateDto);
+                _showContractForm = false;
             }
-
-            await LoadData();
-            CloseDialogs();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error saving contract: {ex.Message}");
+            _contractError = $"Failed to save contract: {ex.Message}";
         }
         finally
         {
-            _saving = false;
+            _savingContract = false;
         }
     }
 
-    private async Task ShowDeleteDialog(ContractModel contract)
+    private void CancelContract()
     {
-        try
-        {
-            await ContractService.DeleteContractAsync(contract.contract_id);
-            await LoadData();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting contract: {ex.Message}");
-        }
+        _showContractForm = false;
     }
 
-    private void CloseDialogs()
+    private void GoMainMenu()
     {
-        _showAddDialog = false;
-        _showEditDialog = false;
-        _currentContract = new ContractModel();
+        Navigation.NavigateTo("/");
+    }
+
+    private void GoContractsMenu()
+    {
+        Navigation.NavigateTo("/contracts");
+    }
+
+    private void GoTop()
+    {
+        Navigation.NavigateTo("/contracts#PageTop");
+    }
+
+    private void GoBottom()
+    {
+        Navigation.NavigateTo("/contracts#PageBottom");
+    }
+
+    private class ContractFormModel
+    {
+        public int VmfCode { get; set; }
+        public short SiteCode { get; set; }
+        public string ContractType { get; set; } = "Daily";
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public DateTime? TargetReturnDate { get; set; }
+        public int? StartOdometer { get; set; }
+        public string? ReceiverId { get; set; }
+        public string? ResponsibilityCode { get; set; }
+        public string? ObjectiveCode { get; set; }
+        public string? ProjectCode { get; set; }
+        public string? AuthorizationNumber { get; set; }
+        public string? Notes { get; set; }
     }
 }

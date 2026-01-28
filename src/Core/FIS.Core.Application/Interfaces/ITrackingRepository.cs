@@ -6,7 +6,7 @@ public interface ITrackingRepository
     Task<IEnumerable<Tracking>> GetAllAsync();
     Task<IEnumerable<Tracking>> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<Tracking>> GetActiveTrackingAsync();
-    Task<Tracking> CreateAsync(Tracking tracking);
-    Task<Tracking> UpdateAsync(Tracking tracking);
-    Task DeleteAsync(short trackCode);
+    Task<Tracking> CreateAsync(Tracking tracking, int currentUserId);
+    Task<Tracking> UpdateAsync(Tracking tracking, int currentUserId);
+    Task DeleteAsync(short trackCode, int currentUserId);
 }

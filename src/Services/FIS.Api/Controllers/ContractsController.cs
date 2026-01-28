@@ -14,7 +14,7 @@ namespace FIS.Api.Controllers;
 [Route("api/[controller]")]
 [Authorize]
 [Produces("application/json")]
-public class ContractsController : ControllerBase
+public class ContractsController : BaseApiController
 {
     private readonly IContractRepository _contractRepository;
     private readonly IContractService _contractService;
@@ -48,6 +48,8 @@ public class ContractsController : ControllerBase
 
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var hireRequest = new HireContractRequest
             {
                 VmfCode = request.VmfCode,
@@ -82,6 +84,8 @@ public class ContractsController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var success = await _contractService.EndContractByVmfCodeAsync(vmfCode, request.EndOdometer, request.Notes);
             if (!success)
                 return NotFound(new { error = "No active contract found for vehicle" });
@@ -134,6 +138,8 @@ public class ContractsController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             // Note: This uses the internal AddContractAsync from ContractService
             // which isn't exposed in IContractService interface but exists in implementation
             // For now, use repository pattern directly or expose through interface
@@ -169,12 +175,14 @@ public class ContractsController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var contract = await _contractRepository.GetByIdAsync(contractCode);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
 
             contract.target_return_date = request.NewTargetReturnDate;
-            await _contractRepository.UpdateAsync(contract);
+            await _contractRepository.UpdateAsync(contract, currentUserId);
 
             return Ok(new { message = "Contract extended successfully", newTargetReturnDate = request.NewTargetReturnDate });
         }
@@ -198,6 +206,8 @@ public class ContractsController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var contract = await _contractRepository.GetByIdAsync(contractCode);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
@@ -207,7 +217,7 @@ public class ContractsController : ControllerBase
             contract.end_date = DateTime.Now;
             contract.Notes = request?.CancellationReason ?? "Cancelled";
 
-            await _contractRepository.UpdateAsync(contract);
+            await _contractRepository.UpdateAsync(contract, currentUserId);
 
             return Ok(new { message = "Contract cancelled successfully", contractCode });
         }

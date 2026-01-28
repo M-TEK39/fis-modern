@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class TypeController : ControllerBase
+public class TypeController : BaseApiController
 {
     private readonly ITypeRepository _typeRepository;
     private readonly ILogger<TypeController> _logger;
@@ -33,6 +33,8 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var types = await _typeRepository.GetAllTypesAsync();
             var typeDtos = types.Select(t => new TypeResponseDto
             {
@@ -58,6 +60,8 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var type = await _typeRepository.GetByIdAsync(id);
             if (type == null)
             {
@@ -89,6 +93,8 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var type = await _typeRepository.GetByNameAsync(name);
             if (type == null)
             {
@@ -113,6 +119,8 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var types = await _typeRepository.SearchTypesAsync(searchTerm);
             return Ok(types);
         }
@@ -133,6 +141,8 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -144,7 +154,7 @@ public class TypeController : ControllerBase
                 type_description = createTypeDto.type_description
             };
 
-            var createdType = await _typeRepository.CreateAsync(type);
+            var createdType = await _typeRepository.CreateAsync(type, currentUserId);
             return CreatedAtAction(
                 nameof(GetType),
                 new { id = createdType.type_code },
@@ -169,6 +179,8 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -185,7 +197,7 @@ public class TypeController : ControllerBase
                 return NotFound($"Type with code {id} not found");
             }
 
-            var updatedType = await _typeRepository.UpdateAsync(type);
+            var updatedType = await _typeRepository.UpdateAsync(type, currentUserId);
             return Ok(updatedType);
         }
         catch (Exception ex)
@@ -205,13 +217,15 @@ public class TypeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingType = await _typeRepository.GetByIdAsync(id);
             if (existingType == null)
             {
                 return NotFound($"Type with code {id} not found");
             }
 
-            await _typeRepository.DeleteAsync(id);
+            await _typeRepository.DeleteAsync(id, currentUserId);
             return NoContent();
         }
         catch (Exception ex)

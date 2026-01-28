@@ -11,8 +11,8 @@ namespace FIS.Core.Application.Interfaces
         Task<Auction?> GetByIdAsync(short auctionCode);
         Task<IEnumerable<Auction>> GetAllAsync();
         Task<IEnumerable<Auction>> GetByVehicleAsync(int vmfCode);
-        Task<Auction> CreateAsync(Auction auction);
-        Task<Auction> UpdateAsync(Auction auction);
-        Task DeleteAsync(short auctionCode);
+        Task<Auction> CreateAsync(Auction auction, int currentUserId);
+        Task<Auction> UpdateAsync(Auction auction, int currentUserId);
+        Task DeleteAsync(short auctionCode, int currentUserId);
     }
 }

@@ -43,20 +43,20 @@ public interface ITariffWeightCalculationRepository
     /// </summary>
     /// <param name="weightCalculation">Weight calculation to create</param>
     /// <returns>Created weight calculation</returns>
-    Task<TariffWeightCalculation> CreateAsync(TariffWeightCalculation weightCalculation);
+    Task<TariffWeightCalculation> CreateAsync(TariffWeightCalculation weightCalculation, int currentUserId);
 
     /// <summary>
     /// Update existing weight calculation.
     /// </summary>
     /// <param name="weightCalculation">Weight calculation to update</param>
     /// <returns>Updated weight calculation</returns>
-    Task<TariffWeightCalculation> UpdateAsync(TariffWeightCalculation weightCalculation);
+    Task<TariffWeightCalculation> UpdateAsync(TariffWeightCalculation weightCalculation, int currentUserId);
 
     /// <summary>
     /// Delete weight calculation.
     /// </summary>
     /// <param name="tariffWeightCalculationId">Weight calculation identifier</param>
-    Task DeleteAsync(int tariffWeightCalculationId);
+    Task DeleteAsync(int tariffWeightCalculationId, int currentUserId);
 
     /// <summary>
     /// Delete all weight calculations for a tariff parameter year.

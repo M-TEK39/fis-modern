@@ -36,7 +36,6 @@ else
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Type Code</th>
                         <th>Type Name</th>
                         <th class="actions-column">Actions</th>
                     </tr>
@@ -45,7 +44,6 @@ else
                     @foreach (var type in _vehicleTypes)
                     {
                         <tr>
-                            <td>@type.type_code</td>
                             <td>@type.type_name</td>
                             <td class="actions-column">
                                 <div class="table-actions">

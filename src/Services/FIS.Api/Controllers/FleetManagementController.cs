@@ -19,7 +19,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class FleetManagementController : ControllerBase
+public class FleetManagementController : BaseApiController
 {
     private readonly FuelCardManagementService _fuelCardService;
     private readonly ILogger<FleetManagementController> _logger;

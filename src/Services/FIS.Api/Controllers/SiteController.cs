@@ -58,7 +58,7 @@ namespace FIS.Api.Controllers
     [ApiController]
     [Authorize]
     [Route("api/[controller]")]
-    public class SiteController : ControllerBase
+    public class SiteController : BaseApiController
     {
         private readonly ISiteRepository _siteRepository;
         private readonly ILogger<SiteController> _logger;
@@ -74,6 +74,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var sites = await _siteRepository.GetActiveSitesAsync();
                 var siteDtos = sites.Select(s => new SiteDto
                 {
@@ -113,6 +115,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var site = await _siteRepository.GetByIdAsync(id);
                 if (site == null)
                 {
@@ -158,6 +162,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var sites = await _siteRepository.GetActiveSitesAsync();
                 var siteDtos = sites.Select(s => new SiteDto
                 {
@@ -197,6 +203,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var site = new Site
                 {
                     Depatrment_code = createSiteDto.DepartmentCode,
@@ -221,7 +229,7 @@ namespace FIS.Api.Controllers
                     date_created = DateTime.Now,
                 };
 
-                var createdSite = await _siteRepository.CreateAsync(site);
+                var createdSite = await _siteRepository.CreateAsync(site, currentUserId);
 
                 var siteDto = new SiteDto
                 {
@@ -269,6 +277,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var existingSite = await _siteRepository.GetByIdAsync(id);
                 if (existingSite == null)
                 {
@@ -295,7 +305,7 @@ namespace FIS.Api.Controllers
                 existingSite.financial_system_code = updateSiteDto.FinancialSystemCode;
                 existingSite.financial_system_active = updateSiteDto.FinancialSystemActive;
 
-                await _siteRepository.UpdateAsync(existingSite);
+                await _siteRepository.UpdateAsync(existingSite, currentUserId);
 
                 var siteDto = new SiteDto
                 {
@@ -336,13 +346,15 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var existingSite = await _siteRepository.GetByIdAsync(id);
                 if (existingSite == null)
                 {
                     return NotFound();
                 }
 
-                await _siteRepository.DeleteAsync(id);
+                await _siteRepository.DeleteAsync(id, currentUserId);
                 return NoContent();
             }
             catch (Exception ex)

@@ -53,18 +53,18 @@ public interface ITariffRepository
     /// </summary>
     /// <param name="tariff">Tariff to create</param>
     /// <returns>Created tariff</returns>
-    Task<Tariff> CreateAsync(Tariff tariff);
+    Task<Tariff> CreateAsync(Tariff tariff, int currentUserId);
 
     /// <summary>
     /// Update existing tariff.
     /// </summary>
     /// <param name="tariff">Tariff to update</param>
     /// <returns>Updated tariff</returns>
-    Task<Tariff> UpdateAsync(Tariff tariff);
+    Task<Tariff> UpdateAsync(Tariff tariff, int currentUserId);
 
     /// <summary>
     /// Delete tariff.
     /// </summary>
     /// <param name="tariffCode">Tariff identifier</param>
-    Task DeleteAsync(int tariffCode);
+    Task DeleteAsync(int tariffCode, int currentUserId);
 }

@@ -7,6 +7,12 @@ namespace FIS.Api.DTOs
     {
         public short make_code { get; set; }
         public string make_description { get; set; } = string.Empty;
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public bool is_deleted { get; set; }
     }
 
     /// <summary>
@@ -38,6 +44,12 @@ namespace FIS.Api.DTOs
         public int? gvm { get; set; }
         public string? transmission { get; set; }
         public decimal? wesbank_kilos_per_litre { get; set; }
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public bool is_deleted { get; set; }
     }
 
     /// <summary>
@@ -47,6 +59,27 @@ namespace FIS.Api.DTOs
     {
         public short type_code { get; set; }
         public string type_description { get; set; } = string.Empty;
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public bool is_deleted { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for Class responses - excludes navigation properties and audit fields
+    /// </summary>
+    public class ClassResponseDto
+    {
+        public short class_code { get; set; }
+        public string? description { get; set; }
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public bool is_deleted { get; set; }
     }
 
     /// <summary>
@@ -56,6 +89,12 @@ namespace FIS.Api.DTOs
     {
         public short fuel_type_code { get; set; }
         public string fuel_description { get; set; } = string.Empty;
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public bool is_deleted { get; set; }
     }
 
     /// <summary>
@@ -66,5 +105,11 @@ namespace FIS.Api.DTOs
         public short department_code { get; set; }
         public string department_description { get; set; } = string.Empty;
         public string res_person { get; set; } = string.Empty;
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public bool is_deleted { get; set; }
     }
 }

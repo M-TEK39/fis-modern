@@ -26,6 +26,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<TypeEntity?> GetByIdAsync(short typeCode)
         {
             return await _context.Types
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(t => t.type_code == typeCode);
         }
 
@@ -37,6 +38,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<TypeEntity?> GetByNameAsync(string typeName)
         {
             return await _context.Types
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(t => t.type_description.ToLower() == typeName.ToLower());
         }
 
@@ -47,6 +49,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<IEnumerable<TypeEntity>> GetAllTypesAsync()
         {
             return await _context.Types
+                .Where(x => !x.is_deleted)
                 .OrderBy(t => t.type_description)
                 .ToListAsync();
         }
@@ -69,8 +72,12 @@ namespace FIS.Core.Infrastructure.Repositories
         /// </summary>
         /// <param name="type">The type entity to create</param>
         /// <returns>The created type entity</returns>
-        public async Task<TypeEntity> CreateAsync(TypeEntity type)
+        public async Task<TypeEntity> CreateAsync(TypeEntity type, int currentUserId)
         {
+            // Auto-populate audit fields
+            type.date_created = DateTime.UtcNow;
+            type.is_deleted = false;
+            
             _context.Types.Add(type);
             await _context.SaveChangesAsync();
             return type;
@@ -81,23 +88,32 @@ namespace FIS.Core.Infrastructure.Repositories
         /// </summary>
         /// <param name="type">The type entity to update</param>
         /// <returns>The updated type entity</returns>
-        public async Task<TypeEntity> UpdateAsync(TypeEntity type)
+        public async Task<TypeEntity> UpdateAsync(TypeEntity type, int currentUserId)
         {
-            _context.Entry(type).State = EntityState.Modified;
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+
+            var existing = await _context.Types.FindAsync(type.type_code);
+            if (existing == null)
+                throw new InvalidOperationException($"Type with type_code {type.type_code} not found");
+
+            _context.Entry(existing).CurrentValues.SetValues(type);
             await _context.SaveChangesAsync();
-            return type;
+            return existing;
         }
 
         /// <summary>
         /// Deletes a type by its code
         /// </summary>
         /// <param name="typeCode">The type code to delete</param>
-        public async Task DeleteAsync(short typeCode)
+        public async Task DeleteAsync(short typeCode, int currentUserId)
         {
             var type = await _context.Types.FindAsync(typeCode);
             if (type != null)
             {
-                _context.Types.Remove(type);
+                // Soft delete instead of hard delete
+                type.is_deleted = true;
+                type.date_updated = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
         }

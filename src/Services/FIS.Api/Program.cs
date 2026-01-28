@@ -100,7 +100,12 @@ builder.Services.AddSwaggerGen(options =>
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var jwtSecretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// Set LegacyJWT as default scheme (since most users will use legacy auth initially)
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "LegacyJWT";
+    options.DefaultChallengeScheme = "LegacyJWT";
+})
     .AddJwtBearer("LegacyJWT", options =>
     {
         // Legacy JWT validation
@@ -114,6 +119,29 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
             ClockSkew = TimeSpan.Zero
+        };
+
+        // Read JWT token from HttpOnly cookie (Blazor Server) OR Authorization header
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                // First, check Authorization header (API calls)
+                var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
+
+                // If no Authorization header, check HttpOnly cookie (Blazor Server pages)
+                if (string.IsNullOrEmpty(token) && context.Request.Cookies.ContainsKey("FIS_JWT_Token"))
+                {
+                    token = context.Request.Cookies["FIS_JWT_Token"];
+                }
+
+                if (!string.IsNullOrEmpty(token))
+                {
+                    context.Token = token;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     })
     .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -173,6 +201,7 @@ builder.Services.AddScoped<ITripRepository, TripRepository>();
 builder.Services.AddScoped<IMakeRepository, MakeRepository>();
 builder.Services.AddScoped<IModelRepository, ModelRepository>();
 builder.Services.AddScoped<ITypeRepository, TypeRepository>();
+builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddScoped<IFuelTypeRepository, FuelTypeRepository>();
 builder.Services.AddScoped<IMaintenanceTriggerRepository, MaintenanceTriggerRepository>();
 builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
@@ -216,6 +245,10 @@ builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 
 // Authentication repositories (Dual auth - Entra ID + Legacy JWT)
 builder.Services.AddScoped<IEntraIdUserMappingRepository, EntraIdUserMappingRepository>();
+builder.Services.AddScoped<ILegacyCredentialRepository, LegacyCredentialRepository>();
+
+// Authentication services
+builder.Services.AddScoped<IPasswordService, PasswordService>();
 
 // Financial system repositories - temporarily disabled for debugging
 //builder.Services.AddScoped<ITariffRepository, TariffRepository>();

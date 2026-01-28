@@ -11,7 +11,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class MaintenanceRecordController : ControllerBase
+public class MaintenanceRecordController : BaseApiController
 {
     private readonly IMaintenanceService _maintenanceService;
     private readonly ILogger<MaintenanceRecordController> _logger;

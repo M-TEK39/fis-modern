@@ -36,7 +36,6 @@ else
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Code</th>
                         <th>Department</th>
                         <th>Contact</th>
                         <th>Telephone</th>
@@ -48,7 +47,6 @@ else
                     @foreach (var dept in _departments)
                     {
                         <tr>
-                            <td>@dept.department_code</td>
                             <td>@dept.department_description</td>
                             <td>@(dept.contact_person ?? "-")</td>
                             <td>@(dept.telephone ?? "-")</td>

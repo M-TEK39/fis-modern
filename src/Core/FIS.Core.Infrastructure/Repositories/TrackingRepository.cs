@@ -11,7 +11,7 @@ public class TrackingRepository : ITrackingRepository
     public async Task<IEnumerable<Tracking>> GetAllAsync() { return await _context.Set<Tracking>().Include(t => t.Vehicle).ToListAsync(); }
     public async Task<IEnumerable<Tracking>> GetByVehicleAsync(int vmfCode) { return await _context.Set<Tracking>().Where(t => t.vmf_code == vmfCode).Include(t => t.Vehicle).ToListAsync(); }
     public async Task<IEnumerable<Tracking>> GetActiveTrackingAsync() { return await _context.Set<Tracking>().Where(t => t.remove_date == null).Include(t => t.Vehicle).ToListAsync(); }
-    public async Task<Tracking> CreateAsync(Tracking tracking) { _context.Set<Tracking>().Add(tracking); await _context.SaveChangesAsync(); return tracking; }
-    public async Task<Tracking> UpdateAsync(Tracking tracking) { _context.Set<Tracking>().Update(tracking); await _context.SaveChangesAsync(); return tracking; }
-    public async Task DeleteAsync(short trackCode) { var tracking = await GetByIdAsync(trackCode); if (tracking != null) { _context.Set<Tracking>().Remove(tracking); await _context.SaveChangesAsync(); } }
+    public async Task<Tracking> CreateAsync(Tracking tracking, int currentUserId) { _context.Set<Tracking>().Add(tracking); await _context.SaveChangesAsync(); return tracking; }
+    public async Task<Tracking> UpdateAsync(Tracking tracking, int currentUserId) { if (tracking == null) throw new ArgumentNullException(nameof(tracking)); var existing = await _context.Set<Tracking>().FindAsync(tracking.track_code); if (existing == null) throw new InvalidOperationException($"Tracking with track_code {tracking.track_code} not found"); _context.Entry(existing).CurrentValues.SetValues(tracking); await _context.SaveChangesAsync(); return existing; }
+    public async Task DeleteAsync(short trackCode, int currentUserId) { var tracking = await GetByIdAsync(trackCode); if (tracking != null) { _context.Set<Tracking>().Remove(tracking); await _context.SaveChangesAsync(); } }
 }

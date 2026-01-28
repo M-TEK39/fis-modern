@@ -8,7 +8,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class FineController : ControllerBase
+public class FineController : BaseApiController
 {
     private readonly IFineRepository _repository;
     private readonly ILogger<FineController> _logger;
@@ -43,21 +43,21 @@ public class FineController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Fine>> Create([FromBody] Fine item)
     {
-        try { var created = await _repository.CreateAsync(item); return CreatedAtAction(nameof(GetById), new { id = created.Fine_code }, created); }
+        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.Fine_code }, created); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Fine>> Update(int id, [FromBody] Fine item)
     {
-        try { if (id != item.Fine_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item)); }
+        try { if (id != item.Fine_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
-        try { await _repository.DeleteAsync(id); return NoContent(); }
+        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 }

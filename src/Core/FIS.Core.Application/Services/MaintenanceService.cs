@@ -58,7 +58,7 @@ public class MaintenanceService : IMaintenanceService
                 maintenanceRecord.Status = "COMPLETED";
             }
 
-            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord);
+            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
 
             _logger.LogInformation("Maintenance record created: ID {MaintenanceId}, Next service: {NextServiceDate} / {NextServiceOdometer}km",
                 created.MaintenanceId, created.NextServiceDate, created.NextServiceOdometer);
@@ -99,7 +99,7 @@ public class MaintenanceService : IMaintenanceService
                     maintenanceRecord.ServiceIntervalKm.Value);
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord);
+            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
 
             _logger.LogInformation("Maintenance record updated: {MaintenanceId}", maintenanceRecord.MaintenanceId);
         }
@@ -514,7 +514,7 @@ public class MaintenanceService : IMaintenanceService
                 StillCurrentFlag = "Y"
             };
 
-            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord);
+            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
 
             _logger.LogInformation("Maintenance scheduled: ID {MaintenanceId}", created.MaintenanceId);
 
@@ -567,7 +567,7 @@ public class MaintenanceService : IMaintenanceService
                     actualOdometer, maintenanceRecord.ServiceIntervalKm.Value);
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord);
+            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
 
             _logger.LogInformation("Maintenance {MaintenanceId} completed successfully", maintenanceId);
         }
@@ -602,7 +602,7 @@ public class MaintenanceService : IMaintenanceService
                 maintenanceRecord.MechanicNotes = $"CANCELLED: {reason}";
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord);
+            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
 
             _logger.LogInformation("Maintenance {MaintenanceId} cancelled", maintenanceId);
         }
@@ -753,7 +753,7 @@ public class MaintenanceService : IMaintenanceService
             // Could add validation here to prevent deletion of certain records
             // For example, don't delete if it's linked to warranty claims, etc.
 
-            await _maintenanceRecordRepository.DeleteAsync(maintenanceId);
+            await _maintenanceRecordRepository.DeleteAsync(maintenanceId, 1); // TODO: Pass actual user ID from JWT
 
             _logger.LogInformation("Maintenance record deleted: {MaintenanceId}", maintenanceId);
         }

@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers
     [ApiController]
     [Authorize]
     [Route("api/[controller]")]
-    public class FuelTypeController : ControllerBase
+    public class FuelTypeController : BaseApiController
     {
         private readonly IFuelTypeRepository _fuelTypeRepository;
 
@@ -31,6 +31,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var fuelTypes = await _fuelTypeRepository.GetAllFuelTypesAsync();
                 var fuelTypeDtos = fuelTypes.Select(ft => new FuelTypeResponseDto
                 {
@@ -55,6 +57,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var fuelType = await _fuelTypeRepository.GetByIdAsync(id);
                 if (fuelType == null)
                 {
@@ -85,6 +89,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var fuelType = await _fuelTypeRepository.GetByDescriptionAsync(description);
                 if (fuelType == null)
                 {
@@ -108,6 +114,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var fuelTypes = await _fuelTypeRepository.SearchFuelTypesAsync(searchTerm);
                 return Ok(fuelTypes);
             }
@@ -127,6 +135,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 if (!ModelState.IsValid)
                 {
                     return BadRequest(ModelState);
@@ -138,7 +148,7 @@ namespace FIS.Api.Controllers
                     fuel_description = createFuelTypeDto.fuel_description
                 };
 
-                var createdFuelType = await _fuelTypeRepository.CreateAsync(fuelType);
+                var createdFuelType = await _fuelTypeRepository.CreateAsync(fuelType, currentUserId);
                 return CreatedAtAction(nameof(GetFuelType), new { id = createdFuelType.fuel_type_code }, createdFuelType);
             }
             catch (Exception ex)
@@ -158,6 +168,8 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 if (id != fuelType.fuel_type_code)
                 {
                     return BadRequest("Fuel type code mismatch");
@@ -174,7 +186,7 @@ namespace FIS.Api.Controllers
                     return NotFound($"Fuel type with code {id} not found");
                 }
 
-                var updatedFuelType = await _fuelTypeRepository.UpdateAsync(fuelType);
+                var updatedFuelType = await _fuelTypeRepository.UpdateAsync(fuelType, currentUserId);
                 return Ok(updatedFuelType);
             }
             catch (Exception ex)
@@ -193,13 +205,15 @@ namespace FIS.Api.Controllers
         {
             try
             {
+            int currentUserId = GetCurrentUserId();
+
                 var existingFuelType = await _fuelTypeRepository.GetByIdAsync(id);
                 if (existingFuelType == null)
                 {
                     return NotFound($"Fuel type with code {id} not found");
                 }
 
-                await _fuelTypeRepository.DeleteAsync(id);
+                await _fuelTypeRepository.DeleteAsync(id, currentUserId);
                 return NoContent();
             }
             catch (Exception ex)

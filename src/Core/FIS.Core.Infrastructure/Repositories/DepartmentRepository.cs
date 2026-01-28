@@ -88,7 +88,7 @@ public class DepartmentRepository : IDepartmentRepository
     /// <summary>
     /// Create new department
     /// </summary>
-    public async Task<Department> CreateAsync(Department department)
+    public async Task<Department> CreateAsync(Department department, int currentUserId)
     {
         if (department == null)
             throw new ArgumentNullException(nameof(department));
@@ -105,26 +105,31 @@ public class DepartmentRepository : IDepartmentRepository
     /// <summary>
     /// Update existing department
     /// </summary>
-    public async Task UpdateAsync(Department department)
+    public async Task UpdateAsync(Department department, int currentUserId)
     {
         if (department == null)
             throw new ArgumentNullException(nameof(department));
 
-        department.date_updated = DateTime.Now;
+        var existing = await _context.Departments.FindAsync(department.department_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Department with department_code {department.department_code} not found");
 
-        _context.Entry(department).State = EntityState.Modified;
+        department.date_updated = DateTime.Now;
+        _context.Entry(existing).CurrentValues.SetValues(department);
         await _context.SaveChangesAsync();
     }
 
     /// <summary>
     /// Delete department by ID
     /// </summary>
-    public async Task DeleteAsync(int departmentCode)
+    public async Task DeleteAsync(int departmentCode, int currentUserId)
     {
         var department = await _context.Departments.FindAsync(departmentCode);
         if (department != null)
         {
-            _context.Departments.Remove(department);
+            // Soft delete instead of hard delete
+                department.is_deleted = true;
+                department.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

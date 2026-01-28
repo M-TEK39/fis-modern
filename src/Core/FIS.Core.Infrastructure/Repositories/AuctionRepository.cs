@@ -36,21 +36,28 @@ public class AuctionRepository : IAuctionRepository
             .ToListAsync();
     }
 
-    public async Task<Auction> CreateAsync(Auction auction)
+    public async Task<Auction> CreateAsync(Auction auction, int currentUserId)
     {
         await _context.Set<Auction>().AddAsync(auction);
         await _context.SaveChangesAsync();
         return auction;
     }
 
-    public async Task<Auction> UpdateAsync(Auction auction)
+    public async Task<Auction> UpdateAsync(Auction auction, int currentUserId)
     {
-        _context.Set<Auction>().Update(auction);
+        if (auction == null)
+            throw new ArgumentNullException(nameof(auction));
+
+        var existing = await _context.Set<Auction>().FindAsync(auction.auction_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Auction with auction_code {auction.auction_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(auction);
         await _context.SaveChangesAsync();
-        return auction;
+        return existing;
     }
 
-    public async Task DeleteAsync(short auctionCode)
+    public async Task DeleteAsync(short auctionCode, int currentUserId)
     {
         var auction = await GetByIdAsync(auctionCode);
         if (auction != null)

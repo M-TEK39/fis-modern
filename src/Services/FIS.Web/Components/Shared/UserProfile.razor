@@ -6,7 +6,11 @@
         <Authorized>
             <div class="user-info">
                 <span class="user-name">@context.User.Identity?.Name</span>
-                <a href="/MicrosoftIdentity/Account/SignOut" class="btn-logout">Sign out</a>
+                <form method="post" action="/Account/Logout" style="display: inline;">
+                    <button type="submit" class="btn-logout" style="border: 1px solid #dee2e6; background: #f8f9fa; color: #666; padding: 0.5rem 1rem; border-radius: 4px; font-size: 0.875rem; cursor: pointer; transition: all 0.2s;">
+                        Sign out
+                    </button>
+                </form>
             </div>
         </Authorized>
         <NotAuthorized>

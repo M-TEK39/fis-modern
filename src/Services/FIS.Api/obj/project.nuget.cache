@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "fCtMzYsaR/KMjlbmdYQU9ZZpU66QZy8rysFadUXL4urhfMBEMlaqYYnZQy5YyHlD3H2BVH2D4FP0xtqn4i3B0w==",
+  "dgSpecHash": "juiq67noVv1ExvP9C2ExCGCxxMWFn0g064qoVwgPfErQ33I08PWj3ppFR9rP46URiRf2tSQxxYLp/qm8H4VAsg==",
   "success": true,
   "projectFilePath": "/home/dev/work/fis-modern/src/Services/FIS.Api/FIS.Api.csproj",
   "expectedPackageFiles": [
@@ -9,6 +9,7 @@
     "/home/dev/work/fis-modern/packages/azure.identity/1.11.4/azure.identity.1.11.4.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/azure.security.keyvault.certificates/4.6.0/azure.security.keyvault.certificates.4.6.0.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/azure.security.keyvault.secrets/4.6.0/azure.security.keyvault.secrets.4.6.0.nupkg.sha512",
+    "/home/dev/work/fis-modern/packages/bcrypt.net-next/4.0.3/bcrypt.net-next.4.0.3.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/microsoft.aspnetcore.authentication.jwtbearer/8.0.0/microsoft.aspnetcore.authentication.jwtbearer.8.0.0.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/microsoft.aspnetcore.authentication.openidconnect/8.0.0/microsoft.aspnetcore.authentication.openidconnect.8.0.0.nupkg.sha512",
     "/home/dev/work/fis-modern/packages/microsoft.aspnetcore.cryptography.internal/8.0.1/microsoft.aspnetcore.cryptography.internal.8.0.1.nupkg.sha512",

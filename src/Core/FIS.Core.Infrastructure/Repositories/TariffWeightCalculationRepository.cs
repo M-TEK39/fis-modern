@@ -71,7 +71,7 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// <summary>
     /// Create new weight calculation.
     /// </summary>
-    public async Task<TariffWeightCalculation> CreateAsync(TariffWeightCalculation weightCalculation)
+    public async Task<TariffWeightCalculation> CreateAsync(TariffWeightCalculation weightCalculation, int currentUserId)
     {
         weightCalculation.calculation_date_time = DateTime.Now;
         _context.Set<TariffWeightCalculation>().Add(weightCalculation);
@@ -82,18 +82,25 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// <summary>
     /// Update existing weight calculation.
     /// </summary>
-    public async Task<TariffWeightCalculation> UpdateAsync(TariffWeightCalculation weightCalculation)
+    public async Task<TariffWeightCalculation> UpdateAsync(TariffWeightCalculation weightCalculation, int currentUserId)
     {
+        if (weightCalculation == null)
+            throw new ArgumentNullException(nameof(weightCalculation));
+
+        var existing = await _context.Set<TariffWeightCalculation>().FindAsync(weightCalculation.TariffWeightCalculation_Code);
+        if (existing == null)
+            throw new InvalidOperationException($"TariffWeightCalculation with TariffWeightCalculation_Code {weightCalculation.TariffWeightCalculation_Code} not found");
+
         weightCalculation.calculation_date_time = DateTime.Now;
-        _context.Set<TariffWeightCalculation>().Update(weightCalculation);
+        _context.Entry(existing).CurrentValues.SetValues(weightCalculation);
         await _context.SaveChangesAsync();
-        return weightCalculation;
+        return existing;
     }
 
     /// <summary>
     /// Delete weight calculation.
     /// </summary>
-    public async Task DeleteAsync(int tariffWeightCalculationId)
+    public async Task DeleteAsync(int tariffWeightCalculationId, int currentUserId)
     {
         var weightCalculation = await GetByIdAsync(tariffWeightCalculationId);
         if (weightCalculation != null)

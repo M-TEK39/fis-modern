@@ -20,7 +20,8 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
     public async Task<MaintenanceRecord?> GetByIdAsync(int maintenanceId)
     {
         return await _context.MaintenanceRecords
-            .FirstOrDefaultAsync(mr => mr.MaintenanceId == maintenanceId);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(mr => mr.MaintenanceId == maintenanceId);
     }
 
     public async Task<IEnumerable<MaintenanceRecord>> GetByVehicleAsync(int vmfCode)
@@ -50,31 +51,45 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
     public async Task<IEnumerable<MaintenanceRecord>> GetAllAsync()
     {
         return await _context.MaintenanceRecords
+                .Where(x => !x.is_deleted)
             .OrderByDescending(mr => mr.MaintenanceDate)
             .ToListAsync();
     }
 
-    public async Task<MaintenanceRecord> CreateAsync(MaintenanceRecord maintenanceRecord)
+    public async Task<MaintenanceRecord> CreateAsync(MaintenanceRecord maintenanceRecord, int currentUserId)
     {
         maintenanceRecord.CreatedDate = DateTime.UtcNow;
-        _context.MaintenanceRecords.Add(maintenanceRecord);
+        // Auto-populate audit fields
+            maintenanceRecord.date_created = DateTime.UtcNow;
+            maintenanceRecord.is_deleted = false;
+            
+            _context.MaintenanceRecords.Add(maintenanceRecord);
         await _context.SaveChangesAsync();
         return maintenanceRecord;
     }
 
-    public async Task UpdateAsync(MaintenanceRecord maintenanceRecord)
+    public async Task UpdateAsync(MaintenanceRecord maintenanceRecord, int currentUserId)
     {
+        if (maintenanceRecord == null)
+            throw new ArgumentNullException(nameof(maintenanceRecord));
+
+        var existing = await _context.MaintenanceRecords.FindAsync(maintenanceRecord.MaintenanceId);
+        if (existing == null)
+            throw new InvalidOperationException($"MaintenanceRecord with MaintenanceId {maintenanceRecord.MaintenanceId} not found");
+
         maintenanceRecord.ModifiedDate = DateTime.UtcNow;
-        _context.Entry(maintenanceRecord).State = EntityState.Modified;
+        _context.Entry(existing).CurrentValues.SetValues(maintenanceRecord);
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(int maintenanceId)
+    public async Task DeleteAsync(int maintenanceId, int currentUserId)
     {
         var maintenanceRecord = await GetByIdAsync(maintenanceId);
         if (maintenanceRecord != null)
         {
-            _context.MaintenanceRecords.Remove(maintenanceRecord);
+            // Soft delete instead of hard delete
+                maintenanceRecord.is_deleted = true;
+                maintenanceRecord.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }
@@ -83,6 +98,7 @@ public class MaintenanceRecordRepository : IMaintenanceRecordRepository
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
             return await _context.MaintenanceRecords
+                .Where(x => !x.is_deleted)
                 .OrderByDescending(mr => mr.MaintenanceDate)
                 .ToListAsync();
 

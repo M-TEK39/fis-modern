@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class LicenseController : ControllerBase
+public class LicenseController : BaseApiController
 {
     private readonly ILicenseRepository _licenseRepository;
     private readonly ILogger<LicenseController> _logger;
@@ -33,6 +33,8 @@ public class LicenseController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var licenses = await _licenseRepository.GetAllLicensesAsync();
             return Ok(licenses);
         }
@@ -53,6 +55,8 @@ public class LicenseController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var license = await _licenseRepository.GetByIdAsync(licenceCode);
             if (license == null)
                 return NotFound($"License with code {licenceCode} not found");
@@ -76,6 +80,8 @@ public class LicenseController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var license = await _licenseRepository.GetByDescriptionAsync(description);
             if (license == null)
                 return NotFound($"License with description '{description}' not found");
@@ -99,6 +105,8 @@ public class LicenseController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var licenses = await _licenseRepository.SearchLicensesAsync(searchTerm);
             return Ok(licenses);
         }
@@ -119,6 +127,8 @@ public class LicenseController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -128,7 +138,7 @@ public class LicenseController : ControllerBase
                 licence_category = createLicenseDto.licence_category
             };
 
-            var createdLicense = await _licenseRepository.CreateAsync(license);
+            var createdLicense = await _licenseRepository.CreateAsync(license, currentUserId);
             return CreatedAtAction(nameof(GetLicense), new { licenceCode = createdLicense.licence_code }, createdLicense);
         }
         catch (Exception ex)
@@ -149,6 +159,8 @@ public class LicenseController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (licenceCode != license.licence_code)
                 return BadRequest("License code in URL does not match license code in body");
 
@@ -156,7 +168,7 @@ public class LicenseController : ControllerBase
             if (existingLicense == null)
                 return NotFound($"License with code {licenceCode} not found");
 
-            var updatedLicense = await _licenseRepository.UpdateAsync(license);
+            var updatedLicense = await _licenseRepository.UpdateAsync(license, currentUserId);
             return Ok(updatedLicense);
         }
         catch (Exception ex)
@@ -176,7 +188,9 @@ public class LicenseController : ControllerBase
     {
         try
         {
-            var deleted = await _licenseRepository.DeleteAsync(licenceCode);
+            int currentUserId = GetCurrentUserId();
+
+            var deleted = await _licenseRepository.DeleteAsync(licenceCode, currentUserId);
             if (!deleted)
                 return NotFound($"License with code {licenceCode} not found");
 

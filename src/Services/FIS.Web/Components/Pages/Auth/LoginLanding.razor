@@ -1,24 +1,61 @@
 @page "/login"
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
 @rendermode InteractiveServer
 @layout FIS.Web.Components.Layout.AuthLayout
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Sign In - Fleet Information System</PageTitle>
 
 <div class="auth-card">
     <img src="http://www.gfleet.gov.za/images/top.jpg" alt="Gauteng Provincial Government" class="auth-logo" />
-    <div class="auth-header">
-        <h1>Fleet Information System</h1>
-        <p>Choose how you want to sign in.</p>
-    </div>
-    <div class="auth-actions">
-        <a class="btn btn-primary auth-btn" href="/MicrosoftIdentity/Account/SignIn">
-            Sign in with Microsoft
-        </a>
-        <a class="btn btn-secondary auth-btn auth-outline" href="/login/legacy">
-            Legacy Sign In
-        </a>
-    </div>
-    <p class="auth-footnote">
-        Authorized Gauteng Provincial Government staff only.
-    </p>
+
+    @if (isAuthenticated)
+    {
+        <div class="auth-header">
+            <h1>Already Signed In</h1>
+            <p>You're already authenticated.</p>
+        </div>
+        <div class="auth-actions">
+            <a class="btn btn-primary auth-btn" href="/home">
+                Go to Home
+            </a>
+            <form method="post" action="/Account/Logout" style="width: 100%;">
+                <button type="submit" class="btn btn-secondary auth-btn auth-outline" style="width: 100%; border: 1px solid #dee2e6; background: white; color: #666; padding: 0.75rem 1.5rem; border-radius: 6px; font-size: 1rem; cursor: pointer; transition: all 0.2s;">
+                    Sign Out
+                </button>
+            </form>
+        </div>
+    }
+    else
+    {
+        <div class="auth-header">
+            <h1>Fleet Information System</h1>
+            <p>Choose how you want to sign in.</p>
+        </div>
+        <div class="auth-actions">
+            <a class="btn btn-primary auth-btn" href="/MicrosoftIdentity/Account/SignIn">
+                Sign in with Microsoft
+            </a>
+            <a class="btn btn-secondary auth-btn auth-outline" href="/login/legacy">
+                Legacy Sign In
+            </a>
+        </div>
+        <p class="auth-footnote">
+            Authorized Gauteng Provincial Government staff only.
+        </p>
+    }
 </div>
+
+@code {
+    private bool isAuthenticated = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user is authenticated (but don't redirect - prevents loop)
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User?.Identity?.IsAuthenticated == true;
+    }
+}

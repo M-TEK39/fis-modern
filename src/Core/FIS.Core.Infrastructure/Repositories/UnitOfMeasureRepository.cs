@@ -26,7 +26,8 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     public async Task<UnitOfMeasure?> GetByIdAsync(short unitCode)
     {
         return await _context.UnitsOfMeasure
-            .FirstOrDefaultAsync(u => u.unit_of_measure_code == unitCode);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(u => u.unit_of_measure_code == unitCode);
     }
 
     /// <summary>
@@ -37,7 +38,8 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     public async Task<UnitOfMeasure?> GetByDescriptionAsync(string description)
     {
         return await _context.UnitsOfMeasure
-            .FirstOrDefaultAsync(u => u.unit_description == description);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(u => u.unit_description == description);
     }
 
     /// <summary>
@@ -48,7 +50,8 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     public async Task<UnitOfMeasure?> GetByAbbreviationAsync(string abbreviation)
     {
         return await _context.UnitsOfMeasure
-            .FirstOrDefaultAsync(u => u.unit_abbreviation == abbreviation);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(u => u.unit_abbreviation == abbreviation);
     }
 
     /// <summary>
@@ -58,6 +61,7 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     public async Task<IEnumerable<UnitOfMeasure>> GetAllUnitsAsync()
     {
         return await _context.UnitsOfMeasure
+                .Where(x => !x.is_deleted)
             .OrderBy(u => u.unit_category)
             .ThenBy(u => u.unit_description)
             .ToListAsync();
@@ -95,10 +99,16 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// Create a new unit of measure
     /// </summary>
     /// <param name="unit">The unit of measure entity to create</param>
+    /// <param name="currentUserId">The user creating the unit</param>
     /// <returns>The created unit of measure with generated ID</returns>
-    public async Task<UnitOfMeasure> CreateAsync(UnitOfMeasure unit)
+    public async Task<UnitOfMeasure> CreateAsync(UnitOfMeasure unit, int currentUserId)
     {
-        _context.UnitsOfMeasure.Add(unit);
+        // Auto-populate audit fields
+            unit.date_created = DateTime.UtcNow;
+            unit.created_by_user_code = currentUserId;
+            unit.is_deleted = false;
+            
+            _context.UnitsOfMeasure.Add(unit);
         await _context.SaveChangesAsync();
         return unit;
     }
@@ -107,26 +117,45 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// Update an existing unit of measure
     /// </summary>
     /// <param name="unit">The unit of measure entity to update</param>
+    /// <param name="currentUserId">The user updating the unit</param>
     /// <returns>The updated unit of measure entity</returns>
-    public async Task<UnitOfMeasure> UpdateAsync(UnitOfMeasure unit)
+    public async Task<UnitOfMeasure> UpdateAsync(UnitOfMeasure unit, int currentUserId)
     {
-        _context.UnitsOfMeasure.Update(unit);
+        if (unit == null)
+            throw new ArgumentNullException(nameof(unit));
+
+        var existing = await _context.UnitsOfMeasure.FindAsync(unit.unit_of_measure_code);
+        if (existing == null)
+            throw new InvalidOperationException($"UnitOfMeasure with unit_of_measure_code {unit.unit_of_measure_code} not found");
+
+        // Preserve creation audit fields
+        unit.date_created = existing.date_created;
+        unit.created_by_user_code = existing.created_by_user_code;
+        // Set update audit fields
+        unit.date_updated = DateTime.UtcNow;
+        unit.modified_by_user_code = currentUserId;
+        
+        _context.Entry(existing).CurrentValues.SetValues(unit);
         await _context.SaveChangesAsync();
-        return unit;
+        return existing;
     }
 
     /// <summary>
     /// Delete a unit of measure by unit code
     /// </summary>
     /// <param name="unitCode">The unit code to delete</param>
+    /// <param name="currentUserId">The user deleting the unit</param>
     /// <returns>True if deleted, false if not found</returns>
-    public async Task<bool> DeleteAsync(short unitCode)
+    public async Task<bool> DeleteAsync(short unitCode, int currentUserId)
     {
         var unit = await GetByIdAsync(unitCode);
         if (unit == null)
             return false;
 
-        _context.UnitsOfMeasure.Remove(unit);
+        // Soft delete instead of hard delete
+                unit.is_deleted = true;
+                unit.date_updated = DateTime.UtcNow;
+                unit.modified_by_user_code = currentUserId;
         await _context.SaveChangesAsync();
         return true;
     }

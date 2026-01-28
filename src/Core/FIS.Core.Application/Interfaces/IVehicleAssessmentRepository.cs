@@ -6,7 +6,7 @@ public interface IVehicleAssessmentRepository
     Task<IEnumerable<VehicleAssessment>> GetAllAsync();
     Task<VehicleAssessment?> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<VehicleAssessment>> GetRecentAssessmentsAsync(int days);
-    Task<VehicleAssessment> CreateAsync(VehicleAssessment assessment);
-    Task<VehicleAssessment> UpdateAsync(VehicleAssessment assessment);
-    Task DeleteAsync(int assessmentCode);
+    Task<VehicleAssessment> CreateAsync(VehicleAssessment assessment, int currentUserId);
+    Task<VehicleAssessment> UpdateAsync(VehicleAssessment assessment, int currentUserId);
+    Task DeleteAsync(int assessmentCode, int currentUserId);
 }

@@ -3,9 +3,13 @@
     <ProjectReference Include="..\FIS.Core.Domain\FIS.Core.Domain.csproj" />
     <ProjectReference Include="..\..\Data\FIS.Data\FIS.Data.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+  </ItemGroup>
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);CS1573</NoWarn>
   </PropertyGroup>
 </Project>

@@ -26,6 +26,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<FuelTypeEntity?> GetByIdAsync(short fuelTypeCode)
         {
             return await _context.FuelTypes
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(ft => ft.fuel_type_code == fuelTypeCode);
         }
 
@@ -37,6 +38,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<FuelTypeEntity?> GetByDescriptionAsync(string fuelDescription)
         {
             return await _context.FuelTypes
+                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(ft => ft.fuel_description.ToLower() == fuelDescription.ToLower());
         }
 
@@ -47,6 +49,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<IEnumerable<FuelTypeEntity>> GetAllFuelTypesAsync()
         {
             return await _context.FuelTypes
+                .Where(x => !x.is_deleted)
                 .OrderBy(ft => ft.fuel_description)
                 .ToListAsync();
         }
@@ -68,9 +71,15 @@ namespace FIS.Core.Infrastructure.Repositories
         /// Creates a new fuel type
         /// </summary>
         /// <param name="fuelType">The fuel type entity to create</param>
+        /// <param name="currentUserId">The ID of the user performing the action</param>
         /// <returns>The created fuel type entity</returns>
-        public async Task<FuelTypeEntity> CreateAsync(FuelTypeEntity fuelType)
+        public async Task<FuelTypeEntity> CreateAsync(FuelTypeEntity fuelType, int currentUserId)
         {
+            // Auto-populate audit fields
+            fuelType.date_created = DateTime.UtcNow;
+            fuelType.created_by_user_code = currentUserId;
+            fuelType.is_deleted = false;
+            
             _context.FuelTypes.Add(fuelType);
             await _context.SaveChangesAsync();
             return fuelType;
@@ -80,24 +89,43 @@ namespace FIS.Core.Infrastructure.Repositories
         /// Updates an existing fuel type
         /// </summary>
         /// <param name="fuelType">The fuel type entity to update</param>
+        /// <param name="currentUserId">The user updating the fuel type</param>
         /// <returns>The updated fuel type entity</returns>
-        public async Task<FuelTypeEntity> UpdateAsync(FuelTypeEntity fuelType)
+        public async Task<FuelTypeEntity> UpdateAsync(FuelTypeEntity fuelType, int currentUserId)
         {
-            _context.Entry(fuelType).State = EntityState.Modified;
+            if (fuelType == null)
+                throw new ArgumentNullException(nameof(fuelType));
+
+            var existing = await _context.FuelTypes.FindAsync(fuelType.fuel_type_code);
+            if (existing == null)
+                throw new InvalidOperationException($"FuelType with fuel_type_code {fuelType.fuel_type_code} not found");
+
+            // Preserve creation audit fields
+            fuelType.date_created = existing.date_created;
+            fuelType.created_by_user_code = existing.created_by_user_code;
+            // Set update audit fields
+            fuelType.date_updated = DateTime.UtcNow;
+            fuelType.modified_by_user_code = currentUserId;
+            
+            _context.Entry(existing).CurrentValues.SetValues(fuelType);
             await _context.SaveChangesAsync();
-            return fuelType;
+            return existing;
         }
 
         /// <summary>
         /// Deletes a fuel type by its code
         /// </summary>
         /// <param name="fuelTypeCode">The fuel type code to delete</param>
-        public async Task DeleteAsync(short fuelTypeCode)
+        /// <param name="currentUserId">The user deleting the fuel type</param>
+        public async Task DeleteAsync(short fuelTypeCode, int currentUserId)
         {
             var fuelType = await _context.FuelTypes.FindAsync(fuelTypeCode);
             if (fuelType != null)
             {
-                _context.FuelTypes.Remove(fuelType);
+                // Soft delete instead of hard delete
+                fuelType.is_deleted = true;
+                fuelType.date_updated = DateTime.UtcNow;
+                fuelType.modified_by_user_code = currentUserId;
                 await _context.SaveChangesAsync();
             }
         }

@@ -15,6 +15,12 @@ internal class ApiModelResponse
     public short model_code { get; set; }
     public short make_code { get; set; }
     public string model_description { get; set; } = string.Empty;
+    public string? make_description { get; set; }
+    public short unit_of_measure_code { get; set; }
+    public short licence_code { get; set; }
+    public short class_code { get; set; }
+    public short fuel_type_code { get; set; }
+    public short? type_code { get; set; }
 }
 
 internal class ApiVehicleTypeResponse
@@ -149,7 +155,13 @@ public class ReferenceDataApiService
             {
                 model_code = model.model_code,
                 make_code = model.make_code,
-                model_name = model.model_description
+                model_name = model.model_description,
+                make_name = model.make_description,
+                unit_of_measure_code = model.unit_of_measure_code,
+                fuel_type_code = model.fuel_type_code,
+                licence_code = model.licence_code,
+                class_code = model.class_code,
+                type_code = model.type_code
             }).ToList();
         }
         catch (Exception ex)
@@ -170,7 +182,13 @@ public class ReferenceDataApiService
             {
                 model_code = apiResponse.model_code,
                 make_code = apiResponse.make_code,
-                model_name = apiResponse.model_description
+                model_name = apiResponse.model_description,
+                make_name = apiResponse.make_description,
+                unit_of_measure_code = apiResponse.unit_of_measure_code,
+                fuel_type_code = apiResponse.fuel_type_code,
+                licence_code = apiResponse.licence_code,
+                class_code = apiResponse.class_code,
+                type_code = apiResponse.type_code
             };
         }
         catch (Exception ex)
@@ -188,6 +206,11 @@ public class ReferenceDataApiService
             var createModelDto = new
             {
                 make_code = model.make_code,
+                unit_of_measure_code = model.unit_of_measure_code,
+                type_code = model.type_code,
+                fuel_type_code = model.fuel_type_code,
+                licence_code = model.licence_code,
+                class_code = model.class_code,
                 model_description = model.model_name
             };
             
@@ -210,6 +233,11 @@ public class ReferenceDataApiService
             {
                 model_code = (short)modelCode,
                 make_code = model.make_code,
+                unit_of_measure_code = model.unit_of_measure_code,
+                type_code = model.type_code,
+                fuel_type_code = model.fuel_type_code,
+                licence_code = model.licence_code,
+                class_code = model.class_code,
                 model_description = model.model_name
             };
             

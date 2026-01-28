@@ -5,8 +5,8 @@ namespace FIS.Core.Application.Interfaces
     {
         Task<VehicleOrder?> GetByIdAsync(int code);
         Task<IEnumerable<VehicleOrder>> GetAllAsync();
-        Task<VehicleOrder> CreateAsync(VehicleOrder item);
-        Task<VehicleOrder> UpdateAsync(VehicleOrder item);
-        Task DeleteAsync(int code);
+        Task<VehicleOrder> CreateAsync(VehicleOrder item, int currentUserId);
+        Task<VehicleOrder> UpdateAsync(VehicleOrder item, int currentUserId);
+        Task DeleteAsync(int code, int currentUserId);
     }
 }

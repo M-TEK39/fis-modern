@@ -9,7 +9,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class ModelController : ControllerBase
+public class ModelController : BaseApiController
 {
     private readonly IModelRepository _modelRepository;
     private readonly IMakeRepository _makeRepository;
@@ -33,6 +33,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var models = await _modelRepository.GetAllModelsAsync();
             var modelDtos = models.Select(m => MapToDto(m));
             _logger.LogInformation("Retrieved {Count} models", models.Count());
@@ -53,6 +55,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var model = await _modelRepository.GetByIdAsync(modelCode);
 
             if (model == null)
@@ -80,6 +84,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             // Verify make exists
             var make = await _makeRepository.GetByIdAsync(makeCode);
             if (make == null)
@@ -109,6 +115,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var models = await _modelRepository.SearchModelsAsync(searchTerm ?? "");
             var modelDtos = models.Select(m => MapToDto(m));
             _logger.LogInformation("Found {Count} models matching search term '{SearchTerm}'",
@@ -130,6 +138,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var models = await _modelRepository.GetModelsByEngineTypeAsync(engineType);
             var modelDtos = models.Select(m => MapToDto(m));
             _logger.LogInformation("Found {Count} models with engine type '{EngineType}'",
@@ -151,6 +161,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -187,7 +199,7 @@ public class ModelController : ControllerBase
                 wesbank_kilos_per_litre = createDto.wesbank_kilos_per_litre
             };
 
-            var createdModel = await _modelRepository.CreateAsync(model);
+            var createdModel = await _modelRepository.CreateAsync(model, currentUserId);
             _logger.LogInformation("Created new model with code {ModelCode}", createdModel.model_code);
 
             var responseDto = MapToDto(createdModel);
@@ -211,6 +223,8 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -259,7 +273,7 @@ public class ModelController : ControllerBase
                 wesbank_kilos_per_litre = updateDto.wesbank_kilos_per_litre
             };
 
-            var updatedModel = await _modelRepository.UpdateAsync(model);
+            var updatedModel = await _modelRepository.UpdateAsync(model, currentUserId);
             _logger.LogInformation("Updated model with code {ModelCode}", modelCode);
 
             var responseDto = MapToDto(updatedModel);
@@ -280,13 +294,15 @@ public class ModelController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingModel = await _modelRepository.GetByIdAsync(modelCode);
             if (existingModel == null)
             {
                 return NotFound();
             }
 
-            await _modelRepository.DeleteAsync(modelCode);
+            await _modelRepository.DeleteAsync(modelCode, currentUserId);
             _logger.LogInformation("Deleted model with code {ModelCode}", modelCode);
 
             return NoContent();

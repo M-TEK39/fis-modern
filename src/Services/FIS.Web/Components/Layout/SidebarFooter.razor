@@ -1,11 +1,18 @@
 @rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using FIS.Web.Services
+@inject AuthApiService AuthService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@implements IDisposable
 
 <div class="sidebar-footer">
     <div class="sidebar-user" role="button" tabindex="0" @onclick="ToggleUserMenu">
-        <span class="sidebar-avatar" aria-hidden="true">JS</span>
+        <span class="sidebar-avatar" aria-hidden="true">@_avatarText</span>
         <span class="sidebar-user-meta">
-            <span class="sidebar-user-name">Jordan Smith</span>
-            <span class="sidebar-user-role">Fleet Manager</span>
+            <span class="sidebar-user-name">@_userEmail</span>
+            <span class="sidebar-user-role">@_userRole</span>
         </span>
         <button class="sidebar-notification" type="button" @onclick="ToggleNotifications" @onclick:stopPropagation="true">
             <i class="bx bx-bell" aria-hidden="true"></i>
@@ -20,10 +27,10 @@
     <button class="overlay-scrim" type="button" @onclick="CloseOverlays" aria-label="Close menu"></button>
     <div class="sidebar-user-menu" role="menu" aria-label="User menu">
         <button class="sidebar-user-card" type="button" @onclick="OpenSettingsFromMenu">
-            <span class="sidebar-avatar">JS</span>
+            <span class="sidebar-avatar">@_avatarText</span>
             <div class="sidebar-user-meta">
-                <span class="sidebar-user-name">Jordan Smith</span>
-                <span class="sidebar-user-role">Fleet Manager</span>
+                <span class="sidebar-user-name">@_userEmail</span>
+                <span class="sidebar-user-role">@_userRole</span>
             </div>
         </button>
         <div class="sidebar-user-section">
@@ -41,10 +48,10 @@
             </button>
         </div>
         <div class="sidebar-user-section">
-            <a class="sidebar-user-item danger" href="#">
+            <button class="sidebar-user-item danger" type="button" @onclick="HandleLogout">
                 <i class="bx bx-log-out" aria-hidden="true"></i>
                 <span>Logout</span>
-            </a>
+            </button>
         </div>
     </div>
 }
@@ -111,19 +118,15 @@
                 {
                     <div class="settings-section">
                         <h3>Profile</h3>
-                        <p>Update your name, role, and contact information.</p>
+                        <p>Review your account and authentication details.</p>
                         <div class="settings-grid">
                             <div>
-                                <label class="form-label">Full name</label>
-                                <input class="form-input" value="Jordan Smith" />
+                                <label class="form-label">Email</label>
+                                <input class="form-input" value="@_userEmail" readonly />
                             </div>
                             <div>
-                                <label class="form-label">Role</label>
-                                <input class="form-input" value="Fleet Manager" />
-                            </div>
-                            <div>
-                                <label class="form-label">Work email</label>
-                                <input class="form-input" value="j.smith@gpg.gov.za" />
+                                <label class="form-label">Account type</label>
+                                <input class="form-input" value="@_userRole" readonly />
                             </div>
                         </div>
                     </div>
@@ -277,6 +280,9 @@
     private bool _showSettings;
     private bool _showUserMenu;
     private string _activeSection = "profile";
+    private string _userEmail = "authenticated@local";
+    private string _userRole = "Authenticated User";
+    private string _avatarText = "AU";
 
     private readonly IReadOnlyList<NotificationItem> _notifications =
     [
@@ -299,6 +305,49 @@
         new("logs", "System Logs", "bx bx-file"),
         new("reports", "System Reports", "bx bx-bar-chart-alt-2")
     ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserAsync();
+        AuthStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+    }
+
+    private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
+    {
+        var authState = await task;
+        UpdateUserInfo(authState.User);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadUserAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        UpdateUserInfo(authState.User);
+    }
+
+    private void UpdateUserInfo(ClaimsPrincipal user)
+    {
+        var email = user.FindFirst(ClaimTypes.Email)?.Value
+            ?? user.FindFirst("preferred_username")?.Value
+            ?? user.Identity?.Name;
+
+        _userEmail = string.IsNullOrWhiteSpace(email) ? "authenticated@local" : email;
+        _userRole = "Authenticated User";
+        _avatarText = GetAvatarText(_userEmail);
+    }
+
+    private static string GetAvatarText(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return "AU";
+        }
+
+        var trimmed = email.Trim();
+        return trimmed.Length >= 2
+            ? trimmed[..2].ToUpperInvariant()
+            : trimmed[..1].ToUpperInvariant();
+    }
 
     private void ToggleUserMenu()
     {
@@ -363,5 +412,20 @@
         _showNotifications = false;
         _showSettings = false;
         _showUserMenu = false;
+    }
+
+    private async Task HandleLogout()
+    {
+        // Clear JWT token (if using legacy auth)
+        await AuthService.LogoutAsync();
+
+        // For Entra ID users, redirect to Microsoft logout
+        // For JWT users, redirect to login
+        Navigation.NavigateTo("/logout", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
     }
 }

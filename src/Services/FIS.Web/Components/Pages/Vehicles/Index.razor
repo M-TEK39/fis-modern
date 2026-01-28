@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 
 <PageTitle>Vehicle Master - Fleet Information System</PageTitle>
+<a id="PageTop"></a>
 
 <div class="page-header">
     <div class="page-header-content">
@@ -22,15 +23,113 @@
         </button>
     </div>
 </div>
+<a id="PageBottom"></a>
 
 <div class="page-content">
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleVehicleInfo">
+                <span>Vehicle Master Information / Help</span>
+                <i class="bx @(_showVehicleInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showVehicleInfo)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">Vehicle Master Information / Help</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleVehicleMaintenance">
+                <span>Vehicle Master Maintenance</span>
+                <i class="bx @(_showVehicleMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showVehicleMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicles/create">1) Add New Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">1) Authorize Captured Vehicle Information</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicles">2) Edit A Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">3) Vehicle Status Maintenance</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">4) Add/Edit Barcode</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">5) Add GG Block Number(s)</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleVehicleSource">
+                <span>Vehicle Source Maintenance</span>
+                <i class="bx @(_showVehicleSource ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showVehicleSource)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">1) Vehicle Source Maintenance</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleDemoVehicles">
+                <span>Demo & Stolen Vehicles</span>
+                <i class="bx @(_showDemoVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showDemoVehicles)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">Stolen & Recovered Vehicles</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">Demo Vehicles</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
     <div class="search-bar">
-        <div class="search-input-wrapper">
+        <div class="search-input-wrapper" style="align-items:center;">
+            <div style="display:flex; align-items:center; gap:0.75rem; margin-right:0.75rem;">
+                <label class="form-label" style="margin:0;">
+                    <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
+                           @onchange='() => SetSearchType("GG")' />
+                    GG
+                </label>
+                <label class="form-label" style="margin:0;">
+                    <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
+                           @onchange='() => SetSearchType("GP")' />
+                    GP Number
+                </label>
+            </div>
             <i class="bx bx-search"></i>
-            <input 
-                type="text" 
-                class="search-input" 
-                placeholder="Search by registration, VIN, or VMF code..."
+            <input
+                type="text"
+                class="search-input"
+                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
                 @bind="_searchQuery"
                 @bind:event="oninput"
                 @onkeyup="HandleSearchKeyUp" />
@@ -40,6 +139,12 @@
                     <i class="bx bx-x" style="margin-left:-10px; margin-top: -10px"></i>
                 </button>
             }
+        </div>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoVehiclesMenu">Vehicles Menu</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
         </div>
     </div>
 
@@ -67,51 +172,58 @@
     }
     else
     {
-        <div class="vehicle-grid">
-            @foreach (var vehicle in _vehicles.Data)
-            {
-                <article class="vehicle-card" @onclick="() => NavigateToDetail(vehicle.vmf_code)">
-                    <div class="vehicle-card-header">
-                        <div class="vehicle-reg">@vehicle.registration_number</div>
-                        <div class="vehicle-badge">@vehicle.status_description</div>
-                    </div>
-                    <div class="vehicle-card-body">
-                        <div class="vehicle-info">
-                            <span class="vehicle-label">VMF Code:</span>
-                            <span class="vehicle-value">@vehicle.vmf_code</span>
-                        </div>
-                        <div class="vehicle-info">
-                            <span class="vehicle-label">Fleet Number:</span>
-                            <span class="vehicle-value">@vehicle.fleet_number</span>
-                        </div>
-                        <div class="vehicle-info">
-                            <span class="vehicle-label">Model:</span>
-                            <span class="vehicle-value">@vehicle.model_name</span>
-                        </div>
-                        <div class="vehicle-info">
-                            <span class="vehicle-label">Year:</span>
-                            <span class="vehicle-value">@vehicle.year_manufactured</span>
-                        </div>
-                        <div class="vehicle-info">
-                            <span class="vehicle-label">Location:</span>
-                            <span class="vehicle-value">@vehicle.location_description</span>
-                        </div>
-                    </div>
-                    <div class="vehicle-card-footer">
-                        <span class="vehicle-meta">
-                            <i class="bx bx-tachometer"></i>
-                            @((vehicle.current_odo ?? 0).ToString("N0")) km
-                        </span>
-                        <span class="vehicle-meta">
-                            <i class="bx bx-calendar"></i>
-                            @(vehicle.take_on_date?.ToString("yyyy-MM-dd") ?? "N/A")
-                        </span>
-                    </div>
-                </article>
-            }
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_vehicles.TotalCount Vehicle(s)</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="LoadVehicles">
+                        <i class="bx bx-refresh"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Registration</th>
+                            <th>Fleet Number</th>
+                            <th>Model</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                            <th>Odometer</th>
+                            <th>Take On Date</th>
+                            <th class="actions-column">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var vehicle in _vehicles.Data)
+                        {
+                            <tr>
+                                <td>@vehicle.registration_number</td>
+                                <td>@vehicle.fleet_number</td>
+                                <td>@vehicle.model_name</td>
+                                <td>@vehicle.status_description</td>
+                                <td>@vehicle.location_description</td>
+                                <td>@((vehicle.current_odo ?? 0).ToString("N0"))</td>
+                                <td>@(vehicle.take_on_date?.ToString("yyyy-MM-dd") ?? "N/A")</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-view" @onclick="() => NavigateToDetail(vehicle.vmf_code)" title="View">
+                                            <i class="bx bx-show"></i>
+                                        </button>
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => NavigateToDetail(vehicle.vmf_code)" title="Edit">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        @if (_vehicles.TotalPages > 1)
+        @if (_vehicles.TotalPages > 1 && string.IsNullOrWhiteSpace(_searchQuery))
         {
             <div class="pagination">
                 <button 
@@ -142,11 +254,16 @@
 @code {
     private PagedResult<VehicleDto> _vehicles = new();
     private string _searchQuery = string.Empty;
+    private string _searchType = "GG";
     private int _currentPage = 1;
     private const int PageSize = 12;
     private bool _loading = true;
     private bool _hasSearched = false;
     private System.Threading.Timer? _searchTimer;
+    private bool _showVehicleInfo = true;
+    private bool _showVehicleMaintenance = true;
+    private bool _showVehicleSource = false;
+    private bool _showDemoVehicles = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,7 +273,23 @@
     private async Task LoadVehicles()
     {
         _loading = true;
-        _vehicles = await VehicleService.GetVehiclesAsync(_currentPage, PageSize, _searchQuery);
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            // Legacy search is exact by GG (fleet number) or GP (registration number)
+            var result = await VehicleService.GetVehiclesAsync(1, 5000, _searchQuery);
+            var filtered = ApplyLegacyFilter(result.Data);
+            _vehicles = new PagedResult<VehicleDto>
+            {
+                Data = filtered,
+                TotalCount = filtered.Count,
+                PageNumber = 1,
+                PageSize = filtered.Count == 0 ? 1 : filtered.Count
+            };
+        }
+        else
+        {
+            _vehicles = await VehicleService.GetVehiclesAsync(_currentPage, PageSize, _searchQuery);
+        }
         _loading = false;
         StateHasChanged();
     }
@@ -181,6 +314,34 @@
         _hasSearched = false;
         _currentPage = 1;
         await LoadVehicles();
+    }
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+        _searchQuery = string.Empty;
+        _hasSearched = false;
+        _currentPage = 1;
+    }
+
+    private void GoMainMenu()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private void GoVehiclesMenu()
+    {
+        Navigation.NavigateTo("/vehicles");
+    }
+
+    private void GoTop()
+    {
+        Navigation.NavigateTo("/vehicles#PageTop");
+    }
+
+    private void GoBottom()
+    {
+        Navigation.NavigateTo("/vehicles#PageBottom");
     }
 
     private async Task NextPage()
@@ -214,5 +375,47 @@
     public void Dispose()
     {
         _searchTimer?.Dispose();
+    }
+
+    private void ToggleVehicleInfo()
+    {
+        _showVehicleInfo = !_showVehicleInfo;
+    }
+
+    private void ToggleVehicleMaintenance()
+    {
+        _showVehicleMaintenance = !_showVehicleMaintenance;
+    }
+
+    private void ToggleVehicleSource()
+    {
+        _showVehicleSource = !_showVehicleSource;
+    }
+
+    private void ToggleDemoVehicles()
+    {
+        _showDemoVehicles = !_showDemoVehicles;
+    }
+
+    private List<VehicleDto> ApplyLegacyFilter(List<VehicleDto> vehicles)
+    {
+        var query = _searchQuery.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return vehicles;
+        }
+
+        if (_searchType == "GG")
+        {
+            return vehicles.Where(v =>
+                !string.IsNullOrWhiteSpace(v.fleet_number) &&
+                string.Equals(v.fleet_number.Trim(), query, StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+        }
+
+        return vehicles.Where(v =>
+            !string.IsNullOrWhiteSpace(v.registration_number) &&
+            string.Equals(v.registration_number.Trim(), query, StringComparison.OrdinalIgnoreCase)
+        ).ToList();
     }
 }

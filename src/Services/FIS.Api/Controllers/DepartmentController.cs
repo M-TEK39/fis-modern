@@ -71,17 +71,17 @@ public class DepartmentDto
     public int ServiceKilometres { get; set; }
     public byte ServiceYears { get; set; }
     public decimal OverheadPercentage { get; set; }
-    public DateTime DateCreated { get; set; }
-    public DateTime DateUpdated { get; set; }
-    public short? UserAccessCode { get; set; }
-    public short? ModifiedByUserCode { get; set; }
+    public DateTime? DateCreated { get; set; }
+    public DateTime? DateUpdated { get; set; }
+    public int? UserAccessCode { get; set; }
+    public int? ModifiedByUserCode { get; set; }
     public string? Comments { get; set; }
 }
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class DepartmentController : ControllerBase
+public class DepartmentController : BaseApiController
 {
     private readonly IDepartmentRepository _departmentRepository;
     private readonly ILogger<DepartmentController> _logger;
@@ -97,6 +97,8 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var departments = await _departmentRepository.GetActiveDepartmentsAsync();
             var departmentDtos = departments.Select(d => new DepartmentDto
             {
@@ -149,6 +151,8 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var department = await _departmentRepository.GetByIdAsync(id);
             if (department == null)
             {
@@ -213,6 +217,8 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var departments = await _departmentRepository.GetByCompanyAsync(companyCode);
             var departmentDtos = departments.Select(d => new DepartmentDto
             {
@@ -265,6 +271,8 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var departments = await _departmentRepository.SearchDepartmentsAsync(searchTerm);
             var departmentDtos = departments.Select(d => new DepartmentDto
             {
@@ -317,6 +325,8 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var department = new Department
             {
                 company_code = createDepartmentDto.CompanyCode,
@@ -350,7 +360,7 @@ public class DepartmentController : ControllerBase
                 comments = createDepartmentDto.Comments
             };
 
-            var createdDepartment = await _departmentRepository.CreateAsync(department);
+            var createdDepartment = await _departmentRepository.CreateAsync(department, currentUserId);
 
             var departmentDto = new DepartmentDto
             {
@@ -404,6 +414,8 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingDepartment = await _departmentRepository.GetByIdAsync(id);
             if (existingDepartment == null)
             {
@@ -440,7 +452,7 @@ public class DepartmentController : ControllerBase
             existingDepartment.user_access_code = updateDepartmentDto.UserAccessCode;
             existingDepartment.comments = updateDepartmentDto.Comments;
 
-            await _departmentRepository.UpdateAsync(existingDepartment);
+            await _departmentRepository.UpdateAsync(existingDepartment, currentUserId);
 
             var departmentDto = new DepartmentDto
             {
@@ -494,13 +506,15 @@ public class DepartmentController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingDepartment = await _departmentRepository.GetByIdAsync(id);
             if (existingDepartment == null)
             {
                 return NotFound();
             }
 
-            await _departmentRepository.DeleteAsync(id);
+            await _departmentRepository.DeleteAsync(id, currentUserId);
             return NoContent();
         }
         catch (Exception ex)

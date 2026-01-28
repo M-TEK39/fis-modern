@@ -55,20 +55,20 @@ public interface ILeaseTariffRepository
     /// </summary>
     /// <param name="leaseTariff">Lease tariff to create</param>
     /// <returns>Created lease tariff</returns>
-    Task<LeaseTariff> CreateAsync(LeaseTariff leaseTariff);
+    Task<LeaseTariff> CreateAsync(LeaseTariff leaseTariff, int currentUserId);
 
     /// <summary>
     /// Update existing lease tariff.
     /// </summary>
     /// <param name="leaseTariff">Lease tariff to update</param>
     /// <returns>Updated lease tariff</returns>
-    Task<LeaseTariff> UpdateAsync(LeaseTariff leaseTariff);
+    Task<LeaseTariff> UpdateAsync(LeaseTariff leaseTariff, int currentUserId);
 
     /// <summary>
     /// Delete lease tariff.
     /// </summary>
     /// <param name="leaseTariffCode">Lease tariff identifier</param>
-    Task DeleteAsync(int leaseTariffCode);
+    Task DeleteAsync(int leaseTariffCode, int currentUserId);
 
     /// <summary>
     /// Deactivate a lease tariff.

@@ -13,8 +13,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Fine>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<Fine>> GetBySiteAsync(short siteCode);
         Task<IEnumerable<Fine>> GetUnpaidFinesAsync();
-        Task<Fine> CreateAsync(Fine fine);
-        Task<Fine> UpdateAsync(Fine fine);
-        Task DeleteAsync(int fineCode);
+        Task<Fine> CreateAsync(Fine fine, int currentUserId);
+        Task<Fine> UpdateAsync(Fine fine, int currentUserId);
+        Task DeleteAsync(int fineCode, int currentUserId);
     }
 }

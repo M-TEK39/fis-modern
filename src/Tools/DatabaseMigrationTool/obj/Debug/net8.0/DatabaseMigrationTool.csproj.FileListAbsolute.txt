@@ -97,3 +97,4 @@
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/obj/Debug/net8.0/DatabaseMigrationTool.pdb
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/obj/Debug/net8.0/DatabaseMigrationTool.genruntimeconfig.cache
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/obj/Debug/net8.0/ref/DatabaseMigrationTool.dll
+/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/BCrypt.Net-Next.dll

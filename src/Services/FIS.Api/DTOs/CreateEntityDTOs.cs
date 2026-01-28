@@ -39,6 +39,8 @@ namespace FIS.Api.DTOs
         [Required]
         public short class_code { get; set; }
 
+        public short? type_code { get; set; }
+
         [Required]
         [StringLength(100)]
         public string model_description { get; set; } = string.Empty;
@@ -97,6 +99,8 @@ namespace FIS.Api.DTOs
         [Required]
         public short class_code { get; set; }
 
+        public short? type_code { get; set; }
+
         [Required]
         [StringLength(100)]
         public string model_description { get; set; } = string.Empty;
@@ -141,6 +145,32 @@ namespace FIS.Api.DTOs
         [Required]
         [MaxLength(255)]
         public string type_description { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// DTO for creating a new Class entity
+    /// Excludes auto-generated ID and audit fields
+    /// </summary>
+    public class CreateClassDto
+    {
+        /// <summary>
+        /// Description of the vehicle class (e.g., "Sedan", "SUV", "Truck")
+        /// </summary>
+        [MaxLength(255)]
+        public string? description { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for updating an existing Class entity
+    /// Excludes audit fields (auto-populated by repository)
+    /// </summary>
+    public class UpdateClassDto
+    {
+        /// <summary>
+        /// Description of the vehicle class
+        /// </summary>
+        [MaxLength(255)]
+        public string? description { get; set; }
     }
 
     /// <summary>

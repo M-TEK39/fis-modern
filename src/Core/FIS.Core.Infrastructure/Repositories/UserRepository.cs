@@ -24,7 +24,8 @@ public class UserRepository : IUserRepository
     public async Task<User?> GetByIdAsync(int userAccessCode)
     {
         return await _context.Users
-            .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
     }
 
     /// <summary>
@@ -36,7 +37,8 @@ public class UserRepository : IUserRepository
             return null;
 
         return await _context.Users
-            .FirstOrDefaultAsync(u => u.email == email);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(u => u.email == email);
     }
 
     /// <summary>
@@ -48,7 +50,8 @@ public class UserRepository : IUserRepository
             return null;
 
         return await _context.Users
-            .FirstOrDefaultAsync(u => u.tel_no == telephone);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(u => u.tel_no == telephone);
     }
 
     /// <summary>
@@ -57,6 +60,7 @@ public class UserRepository : IUserRepository
     public async Task<IEnumerable<User>> GetAllUsersAsync()
     {
         return await _context.Users
+                .Where(x => !x.is_deleted)
             .OrderBy(u => u.user_access_code)
             .ToListAsync();
     }
@@ -64,12 +68,16 @@ public class UserRepository : IUserRepository
     /// <summary>
     /// Create a new user
     /// </summary>
-    public async Task<User> CreateAsync(User user)
+    public async Task<User> CreateAsync(User user, int currentUserId)
     {
         if (user == null)
             throw new ArgumentNullException(nameof(user));
 
-        _context.Users.Add(user);
+        // Auto-populate audit fields
+            user.date_created = DateTime.UtcNow;
+            user.is_deleted = false;
+            
+            _context.Users.Add(user);
         await _context.SaveChangesAsync();
         return user;
     }
@@ -77,24 +85,30 @@ public class UserRepository : IUserRepository
     /// <summary>
     /// Update an existing user
     /// </summary>
-    public async Task UpdateAsync(User user)
+    public async Task UpdateAsync(User user, int currentUserId)
     {
         if (user == null)
             throw new ArgumentNullException(nameof(user));
 
-        _context.Entry(user).State = EntityState.Modified;
+        var existing = await _context.Users.FindAsync(user.user_access_code);
+        if (existing == null)
+            throw new InvalidOperationException($"User with user_access_code {user.user_access_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(user);
         await _context.SaveChangesAsync();
     }
 
     /// <summary>
     /// Delete a user by access code
     /// </summary>
-    public async Task DeleteAsync(int userAccessCode)
+    public async Task DeleteAsync(int userAccessCode, int currentUserId)
     {
         var user = await GetByIdAsync(userAccessCode);
         if (user != null)
         {
-            _context.Users.Remove(user);
+            // Soft delete instead of hard delete
+                user.is_deleted = true;
+                user.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

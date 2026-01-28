@@ -48,21 +48,28 @@ public class LossRepository : ILossRepository
             .ToListAsync();
     }
 
-    public async Task<Loss> CreateAsync(Loss loss)
+    public async Task<Loss> CreateAsync(Loss loss, int currentUserId)
     {
         await _context.Set<Loss>().AddAsync(loss);
         await _context.SaveChangesAsync();
         return loss;
     }
 
-    public async Task<Loss> UpdateAsync(Loss loss)
+    public async Task<Loss> UpdateAsync(Loss loss, int currentUserId)
     {
-        _context.Set<Loss>().Update(loss);
+        if (loss == null)
+            throw new ArgumentNullException(nameof(loss));
+
+        var existing = await _context.Set<Loss>().FindAsync(loss.loss_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Loss with loss_code {loss.loss_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(loss);
         await _context.SaveChangesAsync();
-        return loss;
+        return existing;
     }
 
-    public async Task DeleteAsync(short lossCode)
+    public async Task DeleteAsync(short lossCode, int currentUserId)
     {
         var loss = await GetByIdAsync(lossCode);
         if (loss != null)

@@ -94,7 +94,7 @@ public class ContractRepository : IContractRepository
     /// Create a new contract
     /// IMPORTANT: Business rule enforcement for unique active contracts
     /// </summary>
-    public async Task<Contract> CreateAsync(Contract contract)
+    public async Task<Contract> CreateAsync(Contract contract, int currentUserId)
     {
         if (contract == null)
             throw new ArgumentNullException(nameof(contract));
@@ -120,7 +120,7 @@ public class ContractRepository : IContractRepository
     /// Update an existing contract
     /// IMPORTANT: Enforce business rules for active contract changes
     /// </summary>
-    public async Task UpdateAsync(Contract contract)
+    public async Task UpdateAsync(Contract contract, int currentUserId)
     {
         if (contract == null)
             throw new ArgumentNullException(nameof(contract));
@@ -143,7 +143,18 @@ public class ContractRepository : IContractRepository
             }
         }
 
-        _context.Entry(contract).State = EntityState.Modified;
+        var existing = await _context.Contracts.FindAsync(contract.contract_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Contract with contract_code {contract.contract_code} not found");
+
+        // Preserve creation audit fields
+                    contract.date_created = existing.date_created;
+                    contract.created_by_user_code = existing.created_by_user_code;
+        // Set update audit fields
+                    contract.date_updated = DateTime.UtcNow;
+                    contract.modified_by_user_code = currentUserId;
+        
+        _context.Entry(existing).CurrentValues.SetValues(contract);
         await _context.SaveChangesAsync();
     }
 
@@ -151,14 +162,15 @@ public class ContractRepository : IContractRepository
     /// Delete a contract
     /// IMPORTANT: Consider business implications of deleting contracts
     /// </summary>
-    public async Task DeleteAsync(int contractCode)
+    public async Task DeleteAsync(int contractCode, int currentUserId)
     {
         var contract = await GetByIdAsync(contractCode);
         if (contract != null)
         {
-            // Consider if this should be soft delete for audit trail
-            // For legacy compatibility, we'll do hard delete
-            _context.Contracts.Remove(contract);
+            // Soft delete instead of hard delete
+            contract.is_deleted = true;
+            contract.modified_by_user_code = currentUserId;
+            contract.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }
@@ -186,6 +198,6 @@ public class ContractRepository : IContractRepository
         if (!string.IsNullOrEmpty(notes))
             contract.Notes = notes;
 
-        await UpdateAsync(contract);
+        await UpdateAsync(contract, 1);
     }
 }

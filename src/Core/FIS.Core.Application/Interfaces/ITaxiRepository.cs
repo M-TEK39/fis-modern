@@ -13,8 +13,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode);
         Task<IEnumerable<Taxi>> GetByDepartmentAsync(short departmentCode);
         Task<IEnumerable<Taxi>> GetByDateAsync(DateTime date);
-        Task<Taxi> CreateAsync(Taxi taxi);
-        Task<Taxi> UpdateAsync(Taxi taxi);
-        Task DeleteAsync(int requestId);
+        Task<Taxi> CreateAsync(Taxi taxi, int currentUserId);
+        Task<Taxi> UpdateAsync(Taxi taxi, int currentUserId);
+        Task DeleteAsync(int requestId, int currentUserId);
     }
 }

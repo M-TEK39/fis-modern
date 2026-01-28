@@ -13,7 +13,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class ContractStatusController : ControllerBase
+public class ContractStatusController : BaseApiController
 {
     private readonly IContractStatusRepository _contractStatusRepository;
     private readonly ILogger<ContractStatusController> _logger;
@@ -33,6 +33,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var statuses = await _contractStatusRepository.GetAllStatusesAsync();
             return Ok(statuses);
         }
@@ -53,6 +55,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var status = await _contractStatusRepository.GetByIdAsync(statusCode);
             if (status == null)
                 return NotFound($"Contract status with code {statusCode} not found");
@@ -76,6 +80,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var status = await _contractStatusRepository.GetByDescriptionAsync(description);
             if (status == null)
                 return NotFound($"Contract status with description '{description}' not found");
@@ -99,6 +105,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var status = await _contractStatusRepository.GetByAbbreviationAsync(abbreviation);
             if (status == null)
                 return NotFound($"Contract status with abbreviation '{abbreviation}' not found");
@@ -121,6 +129,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var statuses = await _contractStatusRepository.GetActiveStatusesAsync();
             return Ok(statuses);
         }
@@ -140,6 +150,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var statuses = await _contractStatusRepository.GetFinalStatusesAsync();
             return Ok(statuses);
         }
@@ -160,6 +172,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var statuses = await _contractStatusRepository.SearchStatusesAsync(searchTerm);
             return Ok(statuses);
         }
@@ -180,6 +194,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
@@ -191,7 +207,7 @@ public class ContractStatusController : ControllerBase
                 is_final = createStatusDto.is_final
             };
 
-            var createdStatus = await _contractStatusRepository.CreateAsync(status);
+            var createdStatus = await _contractStatusRepository.CreateAsync(status, currentUserId);
             return CreatedAtAction(nameof(GetStatus), new { statusCode = createdStatus.contract_status_code }, createdStatus);
         }
         catch (Exception ex)
@@ -212,6 +228,8 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (statusCode != status.contract_status_code)
                 return BadRequest("Status code in URL does not match status code in body");
 
@@ -219,7 +237,7 @@ public class ContractStatusController : ControllerBase
             if (existingStatus == null)
                 return NotFound($"Contract status with code {statusCode} not found");
 
-            var updatedStatus = await _contractStatusRepository.UpdateAsync(status);
+            var updatedStatus = await _contractStatusRepository.UpdateAsync(status, currentUserId);
             return Ok(updatedStatus);
         }
         catch (Exception ex)
@@ -239,7 +257,9 @@ public class ContractStatusController : ControllerBase
     {
         try
         {
-            var deleted = await _contractStatusRepository.DeleteAsync(statusCode);
+            int currentUserId = GetCurrentUserId();
+
+            var deleted = await _contractStatusRepository.DeleteAsync(statusCode, currentUserId);
             if (!deleted)
                 return NotFound($"Contract status with code {statusCode} not found");
 

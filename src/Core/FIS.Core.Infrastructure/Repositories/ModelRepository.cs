@@ -99,12 +99,16 @@ public class ModelRepository : IModelRepository
     /// <summary>
     /// Create a new model
     /// </summary>
-    public async Task<Model> CreateAsync(Model model)
+    public async Task<Model> CreateAsync(Model model, int currentUserId)
     {
         if (model == null)
             throw new ArgumentNullException(nameof(model));
 
-        _context.Models.Add(model);
+        // Auto-populate audit fields
+            model.date_created = DateTime.UtcNow;
+            model.is_deleted = false;
+            
+            _context.Models.Add(model);
         await _context.SaveChangesAsync();
         return model;
     }
@@ -112,25 +116,33 @@ public class ModelRepository : IModelRepository
     /// <summary>
     /// Update an existing model
     /// </summary>
-    public async Task<Model> UpdateAsync(Model model)
+    public async Task<Model> UpdateAsync(Model model, int currentUserId)
     {
         if (model == null)
             throw new ArgumentNullException(nameof(model));
 
-        _context.Entry(model).State = EntityState.Modified;
+        var existing = await _context.Models.FindAsync(model.model_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Model with code {model.model_code} not found");
+
+        // Update properties using EF Core's SetValues (handles all properties automatically)
+        _context.Entry(existing).CurrentValues.SetValues(model);
+
         await _context.SaveChangesAsync();
-        return model;
+        return existing;
     }
 
     /// <summary>
     /// Delete a model
     /// </summary>
-    public async Task DeleteAsync(short modelCode)
+    public async Task DeleteAsync(short modelCode, int currentUserId)
     {
         var model = await GetByIdAsync(modelCode);
         if (model != null)
         {
-            _context.Models.Remove(model);
+            // Soft delete instead of hard delete
+                model.is_deleted = true;
+                model.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

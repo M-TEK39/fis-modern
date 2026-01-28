@@ -50,7 +50,7 @@ public class DriverDto
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class DriverController : ControllerBase
+public class DriverController : BaseApiController
 {
     private readonly IDriverRepository _driverRepository;
     private readonly ILogger<DriverController> _logger;
@@ -66,6 +66,8 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var drivers = await _driverRepository.GetActiveDriversAsync();
             var driverDtos = drivers.Select(d => new DriverDto
             {
@@ -100,6 +102,8 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var driver = await _driverRepository.GetByIdAsync(id);
             if (driver == null)
             {
@@ -146,6 +150,8 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var driver = await _driverRepository.GetByLicenceNumberAsync(licenceNumber);
             if (driver == null)
             {
@@ -186,6 +192,8 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var drivers = await _driverRepository.SearchDriversAsync(searchTerm);
             var driverDtos = drivers.Select(d => new DriverDto
             {
@@ -220,6 +228,8 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var driver = new Driver
             {
                 site_code = createDriverDto.SiteCode,
@@ -239,7 +249,7 @@ public class DriverController : ControllerBase
                 driver_active = createDriverDto.DriverActive
             };
 
-            var createdDriver = await _driverRepository.CreateAsync(driver);
+            var createdDriver = await _driverRepository.CreateAsync(driver, currentUserId);
 
             var driverDto = new DriverDto
             {
@@ -275,6 +285,8 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingDriver = await _driverRepository.GetByIdAsync(id);
             if (existingDriver == null)
             {
@@ -297,7 +309,7 @@ public class DriverController : ControllerBase
             existingDriver.driver_licence_ExpiryDate = updateDriverDto.DriverLicenceExpiryDate;
             existingDriver.driver_active = updateDriverDto.DriverActive;
 
-            await _driverRepository.UpdateAsync(existingDriver);
+            await _driverRepository.UpdateAsync(existingDriver, currentUserId);
 
             var driverDto = new DriverDto
             {
@@ -333,13 +345,15 @@ public class DriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingDriver = await _driverRepository.GetByIdAsync(id);
             if (existingDriver == null)
             {
                 return NotFound();
             }
 
-            await _driverRepository.DeleteAsync(id);
+            await _driverRepository.DeleteAsync(id, currentUserId);
             return NoContent();
         }
         catch (Exception ex)

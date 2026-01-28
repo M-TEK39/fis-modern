@@ -1,9 +1,11 @@
 ﻿@inherits LayoutComponentBase
-@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
 
 <div class="legacy-shell">
     <aside class="legacy-sidebar" aria-label="Primary navigation">
         <NavLink class="legacy-brand legacy-brand-link" href="/home" Match="NavLinkMatch.All">
+            <span class="brand-short">FIS</span>
             <p class="brand-line">Gauteng Provincial Government</p>
             <p class="brand-line strong">g-FleeT Management</p>
             <p class="brand-caption">Fleet Information System</p>
@@ -17,6 +19,7 @@
     </aside>
 
     <div class="legacy-main">
+        <AppHeader />
         <main class="page-surface">
             @Body
         </main>

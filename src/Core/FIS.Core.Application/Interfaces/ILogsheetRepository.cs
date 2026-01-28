@@ -12,8 +12,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Logsheet>> GetAllAsync();
         Task<IEnumerable<Logsheet>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<Logsheet>> GetByMonthAsync(DateTime month);
-        Task<Logsheet> CreateAsync(Logsheet logsheet);
-        Task<Logsheet> UpdateAsync(Logsheet logsheet);
-        Task DeleteAsync(int logCode);
+        Task<Logsheet> CreateAsync(Logsheet logsheet, int currentUserId);
+        Task<Logsheet> UpdateAsync(Logsheet logsheet, int currentUserId);
+        Task DeleteAsync(int logCode, int currentUserId);
     }
 }

@@ -7,7 +7,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class LeaseContractTermsController : ControllerBase
+public class LeaseContractTermsController : BaseApiController
 {
     private readonly ILeaseContractTermsRepository _repository;
     private readonly ILogger<LeaseContractTermsController> _logger;
@@ -26,11 +26,11 @@ public class LeaseContractTermsController : ControllerBase
     public async Task<ActionResult<IEnumerable<LeaseContractTerms>>> GetActive() { try { return Ok(await _repository.GetActiveTermsAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPost]
-    public async Task<ActionResult<LeaseContractTerms>> Create([FromBody] LeaseContractTerms item) { try { var created = await _repository.CreateAsync(item); return CreatedAtAction(nameof(GetById), new { id = created.VehicleContractTermID }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<LeaseContractTerms>> Create([FromBody] LeaseContractTerms item) { try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.VehicleContractTermID }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<LeaseContractTerms>> Update(int id, [FromBody] LeaseContractTerms item) { try { if (id != item.VehicleContractTermID) return BadRequest(); return Ok(await _repository.UpdateAsync(item)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<LeaseContractTerms>> Update(int id, [FromBody] LeaseContractTerms item) { try { if (id != item.VehicleContractTermID) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpDelete("{id}")]
-    public async Task<ActionResult> Delete(int id) { try { await _repository.DeleteAsync(id); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult> Delete(int id) { try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 }

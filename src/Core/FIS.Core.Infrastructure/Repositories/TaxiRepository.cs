@@ -57,21 +57,28 @@ public class TaxiRepository : ITaxiRepository
             .ToListAsync();
     }
 
-    public async Task<Taxi> CreateAsync(Taxi taxi)
+    public async Task<Taxi> CreateAsync(Taxi taxi, int currentUserId)
     {
         await _context.Set<Taxi>().AddAsync(taxi);
         await _context.SaveChangesAsync();
         return taxi;
     }
 
-    public async Task<Taxi> UpdateAsync(Taxi taxi)
+    public async Task<Taxi> UpdateAsync(Taxi taxi, int currentUserId)
     {
-        _context.Set<Taxi>().Update(taxi);
+        if (taxi == null)
+            throw new ArgumentNullException(nameof(taxi));
+
+        var existing = await _context.Set<Taxi>().FindAsync(taxi.request_id);
+        if (existing == null)
+            throw new InvalidOperationException($"Taxi with request_id {taxi.request_id} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(taxi);
         await _context.SaveChangesAsync();
-        return taxi;
+        return existing;
     }
 
-    public async Task DeleteAsync(int requestId)
+    public async Task DeleteAsync(int requestId, int currentUserId)
     {
         var taxi = await GetByIdAsync(requestId);
         if (taxi != null)

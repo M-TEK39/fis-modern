@@ -26,11 +26,14 @@ public record VehicleDto
     public string? fleet_number { get; set; }
     [Required]
     public string? registration_number { get; set; }
+    public string? previos_gg_number { get; set; }
+    public string? followup_gg_number { get; set; }
     public string? asset_number { get; set; }
     [Required]
     public string? engine_number_1 { get; set; }
     [Required]
     public string? chassis_number { get; set; }
+    public string? lic_register_number { get; set; }
     
     // Dates & Odometer - Required
     [Required]
@@ -43,6 +46,8 @@ public record VehicleDto
     public int? current_odo { get; set; }
     public int? odo_adjustment { get; set; }
     public DateTime? odo_update_date { get; set; }
+    public DateTime? date_First_Regist { get; set; }
+    public DateTime? vehicle_status_date { get; set; }
     
     // Specifications
     [Required]
@@ -74,6 +79,7 @@ public record VehicleDto
     public DateTime? purchase_date { get; set; }
     public decimal? purchase_amount { get; set; }
     public string? purchased_from { get; set; }
+    public string? invoice_number { get; set; }
     public decimal? book_value { get; set; }
     public DateTime? book_value_date { get; set; }
     public string? sold_to { get; set; }
@@ -89,6 +95,11 @@ public record VehicleDto
     public string? cof_number { get; set; }
     public decimal? Cof_amount { get; set; }
     public string? Licence_receiver { get; set; }
+
+    // Audit fields (read-only in UI)
+    public DateTime? date_created { get; set; }
+    public DateTime? date_updated { get; set; }
+    public DateTime? captured_date { get; set; }
 }
 
 public record PagedResult<T>

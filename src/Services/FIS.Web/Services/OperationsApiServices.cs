@@ -2,12 +2,13 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Net.Http;
 using Microsoft.Extensions.Logging;
+using System.Net.Http.Headers;
 
 namespace FIS.Web.Services;
 
 /// <summary>
 /// Lightweight base class for simple CRUD-style API calls with case-insensitive JSON handling.
-/// Components can supply their own DTO types when calling these methods.
+/// Automatically adds JWT token to requests.
 /// </summary>
 public abstract class BaseApiService
 {
@@ -16,19 +17,34 @@ public abstract class BaseApiService
         PropertyNameCaseInsensitive = true
     };
 
-    protected BaseApiService(HttpClient httpClient, ILogger logger)
+    protected BaseApiService(HttpClient httpClient, TokenService tokenService, ILogger logger)
     {
         HttpClient = httpClient;
+        TokenService = tokenService;
         Logger = logger;
     }
 
     protected HttpClient HttpClient { get; }
+    protected TokenService TokenService { get; }
     protected ILogger Logger { get; }
+
+    /// <summary>
+    /// Adds JWT token to request if available
+    /// </summary>
+    private void AddAuthorizationHeader()
+    {
+        if (TokenService.IsTokenValid && !string.IsNullOrEmpty(TokenService.Token))
+        {
+            HttpClient.DefaultRequestHeaders.Authorization = 
+                new AuthenticationHeaderValue("Bearer", TokenService.Token);
+        }
+    }
 
     protected async Task<List<T>> GetListAsync<T>(string path)
     {
         try
         {
+            AddAuthorizationHeader();
             var response = await HttpClient.GetAsync(path);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<List<T>>(_jsonOptions) ?? new();
@@ -44,6 +60,7 @@ public abstract class BaseApiService
     {
         try
         {
+            AddAuthorizationHeader();
             var response = await HttpClient.GetAsync(path);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<T>(_jsonOptions);
@@ -59,6 +76,7 @@ public abstract class BaseApiService
     {
         try
         {
+            AddAuthorizationHeader();
             var response = await HttpClient.PostAsJsonAsync(path, payload);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TResponse>(_jsonOptions);
@@ -74,6 +92,7 @@ public abstract class BaseApiService
     {
         try
         {
+            AddAuthorizationHeader();
             var response = await HttpClient.PutAsJsonAsync(path, payload);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TResponse>(_jsonOptions);
@@ -101,7 +120,7 @@ public abstract class BaseApiService
 }
 
 // Operations/auxiliary services
-public class CallCentreApiService(HttpClient httpClient, ILogger<CallCentreApiService> logger) : BaseApiService(httpClient, logger)
+public class CallCentreApiService(HttpClient httpClient, TokenService tokenService, ILogger<CallCentreApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/callcentre";
 
@@ -112,7 +131,7 @@ public class CallCentreApiService(HttpClient httpClient, ILogger<CallCentreApiSe
     public Task DeleteAsync(short id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class FineApiService(HttpClient httpClient, ILogger<FineApiService> logger) : BaseApiService(httpClient, logger)
+public class FineApiService(HttpClient httpClient, TokenService tokenService, ILogger<FineApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/fine";
 
@@ -123,7 +142,7 @@ public class FineApiService(HttpClient httpClient, ILogger<FineApiService> logge
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class LogbookApiService(HttpClient httpClient, ILogger<LogbookApiService> logger) : BaseApiService(httpClient, logger)
+public class LogbookApiService(HttpClient httpClient, TokenService tokenService, ILogger<LogbookApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/logbook";
 
@@ -134,7 +153,7 @@ public class LogbookApiService(HttpClient httpClient, ILogger<LogbookApiService>
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class LogsheetApiService(HttpClient httpClient, ILogger<LogsheetApiService> logger) : BaseApiService(httpClient, logger)
+public class LogsheetApiService(HttpClient httpClient, TokenService tokenService, ILogger<LogsheetApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/logsheet";
 
@@ -145,7 +164,7 @@ public class LogsheetApiService(HttpClient httpClient, ILogger<LogsheetApiServic
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class MonitorApiService(HttpClient httpClient, ILogger<MonitorApiService> logger) : BaseApiService(httpClient, logger)
+public class MonitorApiService(HttpClient httpClient, TokenService tokenService, ILogger<MonitorApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/monitor";
 
@@ -156,7 +175,7 @@ public class MonitorApiService(HttpClient httpClient, ILogger<MonitorApiService>
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class TrackingApiService(HttpClient httpClient, ILogger<TrackingApiService> logger) : BaseApiService(httpClient, logger)
+public class TrackingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TrackingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/tracking";
 
@@ -167,7 +186,7 @@ public class TrackingApiService(HttpClient httpClient, ILogger<TrackingApiServic
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class TowingApiService(HttpClient httpClient, ILogger<TowingApiService> logger) : BaseApiService(httpClient, logger)
+public class TowingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TowingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/towing";
 
@@ -178,7 +197,7 @@ public class TowingApiService(HttpClient httpClient, ILogger<TowingApiService> l
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class AuctionApiService(HttpClient httpClient, ILogger<AuctionApiService> logger) : BaseApiService(httpClient, logger)
+public class AuctionApiService(HttpClient httpClient, TokenService tokenService, ILogger<AuctionApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/auction";
 
@@ -189,7 +208,7 @@ public class AuctionApiService(HttpClient httpClient, ILogger<AuctionApiService>
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class ClearanceApiService(HttpClient httpClient, ILogger<ClearanceApiService> logger) : BaseApiService(httpClient, logger)
+public class ClearanceApiService(HttpClient httpClient, TokenService tokenService, ILogger<ClearanceApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/clearance";
 
@@ -200,7 +219,7 @@ public class ClearanceApiService(HttpClient httpClient, ILogger<ClearanceApiServ
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class LossApiService(HttpClient httpClient, ILogger<LossApiService> logger) : BaseApiService(httpClient, logger)
+public class LossApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/loss";
 
@@ -211,7 +230,7 @@ public class LossApiService(HttpClient httpClient, ILogger<LossApiService> logge
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class VehicleOrderApiService(HttpClient httpClient, ILogger<VehicleOrderApiService> logger) : BaseApiService(httpClient, logger)
+public class VehicleOrderApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleOrderApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehicleorder";
 
@@ -222,7 +241,7 @@ public class VehicleOrderApiService(HttpClient httpClient, ILogger<VehicleOrderA
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class VehiclePhotoApiService(HttpClient httpClient, ILogger<VehiclePhotoApiService> logger) : BaseApiService(httpClient, logger)
+public class VehiclePhotoApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehiclePhotoApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehiclephoto";
 
@@ -233,7 +252,7 @@ public class VehiclePhotoApiService(HttpClient httpClient, ILogger<VehiclePhotoA
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class WorkshopApiService(HttpClient httpClient, ILogger<WorkshopApiService> logger) : BaseApiService(httpClient, logger)
+public class WorkshopApiService(HttpClient httpClient, TokenService tokenService, ILogger<WorkshopApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/workshop";
 
@@ -244,7 +263,7 @@ public class WorkshopApiService(HttpClient httpClient, ILogger<WorkshopApiServic
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class TaxiApiService(HttpClient httpClient, ILogger<TaxiApiService> logger) : BaseApiService(httpClient, logger)
+public class TaxiApiService(HttpClient httpClient, TokenService tokenService, ILogger<TaxiApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/taxi";
 
@@ -255,7 +274,7 @@ public class TaxiApiService(HttpClient httpClient, ILogger<TaxiApiService> logge
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class AssetVerificationApiService(HttpClient httpClient, ILogger<AssetVerificationApiService> logger) : BaseApiService(httpClient, logger)
+public class AssetVerificationApiService(HttpClient httpClient, TokenService tokenService, ILogger<AssetVerificationApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/assetverification";
 
@@ -266,7 +285,7 @@ public class AssetVerificationApiService(HttpClient httpClient, ILogger<AssetVer
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class VehicleAssessmentApiService(HttpClient httpClient, ILogger<VehicleAssessmentApiService> logger) : BaseApiService(httpClient, logger)
+public class VehicleAssessmentApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleAssessmentApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehicleassessment";
 
@@ -277,7 +296,7 @@ public class VehicleAssessmentApiService(HttpClient httpClient, ILogger<VehicleA
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class VehicleDamageApiService(HttpClient httpClient, ILogger<VehicleDamageApiService> logger) : BaseApiService(httpClient, logger)
+public class VehicleDamageApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleDamageApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehicledamage";
 
@@ -288,7 +307,7 @@ public class VehicleDamageApiService(HttpClient httpClient, ILogger<VehicleDamag
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class SupplierApiService(HttpClient httpClient, ILogger<SupplierApiService> logger) : BaseApiService(httpClient, logger)
+public class SupplierApiService(HttpClient httpClient, TokenService tokenService, ILogger<SupplierApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/supplier";
 
@@ -299,7 +318,7 @@ public class SupplierApiService(HttpClient httpClient, ILogger<SupplierApiServic
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class BookingApiService(HttpClient httpClient, ILogger<BookingApiService> logger) : BaseApiService(httpClient, logger)
+public class BookingApiService(HttpClient httpClient, TokenService tokenService, ILogger<BookingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/booking";
 
@@ -310,7 +329,7 @@ public class BookingApiService(HttpClient httpClient, ILogger<BookingApiService>
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class LeaseContractTermsApiService(HttpClient httpClient, ILogger<LeaseContractTermsApiService> logger) : BaseApiService(httpClient, logger)
+public class LeaseContractTermsApiService(HttpClient httpClient, TokenService tokenService, ILogger<LeaseContractTermsApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/leasecontractterms";
 
@@ -321,7 +340,7 @@ public class LeaseContractTermsApiService(HttpClient httpClient, ILogger<LeaseCo
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
-public class TrafficDeptApiService(HttpClient httpClient, ILogger<TrafficDeptApiService> logger) : BaseApiService(httpClient, logger)
+public class TrafficDeptApiService(HttpClient httpClient, TokenService tokenService, ILogger<TrafficDeptApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/trafficdept";
 

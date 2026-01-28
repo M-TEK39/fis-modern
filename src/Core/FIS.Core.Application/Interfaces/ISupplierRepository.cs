@@ -6,7 +6,7 @@ public interface ISupplierRepository
     Task<IEnumerable<Supplier>> GetAllAsync();
     Task<IEnumerable<Supplier>> GetActiveAsync();
     Task<IEnumerable<Supplier>> GetByTypeAsync(string supplierType);
-    Task<Supplier> CreateAsync(Supplier supplier);
-    Task<Supplier> UpdateAsync(Supplier supplier);
-    Task DeleteAsync(short supplierId);
+    Task<Supplier> CreateAsync(Supplier supplier, int currentUserId);
+    Task<Supplier> UpdateAsync(Supplier supplier, int currentUserId);
+    Task DeleteAsync(short supplierId, int currentUserId);
 }

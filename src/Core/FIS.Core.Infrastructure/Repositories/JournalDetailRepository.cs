@@ -169,7 +169,7 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
     }
 
-    public async Task<JournalDetail> CreateAsync(JournalDetail journalDetail)
+    public async Task<JournalDetail> CreateAsync(JournalDetail journalDetail, int currentUserId)
     {
         try
         {
@@ -197,12 +197,19 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
     }
 
-    public async Task UpdateAsync(JournalDetail journalDetail)
+    public async Task UpdateAsync(JournalDetail journalDetail, int currentUserId)
     {
         try
         {
+            if (journalDetail == null)
+                throw new ArgumentNullException(nameof(journalDetail));
+
+            var existing = await _context.Set<JournalDetail>().FindAsync(journalDetail.journal_detail_id);
+            if (existing == null)
+                throw new InvalidOperationException($"JournalDetail with journal_detail_id {journalDetail.journal_detail_id} not found");
+
             journalDetail.journal_detail_date_updated = DateTime.Now;
-            _context.Set<JournalDetail>().Update(journalDetail);
+            _context.Entry(existing).CurrentValues.SetValues(journalDetail);
             await _context.SaveChangesAsync();
 
             _logger.LogInformation("Updated journal detail: {JournalDetailCode}", journalDetail.journal_detail_code);
@@ -214,7 +221,7 @@ public class JournalDetailRepository : IJournalDetailRepository
         }
     }
 
-    public async Task DeleteAsync(int journalDetailId)
+    public async Task DeleteAsync(int journalDetailId, int currentUserId)
     {
         try
         {

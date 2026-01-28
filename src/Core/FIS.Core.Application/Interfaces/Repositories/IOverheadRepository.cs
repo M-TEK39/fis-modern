@@ -42,20 +42,20 @@ public interface IOverheadRepository
     /// </summary>
     /// <param name="overhead">Overhead to create</param>
     /// <returns>Created overhead</returns>
-    Task<Overhead> CreateAsync(Overhead overhead);
+    Task<Overhead> CreateAsync(Overhead overhead, int currentUserId);
 
     /// <summary>
     /// Update existing overhead.
     /// </summary>
     /// <param name="overhead">Overhead to update</param>
     /// <returns>Updated overhead</returns>
-    Task<Overhead> UpdateAsync(Overhead overhead);
+    Task<Overhead> UpdateAsync(Overhead overhead, int currentUserId);
 
     /// <summary>
     /// Delete overhead.
     /// </summary>
     /// <param name="overheadId">Overhead identifier</param>
-    Task DeleteAsync(int overheadId);
+    Task DeleteAsync(int overheadId, int currentUserId);
 
     /// <summary>
     /// Delete all overheads for a tariff parameter year.

@@ -9,7 +9,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class MakeController : ControllerBase
+public class MakeController : BaseApiController
 {
     private readonly IMakeRepository _makeRepository;
     private readonly ILogger<MakeController> _logger;
@@ -143,6 +143,8 @@ public class MakeController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+            
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -154,7 +156,7 @@ public class MakeController : ControllerBase
                 make_description = createMakeDto.make_description
             };
 
-            var createdMake = await _makeRepository.CreateAsync(make);
+            var createdMake = await _makeRepository.CreateAsync(make, currentUserId);
             
             var makeResponse = new MakeResponseDto
             {
@@ -200,7 +202,7 @@ public class MakeController : ControllerBase
                 return NotFound();
             }
 
-            var updatedMake = await _makeRepository.UpdateAsync(make);
+            var updatedMake = await _makeRepository.UpdateAsync(make, GetCurrentUserId());
             
             var makeResponse = new MakeResponseDto
             {
@@ -233,7 +235,7 @@ public class MakeController : ControllerBase
                 return NotFound();
             }
 
-            await _makeRepository.DeleteAsync(makeCode);
+            await _makeRepository.DeleteAsync(makeCode, GetCurrentUserId());
             _logger.LogInformation("Deleted make with code {MakeCode}", makeCode);
             
             return NoContent();

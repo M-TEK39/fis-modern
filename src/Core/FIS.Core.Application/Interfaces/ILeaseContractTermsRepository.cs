@@ -6,7 +6,7 @@ public interface ILeaseContractTermsRepository
     Task<IEnumerable<LeaseContractTerms>> GetAllAsync();
     Task<LeaseContractTerms?> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<LeaseContractTerms>> GetActiveTermsAsync();
-    Task<LeaseContractTerms> CreateAsync(LeaseContractTerms terms);
-    Task<LeaseContractTerms> UpdateAsync(LeaseContractTerms terms);
-    Task DeleteAsync(int termId);
+    Task<LeaseContractTerms> CreateAsync(LeaseContractTerms terms, int currentUserId);
+    Task<LeaseContractTerms> UpdateAsync(LeaseContractTerms terms, int currentUserId);
+    Task DeleteAsync(int termId, int currentUserId);
 }

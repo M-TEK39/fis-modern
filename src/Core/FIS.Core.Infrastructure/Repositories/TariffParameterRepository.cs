@@ -80,7 +80,7 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// <summary>
     /// Create new tariff parameter.
     /// </summary>
-    public async Task<TariffParameter> CreateAsync(TariffParameter tariffParameter)
+    public async Task<TariffParameter> CreateAsync(TariffParameter tariffParameter, int currentUserId)
     {
         tariffParameter.CaptureDate = DateTime.Now;
         tariffParameter.Approved = false; // New parameters start as unapproved
@@ -92,18 +92,25 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// <summary>
     /// Update existing tariff parameter.
     /// </summary>
-    public async Task<TariffParameter> UpdateAsync(TariffParameter tariffParameter)
+    public async Task<TariffParameter> UpdateAsync(TariffParameter tariffParameter, int currentUserId)
     {
+        if (tariffParameter == null)
+            throw new ArgumentNullException(nameof(tariffParameter));
+
+        var existing = await _context.Set<TariffParameter>().FindAsync(tariffParameter.TariffParameterID);
+        if (existing == null)
+            throw new InvalidOperationException($"TariffParameter with TariffParameterID {tariffParameter.TariffParameterID} not found");
+
         tariffParameter.ModifiedDate = DateTime.Now;
-        _context.Set<TariffParameter>().Update(tariffParameter);
+        _context.Entry(existing).CurrentValues.SetValues(tariffParameter);
         await _context.SaveChangesAsync();
-        return tariffParameter;
+        return existing;
     }
 
     /// <summary>
     /// Delete tariff parameter.
     /// </summary>
-    public async Task DeleteAsync(int tariffParameterId)
+    public async Task DeleteAsync(int tariffParameterId, int currentUserId)
     {
         var tariffParameter = await GetByIdAsync(tariffParameterId);
         if (tariffParameter != null)

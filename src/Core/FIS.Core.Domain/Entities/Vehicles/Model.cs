@@ -57,6 +57,13 @@ public class Model
     public short class_code { get; set; }
 
     /// <summary>
+    /// Vehicle type code (NEW: User-approved schema extension)
+    /// Links to type table for vehicle categorization
+    /// </summary>
+    [Column("type_code")]
+    public short? type_code { get; set; }
+
+    /// <summary>
     /// Model description/name (Camry, F-150, etc.)
     /// </summary>
     [Required]
@@ -150,6 +157,29 @@ public class Model
     /// Vehicles using this model
     /// </summary>
     public virtual ICollection<Vehicle> Vehicles { get; set; } = new List<Vehicle>();
+
+    // Global audit fields (AI_CODING_RULES.md - Section 4.5)
+    [Column("date_created")]
+    public DateTime date_created { get; set; }
+
+    [Column("date_updated")]
+    public DateTime? date_updated { get; set; }
+
+    [Column("created_by_user_code")]
+    public int? created_by_user_code { get; set; }
+
+    [Column("modified_by_user_code")]
+    public int? modified_by_user_code { get; set; }
+
+    [Column("is_deleted")]
+    public bool is_deleted { get; set; } = false;
+
+    // Navigation properties for audit trail
+    [ForeignKey("created_by_user_code")]
+    public virtual User? CreatedByUser { get; set; }
+
+    [ForeignKey("modified_by_user_code")]
+    public virtual User? ModifiedByUser { get; set; }
 
     // Computed properties for modern API compatibility
     public short ModelCode => model_code;

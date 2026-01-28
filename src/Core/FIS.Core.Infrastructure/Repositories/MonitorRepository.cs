@@ -47,21 +47,28 @@ public class MonitorRepository : IMonitorRepository
             .ToListAsync();
     }
 
-    public async Task<MonitorEntity> CreateAsync(MonitorEntity monitor)
+    public async Task<MonitorEntity> CreateAsync(MonitorEntity monitor, int currentUserId)
     {
         await _context.Set<MonitorEntity>().AddAsync(monitor);
         await _context.SaveChangesAsync();
         return monitor;
     }
 
-    public async Task<MonitorEntity> UpdateAsync(MonitorEntity monitor)
+    public async Task<MonitorEntity> UpdateAsync(MonitorEntity monitor, int currentUserId)
     {
-        _context.Set<MonitorEntity>().Update(monitor);
+        if (monitor == null)
+            throw new ArgumentNullException(nameof(monitor));
+
+        var existing = await _context.Set<MonitorEntity>().FindAsync(monitor.monitor_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Monitor with monitor_code {monitor.monitor_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(monitor);
         await _context.SaveChangesAsync();
-        return monitor;
+        return existing;
     }
 
-    public async Task DeleteAsync(short monitorCode)
+    public async Task DeleteAsync(short monitorCode, int currentUserId)
     {
         var monitor = await GetByIdAsync(monitorCode);
         if (monitor != null)

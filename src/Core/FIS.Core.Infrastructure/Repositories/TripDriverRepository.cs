@@ -20,13 +20,15 @@ public class TripDriverRepository : ITripDriverRepository
     public async Task<TripDriver?> GetByIdAsync(int tripDriverCode)
     {
         return await _context.TripDrivers
-            .FirstOrDefaultAsync(td => td.trip_driver_code == tripDriverCode);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(td => td.trip_driver_code == tripDriverCode);
     }
 
     public async Task<TripDriver?> GetByNameAsync(string tripDriverName)
     {
         return await _context.TripDrivers
-            .FirstOrDefaultAsync(td => td.trip_driver_name == tripDriverName);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(td => td.trip_driver_name == tripDriverName);
     }
 
     public async Task<IEnumerable<TripDriver>> GetByTripAuthorityAsync(int tripAuthorityCode)
@@ -64,25 +66,38 @@ public class TripDriverRepository : ITripDriverRepository
             .ToListAsync();
     }
 
-    public async Task<TripDriver> CreateAsync(TripDriver tripDriver)
+    public async Task<TripDriver> CreateAsync(TripDriver tripDriver, int currentUserId)
     {
-        _context.TripDrivers.Add(tripDriver);
+        // Auto-populate audit fields
+            tripDriver.date_created = DateTime.UtcNow;
+            tripDriver.is_deleted = false;
+            
+            _context.TripDrivers.Add(tripDriver);
         await _context.SaveChangesAsync();
         return tripDriver;
     }
 
-    public async Task UpdateAsync(TripDriver tripDriver)
+    public async Task UpdateAsync(TripDriver tripDriver, int currentUserId)
     {
-        _context.Entry(tripDriver).State = EntityState.Modified;
+        if (tripDriver == null)
+            throw new ArgumentNullException(nameof(tripDriver));
+
+        var existing = await _context.TripDrivers.FindAsync(tripDriver.trip_driver_code);
+        if (existing == null)
+            throw new InvalidOperationException($"TripDriver with trip_driver_code {tripDriver.trip_driver_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(tripDriver);
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(int tripDriverCode)
+    public async Task DeleteAsync(int tripDriverCode, int currentUserId)
     {
         var tripDriver = await GetByIdAsync(tripDriverCode);
         if (tripDriver != null)
         {
-            _context.TripDrivers.Remove(tripDriver);
+            // Soft delete instead of hard delete
+                tripDriver.is_deleted = true;
+                tripDriver.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

@@ -23,7 +23,7 @@ public class UserDto
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class UserController : ControllerBase
+public class UserController : BaseApiController
 {
     private readonly IUserRepository _userRepository;
     private readonly ILogger<UserController> _logger;
@@ -39,6 +39,8 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var users = await _userRepository.GetAllUsersAsync();
             var userDtos = users.Select(u => new UserDto
             {
@@ -60,6 +62,8 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var user = await _userRepository.GetByIdAsync(id);
             if (user == null)
             {
@@ -87,6 +91,8 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var user = await _userRepository.GetByEmailAsync(email);
             if (user == null)
             {
@@ -114,6 +120,8 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var user = await _userRepository.GetByTelephoneAsync(telephone);
             if (user == null)
             {
@@ -141,13 +149,15 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var user = new User
             {
                 tel_no = createUserDto.TelephoneNumber,
                 email = createUserDto.Email
             };
 
-            var createdUser = await _userRepository.CreateAsync(user);
+            var createdUser = await _userRepository.CreateAsync(user, currentUserId);
 
             var userDto = new UserDto
             {
@@ -170,6 +180,8 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingUser = await _userRepository.GetByIdAsync(id);
             if (existingUser == null)
             {
@@ -179,7 +191,7 @@ public class UserController : ControllerBase
             existingUser.tel_no = updateUserDto.TelephoneNumber;
             existingUser.email = updateUserDto.Email;
 
-            await _userRepository.UpdateAsync(existingUser);
+            await _userRepository.UpdateAsync(existingUser, currentUserId);
 
             var userDto = new UserDto
             {
@@ -202,13 +214,15 @@ public class UserController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingUser = await _userRepository.GetByIdAsync(id);
             if (existingUser == null)
             {
                 return NotFound();
             }
 
-            await _userRepository.DeleteAsync(id);
+            await _userRepository.DeleteAsync(id, currentUserId);
             return NoContent();
         }
         catch (Exception ex)

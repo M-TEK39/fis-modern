@@ -27,7 +27,9 @@ public class DriverRepository : IDriverRepository
         if (!int.TryParse(driverId, out int driverCode))
             return null;
 
-        return await _context.Drivers.FirstOrDefaultAsync(d => d.site_driver_code == driverCode);
+        return await _context.Drivers
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(d => d.site_driver_code == driverCode);
     }
 
     /// <summary>
@@ -39,7 +41,8 @@ public class DriverRepository : IDriverRepository
             return null;
 
         return await _context.Drivers
-            .FirstOrDefaultAsync(d => d.driver_licence_number == licenceNumber);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(d => d.driver_licence_number == licenceNumber);
     }
 
     /// <summary>
@@ -77,12 +80,16 @@ public class DriverRepository : IDriverRepository
     /// <summary>
     /// Create new driver
     /// </summary>
-    public async Task<Driver> CreateAsync(Driver driver)
+    public async Task<Driver> CreateAsync(Driver driver, int currentUserId)
     {
         if (driver == null)
             throw new ArgumentNullException(nameof(driver));
 
-        _context.Drivers.Add(driver);
+        // Auto-populate audit fields
+            driver.date_created = DateTime.UtcNow;
+            driver.is_deleted = false;
+            
+            _context.Drivers.Add(driver);
         await _context.SaveChangesAsync();
         
         return driver;
@@ -91,12 +98,16 @@ public class DriverRepository : IDriverRepository
     /// <summary>
     /// Update existing driver
     /// </summary>
-    public async Task UpdateAsync(Driver driver)
+    public async Task UpdateAsync(Driver driver, int currentUserId)
     {
         if (driver == null)
             throw new ArgumentNullException(nameof(driver));
 
-        _context.Entry(driver).State = EntityState.Modified;
+        var existing = await _context.Drivers.FindAsync(driver.site_driver_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Driver with site_driver_code {driver.site_driver_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(driver);
         await _context.SaveChangesAsync();
     }
 
@@ -104,7 +115,7 @@ public class DriverRepository : IDriverRepository
     /// Delete driver by ID
     /// Note: Interface expects string but entity uses int - convert accordingly
     /// </summary>
-    public async Task DeleteAsync(string driverId)
+    public async Task DeleteAsync(string driverId, int currentUserId)
     {
         if (!int.TryParse(driverId, out int driverCode))
             return;
@@ -112,7 +123,9 @@ public class DriverRepository : IDriverRepository
         var driver = await _context.Drivers.FindAsync(driverCode);
         if (driver != null)
         {
-            _context.Drivers.Remove(driver);
+            // Soft delete instead of hard delete
+                driver.is_deleted = true;
+                driver.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

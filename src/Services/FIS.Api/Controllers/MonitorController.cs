@@ -8,7 +8,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class MonitorController : ControllerBase
+public class MonitorController : BaseApiController
 {
     private readonly IMonitorRepository _repository;
     private readonly ILogger<MonitorController> _logger;
@@ -36,21 +36,21 @@ public class MonitorController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<MonitorEntity>> Create([FromBody] MonitorEntity item)
     {
-        try { var created = await _repository.CreateAsync(item); return CreatedAtAction(nameof(GetById), new { id = created.monitor_code }, created); }
+        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.monitor_code }, created); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<MonitorEntity>> Update(short id, [FromBody] MonitorEntity item)
     {
-        try { if (id != item.monitor_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item)); }
+        try { if (id != item.monitor_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
-        try { await _repository.DeleteAsync(id); return NoContent(); }
+        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 }

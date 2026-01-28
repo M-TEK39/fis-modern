@@ -1,5 +1,6 @@
 @page "/licenses"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject IJSRuntime JS
@@ -12,7 +13,7 @@
             <i class="bx bxs-user-badge"></i>
             Licenses
         </h1>
-        <p class="page-description">Driver/vehicle license summary. Static entries until license API is available.</p>
+        <p class="page-description">Manage license types used for vehicle and driver requirements.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadLicenses">
@@ -35,7 +36,7 @@
         <div class="empty-state">
             <i class="bx bxs-user-badge"></i>
             <h3>No licenses found</h3>
-            <p>Awaiting license API. Provide endpoint/fields to replace static data.</p>
+            <p>Get started by adding your first license type.</p>
         </div>
     }
     else
@@ -48,22 +49,18 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>License #</th>
+                            <th>License Code</th>
                             <th>Description</th>
-                            <th>Status</th>
-                            <th>Expiry</th>
-                            <th>Notes</th>
+                            <th>Category</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var license in _licenses)
                         {
                             <tr>
-                                <td>@license.LicenceCode</td>
-                                <td>@license.Description</td>
-                                <td><span class="badge">@license.Status</span></td>
-                                <td>@license.ExpiryDate?.ToString("yyyy-MM-dd")</td>
-                                <td></td>
+                                <td>@license.licence_code</td>
+                                <td>@license.licence_description</td>
+                                <td>@(string.IsNullOrWhiteSpace(license.licence_category) ? "-" : license.licence_category)</td>
                             </tr>
                         }
                     </tbody>
@@ -77,7 +74,7 @@
 
 @code {
     private bool _loading = true;
-    private List<LicenseDto> _licenses = new();
+    private List<LicenseTypeDto> _licenses = new();
 
     protected override async Task OnInitializedAsync()
     {

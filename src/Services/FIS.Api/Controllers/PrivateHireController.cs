@@ -11,7 +11,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class PrivateHireController : ControllerBase
+public class PrivateHireController : BaseApiController
 {
     private readonly IPrivateHireRepository _privateHireRepository;
     private readonly ILogger<PrivateHireController> _logger;
@@ -32,6 +32,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var privateHires = await _privateHireRepository.GetActiveHiresAsync();
             _logger.LogInformation("Retrieved {Count} active private hires", privateHires.Count());
             return Ok(privateHires);
@@ -51,6 +53,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var privateHire = await _privateHireRepository.GetByIdAsync(privateHireCode);
             if (privateHire == null)
             {
@@ -77,6 +81,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var privateHires = await _privateHireRepository.GetByVehicleAsync(vmfCode);
             _logger.LogInformation("Found {Count} private hires for vehicle {VmfCode}", privateHires.Count(), vmfCode);
             return Ok(privateHires);
@@ -97,6 +103,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (startDate > endDate)
             {
                 return BadRequest("Start date must be before or equal to end date");
@@ -123,6 +131,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var privateHires = await _privateHireRepository.SearchHiresAsync(searchTerm ?? "");
             _logger.LogInformation("Found {Count} private hires matching search term '{SearchTerm}'", 
                 privateHires.Count(), searchTerm);
@@ -143,7 +153,9 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
-            var createdPrivateHire = await _privateHireRepository.CreateAsync(privateHire);
+            int currentUserId = GetCurrentUserId();
+
+            var createdPrivateHire = await _privateHireRepository.CreateAsync(privateHire, currentUserId);
             _logger.LogInformation("Created private hire {PrivateHireCode}: {Registration}", 
                 createdPrivateHire.PHV_code, createdPrivateHire.registration_number);
             
@@ -165,6 +177,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (privateHireCode != privateHire.PHV_code)
             {
                 return BadRequest("Private hire code mismatch");
@@ -177,7 +191,7 @@ public class PrivateHireController : ControllerBase
                 return NotFound($"Private hire with code {privateHireCode} not found");
             }
 
-            await _privateHireRepository.UpdateAsync(privateHire);
+            await _privateHireRepository.UpdateAsync(privateHire, currentUserId);
             _logger.LogInformation("Updated private hire {PrivateHireCode}: {Registration}", 
                 privateHireCode, privateHire.registration_number);
             
@@ -198,6 +212,8 @@ public class PrivateHireController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingPrivateHire = await _privateHireRepository.GetByIdAsync(privateHireCode);
             if (existingPrivateHire == null)
             {
@@ -205,7 +221,7 @@ public class PrivateHireController : ControllerBase
                 return NotFound($"Private hire with code {privateHireCode} not found");
             }
 
-            await _privateHireRepository.DeleteAsync(privateHireCode);
+            await _privateHireRepository.DeleteAsync(privateHireCode, currentUserId);
             _logger.LogInformation("Deleted private hire {PrivateHireCode}: {Registration}", 
                 privateHireCode, existingPrivateHire.registration_number);
             

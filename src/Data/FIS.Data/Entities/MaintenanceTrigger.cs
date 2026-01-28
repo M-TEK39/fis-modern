@@ -34,5 +34,21 @@ namespace FIS.Data.Entities
 
         // Note: Model entity has maint_trigger_code foreign key field but no navigation property
         // This is intentional for legacy schema compatibility
+
+        // Global audit fields (AI_CODING_RULES.md - Section 4.5)
+        [Column("date_created")]
+        public DateTime date_created { get; set; }
+
+        [Column("date_updated")]
+        public DateTime? date_updated { get; set; }
+
+        [Column("created_by_user_code")]
+        public int? created_by_user_code { get; set; }
+
+        [Column("modified_by_user_code")]
+        public int? modified_by_user_code { get; set; }
+
+        [Column("is_deleted")]
+        public bool is_deleted { get; set; } = false;
     }
 }

@@ -7,7 +7,7 @@ public interface IAssetVerificationRepository
     Task<IEnumerable<AssetVerification>> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<AssetVerification>> GetBySiteAsync(int siteCode);
     Task<IEnumerable<AssetVerification>> GetByStatusAsync(string status);
-    Task<AssetVerification> CreateAsync(AssetVerification verification);
-    Task<AssetVerification> UpdateAsync(AssetVerification verification);
-    Task DeleteAsync(int verificationCode);
+    Task<AssetVerification> CreateAsync(AssetVerification verification, int currentUserId);
+    Task<AssetVerification> UpdateAsync(AssetVerification verification, int currentUserId);
+    Task DeleteAsync(int verificationCode, int currentUserId);
 }

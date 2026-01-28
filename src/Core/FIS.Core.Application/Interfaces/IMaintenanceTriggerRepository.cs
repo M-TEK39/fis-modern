@@ -47,19 +47,19 @@ namespace FIS.Core.Application.Interfaces
         /// </summary>
         /// <param name="maintenanceTrigger">The maintenance trigger entity to create</param>
         /// <returns>The created maintenance trigger entity</returns>
-        Task<MaintenanceTriggerEntity> CreateAsync(MaintenanceTriggerEntity maintenanceTrigger);
+        Task<MaintenanceTriggerEntity> CreateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId);
 
         /// <summary>
         /// Updates an existing maintenance trigger
         /// </summary>
         /// <param name="maintenanceTrigger">The maintenance trigger entity to update</param>
         /// <returns>The updated maintenance trigger entity</returns>
-        Task<MaintenanceTriggerEntity> UpdateAsync(MaintenanceTriggerEntity maintenanceTrigger);
+        Task<MaintenanceTriggerEntity> UpdateAsync(MaintenanceTriggerEntity maintenanceTrigger, int currentUserId);
 
         /// <summary>
         /// Deletes a maintenance trigger by its code
         /// </summary>
         /// <param name="triggerCode">The maintenance trigger code to delete</param>
-        Task DeleteAsync(short triggerCode);
+        Task DeleteAsync(short triggerCode, int currentUserId);
     }
 }

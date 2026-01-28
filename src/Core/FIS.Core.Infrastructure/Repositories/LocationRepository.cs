@@ -20,13 +20,15 @@ public class LocationRepository : ILocationRepository
     public async Task<Location?> GetByIdAsync(int locationId)
     {
         return await _context.Locations
-            .FirstOrDefaultAsync(l => l.LocationId == locationId);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(l => l.LocationId == locationId);
     }
 
     public async Task<Location?> GetByNameAsync(string locationName)
     {
         return await _context.Locations
-            .FirstOrDefaultAsync(l => l.LocationName == locationName);
+                .Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(l => l.LocationName == locationName);
     }
 
     public async Task<IEnumerable<Location>> GetAllLocationsAsync()
@@ -53,22 +55,33 @@ public class LocationRepository : ILocationRepository
             .ToListAsync();
     }
 
-    public async Task<Location> CreateAsync(Location location)
+    public async Task<Location> CreateAsync(Location location, int currentUserId)
     {
         location.CreatedDate = DateTime.UtcNow;
-        _context.Locations.Add(location);
+        // Auto-populate audit fields
+            location.date_created = DateTime.UtcNow;
+            location.is_deleted = false;
+            
+            _context.Locations.Add(location);
         await _context.SaveChangesAsync();
         return location;
     }
 
-    public async Task UpdateAsync(Location location)
+    public async Task UpdateAsync(Location location, int currentUserId)
     {
+        if (location == null)
+            throw new ArgumentNullException(nameof(location));
+
+        var existing = await _context.Locations.FindAsync(location.LocationId);
+        if (existing == null)
+            throw new InvalidOperationException($"Location with LocationId {location.LocationId} not found");
+
         location.ModifiedDate = DateTime.UtcNow;
-        _context.Entry(location).State = EntityState.Modified;
+        _context.Entry(existing).CurrentValues.SetValues(location);
         await _context.SaveChangesAsync();
     }
 
-    public async Task DeleteAsync(int locationId)
+    public async Task DeleteAsync(int locationId, int currentUserId)
     {
         var location = await GetByIdAsync(locationId);
         if (location != null)
@@ -76,7 +89,7 @@ public class LocationRepository : ILocationRepository
             // Soft delete - mark as inactive
             location.IsActive = false;
             location.ModifiedDate = DateTime.UtcNow;
-            await UpdateAsync(location);
+            await UpdateAsync(location, currentUserId);
         }
     }
 

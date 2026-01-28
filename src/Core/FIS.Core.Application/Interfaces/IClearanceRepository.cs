@@ -11,8 +11,8 @@ namespace FIS.Core.Application.Interfaces
         Task<Clearance?> GetByIdAsync(int clearanceCode);
         Task<IEnumerable<Clearance>> GetAllAsync();
         Task<IEnumerable<Clearance>> GetByVehicleAsync(int vmfCode);
-        Task<Clearance> CreateAsync(Clearance clearance);
-        Task<Clearance> UpdateAsync(Clearance clearance);
-        Task DeleteAsync(int clearanceCode);
+        Task<Clearance> CreateAsync(Clearance clearance, int currentUserId);
+        Task<Clearance> UpdateAsync(Clearance clearance, int currentUserId);
+        Task DeleteAsync(int clearanceCode, int currentUserId);
     }
 }

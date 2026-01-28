@@ -6,8 +6,8 @@ namespace FIS.Core.Application.Interfaces
         Task<Workshop?> GetByIdAsync(short code);
         Task<IEnumerable<Workshop>> GetAllAsync();
         Task<IEnumerable<Workshop>> GetByVehicleAsync(int vmfCode);
-        Task<Workshop> CreateAsync(Workshop item);
-        Task<Workshop> UpdateAsync(Workshop item);
-        Task DeleteAsync(short code);
+        Task<Workshop> CreateAsync(Workshop item, int currentUserId);
+        Task<Workshop> UpdateAsync(Workshop item, int currentUserId);
+        Task DeleteAsync(short code, int currentUserId);
     }
 }

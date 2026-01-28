@@ -12,8 +12,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<CallCentre>> GetAllAsync();
         Task<IEnumerable<CallCentre>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<CallCentre>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
-        Task<CallCentre> CreateAsync(CallCentre callCentre);
-        Task<CallCentre> UpdateAsync(CallCentre callCentre);
-        Task DeleteAsync(short callCentreCode);
+        Task<CallCentre> CreateAsync(CallCentre callCentre, int currentUserId);
+        Task<CallCentre> UpdateAsync(CallCentre callCentre, int currentUserId);
+        Task DeleteAsync(short callCentreCode, int currentUserId);
     }
 }

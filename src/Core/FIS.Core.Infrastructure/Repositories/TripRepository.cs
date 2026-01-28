@@ -107,12 +107,16 @@ public class TripRepository : ITripRepository
     /// <summary>
     /// Create new trip
     /// </summary>
-    public async Task<Trip> CreateAsync(Trip trip)
+    public async Task<Trip> CreateAsync(Trip trip, int currentUserId)
     {
         if (trip == null)
             throw new ArgumentNullException(nameof(trip));
 
-        _context.Trips.Add(trip);
+        // Auto-populate audit fields
+            trip.date_created = DateTime.UtcNow;
+            trip.is_deleted = false;
+            
+            _context.Trips.Add(trip);
         await _context.SaveChangesAsync();
         
         return trip;
@@ -121,24 +125,30 @@ public class TripRepository : ITripRepository
     /// <summary>
     /// Update existing trip
     /// </summary>
-    public async Task UpdateAsync(Trip trip)
+    public async Task UpdateAsync(Trip trip, int currentUserId)
     {
         if (trip == null)
             throw new ArgumentNullException(nameof(trip));
 
-        _context.Entry(trip).State = EntityState.Modified;
+        var existing = await _context.Trips.FindAsync(trip.trip_authority_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Trip with trip_authority_code {trip.trip_authority_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(trip);
         await _context.SaveChangesAsync();
     }
 
     /// <summary>
     /// Delete trip by ID
     /// </summary>
-    public async Task DeleteAsync(int tripId)
+    public async Task DeleteAsync(int tripId, int currentUserId)
     {
         var trip = await _context.Trips.FindAsync(tripId);
         if (trip != null)
         {
-            _context.Trips.Remove(trip);
+            // Soft delete instead of hard delete
+                trip.is_deleted = true;
+                trip.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

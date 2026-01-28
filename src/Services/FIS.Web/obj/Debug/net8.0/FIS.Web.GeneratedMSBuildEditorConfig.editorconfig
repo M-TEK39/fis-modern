@@ -22,6 +22,10 @@ build_property._RazorSourceGeneratorDebug =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9BcHAucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Layout/AppHeader.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9MYXlvdXQvQXBwSGVhZGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Layout/AuthLayout.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9MYXlvdXQvQXV0aExheW91dC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -44,6 +48,14 @@ build_metadata.AdditionalFiles.CssScope =
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Auth/LoginLanding.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BdXRoL0xvZ2luTGFuZGluZy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Auth/Logout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BdXRoL0xvZ291dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Auth/SignedOut.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9BdXRoL1NpZ25lZE91dC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/CallCentre/Index.razor]
@@ -134,6 +146,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Ob3RpY2VNYW5hZ2VtZW50L0luZGV4LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/ClassesTab/ClassesTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0NsYXNzZXNUYWIvQ2xhc3Nlc1RhYi5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/DepartmentsTab/DepartmentsTab.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0RlcGFydG1lbnRzVGFiL0RlcGFydG1lbnRzVGFiLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
@@ -146,6 +162,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0luZGV4LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/LicenseTypesTab/LicenseTypesTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL0xpY2Vuc2VUeXBlc1RhYi9MaWNlbnNlVHlwZXNUYWIucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/MakesTab/MakesTab.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL01ha2VzVGFiL01ha2VzVGFiLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
@@ -156,6 +176,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/TypesTab/TypesTab.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL1R5cGVzVGFiL1R5cGVzVGFiLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/UnitOfMeasureTab/UnitOfMeasureTab.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL1VuaXRPZk1lYXN1cmVUYWIvVW5pdE9mTWVhc3VyZVRhYi5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/Index.razor]

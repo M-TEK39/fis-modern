@@ -79,7 +79,7 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
     /// <summary>
     /// Create new maintenance value.
     /// </summary>
-    public async Task<MaintenanceValue> CreateAsync(MaintenanceValue maintenanceValue)
+    public async Task<MaintenanceValue> CreateAsync(MaintenanceValue maintenanceValue, int currentUserId)
     {
         maintenanceValue.CaptureDate = DateTime.Now;
         _context.Set<MaintenanceValue>().Add(maintenanceValue);
@@ -90,18 +90,25 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
     /// <summary>
     /// Update existing maintenance value.
     /// </summary>
-    public async Task<MaintenanceValue> UpdateAsync(MaintenanceValue maintenanceValue)
+    public async Task<MaintenanceValue> UpdateAsync(MaintenanceValue maintenanceValue, int currentUserId)
     {
+        if (maintenanceValue == null)
+            throw new ArgumentNullException(nameof(maintenanceValue));
+
+        var existing = await _context.Set<MaintenanceValue>().FindAsync(maintenanceValue.TariffParameterID);
+        if (existing == null)
+            throw new InvalidOperationException($"MaintenanceValue with TariffParameterID {maintenanceValue.TariffParameterID} not found");
+
         maintenanceValue.ModifiedDate = DateTime.Now;
-        _context.Set<MaintenanceValue>().Update(maintenanceValue);
+        _context.Entry(existing).CurrentValues.SetValues(maintenanceValue);
         await _context.SaveChangesAsync();
-        return maintenanceValue;
+        return existing;
     }
 
     /// <summary>
     /// Delete maintenance value.
     /// </summary>
-    public async Task DeleteAsync(int maintenanceValueId)
+    public async Task DeleteAsync(int maintenanceValueId, int currentUserId)
     {
         var maintenanceValue = await GetByIdAsync(maintenanceValueId);
         if (maintenanceValue != null)

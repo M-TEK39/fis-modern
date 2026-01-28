@@ -11,7 +11,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class TripDriverController : ControllerBase
+public class TripDriverController : BaseApiController
 {
     private readonly ITripDriverRepository _tripDriverRepository;
     private readonly ILogger<TripDriverController> _logger;
@@ -32,6 +32,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var tripDrivers = await _tripDriverRepository.GetActiveDriversAsync();
             _logger.LogInformation("Retrieved {Count} active trip drivers", tripDrivers.Count());
             return Ok(tripDrivers);
@@ -51,6 +53,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var tripDriver = await _tripDriverRepository.GetByIdAsync(tripDriverCode);
             if (tripDriver == null)
             {
@@ -76,6 +80,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var tripDrivers = await _tripDriverRepository.GetBySiteAsync(siteCode);
             _logger.LogInformation("Found {Count} trip drivers for site {SiteCode}", tripDrivers.Count(), siteCode);
             return Ok(tripDrivers);
@@ -95,6 +101,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var primaryDrivers = await _tripDriverRepository.GetPrimaryDriversAsync();
             _logger.LogInformation("Found {Count} primary drivers", primaryDrivers.Count());
             return Ok(primaryDrivers);
@@ -114,6 +122,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var tripDrivers = await _tripDriverRepository.SearchDriversAsync(searchTerm ?? "");
             _logger.LogInformation("Found {Count} trip drivers matching search term '{SearchTerm}'", 
                 tripDrivers.Count(), searchTerm);
@@ -134,7 +144,9 @@ public class TripDriverController : ControllerBase
     {
         try
         {
-            var createdTripDriver = await _tripDriverRepository.CreateAsync(tripDriver);
+            int currentUserId = GetCurrentUserId();
+
+            var createdTripDriver = await _tripDriverRepository.CreateAsync(tripDriver, currentUserId);
             _logger.LogInformation("Created trip driver {TripDriverCode}: {DriverName}", 
                 createdTripDriver.trip_driver_code, createdTripDriver.trip_driver_name);
             
@@ -156,6 +168,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             if (tripDriverCode != tripDriver.trip_driver_code)
             {
                 return BadRequest("Trip driver code mismatch");
@@ -168,7 +182,7 @@ public class TripDriverController : ControllerBase
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
-            await _tripDriverRepository.UpdateAsync(tripDriver);
+            await _tripDriverRepository.UpdateAsync(tripDriver, currentUserId);
             _logger.LogInformation("Updated trip driver {TripDriverCode}: {DriverName}", 
                 tripDriverCode, tripDriver.trip_driver_name);
             
@@ -189,6 +203,8 @@ public class TripDriverController : ControllerBase
     {
         try
         {
+            int currentUserId = GetCurrentUserId();
+
             var existingTripDriver = await _tripDriverRepository.GetByIdAsync(tripDriverCode);
             if (existingTripDriver == null)
             {
@@ -196,7 +212,7 @@ public class TripDriverController : ControllerBase
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
-            await _tripDriverRepository.DeleteAsync(tripDriverCode);
+            await _tripDriverRepository.DeleteAsync(tripDriverCode, currentUserId);
             _logger.LogInformation("Deleted trip driver {TripDriverCode}: {DriverName}", 
                 tripDriverCode, existingTripDriver.trip_driver_name);
             

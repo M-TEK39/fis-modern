@@ -48,21 +48,28 @@ public class LogbookRepository : ILogbookRepository
             .ToListAsync();
     }
 
-    public async Task<Logbook> CreateAsync(Logbook logbook)
+    public async Task<Logbook> CreateAsync(Logbook logbook, int currentUserId)
     {
         await _context.Set<Logbook>().AddAsync(logbook);
         await _context.SaveChangesAsync();
         return logbook;
     }
 
-    public async Task<Logbook> UpdateAsync(Logbook logbook)
+    public async Task<Logbook> UpdateAsync(Logbook logbook, int currentUserId)
     {
-        _context.Set<Logbook>().Update(logbook);
+        if (logbook == null)
+            throw new ArgumentNullException(nameof(logbook));
+
+        var existing = await _context.Set<Logbook>().FindAsync(logbook.logbookcode);
+        if (existing == null)
+            throw new InvalidOperationException($"Logbook with logbookcode {logbook.logbookcode} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(logbook);
         await _context.SaveChangesAsync();
-        return logbook;
+        return existing;
     }
 
-    public async Task DeleteAsync(short logbookCode)
+    public async Task DeleteAsync(short logbookCode, int currentUserId)
     {
         var logbook = await GetByIdAsync(logbookCode);
         if (logbook != null)

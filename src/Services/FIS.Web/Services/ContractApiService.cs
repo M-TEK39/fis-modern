@@ -96,6 +96,19 @@ public class ContractApiService
             throw new InvalidOperationException("Unable to connect to the API service");
         }
     }
+
+    public async Task<bool> HireContractAsync(HireContractRequestDto request)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/Contracts/hire", request);
+            return response.IsSuccessStatusCode;
+        }
+        catch (HttpRequestException)
+        {
+            return false;
+        }
+    }
 }
 
 public class ContractCreateDto
@@ -122,4 +135,14 @@ public class ContractUpdateDto
     public decimal? monthly_cost { get; set; }
     public string status { get; set; } = "Active";
     public string? contract_notes { get; set; }
+}
+
+public class HireContractRequestDto
+{
+    public int VmfCode { get; set; }
+    public short SiteCode { get; set; }
+    public int? StartOdometer { get; set; }
+    public string? DriverId { get; set; }
+    public string? Notes { get; set; }
+    public DateTime? TargetReturnDate { get; set; }
 }

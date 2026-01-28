@@ -57,21 +57,28 @@ public class FineRepository : IFineRepository
             .ToListAsync();
     }
 
-    public async Task<Fine> CreateAsync(Fine fine)
+    public async Task<Fine> CreateAsync(Fine fine, int currentUserId)
     {
         await _context.Set<Fine>().AddAsync(fine);
         await _context.SaveChangesAsync();
         return fine;
     }
 
-    public async Task<Fine> UpdateAsync(Fine fine)
+    public async Task<Fine> UpdateAsync(Fine fine, int currentUserId)
     {
-        _context.Set<Fine>().Update(fine);
+        if (fine == null)
+            throw new ArgumentNullException(nameof(fine));
+
+        var existing = await _context.Set<Fine>().FindAsync(fine.Fine_code);
+        if (existing == null)
+            throw new InvalidOperationException($"Fine with Fine_code {fine.Fine_code} not found");
+
+        _context.Entry(existing).CurrentValues.SetValues(fine);
         await _context.SaveChangesAsync();
-        return fine;
+        return existing;
     }
 
-    public async Task DeleteAsync(int fineCode)
+    public async Task DeleteAsync(int fineCode, int currentUserId)
     {
         var fine = await GetByIdAsync(fineCode);
         if (fine != null)

@@ -3,8 +3,12 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.JSInterop
 @inject VehicleApiService VehicleService
+@inject ReferenceDataApiService ReferenceDataService
+@inject LocationApiService LocationService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@(_isEditMode ? "Edit Vehicle" : "Add Vehicle") - Fleet Information System</PageTitle>
 
@@ -23,272 +27,317 @@
     <div class="form-container">
         <div class="form-card">
             <div class="form-card-header">
-                <h2>@(_isEditMode ? "Edit Vehicle" : "Add New Vehicle")</h2>
-                <p>@(_isEditMode ? "Update vehicle information" : "Enter vehicle details - all fields from legacy system")</p>
+                <h2>@(_isEditMode ? "Vehicle Master - Edit Vehicle" : "Vehicle Master - Add New Vehicle")</h2>
+                <p>@(_isEditMode ? "Update vehicle details from the legacy master file." : "Capture vehicle details exactly as per legacy vehicle master.")</p>
             </div>
 
             <div class="form-card-body">
-                <EditForm Model="@_vehicle" OnValidSubmit="HandleSubmit">
-                    <DataAnnotationsValidator />
-                    <ValidationSummary class="validation-summary" />
+                @if (_loadingReferenceData)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Loading reference data...</p>
+                    </div>
+                }
+                else
+                {
+                    <EditForm Model="@_vehicle" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="validation-summary" />
 
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-info-circle"></i>
-                            Core Information
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">Model Code <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.model_code" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.model_code" />
-                            </div>
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-id-card"></i>
+                                Vehicle Detail
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Current GG No <span class="required">*</span></label>
+                                    <InputText @bind-Value="_vehicle.fleet_number" class="form-input" placeholder="GG number" />
+                                    <ValidationMessage For="() => _vehicle.fleet_number" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Type Code <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.type_code" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.type_code" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Current Reg. No <span class="required">*</span></label>
+                                    <InputText @bind-Value="_vehicle.registration_number" class="form-input" placeholder="GP number" />
+                                    <ValidationMessage For="() => _vehicle.registration_number" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Vehicle Status Code <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.vehicle_status_code" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.vehicle_status_code" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Replace GG No</label>
+                                    <InputText @bind-Value="_vehicle.previos_gg_number" class="form-input" placeholder="Previous GG" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Location Code <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.location_code" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.location_code" />
+                                <div class="form-field">
+                                    <label class="form-label">Follow Up GG No</label>
+                                    <InputText @bind-Value="_vehicle.followup_gg_number" class="form-input" placeholder="Follow-up GG" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Register Number</label>
+                                    <InputText @bind-Value="_vehicle.lic_register_number" class="form-input" placeholder="License register" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Make & Model <span class="required">*</span></label>
+                                    <select class="form-select" @bind="_vehicle.model_code" @onchange="OnModelChanged">
+                                        <option value="0">Select One...</option>
+                                        @foreach (var model in _models)
+                                        {
+                                            <option value="@model.model_code">@ModelDisplayName(model)</option>
+                                        }
+                                    </select>
+                                    <ValidationMessage For="() => _vehicle.model_code" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Vehicle Type Code</label>
+                                    <InputNumber @bind-Value="_vehicle.type_code" class="form-input" disabled />
+                                    @if (!string.IsNullOrWhiteSpace(_vehicle.type_name))
+                                    {
+                                        <span class="form-hint">@_vehicle.type_name</span>
+                                    }
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Color</label>
+                                    <select class="form-select" @bind="_colorSelection">
+                                        @foreach (var color in _colorOptions)
+                                        {
+                                            <option value="@color">@color</option>
+                                        }
+                                    </select>
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Other Color</label>
+                                    <InputText @bind-Value="_otherColor" class="form-input" placeholder="Specify other color" disabled="@(_colorSelection != "Other")" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Year Manufactured <span class="required">*</span></label>
+                                    <InputNumber @bind-Value="_vehicle.year_manufactured" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.year_manufactured" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Date First Registration</label>
+                                    <InputDate @bind-Value="_vehicle.date_First_Regist" class="form-input" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Tare (Kg) <span class="required">*</span></label>
+                                    <InputNumber @bind-Value="_vehicle.tare" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.tare" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">VIN (Chassis) No <span class="required">*</span></label>
+                                    <InputText @bind-Value="_vehicle.chassis_number" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.chassis_number" />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Engine No <span class="required">*</span></label>
+                                    <InputText @bind-Value="_vehicle.engine_number_1" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.engine_number_1" />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-id-card"></i>
-                            Identification Numbers
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">Fleet Number (GG) <span class="required">*</span></label>
-                                <InputText @bind-Value="_vehicle.fleet_number" class="form-input" placeholder="e.g., GG123" />
-                                <ValidationMessage For="() => _vehicle.fleet_number" />
-                            </div>
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-tachometer"></i>
+                                Odometer & Dates
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Take On Odo (Km) <span class="required">*</span></label>
+                                    <InputNumber @bind-Value="_vehicle.take_on_odo" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.take_on_odo" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Registration Number (GP) <span class="required">*</span></label>
-                                <InputText @bind-Value="_vehicle.registration_number" class="form-input" placeholder="e.g., GP123ABC" />
-                                <ValidationMessage For="() => _vehicle.registration_number" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Take On Date <span class="required">*</span></label>
+                                    <InputDate @bind-Value="_vehicle.take_on_date" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.take_on_date" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Asset Number</label>
-                                <InputText @bind-Value="_vehicle.asset_number" class="form-input" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Current Odo (Km) <span class="required">*</span></label>
+                                    <InputNumber @bind-Value="_vehicle.current_odo" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.current_odo" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Engine Number <span class="required">*</span></label>
-                                <InputText @bind-Value="_vehicle.engine_number_1" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.engine_number_1" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Odo Adjustment</label>
+                                    <InputNumber @bind-Value="_vehicle.odo_adjustment" class="form-input" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Chassis Number <span class="required">*</span></label>
-                                <InputText @bind-Value="_vehicle.chassis_number" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.chassis_number" />
-                            </div>
-                        </div>
-                    </div>
+                                <div class="form-field">
+                                    <label class="form-label">Odo Update Date</label>
+                                    <InputDate @bind-Value="_vehicle.odo_update_date" class="form-input" />
+                                </div>
 
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-tachometer"></i>
-                            Odometer & Dates
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">Take On Date <span class="required">*</span></label>
-                                <InputDate @bind-Value="_vehicle.take_on_date" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.take_on_date" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Take On Odo (km) <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.take_on_odo" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.take_on_odo" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Current Odo (km) <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.current_odo" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.current_odo" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Odo Adjustment</label>
-                                <InputNumber @bind-Value="_vehicle.odo_adjustment" class="form-input" />
+                                <div class="form-field">
+                                    <label class="form-label">Additional Fuel Tank (Ltr)</label>
+                                    <InputNumber @bind-Value="_vehicle.additional_fuel_tank" class="form-input" />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-car"></i>
-                            Vehicle Specifications
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">Year Manufactured <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.year_manufactured" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.year_manufactured" />
-                            </div>
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-map"></i>
+                                Location, Status & Hire Details
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Location <span class="required">*</span></label>
+                                    <select class="form-select" @bind="_vehicle.location_code">
+                                        <option value="0">Select Location...</option>
+                                        @foreach (var location in _locations)
+                                        {
+                                            <option value="@ToShort(location.LocationId)">@location.LocationName</option>
+                                        }
+                                    </select>
+                                    <ValidationMessage For="() => _vehicle.location_code" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Colour</label>
-                                <InputText @bind-Value="_vehicle.colour" class="form-input" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Status Code <span class="required">*</span></label>
+                                    <InputNumber @bind-Value="_vehicle.vehicle_status_code" class="form-input" />
+                                    <ValidationMessage For="() => _vehicle.vehicle_status_code" />
+                                    @if (!string.IsNullOrWhiteSpace(_vehicle.status_description))
+                                    {
+                                        <span class="form-hint">@_vehicle.status_description</span>
+                                    }
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Transmission</label>
-                                <InputText @bind-Value="_vehicle.transmission" class="form-input" placeholder="e.g., Manual/Automatic" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Status Date</label>
+                                    <InputDate @bind-Value="_vehicle.vehicle_status_date" class="form-input" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Tare (kg) <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.tare" class="form-input" />
-                                <ValidationMessage For="() => _vehicle.tare" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Hired From</label>
+                                    <InputText @bind-Value="_hiredFrom" class="form-input" placeholder="Not wired yet" />
+                                    <span class="form-hint">Pending API mapping.</span>
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">GVM (kg)</label>
-                                <InputNumber @bind-Value="_vehicle.gvm" class="form-input" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Hire Type</label>
+                                    <InputText @bind-Value="_hireType" class="form-input" placeholder="Not wired yet" />
+                                    <span class="form-hint">Pending API mapping.</span>
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Tow Hitch</label>
-                                <InputText @bind-Value="_vehicle.tow_hitch" class="form-input" placeholder="Yes/No" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Canopy</label>
-                                <InputText @bind-Value="_vehicle.canopy" class="form-input" placeholder="Yes/No" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Optional Extras</label>
-                                <InputText @bind-Value="_vehicle.optional_extras" class="form-input" />
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-credit-card"></i>
-                            Cards & Licensing
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">Fuel Card Number</label>
-                                <InputText @bind-Value="_vehicle.fuel_card_number" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Fuel Card Date</label>
-                                <InputDate @bind-Value="_vehicle.fuel_card_date" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Maint Card Number</label>
-                                <InputText @bind-Value="_vehicle.maint_card_number" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Maint Card Expiry</label>
-                                <InputDate @bind-Value="_vehicle.maint_card_exdate" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Operator Card Number</label>
-                                <InputText @bind-Value="_vehicle.operator_card_number" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Licence Due Date <span class="required">*</span></label>
-                                <InputDate @bind-Value="_vehicle.licence_due_date" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Additional Fuel Tank (L)</label>
-                                <InputNumber @bind-Value="_vehicle.additional_fuel_tank" class="form-input" />
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Comment</label>
+                                    <textarea class="form-input" rows="3" @bind="_comment" placeholder="Not wired yet"></textarea>
+                                    <span class="form-hint">Pending API mapping.</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-wallet"></i>
-                            Financial Information
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">Purchase Date</label>
-                                <InputDate @bind-Value="_vehicle.purchase_date" class="form-input" />
-                            </div>
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-wallet"></i>
+                                Purchase Details
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Purchase Amount</label>
+                                    <InputNumber @bind-Value="_vehicle.purchase_amount" class="form-input" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Purchase Amount</label>
-                                <InputNumber @bind-Value="_vehicle.purchase_amount" class="form-input" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Purchase Date</label>
+                                    <InputDate @bind-Value="_vehicle.purchase_date" class="form-input" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Purchased From</label>
-                                <InputText @bind-Value="_vehicle.purchased_from" class="form-input" />
-                            </div>
+                                <div class="form-field">
+                                    <label class="form-label">Invoice Number</label>
+                                    <InputText @bind-Value="_vehicle.invoice_number" class="form-input" />
+                                </div>
 
-                            <div class="form-field">
-                                <label class="form-label">Book Value</label>
-                                <InputNumber @bind-Value="_vehicle.book_value" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Book Value Date</label>
-                                <InputDate @bind-Value="_vehicle.book_value_date" class="form-input" />
-                            </div>
-
-                            <div class="form-field">
-                                <label class="form-label">Monthly Overhead</label>
-                                <InputNumber @bind-Value="_vehicle.monthly_overhead" class="form-input" />
+                                <div class="form-field">
+                                    <label class="form-label">Purchased From</label>
+                                    <InputText @bind-Value="_vehicle.purchased_from" class="form-input" />
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="form-actions">
-                        <button type="button" class="btn btn-secondary" @onclick="NavigateToList" disabled="@_saving">
-                            Cancel
-                        </button>
-                        <button type="submit" class="btn btn-primary" disabled="@_saving">
-                            @if (_saving)
-                            {
-                                <span class="spinner-sm"></span>
-                                <span>@(_isEditMode ? "Updating..." : "Creating...")</span>
-                            }
-                            else
-                            {
-                                <i class="bx @(_isEditMode ? "bx-check" : "bx-plus")"></i>
-                                <span>@(_isEditMode ? "Update Vehicle" : "Create Vehicle")</span>
-                            }
-                        </button>
-                    </div>
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-note"></i>
+                                Specifications & Optional Extras
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Specifications</label>
+                                    <textarea class="form-input" rows="3" @bind="_specifications" placeholder="Not wired yet"></textarea>
+                                    <span class="form-hint">Pending API mapping for specifications list.</span>
+                                </div>
 
-                    @if (!string.IsNullOrEmpty(_errorMessage))
-                    {
-                        <div class="alert alert-error">
-                            <i class="bx bx-error-circle"></i>
-                            <span>@_errorMessage</span>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Optional Extras</label>
+                                    <textarea class="form-input" rows="3" @bind="_vehicle.optional_extras"></textarea>
+                                </div>
+                            </div>
                         </div>
-                    }
-                </EditForm>
+
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-check-shield"></i>
+                                Approval Workflow
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Captured Date</label>
+                                    <InputDate @bind-Value="_vehicle.captured_date" class="form-input" disabled />
+                                </div>
+
+                                <div class="form-field">
+                                    <label class="form-label">Date Last Modified</label>
+                                    <InputDate @bind-Value="_vehicle.date_updated" class="form-input" disabled />
+                                </div>
+
+                                <div class="form-field form-group-full">
+                                    <div class="alert alert-info">
+                                        <i class="bx bx-info-circle"></i>
+                                        <span>Authorization workflow is UI-only for now. Approval endpoints are pending.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" @onclick="NavigateToList" disabled="@_saving">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn btn-primary" disabled="@_saving">
+                                @if (_saving)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>@(_isEditMode ? "Updating..." : "Creating...")</span>
+                                }
+                                else
+                                {
+                                    <i class="bx @(_isEditMode ? "bx-check" : "bx-plus")"></i>
+                                    <span>@(_isEditMode ? "Update Vehicle" : "Create Vehicle")</span>
+                                }
+                            </button>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_errorMessage))
+                        {
+                            <div class="alert alert-error">
+                                <i class="bx bx-error-circle"></i>
+                                <span>@_errorMessage</span>
+                            </div>
+                        }
+                    </EditForm>
+                }
             </div>
         </div>
     </div>
@@ -301,10 +350,24 @@
     private VehicleDto _vehicle = new();
     private bool _isEditMode => VmfCode.HasValue;
     private bool _saving = false;
+    private bool _loadingReferenceData = true;
     private string? _errorMessage;
+
+    private List<ModelDto> _models = new();
+    private List<LocationViewDto> _locations = new();
+    private readonly List<string> _colorOptions = new() { "Other", "Black", "Blue", "Green", "Red", "Yellow", "White" };
+    private string _colorSelection = "Other";
+    private string _otherColor = "";
+
+    private string _hiredFrom = "";
+    private string _hireType = "";
+    private string _comment = "";
+    private string _specifications = "";
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadReferenceData();
+
         if (_isEditMode && VmfCode.HasValue)
         {
             var vehicle = await VehicleService.GetVehicleAsync(VmfCode.Value);
@@ -319,8 +382,32 @@
         }
         else
         {
-            // Initialize with defaults for new vehicle
-            _vehicle.take_on_date = DateTime.Now;
+            _vehicle.take_on_date = DateTime.Today;
+        }
+
+        InitializeColorSelection();
+    }
+
+    private async Task LoadReferenceData()
+    {
+        _loadingReferenceData = true;
+        try
+        {
+            var modelsTask = ReferenceDataService.GetModelsAsync();
+            var locationsTask = LocationService.GetAllAsync();
+
+            await Task.WhenAll(modelsTask, locationsTask);
+
+            _models = modelsTask.Result ?? new List<ModelDto>();
+            _locations = locationsTask.Result ?? new List<LocationViewDto>();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading reference data: {ex.Message}");
+        }
+        finally
+        {
+            _loadingReferenceData = false;
         }
     }
 
@@ -328,6 +415,14 @@
     {
         _saving = true;
         _errorMessage = null;
+
+        ApplyColorSelection();
+        NormalizeVehicleFields();
+
+        if (!_isEditMode && _vehicle.current_odo is null)
+        {
+            _vehicle.current_odo = _vehicle.take_on_odo;
+        }
 
         bool success;
         if (_isEditMode && VmfCode.HasValue)
@@ -349,6 +444,83 @@
         {
             _errorMessage = $"Failed to {(_isEditMode ? "update" : "create")} vehicle. Please try again.";
         }
+    }
+
+    private void ApplyColorSelection()
+    {
+        if (_colorSelection == "Other")
+        {
+            _vehicle.colour = string.IsNullOrWhiteSpace(_otherColor) ? null : _otherColor.Trim();
+        }
+        else
+        {
+            _vehicle.colour = _colorSelection;
+        }
+    }
+
+    private void InitializeColorSelection()
+    {
+        var current = _vehicle.colour?.Trim();
+        if (string.IsNullOrWhiteSpace(current))
+        {
+            _colorSelection = "Other";
+            _otherColor = "";
+            return;
+        }
+
+        if (_colorOptions.Contains(current))
+        {
+            _colorSelection = current;
+            _otherColor = "";
+            return;
+        }
+
+        _colorSelection = "Other";
+        _otherColor = current;
+    }
+
+    private void NormalizeVehicleFields()
+    {
+        _vehicle.fleet_number = _vehicle.fleet_number?.Trim().ToUpperInvariant();
+        _vehicle.registration_number = _vehicle.registration_number?.Trim().ToUpperInvariant();
+        _vehicle.previos_gg_number = _vehicle.previos_gg_number?.Trim().ToUpperInvariant();
+        _vehicle.followup_gg_number = _vehicle.followup_gg_number?.Trim().ToUpperInvariant();
+        _vehicle.engine_number_1 = _vehicle.engine_number_1?.Trim().ToUpperInvariant();
+        _vehicle.chassis_number = _vehicle.chassis_number?.Trim().ToUpperInvariant();
+        _vehicle.invoice_number = _vehicle.invoice_number?.Trim().ToUpperInvariant();
+    }
+
+    private string ModelDisplayName(ModelDto model)
+    {
+        if (!string.IsNullOrWhiteSpace(model.make_name))
+        {
+            return $"{model.make_name} - {model.model_name}";
+        }
+
+        return model.model_name ?? "Model";
+    }
+
+    private void OnModelChanged(ChangeEventArgs args)
+    {
+        if (!short.TryParse(args.Value?.ToString(), out var modelCode))
+        {
+            return;
+        }
+
+        _vehicle.model_code = modelCode;
+
+        var selectedModel = _models.FirstOrDefault(m => m.model_code == modelCode);
+        if (selectedModel?.type_code != null)
+        {
+            _vehicle.type_code = selectedModel.type_code.Value;
+        }
+    }
+
+    private short ToShort(int value)
+    {
+        if (value < short.MinValue) return short.MinValue;
+        if (value > short.MaxValue) return short.MaxValue;
+        return (short)value;
     }
 
     private void NavigateToList()

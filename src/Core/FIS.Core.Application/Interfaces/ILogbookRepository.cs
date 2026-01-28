@@ -12,8 +12,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Logbook>> GetAllAsync();
         Task<IEnumerable<Logbook>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<Logbook>> GetBySiteAsync(short siteCode);
-        Task<Logbook> CreateAsync(Logbook logbook);
-        Task<Logbook> UpdateAsync(Logbook logbook);
-        Task DeleteAsync(short logbookCode);
+        Task<Logbook> CreateAsync(Logbook logbook, int currentUserId);
+        Task<Logbook> UpdateAsync(Logbook logbook, int currentUserId);
+        Task DeleteAsync(short logbookCode, int currentUserId);
     }
 }

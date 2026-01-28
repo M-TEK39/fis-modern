@@ -12,7 +12,7 @@ namespace FIS.Api.Controllers;
 [Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class TariffController : ControllerBase
+public class TariffController : BaseApiController
 {
     private readonly ITariffCalculationService _tariffCalculationService;
     private readonly ILogger<TariffController> _logger;

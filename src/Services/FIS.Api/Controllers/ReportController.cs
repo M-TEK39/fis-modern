@@ -12,7 +12,7 @@ namespace FIS.Api.Controllers;
 [Authorize]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class ReportController : ControllerBase
+public class ReportController : BaseApiController
 {
     private readonly IReportingService _reportingService;
     private readonly ILogger<ReportController> _logger;

@@ -24,10 +24,6 @@
             <i class="bx bx-car"></i>
             Vehicle Makes
         </button>
-        <button class="tab @(_activeTab == "models" ? "active" : "")" @onclick='() => SetActiveTab("models")'>
-            <i class="bx bx-cog"></i>
-            Vehicle Models
-        </button>
         <button class="tab @(_activeTab == "types" ? "active" : "")" @onclick='() => SetActiveTab("types")'>
             <i class="bx bx-category"></i>
             Vehicle Types
@@ -35,6 +31,22 @@
         <button class="tab @(_activeTab == "fueltypes" ? "active" : "")" @onclick='() => SetActiveTab("fueltypes")'>
             <i class="bx bx-gas-pump"></i>
             Fuel Types
+        </button>
+        <button class="tab @(_activeTab == "classes" ? "active" : "")" @onclick='() => SetActiveTab("classes")'>
+            <i class="bx bx-layer"></i>
+            Vehicle Classes
+        </button>
+        <button class="tab @(_activeTab == "units" ? "active" : "")" @onclick='() => SetActiveTab("units")'>
+            <i class="bx bx-ruler"></i>
+            Units of Measure
+        </button>
+        <button class="tab @(_activeTab == "licenses" ? "active" : "")" @onclick='() => SetActiveTab("licenses")'>
+            <i class="bx bx-id-card"></i>
+            License Types
+        </button>
+        <button class="tab @(_activeTab == "models" ? "active" : "")" @onclick='() => SetActiveTab("models")'>
+            <i class="bx bx-cog"></i>
+            Vehicle Models
         </button>
         <button class="tab @(_activeTab == "departments" ? "active" : "")" @onclick='() => SetActiveTab("departments")'>
             <i class="bx bx-buildings"></i>
@@ -47,10 +59,6 @@
         {
             <MakesTab />
         }
-        else if (_activeTab == "models")
-        {
-            <ModelsTab />
-        }
         else if (_activeTab == "types")
         {
             <TypesTab />
@@ -58,6 +66,22 @@
         else if (_activeTab == "fueltypes")
         {
             <FuelTypesTab />
+        }
+        else if (_activeTab == "classes")
+        {
+            <ClassesTab />
+        }
+        else if (_activeTab == "units")
+        {
+            <UnitOfMeasureTab />
+        }
+        else if (_activeTab == "licenses")
+        {
+            <LicenseTypesTab />
+        }
+        else if (_activeTab == "models")
+        {
+            <ModelsTab />
         }
         else if (_activeTab == "departments")
         {

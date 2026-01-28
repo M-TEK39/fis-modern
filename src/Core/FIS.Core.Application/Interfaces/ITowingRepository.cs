@@ -12,8 +12,8 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Towing>> GetAllAsync();
         Task<IEnumerable<Towing>> GetByVehicleAsync(int vmfCode);
         Task<IEnumerable<Towing>> GetBySiteAsync(short siteCode);
-        Task<Towing> CreateAsync(Towing towing);
-        Task<Towing> UpdateAsync(Towing towing);
-        Task DeleteAsync(short towingCode);
+        Task<Towing> CreateAsync(Towing towing, int currentUserId);
+        Task<Towing> UpdateAsync(Towing towing, int currentUserId);
+        Task DeleteAsync(short towingCode, int currentUserId);
     }
 }

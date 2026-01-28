@@ -8,7 +8,7 @@ namespace FIS.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
-public class LossController : ControllerBase
+public class LossController : BaseApiController
 {
     private readonly ILossRepository _repository;
     private readonly ILogger<LossController> _logger;
@@ -36,21 +36,21 @@ public class LossController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Loss>> Create([FromBody] Loss item)
     {
-        try { var created = await _repository.CreateAsync(item); return CreatedAtAction(nameof(GetById), new { id = created.loss_code }, created); }
+        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.loss_code }, created); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Loss>> Update(short id, [FromBody] Loss item)
     {
-        try { if (id != item.loss_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item)); }
+        try { if (id != item.loss_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
-        try { await _repository.DeleteAsync(id); return NoContent(); }
+        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 }

@@ -3,18 +3,39 @@
 @layout FIS.Web.Components.Layout.AuthLayout
 @using System.ComponentModel.DataAnnotations
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
 @inject FIS.Web.Services.AuthApiService AuthService
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Legacy Sign In - Fleet Information System</PageTitle>
 
 <div class="auth-card auth-card-wide">
-    <div class="auth-header">
-        <h1>Legacy Sign In</h1>
-        <p>Use your legacy fleet credentials to access the system.</p>
-    </div>
+    @if (_isAuthenticated)
+    {
+        <div class="auth-header">
+            <h1>Already Signed In</h1>
+            <p>You're already authenticated.</p>
+        </div>
+        <div class="auth-actions">
+            <a class="btn btn-primary auth-btn" href="/home">
+                Go to Home
+            </a>
+            <button type="button" class="btn btn-secondary auth-btn auth-outline" @onclick="GoBack">
+                Back to Sign In Options
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="auth-header">
+            <h1>Legacy Sign In</h1>
+            <p>Use your legacy fleet credentials to access the system.</p>
+        </div>
 
-    <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit">
         <DataAnnotationsValidator />
         <ValidationSummary class="validation-summary" />
 
@@ -56,12 +77,23 @@
             </button>
         </div>
     </EditForm>
+    }
 </div>
 
 @code {
     private bool _isSubmitting;
     private string? _errorMessage;
+    private bool _isAuthenticated;
     private readonly LegacyLoginModel _model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Check if user is authenticated (but don't redirect - prevents loop)
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _isAuthenticated = authState.User?.Identity?.IsAuthenticated == true;
+
+        // If authenticated, show a message instead of the form
+    }
 
     private async Task HandleSubmit()
     {
@@ -76,7 +108,8 @@
                 Password = _model.Password
             });
 
-            Navigation.NavigateTo("/home");
+            // Force reload to ensure auth state is refreshed
+            Navigation.NavigateTo("/home", forceLoad: true);
         }
         catch (Exception ex)
         {

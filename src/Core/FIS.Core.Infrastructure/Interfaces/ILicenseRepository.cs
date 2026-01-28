@@ -40,19 +40,19 @@ public interface ILicenseRepository
     /// </summary>
     /// <param name="license">The license entity to create</param>
     /// <returns>The created license with generated ID</returns>
-    Task<License> CreateAsync(License license);
+    Task<License> CreateAsync(License license, int currentUserId);
 
     /// <summary>
     /// Update an existing license
     /// </summary>
     /// <param name="license">The license entity to update</param>
     /// <returns>The updated license entity</returns>
-    Task<License> UpdateAsync(License license);
+    Task<License> UpdateAsync(License license, int currentUserId);
 
     /// <summary>
     /// Delete a license by license code
     /// </summary>
     /// <param name="licenceCode">The license code to delete</param>
     /// <returns>True if deleted, false if not found</returns>
-    Task<bool> DeleteAsync(short licenceCode);
+    Task<bool> DeleteAsync(short licenceCode, int currentUserId);
 }

@@ -54,19 +54,19 @@ public interface IUnitOfMeasureRepository
     /// </summary>
     /// <param name="unit">The unit of measure entity to create</param>
     /// <returns>The created unit of measure with generated ID</returns>
-    Task<UnitOfMeasure> CreateAsync(UnitOfMeasure unit);
+    Task<UnitOfMeasure> CreateAsync(UnitOfMeasure unit, int currentUserId);
 
     /// <summary>
     /// Update an existing unit of measure
     /// </summary>
     /// <param name="unit">The unit of measure entity to update</param>
     /// <returns>The updated unit of measure entity</returns>
-    Task<UnitOfMeasure> UpdateAsync(UnitOfMeasure unit);
+    Task<UnitOfMeasure> UpdateAsync(UnitOfMeasure unit, int currentUserId);
 
     /// <summary>
     /// Delete a unit of measure by unit code
     /// </summary>
     /// <param name="unitCode">The unit code to delete</param>
     /// <returns>True if deleted, false if not found</returns>
-    Task<bool> DeleteAsync(short unitCode);
+    Task<bool> DeleteAsync(short unitCode, int currentUserId);
 }

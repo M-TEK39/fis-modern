@@ -38,6 +38,7 @@ public class FisDbContext : DbContext
     public DbSet<Make> Makes { get; set; } = null!;
     public DbSet<Model> Models { get; set; } = null!;
     public DbSet<FIS.Data.Entities.Type> Types { get; set; } = null!;
+    public DbSet<FIS.Core.Domain.Entities.Vehicles.Class> Classes { get; set; } = null!;
     public DbSet<FuelType> FuelTypes { get; set; } = null!;
     public DbSet<MaintenanceTrigger> MaintenanceTriggers { get; set; } = null!;
     public DbSet<License> Licenses { get; set; } = null!;
@@ -83,6 +84,7 @@ public class FisDbContext : DbContext
 
     // Authentication entities (Dual auth - Entra ID + Legacy JWT)
     public DbSet<EntraIdUserMapping> EntraIdUserMappings { get; set; } = null!;
+    public DbSet<LegacyUserCredential> LegacyUserCredentials { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -287,6 +289,30 @@ public class FisDbContext : DbContext
 
             // Default value for created_date
             entity.Property(e => e.created_date).HasDefaultValueSql("GETUTCDATE()");
+        });
+
+        // AUTHENTICATION CONFIGURATION - Legacy User Credentials
+        modelBuilder.Entity<LegacyUserCredential>(entity =>
+        {
+            // CRITICAL: Unique constraint on user_access_code (one credential per user)
+            entity
+                .HasIndex(e => e.user_access_code)
+                .IsUnique()
+                .HasDatabaseName("IX_Legacy_User_Credentials_UserAccessCode_Unique");
+
+            // Foreign key to TS_Users
+            entity
+                .HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.user_access_code)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Legacy_User_Credentials_User");
+
+            // Default values
+            entity.Property(e => e.created_date).HasDefaultValueSql("GETUTCDATE()");
+            entity.Property(e => e.last_password_change).HasDefaultValueSql("GETUTCDATE()");
+            entity.Property(e => e.failed_login_attempts).HasDefaultValue(0);
+            entity.Property(e => e.is_active).HasDefaultValue(true);
         });
 
         // Configure schema

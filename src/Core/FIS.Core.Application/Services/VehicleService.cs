@@ -86,7 +86,9 @@ public class VehicleService
     /// <summary>
     /// Create a new vehicle with business validation
     /// </summary>
-    public async Task<VehicleCreationResult> CreateVehicleAsync(VehicleCreationRequest request)
+    /// <param name="request">Vehicle creation request</param>
+    /// <param name="currentUserId">The user creating the vehicle</param>
+    public async Task<VehicleCreationResult> CreateVehicleAsync(VehicleCreationRequest request, int currentUserId)
     {
         // Business validation
         var validationResult = await ValidateVehicleCreationAsync(request);
@@ -117,7 +119,7 @@ public class VehicleService
 
         try
         {
-            var createdVehicle = await _vehicleRepository.CreateAsync(vehicle);
+            var createdVehicle = await _vehicleRepository.CreateAsync(vehicle, currentUserId);
             _logger.LogInformation("Vehicle created successfully: VMF {VmfCode}, Fleet {FleetNumber}", 
                 createdVehicle.vmf_code, createdVehicle.fleet_number);
             
@@ -134,7 +136,11 @@ public class VehicleService
     /// <summary>
     /// Update vehicle odometer with business rules
     /// </summary>
-    public async Task<VehicleUpdateResult> UpdateOdometerAsync(int vmfCode, int newOdometer, string? notes = null)
+    /// <param name="vmfCode">The vehicle VMF code</param>
+    /// <param name="newOdometer">The new odometer reading</param>
+    /// <param name="notes">Optional notes</param>
+    /// <param name="currentUserId">The user updating the odometer</param>
+    public async Task<VehicleUpdateResult> UpdateOdometerAsync(int vmfCode, int newOdometer, string? notes, int currentUserId)
     {
         var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
         if (vehicle == null)
@@ -162,7 +168,7 @@ public class VehicleService
         
         try
         {
-            await _vehicleRepository.UpdateAsync(vehicle);
+            await _vehicleRepository.UpdateAsync(vehicle, currentUserId);
             _logger.LogInformation("Odometer updated: VMF {VmfCode}, new reading {NewOdometer}", 
                 vmfCode, newOdometer);
             
