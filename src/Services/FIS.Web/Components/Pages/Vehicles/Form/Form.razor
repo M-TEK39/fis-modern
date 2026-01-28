@@ -80,7 +80,7 @@
 
                                 <div class="form-field">
                                     <label class="form-label">Make & Model <span class="required">*</span></label>
-                                    <select class="form-select" @bind="_vehicle.model_code" @onchange="OnModelChanged">
+                                    <select class="form-select" @bind="_vehicle.model_code" @bind:after="OnModelChanged">
                                         <option value="0">Select One...</option>
                                         @foreach (var model in _models)
                                         {
@@ -500,19 +500,12 @@
         return model.model_name ?? "Model";
     }
 
-    private void OnModelChanged(ChangeEventArgs args)
+    private void OnModelChanged()
     {
-        if (!short.TryParse(args.Value?.ToString(), out var modelCode))
-        {
-            return;
-        }
-
-        _vehicle.model_code = modelCode;
-
-        var selectedModel = _models.FirstOrDefault(m => m.model_code == modelCode);
+        var selectedModel = _models.FirstOrDefault(m => m.model_code == _vehicle.model_code);
         if (selectedModel?.type_code != null)
         {
-            _vehicle.type_code = selectedModel.type_code.Value;
+            _vehicle.type_code = ToShort(selectedModel.type_code.Value);
         }
     }
 

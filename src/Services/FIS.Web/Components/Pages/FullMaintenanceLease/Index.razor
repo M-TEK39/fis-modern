@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
+@inject VehicleApiService VehicleService
 @inject LeaseContractTermsApiService LeaseService
 @inject IJSRuntime JS
 
@@ -24,6 +25,76 @@
 </div>
 
 <div class="page-content">
+    <div class="search-bar">
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
+                       @onchange='() => SetSearchType("GG")' />
+                GG
+            </label>
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
+                       @onchange='() => SetSearchType("GP")' />
+                GP Number
+            </label>
+        </div>
+        <div class="search-input-wrapper" style="gap:0.75rem;">
+            <i class="bx bx-search"></i>
+            <input
+                type="text"
+                class="search-input"
+                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
+                @bind="_searchQuery"
+                @bind:event="oninput" />
+            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchLeases" disabled="@_searching">
+                @if (_searching)
+                {
+                    <span class="spinner-sm"></span>
+                    <span>Searching...</span>
+                }
+                else
+                {
+                    <span>Submit</span>
+                }
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_searchError))
+        {
+            <span class="form-error">@_searchError</span>
+        }
+    </div>
+
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleLeaseInfo">
+                <span>Full Maintenance Lease Information / Help</span>
+                <i class="bx @(_showLeaseInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showLeaseInfo)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">Full Maintenance Lease Information / Help</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleLeaseMaintenance">
+                <span>Full Maintenance Lease Maintenance</span>
+                <i class="bx @(_showLeaseMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showLeaseMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/full-maintenance-lease">1) Full Maintenance Lease</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
     @if (_loading)
     {
         <div class="loading-state">
@@ -79,6 +150,13 @@
 @code {
     private bool _loading = true;
     private List<FmlItem> _leases = new();
+    private List<FmlItem> _allLeases = new();
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _searching;
+    private string? _searchError;
+    private bool _showLeaseInfo = true;
+    private bool _showLeaseMaintenance = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -91,7 +169,8 @@
         try
         {
             var leases = await LeaseService.GetAllAsync<LeaseContractTermsDto>();
-            _leases = leases.Select(l => new FmlItem(
+            _allLeases = leases.Select(l => new FmlItem(
+                VmfCode: l.vmf_code,
                 Number: l.leasecontract_code.ToString(),
                 Vehicle: l.vmf_code?.ToString() ?? "Unknown",
                 Status: l.lease_status ?? "Unknown",
@@ -99,11 +178,13 @@
                 End: l.lease_enddate ?? DateTime.MinValue,
                 Notes: l.lease_notes ?? string.Empty
             )).ToList();
+            _leases = new List<FmlItem>(_allLeases);
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("console.error", $"Error loading leases: {ex.Message}");
             _leases = new();
+            _allLeases = new();
         }
         finally
         {
@@ -111,7 +192,7 @@
         }
     }
 
-    private sealed record FmlItem(string Number, string Vehicle, string Status, DateTime Start, DateTime End, string Notes);
+    private sealed record FmlItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime Start, DateTime End, string Notes);
 
     private sealed class LeaseContractTermsDto
     {
@@ -121,5 +202,61 @@
         public DateTime? lease_startdate { get; set; }
         public DateTime? lease_enddate { get; set; }
         public string? lease_notes { get; set; }
+    }
+
+    private void ToggleLeaseInfo()
+    {
+        _showLeaseInfo = !_showLeaseInfo;
+    }
+
+    private void ToggleLeaseMaintenance()
+    {
+        _showLeaseMaintenance = !_showLeaseMaintenance;
+    }
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+    }
+
+    private async Task SearchLeases()
+    {
+        _searchError = null;
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _leases = new List<FmlItem>(_allLeases);
+            return;
+        }
+
+        _searching = true;
+        try
+        {
+            var query = _searchQuery.Trim();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
+            var match = _searchType == "GG"
+                ? vehicles.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
+                : vehicles.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
+
+            if (match == null)
+            {
+                _leases = new List<FmlItem>();
+                _searchError = "Vehicle not found.";
+                return;
+            }
+
+            _leases = _allLeases.Where(l => l.VmfCode == match.vmf_code).ToList();
+            if (_leases.Count == 0)
+            {
+                _searchError = "No lease records found for this vehicle.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _searchError = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            _searching = false;
+        }
     }
 }

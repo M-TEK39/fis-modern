@@ -26,7 +26,44 @@
 <a id="PageBottom"></a>
 
 <div class="page-content">
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+    <div class="search-bar">
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
+                       @onchange='() => SetSearchType("GG")' />
+                GG
+            </label>
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
+                       @onchange='() => SetSearchType("GP")' />
+                GP Number
+            </label>
+        </div>
+        <div class="search-input-wrapper">
+            <i class="bx bx-search"></i>
+            <input
+                type="text"
+                class="search-input"
+                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
+                @bind="_searchQuery"
+                @bind:event="oninput"
+                @onkeyup="HandleSearchKeyUp" />
+            @if (!string.IsNullOrWhiteSpace(_searchQuery))
+            {
+                <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                    <i class="bx bx-x" style="margin-left:-10px; margin-top: -10px"></i>
+                </button>
+            }
+        </div>
+        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoVehiclesMenu">Vehicles Menu</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+            <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
+        </div>
+    </div>
+
+    <div class="menu-tiles" style="margin: 1.5rem 0;">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleVehicleInfo">
                 <span>Vehicle Master Information / Help</span>
@@ -108,43 +145,6 @@
                     </div>
                 </div>
             }
-        </div>
-    </div>
-
-    <div class="search-bar">
-        <div class="search-input-wrapper" style="align-items:center;">
-            <div style="display:flex; align-items:center; gap:0.75rem; margin-right:0.75rem;">
-                <label class="form-label" style="margin:0;">
-                    <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
-                           @onchange='() => SetSearchType("GG")' />
-                    GG
-                </label>
-                <label class="form-label" style="margin:0;">
-                    <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
-                           @onchange='() => SetSearchType("GP")' />
-                    GP Number
-                </label>
-            </div>
-            <i class="bx bx-search"></i>
-            <input
-                type="text"
-                class="search-input"
-                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
-                @bind="_searchQuery"
-                @bind:event="oninput"
-                @onkeyup="HandleSearchKeyUp" />
-            @if (!string.IsNullOrWhiteSpace(_searchQuery))
-            {
-                <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
-                    <i class="bx bx-x" style="margin-left:-10px; margin-top: -10px"></i>
-                </button>
-            }
-        </div>
-        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoVehiclesMenu">Vehicles Menu</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
         </div>
     </div>
 
@@ -326,7 +326,7 @@
 
     private void GoMainMenu()
     {
-        Navigation.NavigateTo("/");
+        Navigation.NavigateTo("/home");
     }
 
     private void GoVehiclesMenu()

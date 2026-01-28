@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
+@inject VehicleApiService VehicleService
 @inject AssetVerificationApiService AssetVerificationService
 @inject IJSRuntime JS
 
@@ -24,6 +25,76 @@
 </div>
 
 <div class="page-content">
+    <div class="search-bar">
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
+                       @onchange='() => SetSearchType("GG")' />
+                GG
+            </label>
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
+                       @onchange='() => SetSearchType("GP")' />
+                GP Number
+            </label>
+        </div>
+        <div class="search-input-wrapper" style="gap:0.75rem;">
+            <i class="bx bx-search"></i>
+            <input
+                type="text"
+                class="search-input"
+                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
+                @bind="_searchQuery"
+                @bind:event="oninput" />
+            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVerifications" disabled="@_searching">
+                @if (_searching)
+                {
+                    <span class="spinner-sm"></span>
+                    <span>Searching...</span>
+                }
+                else
+                {
+                    <span>Submit</span>
+                }
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_searchError))
+        {
+            <span class="form-error">@_searchError</span>
+        }
+    </div>
+
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleVerificationInfo">
+                <span>Vehicle Asset Verification Information / Help</span>
+                <i class="bx @(_showVerificationInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showVerificationInfo)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">Vehicle Asset Verification Information / Help</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleVerificationMaintenance">
+                <span>Vehicle Asset Verification Maintenance</span>
+                <i class="bx @(_showVerificationMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showVerificationMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicle-verification">1) Vehicle Asset Verification</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
     @if (_loading)
     {
         <div class="loading-state">
@@ -79,6 +150,13 @@
 @code {
     private bool _loading = true;
     private List<VerificationItem> _verifications = new();
+    private List<VerificationItem> _allVerifications = new();
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _searching;
+    private string? _searchError;
+    private bool _showVerificationInfo = true;
+    private bool _showVerificationMaintenance = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -91,7 +169,8 @@
         try
         {
             var apiItems = await AssetVerificationService.GetAllAsync<AssetVerificationDto>();
-            _verifications = apiItems.Select(v => new VerificationItem(
+            _allVerifications = apiItems.Select(v => new VerificationItem(
+                VmfCode: v.vmf_code,
                 Number: v.asset_verification_code.ToString(),
                 Vehicle: v.vehicle_reg_no ?? v.vmf_code?.ToString() ?? "Unknown",
                 Status: v.asset_verification_complete ? "Closed" : "Open",
@@ -99,11 +178,13 @@
                 Verifier: v.responsible_manager ?? "N/A",
                 Notes: v.verified_notes ?? v.site_name ?? string.Empty
             )).ToList();
+            _verifications = new List<VerificationItem>(_allVerifications);
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("console.error", $"Error loading asset verifications: {ex.Message}");
             _verifications = new();
+            _allVerifications = new();
         }
         finally
         {
@@ -111,7 +192,7 @@
         }
     }
 
-    private sealed record VerificationItem(string Number, string Vehicle, string Status, DateTime Date, string Verifier, string Notes);
+    private sealed record VerificationItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime Date, string Verifier, string Notes);
 
     private sealed class AssetVerificationDto
     {
@@ -123,5 +204,61 @@
         public string? verified_notes { get; set; }
         public bool asset_verification_complete { get; set; }
         public DateTime? verification_date { get; set; }
+    }
+
+    private void ToggleVerificationInfo()
+    {
+        _showVerificationInfo = !_showVerificationInfo;
+    }
+
+    private void ToggleVerificationMaintenance()
+    {
+        _showVerificationMaintenance = !_showVerificationMaintenance;
+    }
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+    }
+
+    private async Task SearchVerifications()
+    {
+        _searchError = null;
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _verifications = new List<VerificationItem>(_allVerifications);
+            return;
+        }
+
+        _searching = true;
+        try
+        {
+            var query = _searchQuery.Trim();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
+            var match = _searchType == "GG"
+                ? vehicles.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
+                : vehicles.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
+
+            if (match == null)
+            {
+                _verifications = new List<VerificationItem>();
+                _searchError = "Vehicle not found.";
+                return;
+            }
+
+            _verifications = _allVerifications.Where(v => v.VmfCode == match.vmf_code).ToList();
+            if (_verifications.Count == 0)
+            {
+                _searchError = "No verification records found for this vehicle.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _searchError = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            _searching = false;
+        }
     }
 }

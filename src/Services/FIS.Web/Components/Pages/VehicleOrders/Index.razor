@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
+@inject VehicleApiService VehicleService
 @inject VehicleOrderApiService VehicleOrderService
 @inject IJSRuntime JS
 
@@ -24,6 +25,77 @@
 </div>
 
 <div class="page-content">
+    <div class="search-bar">
+        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
+                       @onchange='() => SetSearchType("GG")' />
+                GG
+            </label>
+            <label class="form-label" style="margin:0;">
+                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
+                       @onchange='() => SetSearchType("GP")' />
+                GP Number
+            </label>
+        </div>
+        <div class="search-input-wrapper" style="gap:0.75rem;">
+            <i class="bx bx-search"></i>
+            <input
+                type="text"
+                class="search-input"
+                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
+                @bind="_searchQuery"
+                @bind:event="oninput" />
+            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchOrders" disabled="@_searching">
+                @if (_searching)
+                {
+                    <span class="spinner-sm"></span>
+                    <span>Searching...</span>
+                }
+                else
+                {
+                    <span>Submit</span>
+                }
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_searchError))
+        {
+            <span class="form-error">@_searchError</span>
+        }
+    </div>
+
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleOrdersInfo">
+                <span>Vehicle Orders Information / Help</span>
+                <i class="bx @(_showOrdersInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showOrdersInfo)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-disabled">Vehicle Orders Information / Help</span>
+                        <span class="menu-item-badge">Coming soon</span>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleOrdersMaintenance">
+                <span>Vehicle Orders Maintenance</span>
+                <i class="bx @(_showOrdersMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showOrdersMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicle-orders">1) Vehicle Orders</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
     @if (_loading)
     {
         <div class="loading-state">
@@ -79,6 +151,13 @@
 @code {
     private bool _loading = true;
     private List<VehicleOrderItem> _orders = new();
+    private List<VehicleOrderItem> _allOrders = new();
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _searching;
+    private string? _searchError;
+    private bool _showOrdersInfo = true;
+    private bool _showOrdersMaintenance = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -91,7 +170,8 @@
         try
         {
             var apiItems = await VehicleOrderService.GetAllAsync<VehicleOrderDto>();
-            _orders = apiItems.Select(o => new VehicleOrderItem(
+            _allOrders = apiItems.Select(o => new VehicleOrderItem(
+                VmfCode: o.vmf_code,
                 Number: o.vehicle_order_code.ToString(),
                 Vehicle: o.vmf_code?.ToString() ?? "Unknown",
                 Status: o.order_status ?? "Unknown",
@@ -99,11 +179,13 @@
                 Expected: o.delivery_date ?? o.order_date ?? DateTime.MinValue,
                 Notes: o.order_notes ?? string.Empty
             )).ToList();
+            _orders = new List<VehicleOrderItem>(_allOrders);
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("console.error", $"Error loading vehicle orders: {ex.Message}");
             _orders = new();
+            _allOrders = new();
         }
         finally
         {
@@ -111,7 +193,7 @@
         }
     }
 
-    private sealed record VehicleOrderItem(string Number, string Vehicle, string Status, DateTime Ordered, DateTime Expected, string Notes);
+    private sealed record VehicleOrderItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime Ordered, DateTime Expected, string Notes);
 
     private sealed class VehicleOrderDto
     {
@@ -121,5 +203,61 @@
         public DateTime? order_date { get; set; }
         public DateTime? delivery_date { get; set; }
         public string? order_notes { get; set; }
+    }
+
+    private void ToggleOrdersInfo()
+    {
+        _showOrdersInfo = !_showOrdersInfo;
+    }
+
+    private void ToggleOrdersMaintenance()
+    {
+        _showOrdersMaintenance = !_showOrdersMaintenance;
+    }
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+    }
+
+    private async Task SearchOrders()
+    {
+        _searchError = null;
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _orders = new List<VehicleOrderItem>(_allOrders);
+            return;
+        }
+
+        _searching = true;
+        try
+        {
+            var query = _searchQuery.Trim();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
+            var match = _searchType == "GG"
+                ? vehicles.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
+                : vehicles.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
+
+            if (match == null)
+            {
+                _orders = new List<VehicleOrderItem>();
+                _searchError = "Vehicle not found.";
+                return;
+            }
+
+            _orders = _allOrders.Where(o => o.VmfCode == match.vmf_code).ToList();
+            if (_orders.Count == 0)
+            {
+                _searchError = "No vehicle orders found for this vehicle.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _searchError = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            _searching = false;
+        }
     }
 }
