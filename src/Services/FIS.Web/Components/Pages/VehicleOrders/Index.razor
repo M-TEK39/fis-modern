@@ -49,8 +49,6 @@
         </div>
     </div>
 
-    @* Existing API-driven table kept for future reuse once legacy module is confirmed. *@
-    @*
     @if (_loading)
     {
         <div class="loading-state">
@@ -63,7 +61,7 @@
         <div class="empty-state">
             <i class="bx bx-cart"></i>
             <h3>No vehicle orders</h3>
-            <p>Awaiting vehicle order API. Provide endpoint/fields to replace static data.</p>
+            <p>No vehicle orders are available.</p>
         </div>
     }
     else
@@ -91,8 +89,8 @@
                                 <td>@order.Number</td>
                                 <td>@order.Vehicle</td>
                                 <td><span class="badge">@order.Status</span></td>
-                                <td>@order.Ordered.ToString("yyyy-MM-dd")</td>
-                                <td>@order.Expected.ToString("yyyy-MM-dd")</td>
+                                <td>@FormatDate(order.Ordered)</td>
+                                <td>@FormatDate(order.Expected)</td>
                                 <td>@order.Notes</td>
                             </tr>
                         }
@@ -101,13 +99,17 @@
             </div>
         </div>
     }
-    *@
 </div>
 
 @code {
     private bool _loading = true;
     private List<VehicleOrderItem> _orders = new();
     private bool _showInceptionMenu = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
 
     private async Task LoadOrders()
     {
@@ -120,8 +122,8 @@
                 Number: o.vehicle_order_code.ToString(),
                 Vehicle: o.vmf_code?.ToString() ?? "Unknown",
                 Status: o.order_status ?? "Unknown",
-                Ordered: o.order_date ?? DateTime.MinValue,
-                Expected: o.delivery_date ?? o.order_date ?? DateTime.MinValue,
+                Ordered: o.order_date,
+                Expected: o.delivery_date ?? o.order_date,
                 Notes: o.order_notes ?? string.Empty
             )).ToList();
         }
@@ -141,7 +143,9 @@
         _showInceptionMenu = !_showInceptionMenu;
     }
 
-    private sealed record VehicleOrderItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime Ordered, DateTime Expected, string Notes);
+    private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private sealed record VehicleOrderItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime? Ordered, DateTime? Expected, string Notes);
 
     private sealed class VehicleOrderDto
     {

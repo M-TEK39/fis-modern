@@ -1,5 +1,7 @@
 @page "/job-cards/select-vehicle"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
 
 <PageTitle>Select Vehicle - Job Cards</PageTitle>
 
@@ -79,11 +81,71 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td colspan="16">Awaiting vehicles API for jobcard selection.</td>
-                    </tr>
+                    @if (_loading)
+                    {
+                        <tr>
+                            <td colspan="16">Loading vehicles...</td>
+                        </tr>
+                    }
+                    else if (_vehicles.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="16">No vehicles found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var vehicle in _vehicles)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(vehicle.registration_number)</td>
+                                <td>@FormatDate(vehicle.take_on_date)</td>
+                                <td>@ValueOrDash(vehicle.current_odo?.ToString())</td>
+                                <td>@ValueOrDash(vehicle.chassis_number)</td>
+                                <td>@ValueOrDash(vehicle.engine_number_1)</td>
+                                <td>@ValueOrDash(vehicle.model_name)</td>
+                                <td>@ValueOrDash(vehicle.year_manufactured?.ToString())</td>
+                                <td>@ValueOrDash(vehicle.type_name)</td>
+                                <td>@ValueOrDash(vehicle.status_description)</td>
+                                <td>@ValueOrDash(vehicle.purchased_from)</td>
+                                <td>@FormatDate(vehicle.purchase_date)</td>
+                                <td colspan="4"></td>
+                            </tr>
+                        }
+                    }
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading = true;
+    private List<FIS.Web.Models.VehicleDto> _vehicles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicles();
+    }
+
+    private async Task LoadVehicles()
+    {
+        _loading = true;
+        try
+        {
+            var result = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 50);
+            _vehicles = result.Data;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+}

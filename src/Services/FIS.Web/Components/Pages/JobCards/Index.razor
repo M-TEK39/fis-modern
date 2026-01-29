@@ -59,7 +59,7 @@
         <div class="empty-state">
             <i class="bx bx-id-card"></i>
             <h3>No job cards</h3>
-            <p>Awaiting job card API. Provide endpoint/fields to replace static data.</p>
+            <p>No job cards are available.</p>
         </div>
     }
     else
@@ -87,9 +87,9 @@
                                 <td>@job.Number</td>
                                 <td>@job.Vehicle</td>
                                 <td><span class="badge">@job.Status</span></td>
-                                <td>@job.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@job.AssignedTo</td>
-                                <td>@job.Notes</td>
+                                <td>@FormatDate(job.Date)</td>
+                                <td>@ValueOrDash(job.AssignedTo)</td>
+                                <td>@ValueOrDash(job.Notes)</td>
                             </tr>
                         }
                     </tbody>
@@ -116,12 +116,12 @@
         {
             var apiItems = await WorkshopService.GetAllAsync<WorkshopDto>();
             _jobCards = apiItems.Select(w => new JobCardItem(
-                Number: w.workshop_code.ToString(),
+                Number: w.ww_code.ToString(),
                 Vehicle: w.vmf_code?.ToString() ?? "Unknown",
-                Status: w.workshop_status ?? "Unknown",
-                Date: w.workshop_date ?? DateTime.MinValue,
-                AssignedTo: w.workshop_tech ?? "N/A",
-                Notes: w.workshop_notes ?? string.Empty
+                Status: w.complete_time.HasValue ? "Closed" : "Open",
+                Date: w.receive_date,
+                AssignedTo: "N/A",
+                Notes: string.Empty
             )).ToList();
         }
         catch (Exception ex)
@@ -135,20 +135,24 @@
         }
     }
 
-    private sealed record JobCardItem(string Number, string Vehicle, string Status, DateTime Date, string AssignedTo, string Notes);
+    private sealed record JobCardItem(string Number, string Vehicle, string Status, DateTime? Date, string AssignedTo, string Notes);
 
     private sealed class WorkshopDto
     {
-        public int workshop_code { get; set; }
+        public short ww_code { get; set; }
         public int? vmf_code { get; set; }
-        public string? workshop_status { get; set; }
-        public DateTime? workshop_date { get; set; }
-        public string? workshop_tech { get; set; }
-        public string? workshop_notes { get; set; }
+        public DateTime? receive_date { get; set; }
+        public DateTime? complete_time { get; set; }
     }
 
     private void ToggleJobcardMenu()
     {
         _showJobcardMenu = !_showJobcardMenu;
     }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

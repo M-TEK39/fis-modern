@@ -1,5 +1,14 @@
 @page "/trips/show"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using Microsoft.AspNetCore.Components
+@inject TripApiService TripService
+@inject TripDriverApiService TripDriverService
+@inject DriverApiService DriverService
+@inject VehicleApiService VehicleService
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
 
 <PageTitle>Show Trip Authority - Fleet Information System</PageTitle>
 
@@ -7,9 +16,9 @@
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-clipboard"></i>
-            Trip Authority No: <span class="contract-muted">[Trip Number]</span>
+            Trip Authority No: <span class="contract-muted">@ValueOrDash(_trip?.TripId.ToString() ?? TripId)</span>
         </h1>
-        <p class="page-description">Trip Status: <strong>Open</strong></p>
+        <p class="page-description">Trip Status: <strong>@ValueOrDash(_trip?.Status ?? "Open")</strong></p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/trips">&lt; Back to Trips</a>
@@ -20,7 +29,7 @@
     <div class="form-card">
         <div class="form-card-body">
             <div class="form-section" style="margin-bottom: 1rem;">
-                <div class="form-hint">Trip Authority No : <strong>[Trip Number]</strong> has the following information:</div>
+                <div class="form-hint">Trip Authority No : <strong>@ValueOrDash(_trip?.TripId.ToString() ?? TripId)</strong> has the following information:</div>
             </div>
 
             <div class="tabs">
@@ -50,16 +59,16 @@
                             <div class="table-wrapper">
                                 <table class="data-table">
                                     <tbody>
-                                        <tr><th>Department Name</th><td></td></tr>
-                                        <tr><th>Site Code</th><td></td></tr>
-                                        <tr><th>Site Name</th><td></td></tr>
-                                        <tr><th>Contract Code</th><td></td></tr>
-                                        <tr><th>VMF Code</th><td></td></tr>
-                                        <tr><th>Fleet Number</th><td></td></tr>
-                                        <tr><th>Make</th><td></td></tr>
-                                        <tr><th>Model</th><td></td></tr>
-                                        <tr><th>Registration Number</th><td></td></tr>
-                                        <tr><th>Start ODO Meter</th><td></td></tr>
+                                        <tr><th>Department Name</th><td>@ValueOrDash(_department?.department_description)</td></tr>
+                                        <tr><th>Site Code</th><td>@ValueOrDash(_site?.SiteCode.ToString())</td></tr>
+                                        <tr><th>Site Name</th><td>@ValueOrDash(_site?.Description)</td></tr>
+                                        <tr><th>Contract Code</th><td>@ValueOrDash(_trip?.ContractCode.ToString())</td></tr>
+                                        <tr><th>VMF Code</th><td>@ValueOrDash(_trip?.VmfCode.ToString())</td></tr>
+                                        <tr><th>Fleet Number</th><td>@ValueOrDash(_vehicle?.fleet_number)</td></tr>
+                                        <tr><th>Make</th><td>@ValueOrDash(_vehicle?.type_name)</td></tr>
+                                        <tr><th>Model</th><td>@ValueOrDash(_vehicle?.model_name)</td></tr>
+                                        <tr><th>Registration Number</th><td>@ValueOrDash(_vehicle?.registration_number)</td></tr>
+                                        <tr><th>Start ODO Meter</th><td>@ValueOrDash(_trip?.TripDate.ToString("yyyy-MM-dd"))</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -74,15 +83,15 @@
                             <div class="table-wrapper">
                                 <table class="data-table">
                                     <tbody>
-                                        <tr><th>Approver Name</th><td></td></tr>
-                                        <tr><th>Approver Rank</th><td></td></tr>
-                                        <tr><th>Approver Telephone</th><td></td></tr>
-                                        <tr><th>Expiry Date</th><td></td></tr>
-                                        <tr><th>End ODO Meter</th><td></td></tr>
-                                        <tr><th>Trip Reason</th><td></td></tr>
-                                        <tr><th>Trip Type</th><td></td></tr>
-                                        <tr><th>Trip Type Code</th><td></td></tr>
-                                        <tr><th>Trip Captured by</th><td></td></tr>
+                                        <tr><th>Approver Name</th><td>@ValueOrDash(_approverName)</td></tr>
+                                        <tr><th>Approver Rank</th><td>-</td></tr>
+                                        <tr><th>Approver Telephone</th><td>-</td></tr>
+                                        <tr><th>Expiry Date</th><td>-</td></tr>
+                                        <tr><th>End ODO Meter</th><td>-</td></tr>
+                                        <tr><th>Trip Reason</th><td>@ValueOrDash(_trip?.Notes)</td></tr>
+                                        <tr><th>Trip Type</th><td>@ValueOrDash(_trip?.Status)</td></tr>
+                                        <tr><th>Trip Type Code</th><td>@ValueOrDash(_trip?.TripId.ToString())</td></tr>
+                                        <tr><th>Trip Captured by</th><td>-</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -97,7 +106,17 @@
                             <div class="table-wrapper">
                                 <table class="data-table">
                                     <tbody>
-                                        <tr><td>No drivers found.</td></tr>
+                                        @if (_drivers.Count == 0)
+                                        {
+                                            <tr><td>No drivers found.</td></tr>
+                                        }
+                                        else
+                                        {
+                                            @foreach (var driver in _drivers)
+                                            {
+                                                <tr><td>@ValueOrDash(driver.driver_firstname) @ValueOrDash(driver.driver_surname)</td></tr>
+                                            }
+                                        }
                                     </tbody>
                                 </table>
                             </div>
@@ -105,10 +124,10 @@
                         <div class="form-section" style="margin-top: 1rem;">
                             <table class="data-table">
                                 <tbody>
-                                    <tr><th>Driver Name</th><td></td></tr>
-                                    <tr><th>Driver ID</th><td></td></tr>
-                                    <tr><th>Driver Passport</th><td></td></tr>
-                                    <tr><th>Primary</th><td></td></tr>
+                                    <tr><th>Driver Name</th><td>@ValueOrDash(_drivers.FirstOrDefault()?.driver_firstname) @ValueOrDash(_drivers.FirstOrDefault()?.driver_surname)</td></tr>
+                                    <tr><th>Driver ID</th><td>@ValueOrDash(_drivers.FirstOrDefault()?.driver_SA_id)</td></tr>
+                                    <tr><th>Driver Passport</th><td>@ValueOrDash(_drivers.FirstOrDefault()?.driver_passportnumber)</td></tr>
+                                    <tr><th>Primary</th><td>@ValueOrDash(_primaryDriver)</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -225,10 +244,57 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "tripId")] public string? TripId { get; set; }
+
     private string _activeTab = "routes";
+    private TripDto? _trip;
+    private VehicleDto? _vehicle;
+    private SiteResponseDto? _site;
+    private DepartmentDto? _department;
+    private List<DriverDto> _drivers = new();
+    private string? _approverName;
+    private string? _primaryDriver;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!int.TryParse(TripId, out var tripId))
+        {
+            return;
+        }
+
+        _trip = await TripService.GetAsync(tripId);
+        if (_trip == null)
+        {
+            return;
+        }
+
+        _vehicle = await VehicleService.GetVehicleAsync(_trip.VmfCode);
+        if (_vehicle?.site_code != null)
+        {
+            _site = await SiteService.GetByIdAsync(_vehicle.site_code.Value);
+            if (_site?.DepartmentCode != null)
+            {
+                _department = await DepartmentService.GetDepartmentAsync(_site.DepartmentCode.Value);
+            }
+        }
+
+        _approverName = _vehicle?.fleet_number;
+
+        var tripDrivers = await TripDriverService.GetAllAsync();
+        var driverCodes = tripDrivers.Select(td => td.DriverCode).Distinct().ToList();
+        if (driverCodes.Count > 0)
+        {
+            var allDrivers = await DriverService.GetDriversAsync();
+            _drivers = allDrivers.Where(d => driverCodes.Contains(d.site_driver_code)).ToList();
+            _primaryDriver = tripDrivers.FirstOrDefault(td => td.Primary)?.DriverCode.ToString();
+        }
+    }
 
     private void SetActiveTab(string tab)
     {
         _activeTab = tab;
     }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

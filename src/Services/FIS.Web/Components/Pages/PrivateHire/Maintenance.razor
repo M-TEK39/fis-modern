@@ -1,6 +1,9 @@
 @page "/private-hire/maintenance"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject PrivateHireApiService PrivateHireService
 
 <PageTitle>Private Hire Maintenance - Fleet Information System</PageTitle>
 
@@ -65,11 +68,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>REG Number:</strong></label>
-                                    <input class="form-input" placeholder="Enter registration" />
+                                    <input class="form-input" placeholder="Enter registration" @bind="_vehicleSearch" @bind:event="oninput" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" @onclick="SearchVehicles">Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -88,9 +91,26 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr>
-                                                <td colspan="4">No records found.</td>
-                                            </tr>
+                                            @if (_vehicleMatches.Count == 0)
+                                            {
+                                                <tr>
+                                                    <td colspan="4">No records found.</td>
+                                                </tr>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var match in _vehicleMatches)
+                                                {
+                                                    <tr>
+                                                        <td>@match.registration_number</td>
+                                                        <td>@FormatDate(match.hire_start_date)</td>
+                                                        <td>@FormatDate(match.hire_end_date)</td>
+                                                        <td>
+                                                            <button class="btn btn-secondary btn-sm" @onclick="() => SelectVehicle(match)">Select</button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }
                                         </tbody>
                                     </table>
                                 </div>
@@ -103,41 +123,41 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Registration number</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.registration_number" />
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label"><strong>Make &amp; Model</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.make_model" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Site</strong></label>
                                     <select class="form-select">
-                                        <option value="0">Select...</option>
+                                        <option value="0">@(_selectedVehicle?.department_name ?? "Select...")</option>
                                     </select>
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Contracted to</strong></label>
                                     <select class="form-select">
-                                        <option value="0">Select...</option>
+                                        <option value="0">@(_selectedVehicle?.department_name ?? "Select...")</option>
                                     </select>
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Contractor (Hired from)</strong></label>
                                     <select class="form-select">
-                                        <option value="0">Select...</option>
+                                        <option value="0">@(_selectedVehicle?.contractor_name ?? "Select...")</option>
                                     </select>
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Year Manufactured</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.hire_start_date?.Year.ToString()" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Colour</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Tank Capacity (Litres)</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Engine number</label>
@@ -149,31 +169,31 @@
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Take-on Date</strong></label>
-                                    <input class="form-input" readonly placeholder="Select date" />
+                                    <input class="form-input" readonly placeholder="Select date" value="@FormatDate(_selectedVehicle?.hire_start_date)" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Take-on Odometer</strong></label>
-                                    <input class="form-input" />
+                                    <input class="form-input" value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Km tariff</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.monthly_rate?.ToString("N2")" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Hourly tariff</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.monthly_rate?.ToString("N2")" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Daily tariff</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.monthly_rate?.ToString("N2")" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Return Date</strong></label>
-                                    <input class="form-input" readonly placeholder="Select date" />
+                                    <input class="form-input" readonly placeholder="Select date" value="@FormatDate(_selectedVehicle?.hire_end_date)" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Return Odometer</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
@@ -202,11 +222,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>REG Number:</strong></label>
-                                    <input class="form-input" placeholder="Enter registration" />
+                                    <input class="form-input" placeholder="Enter registration" @bind="_vehicleSearch" @bind:event="oninput" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" @onclick="SearchVehicles">Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -225,9 +245,26 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <tr>
-                                                <td colspan="4">No records found.</td>
-                                            </tr>
+                                            @if (_vehicleMatches.Count == 0)
+                                            {
+                                                <tr>
+                                                    <td colspan="4">No records found.</td>
+                                                </tr>
+                                            }
+                                            else
+                                            {
+                                                @foreach (var match in _vehicleMatches)
+                                                {
+                                                    <tr>
+                                                        <td>@match.registration_number</td>
+                                                        <td>@FormatDate(match.hire_start_date)</td>
+                                                        <td>@FormatDate(match.hire_end_date)</td>
+                                                        <td>
+                                                            <button class="btn btn-secondary btn-sm" @onclick="() => SelectVehicle(match)">Select</button>
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            }
                                         </tbody>
                                     </table>
                                 </div>
@@ -240,7 +277,7 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Registration number</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.registration_number" />
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label"><strong>Make &amp; Model</strong></label>
@@ -314,7 +351,7 @@
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label">Expiry Date (fuel card)</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.make_model" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
@@ -380,59 +417,59 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Registration Number</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.department_name" />
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label"><strong>Make &amp; Model</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.department_name" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Site</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.contractor_name" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Contracted To</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Contractor</strong></label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Year Manufactured</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Colour</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Tank Capacity</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@FormatDate(_selectedVehicle?.hire_start_date)" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Engine Number</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Chassis Number</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.monthly_rate?.ToString("N2")" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Take On Date</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.monthly_rate?.ToString("N2")" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Take On Odometer</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.monthly_rate?.ToString("N2")" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">KM Tariff</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@FormatDate(_selectedVehicle?.hire_end_date)" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Hourly Tariff</label>
-                                    <input class="form-input" readonly />
+                                    <input class="form-input" readonly value="@_selectedVehicle?.notes" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label">Daily Tariff</label>
@@ -632,4 +669,39 @@
     {
         _vehicleMode = mode;
     }
+
+    private string _vehicleSearch = "";
+    private List<PrivateHireVehicleDto> _vehicleMatches = new();
+    private PrivateHireVehicleDto? _selectedVehicle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicles();
+    }
+
+    private async Task LoadVehicles()
+    {
+        var vehicles = await PrivateHireService.GetVehiclesAsync();
+        _vehicleMatches = vehicles;
+    }
+
+    private async Task SearchVehicles()
+    {
+        var vehicles = await PrivateHireService.GetVehiclesAsync();
+        if (string.IsNullOrWhiteSpace(_vehicleSearch))
+        {
+            _vehicleMatches = vehicles;
+            return;
+        }
+
+        _vehicleMatches = vehicles.Where(v => v.registration_number.Contains(_vehicleSearch.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private void SelectVehicle(PrivateHireVehicleDto vehicle)
+    {
+        _selectedVehicle = vehicle;
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 }

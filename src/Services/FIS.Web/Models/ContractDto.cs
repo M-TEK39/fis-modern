@@ -5,6 +5,8 @@ namespace FIS.Web.Models;
 public class ContractDto
 {
     public int contract_id { get; set; }
+    public int? vmf_code { get; set; }
+    public short? site_code { get; set; }
     [Required]
     public string contract_number { get; set; } = "";
     [Required]

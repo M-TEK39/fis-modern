@@ -4,6 +4,8 @@
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
 @inject NavigationManager Navigation
 
 <PageTitle>Contracts Menu - Fleet Information System</PageTitle>
@@ -295,6 +297,7 @@
         try
         {
             _pendingContracts = await ContractService.GetContractsAsync();
+            await HydratePendingContractsAsync();
         }
         finally
         {
@@ -393,13 +396,13 @@
         => ValueOrDash(contract.Vehicle?.status_description ?? contract.status);
 
     private static string GetContractType(ContractDto contract)
-        => ValueOrDash(null);
+        => ValueOrDash(contract.contractor_name);
 
     private static string GetContractStatus(ContractDto contract)
         => ValueOrDash(contract.status);
 
     private static string GetHireType(ContractDto contract)
-        => ValueOrDash(null);
+        => ValueOrDash(contract.contractor_name);
 
     private static string GetMake(ContractDto contract)
         => ValueOrDash(contract.vehicle_make);
@@ -411,17 +414,42 @@
         => ValueOrDash(contract.vehicle_model ?? contract.Vehicle?.model_name);
 
     private static string GetUserName(ContractDto contract)
-        => ValueOrDash(null);
+        => ValueOrDash("-");
 
     private static string GetDepartment(ContractDto contract)
         => ValueOrDash(contract.department_name ?? contract.Department?.department_description);
 
     private static string GetSite(ContractDto contract)
-        => ValueOrDash(null);
+        => ValueOrDash(contract.site_code?.ToString());
 
     private void TogglePermanent(ChangeEventArgs _) => _filterPermanent = !_filterPermanent;
     private void ToggleDaily(ChangeEventArgs _) => _filterDaily = !_filterDaily;
     private void ToggleHourly(ChangeEventArgs _) => _filterHourly = !_filterHourly;
     private void ToggleRelieve(ChangeEventArgs _) => _filterRelieve = !_filterRelieve;
     private void ToggleLease(ChangeEventArgs _) => _filterLease = !_filterLease;
+
+    private async Task HydratePendingContractsAsync()
+    {
+        if (_pendingContracts.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var contract in _pendingContracts)
+        {
+            if (contract.vmf_code.HasValue && contract.Vehicle == null)
+            {
+                contract.Vehicle = await VehicleService.GetVehicleAsync(contract.vmf_code.Value);
+            }
+
+            if (contract.site_code.HasValue && contract.Department == null)
+            {
+                var site = await SiteService.GetByIdAsync(contract.site_code.Value);
+                if (site?.DepartmentCode != null)
+                {
+                    contract.Department = await DepartmentService.GetDepartmentAsync(site.DepartmentCode.Value);
+                }
+            }
+        }
+    }
 }

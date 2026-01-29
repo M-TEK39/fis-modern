@@ -247,6 +247,7 @@ public class VehiclePhotoApiService(HttpClient httpClient, TokenService tokenSer
 
     public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
     public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
+    public Task<List<T>> GetByVehicleAsync<T>(int vmfCode) => GetListAsync<T>($"{BasePath}/vehicle/{vmfCode}");
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");

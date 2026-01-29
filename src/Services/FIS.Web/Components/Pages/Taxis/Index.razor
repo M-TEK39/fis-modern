@@ -181,7 +181,7 @@
                 <div class="empty-state">
                     <i class="bx bx-taxi"></i>
                     <h3>No taxi records</h3>
-                    <p>Awaiting taxi API. Provide endpoint/fields to replace static data.</p>
+                    <p>No taxi records are available.</p>
                 </div>
             }
             else
@@ -206,15 +206,15 @@
                                 @foreach (var taxi in _taxis)
                                 {
                                     <tr>
-                                        <td>@taxi.Number</td>
-                                        <td>@taxi.Driver</td>
-                                        <td>@taxi.Vehicle</td>
-                                        <td><span class="badge">@taxi.Status</span></td>
-                                        <td>@taxi.Date.ToString("yyyy-MM-dd")</td>
-                                        <td>@taxi.Notes</td>
-                                    </tr>
-                                }
-                            </tbody>
+                                    <td>@ValueOrDash(taxi.Number)</td>
+                                    <td>@ValueOrDash(taxi.Driver)</td>
+                                    <td>@ValueOrDash(taxi.Vehicle)</td>
+                                    <td><span class="badge">@ValueOrDash(taxi.Status)</span></td>
+                                    <td>@FormatDate(taxi.Date)</td>
+                                    <td>@ValueOrDash(taxi.Notes)</td>
+                                </tr>
+                            }
+                        </tbody>
                         </table>
                     </div>
                 </div>
@@ -246,12 +246,12 @@
         {
             var apiItems = await TaxiService.GetAllAsync<TaxiDto>();
             _taxis = apiItems.Select(t => new TaxiItem(
-                Number: t.taxi_code.ToString(),
-                Driver: t.driver_name ?? "Unknown",
-                Vehicle: t.vmf_code?.ToString() ?? "Unknown",
-                Status: t.taxi_status ?? "Unknown",
-                Date: t.taxi_date ?? DateTime.MinValue,
-                Notes: t.taxi_notes ?? string.Empty
+                Number: t.rek_num ?? t.request_id.ToString(),
+                Driver: t.official ?? "Unknown",
+                Vehicle: t.vmf_code ?? "Unknown",
+                Status: t.rank ?? "Unknown",
+                Date: t.date_required,
+                Notes: t.address_1 ?? string.Empty
             )).ToList();
         }
         catch (Exception ex)
@@ -272,15 +272,22 @@
     private void ToggleReports() => _showReports = !_showReports;
     private void ToggleOther() => _showOther = !_showOther;
 
-    private sealed record TaxiItem(string Number, string Driver, string Vehicle, string Status, DateTime Date, string Notes);
+    private sealed record TaxiItem(string Number, string Driver, string Vehicle, string Status, DateTime? Date, string Notes);
 
     private sealed class TaxiDto
     {
-        public int taxi_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? driver_name { get; set; }
-        public string? taxi_status { get; set; }
-        public DateTime? taxi_date { get; set; }
-        public string? taxi_notes { get; set; }
+        public int request_id { get; set; }
+        public string? rek_num { get; set; }
+        public string? official { get; set; }
+        public string? vmf_code { get; set; }
+        public string? rank { get; set; }
+        public DateTime? date_required { get; set; }
+        public string? address_1 { get; set; }
     }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

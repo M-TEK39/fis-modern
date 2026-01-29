@@ -50,13 +50,13 @@
                             <div class="form-field">
                                 <label class="form-label">VIN / Engine / GG No</label>
                                 <InputText @bind-Value="_quickSearch" class="form-input" placeholder="Enter VIN / Engine / GG No" />
-                                <span class="form-hint">Pending API mapping for quick search.</span>
+                                <span class="form-hint">Searches existing vehicles by VIN, engine number, or GG/GP.</span>
                             </div>
                         </div>
                         <div class="form-actions">
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="QuickSearch">Search</button>
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="QuickRecall">Recall</button>
-                            <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetQuickSearch">Reset Search</button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="QuickSearch" disabled="@_quickSearchLoading">Search</button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="QuickRecall" disabled="@_quickSearchLoading">Recall</button>
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetQuickSearch" disabled="@_quickSearchLoading">Reset Search</button>
                         </div>
                     </div>
                 </div>
@@ -699,6 +699,7 @@
     private bool _isEditMode => VmfCode.HasValue;
     private bool _saving = false;
     private bool _loadingReferenceData = true;
+    private bool _quickSearchLoading = false;
     private string? _errorMessage;
 
     private List<ModelDto> _models = new();
@@ -922,17 +923,69 @@
 
     private void QuickSearch()
     {
-        _errorMessage = "Quick search is pending API mapping.";
+        if (_isEditMode)
+        {
+            _errorMessage = "Quick search is only available when capturing a new vehicle.";
+            return;
+        }
+
+        _ = ExecuteQuickSearch();
     }
 
     private void QuickRecall()
     {
-        _errorMessage = "Recall is pending API mapping.";
+        if (_isEditMode)
+        {
+            _errorMessage = "Recall is only available when capturing a new vehicle.";
+            return;
+        }
+
+        _ = ExecuteQuickSearch();
     }
 
     private void ResetQuickSearch()
     {
         _quickSearch = "";
+    }
+
+    private async Task ExecuteQuickSearch()
+    {
+        var query = (_quickSearch ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _errorMessage = "Enter a VIN, engine number, or GG/GP number to search.";
+            return;
+        }
+
+        _quickSearchLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(query);
+            if (matches.Count == 0)
+            {
+                _errorMessage = "No vehicles matched the search term.";
+                return;
+            }
+
+            if (matches.Count > 1)
+            {
+                _errorMessage = "Multiple vehicles matched. Use Edit Vehicle search to select the correct record.";
+                return;
+            }
+
+            Navigation.NavigateTo($"/vehicles/{matches[0].vmf_code}/edit");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Quick search failed: {ex.Message}";
+        }
+        finally
+        {
+            _quickSearchLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private void ClearFleetNotes()

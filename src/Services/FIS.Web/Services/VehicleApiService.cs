@@ -128,7 +128,28 @@ public class VehicleApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/vehicles", vehicle);
+            var createRequest = new
+            {
+                model_code = vehicle.model_code,
+                type_code = vehicle.type_code,
+                vehicle_status_code = vehicle.vehicle_status_code,
+                location_code = vehicle.location_code,
+                fleet_number = vehicle.fleet_number,
+                registration_number = vehicle.registration_number,
+                engine_number_1 = vehicle.engine_number_1,
+                chassis_number = vehicle.chassis_number,
+                take_on_date = vehicle.take_on_date,
+                take_on_odo = vehicle.take_on_odo ?? 0,
+                current_odo = vehicle.current_odo ?? 0,
+                tare = vehicle.tare,
+                gvm = vehicle.gvm,
+                year_manufactured = vehicle.year_manufactured,
+                colour = vehicle.colour,
+                purchase_date = vehicle.purchase_date,
+                purchase_amount = vehicle.purchase_amount
+            };
+
+            var response = await _httpClient.PostAsJsonAsync("api/vehicles", createRequest);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -153,7 +174,25 @@ public class VehicleApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/vehicles/{vmfCode}", vehicle);
+            var updateRequest = new
+            {
+                model_code = vehicle.model_code,
+                type_code = vehicle.type_code,
+                vehicle_status_code = vehicle.vehicle_status_code,
+                location_code = vehicle.location_code,
+                fleet_number = vehicle.fleet_number,
+                registration_number = vehicle.registration_number,
+                engine_number_1 = vehicle.engine_number_1,
+                chassis_number = vehicle.chassis_number,
+                take_on_odo = vehicle.take_on_odo,
+                current_odo = vehicle.current_odo,
+                tare = vehicle.tare,
+                gvm = vehicle.gvm,
+                year_manufactured = vehicle.year_manufactured,
+                colour = vehicle.colour
+            };
+
+            var response = await _httpClient.PutAsJsonAsync($"api/vehicles/{vmfCode}", updateRequest);
 
             if (!response.IsSuccessStatusCode)
             {

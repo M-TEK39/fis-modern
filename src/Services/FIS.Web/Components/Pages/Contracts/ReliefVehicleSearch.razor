@@ -1,5 +1,8 @@
 @page "/contracts/relief-vehicle-search"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
 
 <PageTitle>Vehicle Contract Relief Vehicle Search</PageTitle>
 
@@ -25,16 +28,16 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">GG Number</label>
-                    <input class="form-input" placeholder="Enter GG number" />
+                    <input class="form-input" placeholder="Enter GG number" @bind="_ggNumber" @bind:event="oninput" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Registration Number</label>
-                    <input class="form-input" placeholder="Enter registration number" />
+                    <input class="form-input" placeholder="Enter registration number" @bind="_registrationNumber" @bind:event="oninput" />
                 </div>
             </div>
             <div style="margin-top: 1rem;">
-                <button class="btn btn-primary btn-sm">Search</button>
-                <button class="btn btn-secondary btn-sm">Clear</button>
+                <button class="btn btn-primary btn-sm" @onclick="SearchVehicles" disabled="@_loading">Search</button>
+                <button class="btn btn-secondary btn-sm" @onclick="ClearSearch" disabled="@_loading">Clear</button>
             </div>
         </div>
     </div>
@@ -58,15 +61,45 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="6">
-                                    <div class="empty-state">
-                                        <i class="bx bx-car"></i>
-                                        <h3>No relief vehicles found</h3>
-                                        <p>Search results will appear here.</p>
-                                    </div>
-                                </td>
-                            </tr>
+                            @if (_loading)
+                            {
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="loading-state">
+                                            <div class="spinner"></div>
+                                            <p>Loading...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (_results.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="6">
+                                        <div class="empty-state">
+                                            <i class="bx bx-car"></i>
+                                            <h3>No relief vehicles found</h3>
+                                            <p>Search results will appear here.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var vehicle in _results)
+                                {
+                                    <tr>
+                                        <td>@vehicle.fleet_number</td>
+                                        <td>@vehicle.registration_number</td>
+                                        <td>@vehicle.type_name</td>
+                                        <td>@vehicle.model_name</td>
+                                        <td>@vehicle.status_description</td>
+                                        <td>
+                                            <a class="btn btn-secondary btn-sm" href="@($"/contracts/detail?ggnumber={vehicle.fleet_number}&regnumber={vehicle.registration_number}")">View</a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -74,3 +107,41 @@
         </div>
     </div>
 </div>
+
+@code {
+    private string _ggNumber = "";
+    private string _registrationNumber = "";
+    private bool _loading;
+    private List<VehicleDto> _results = new();
+
+    private async Task SearchVehicles()
+    {
+        _loading = true;
+        try
+        {
+            var query = string.IsNullOrWhiteSpace(_ggNumber) ? _registrationNumber : _ggNumber;
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                _results = new();
+                return;
+            }
+
+            _results = await VehicleService.SearchVehiclesAsync(query.Trim());
+        }
+        catch
+        {
+            _results = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ClearSearch()
+    {
+        _ggNumber = "";
+        _registrationNumber = "";
+        _results = new();
+    }
+}

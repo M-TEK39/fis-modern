@@ -51,14 +51,14 @@ else
                     @foreach (var contract in Contracts)
                     {
                         <tr>
-                            <td class="contract-number">@contract.contract_number</td>
+                            <td class="contract-number">@ValueOrDash(contract.contract_number)</td>
                             <td class="vehicle-info">
-                                <div class="vehicle-reg">@contract.Vehicle?.registration_number</div>
-                                <div class="vehicle-details">@contract.Vehicle?.model_name</div>
+                                <div class="vehicle-reg">@ValueOrDash(contract.Vehicle?.registration_number ?? contract.vehicle_registration)</div>
+                                <div class="vehicle-details">@ValueOrDash(contract.Vehicle?.model_name ?? contract.vehicle_model)</div>
                             </td>
-                            <td class="department-name">@contract.Department?.department_description</td>
-                            <td class="date-cell">@contract.start_date.ToString("dd/MM/yyyy")</td>
-                            <td class="date-cell">@contract.end_date?.ToString("dd/MM/yyyy")</td>
+                            <td class="department-name">@ValueOrDash(contract.Department?.department_description ?? contract.department_name)</td>
+                            <td class="date-cell">@FormatDate(contract.start_date)</td>
+                            <td class="date-cell">@FormatDate(contract.end_date)</td>
                             <td>
                                 <span class="status-badge @(GetStatusClass(contract))">
                                     @GetStatusText(contract)
@@ -107,16 +107,27 @@ else
 
     private string GetStatusClass(ContractDto contract)
     {
-        if (!contract.end_date.HasValue)
+        if (!contract.end_date.HasValue && string.IsNullOrWhiteSpace(contract.status))
             return "status-unknown";
 
         var now = DateTime.Now.Date;
         var startDate = contract.start_date.Date;
-        var endDate = contract.end_date.Value.Date;
+        var endDate = contract.end_date?.Date;
 
-        if (now < startDate)
+        if (!string.IsNullOrWhiteSpace(contract.status))
+        {
+            var normalized = contract.status.ToLowerInvariant();
+            if (normalized.Contains("active"))
+                return "status-active";
+            if (normalized.Contains("pending") || normalized.Contains("upcoming"))
+                return "status-upcoming";
+            if (normalized.Contains("expired") || normalized.Contains("cancel") || normalized.Contains("closed"))
+                return "status-expired";
+        }
+
+        if (endDate.HasValue && now < startDate)
             return "status-upcoming";
-        else if (now >= startDate && now <= endDate)
+        else if (endDate.HasValue && now >= startDate && now <= endDate.Value)
             return "status-active";
         else
             return "status-expired";
@@ -124,6 +135,8 @@ else
 
     private string GetStatusText(ContractDto contract)
     {
+        if (!string.IsNullOrWhiteSpace(contract.status))
+            return contract.status;
         if (!contract.end_date.HasValue)
             return "Unknown";
 
@@ -138,4 +151,10 @@ else
         else
             return "Expired";
     }
+
+    private static string FormatDate(DateTime? date)
+        => date.HasValue ? date.Value.ToString("dd/MM/yyyy") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

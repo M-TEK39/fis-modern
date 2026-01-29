@@ -1,6 +1,13 @@
 @page "/contracts/backdating-approval/detail"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject ContractApiService ContractService
+@inject VehicleApiService VehicleService
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
+@inject DriverApiService DriverService
 
 <PageTitle>Vehicle Contract Backdating Approval - Detail</PageTitle>
 
@@ -25,7 +32,7 @@
     </div>
     <div class="contract-banner contract-banner-info">
         <i class="bx bx-info-circle"></i>
-        <span>Contract for <strong>@GetQuery("ggnumber")</strong> || <strong>@GetQuery("regnumber")</strong></span>
+            <span>Contract for <strong>@(ValueOrDash(_vehicle?.fleet_number) ?? GetQuery("ggnumber"))</strong> || <strong>@(ValueOrDash(_vehicle?.registration_number) ?? GetQuery("regnumber"))</strong></span>
     </div>
 
     <div class="contract-section">
@@ -107,9 +114,9 @@
                             <tbody>
                                 <tr>
                                     <th>GG Number</th>
-                                    <td>@GetQuery("ggnumber")</td>
+                                    <td>@(ValueOrDash(_vehicle?.fleet_number) ?? GetQuery("ggnumber"))</td>
                                     <th>Registration Number</th>
-                                    <td>@GetQuery("regnumber")</td>
+                                    <td>@(ValueOrDash(_vehicle?.registration_number) ?? GetQuery("regnumber"))</td>
                                     <th>Identification</th>
                                     <td rowspan="5" class="contract-photo-cell">
                                         <div class="contract-photo-box">Vehicle Photos</div>
@@ -117,33 +124,33 @@
                                 </tr>
                                 <tr>
                                     <th>VIN / Chassis Number</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_vehicle?.chassis_number)</td>
                                     <th>Engine Number</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_vehicle?.engine_number_1)</td>
                                 </tr>
                                 <tr>
                                     <th>Make &amp; Model</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_vehicle?.model_name)</td>
                                     <th>Year Manufactured</th>
-                                    <td>-</td>
+                                    <td>@(_vehicle?.year_manufactured?.ToString() ?? "-")</td>
                                 </tr>
                                 <tr>
                                     <th>Colour</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_vehicle?.colour)</td>
                                     <th>Depot Location</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_vehicle?.location_description)</td>
                                 </tr>
                                 <tr>
                                     <th>Hire Type</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_contract?.contractor_name)</td>
                                     <th>Hired From</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_contract?.contractor_name)</td>
                                 </tr>
                                 <tr>
                                     <th>Status</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_contract?.status ?? _vehicle?.status_description)</td>
                                     <th>Status Date</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_contract?.end_date?.ToString("yyyy/MM/dd") ?? _vehicle?.vehicle_status_date?.ToString("yyyy/MM/dd"))</td>
                                     <td colspan="2"></td>
                                 </tr>
                             </tbody>
@@ -174,7 +181,7 @@
                                     <th>Department</th>
                                     <td colspan="2">
                                         <select class="form-select">
-                                            <option value="">Select Department</option>
+                                            <option value="">@(ValueOrDash(_department?.department_description) ?? "Select Department")</option>
                                         </select>
                                     </td>
                                     <td rowspan="4" class="contract-tariff-cell">
@@ -212,7 +219,7 @@
                                     <th>Site</th>
                                     <td colspan="2">
                                         <select class="form-select">
-                                            <option value="">Select Site</option>
+                                            <option value="">@(ValueOrDash(_siteName) ?? "Select Site")</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -325,7 +332,7 @@
                                     <th>Department</th>
                                     <td colspan="3">
                                         <select class="form-select">
-                                            <option value="">Select Department</option>
+                                            <option value="">@(ValueOrDash(_department?.department_description) ?? "Select Department")</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -333,7 +340,7 @@
                                     <th>Site</th>
                                     <td colspan="3">
                                         <select class="form-select">
-                                            <option value="">Select Site</option>
+                                            <option value="">@(ValueOrDash(_siteName) ?? "Select Site")</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -356,7 +363,7 @@
                                     <th>Driver Name</th>
                                     <td colspan="2">
                                         <select class="form-select">
-                                            <option value="">Select Driver</option>
+                                            <option value="">@(ValueOrDash(_driverName) ?? "Select Driver")</option>
                                         </select>
                                     </td>
                                     <td colspan="2">
@@ -631,6 +638,79 @@
     [SupplyParameterFromQuery(Name = "contractId")] public string? ContractId { get; set; }
     [SupplyParameterFromQuery(Name = "action")] public string? Action { get; set; }
 
+    private ContractDto? _contract;
+    private VehicleDto? _vehicle;
+    private string? _siteName;
+    private DepartmentDto? _department;
+    private string? _driverName;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (int.TryParse(ContractId, out var contractId))
+        {
+            _contract = await ContractService.GetContractAsync(contractId);
+        }
+
+        if (_contract?.vmf_code != null)
+        {
+            _vehicle = await VehicleService.GetVehicleAsync(_contract.vmf_code.Value);
+        }
+
+        if (_vehicle == null)
+        {
+            _vehicle = await FindVehicleFromQuery();
+        }
+
+        if (_contract?.site_code != null)
+        {
+            var site = await SiteService.GetByIdAsync(_contract.site_code.Value);
+            _siteName = site?.Description;
+            if (site?.DepartmentCode != null)
+            {
+                _department = await DepartmentService.GetDepartmentAsync(site.DepartmentCode.Value);
+            }
+        }
+
+        if (_contract != null)
+        {
+            _driverName = await ResolveDriverName(_contract.contractor_name);
+        }
+    }
+
+    private async Task<VehicleDto?> FindVehicleFromQuery()
+    {
+        var query = (GgNumber ?? RegNumber ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        var results = await VehicleService.SearchVehiclesAsync(query);
+        return results.FirstOrDefault();
+    }
+
+    private async Task<string?> ResolveDriverName(string? driverCodeText)
+    {
+        if (string.IsNullOrWhiteSpace(driverCodeText))
+        {
+            return "-";
+        }
+
+        if (!int.TryParse(driverCodeText, out var driverCode))
+        {
+            return driverCodeText;
+        }
+
+        var drivers = await DriverService.GetDriversAsync();
+        var driver = drivers.FirstOrDefault(d => d.site_driver_code == driverCode);
+        if (driver == null)
+        {
+            return driverCodeText;
+        }
+
+        return $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+    }
+
     private string GetQuery(string key)
     {
         return key switch
@@ -642,4 +722,6 @@
             _ => "-"
         };
     }
+
+    private static string? ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

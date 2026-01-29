@@ -65,8 +65,6 @@
             }
         </div>
     </div>
-    @* Existing search/table retained for future reuse once tariff pages are wired. *@
-    @*
     @if (_loading)
     {
         <div class="loading-state">
@@ -79,7 +77,7 @@
         <div class="empty-state">
             <i class="bx bx-cog"></i>
             <h3>No lease records</h3>
-            <p>Awaiting full maintenance lease API. Provide endpoint/fields to replace static data.</p>
+            <p>No lease records are available.</p>
         </div>
     }
     else
@@ -107,9 +105,9 @@
                                 <td>@lease.Number</td>
                                 <td>@lease.Vehicle</td>
                                 <td><span class="badge">@lease.Status</span></td>
-                                <td>@lease.Start.ToString("yyyy-MM-dd")</td>
-                                <td>@lease.End.ToString("yyyy-MM-dd")</td>
-                                <td>@lease.Notes</td>
+                                <td>@FormatDate(lease.Start)</td>
+                                <td>@FormatDate(lease.End)</td>
+                                <td>@ValueOrDash(lease.Notes)</td>
                             </tr>
                         }
                     </tbody>
@@ -117,7 +115,6 @@
             </div>
         </div>
     }
-    *@
 </div>
 
 @code {
@@ -146,8 +143,8 @@
                 Number: l.leasecontract_code.ToString(),
                 Vehicle: l.vmf_code?.ToString() ?? "Unknown",
                 Status: l.lease_status ?? "Unknown",
-                Start: l.lease_startdate ?? DateTime.MinValue,
-                End: l.lease_enddate ?? DateTime.MinValue,
+                Start: l.lease_startdate,
+                End: l.lease_enddate,
                 Notes: l.lease_notes ?? string.Empty
             )).ToList();
             _leases = new List<FmlItem>(_allLeases);
@@ -164,7 +161,7 @@
         }
     }
 
-    private sealed record FmlItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime Start, DateTime End, string Notes);
+    private sealed record FmlItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime? Start, DateTime? End, string Notes);
 
     private sealed class LeaseContractTermsDto
     {
@@ -226,4 +223,10 @@
             _searching = false;
         }
     }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

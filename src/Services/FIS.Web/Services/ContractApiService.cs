@@ -2,6 +2,18 @@ using FIS.Web.Models;
 
 namespace FIS.Web.Services;
 
+internal class ApiContractResponse
+{
+    public int contract_code { get; set; }
+    public int vmf_code { get; set; }
+    public short site_code { get; set; }
+    public DateTime start_date { get; set; }
+    public DateTime? end_date { get; set; }
+    public string? still_current { get; set; }
+    public string? contract_type { get; set; }
+    public string? Notes { get; set; }
+}
+
 public class ContractApiService
 {
     private readonly HttpClient _httpClient;
@@ -15,11 +27,16 @@ public class ContractApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/Contracts");
+            var response = await _httpClient.GetAsync("api/Contracts/active");
             response.EnsureSuccessStatusCode();
-            
-            var contracts = await response.Content.ReadFromJsonAsync<List<FIS.Web.Models.ContractDto>>();
-            return contracts ?? new List<FIS.Web.Models.ContractDto>();
+
+            var apiContracts = await response.Content.ReadFromJsonAsync<List<ApiContractResponse>>();
+            if (apiContracts == null)
+            {
+                return new List<FIS.Web.Models.ContractDto>();
+            }
+
+            return apiContracts.Select(MapToDto).ToList();
         }
         catch (HttpRequestException)
         {
@@ -39,8 +56,9 @@ public class ContractApiService
         {
             var response = await _httpClient.GetAsync($"api/Contracts/{contractId}");
             response.EnsureSuccessStatusCode();
-            
-            return await response.Content.ReadFromJsonAsync<FIS.Web.Models.ContractDto>();
+
+            var apiContract = await response.Content.ReadFromJsonAsync<ApiContractResponse>();
+            return apiContract == null ? null : MapToDto(apiContract);
         }
         catch (HttpRequestException)
         {
@@ -128,6 +146,24 @@ public class ContractApiService
         {
             return new List<ContractSummaryDto>();
         }
+    }
+
+    private static ContractDto MapToDto(ApiContractResponse api)
+    {
+        return new ContractDto
+        {
+            contract_id = api.contract_code,
+            vmf_code = api.vmf_code,
+            site_code = api.site_code,
+            contract_number = api.contract_code.ToString(),
+            vehicle_registration = api.vmf_code.ToString(),
+            department_code = 0,
+            contractor_name = api.contract_type ?? "",
+            start_date = api.start_date,
+            end_date = api.end_date,
+            status = api.still_current == "Y" ? "Active" : api.still_current == "N" ? "Closed" : "Unknown",
+            contract_notes = api.Notes
+        };
     }
 }
 

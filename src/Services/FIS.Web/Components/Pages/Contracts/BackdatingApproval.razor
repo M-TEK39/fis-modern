@@ -4,6 +4,9 @@
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
+@inject DriverApiService DriverService
 @inject NavigationManager Navigation
 
 <PageTitle>Vehicle Contract Back Date Requests - Approval</PageTitle>
@@ -208,6 +211,7 @@
         try
         {
             _pendingContracts = await ContractService.GetContractsAsync();
+            await HydratePendingContractsAsync();
         }
         finally
         {
@@ -300,13 +304,13 @@
         => ValueOrDash(contract.Vehicle?.status_description ?? contract.status);
 
     private static string GetContractType(ContractDto contract)
-        => ValueOrDash(null);
+        => ValueOrDash(contract.contractor_name);
 
     private static string GetContractStatus(ContractDto contract)
         => ValueOrDash(contract.status);
 
     private static string GetHireType(ContractDto contract)
-        => ValueOrDash(null);
+        => ValueOrDash(contract.contractor_name);
 
     private static string GetMake(ContractDto contract)
         => ValueOrDash(contract.vehicle_make);
@@ -317,12 +321,72 @@
     private static string GetModel(ContractDto contract)
         => ValueOrDash(contract.vehicle_model ?? contract.Vehicle?.model_name);
 
-    private static string GetUserName(ContractDto contract)
-        => ValueOrDash(null);
+    private string GetUserName(ContractDto contract)
+        => ValueOrDash(GetDriverName(contract));
 
     private static string GetDepartment(ContractDto contract)
         => ValueOrDash(contract.department_name ?? contract.Department?.department_description);
 
-    private static string GetSite(ContractDto contract)
-        => ValueOrDash(null);
+    private string GetSite(ContractDto contract)
+        => ValueOrDash(_siteNames.TryGetValue(contract.site_code ?? 0, out var name) ? name : contract.site_code?.ToString());
+
+    private async Task HydratePendingContractsAsync()
+    {
+        if (_pendingContracts.Count == 0)
+        {
+            return;
+        }
+
+        if (_siteNames.Count == 0)
+        {
+            var sites = await SiteService.GetAllAsync();
+            _siteNames = sites.ToDictionary(s => s.SiteCode, s => s.Description ?? s.SiteCode.ToString());
+        }
+
+        if (_drivers.Count == 0)
+        {
+            _drivers = await DriverService.GetDriversAsync();
+        }
+
+        foreach (var contract in _pendingContracts)
+        {
+            if (contract.vmf_code.HasValue && contract.Vehicle == null)
+            {
+                contract.Vehicle = await VehicleService.GetVehicleAsync(contract.vmf_code.Value);
+            }
+
+            if (contract.site_code.HasValue && contract.Department == null)
+            {
+                var site = await SiteService.GetByIdAsync(contract.site_code.Value);
+                if (site?.DepartmentCode != null)
+                {
+                    contract.Department = await DepartmentService.GetDepartmentAsync(site.DepartmentCode.Value);
+                }
+            }
+        }
+    }
+
+    private Dictionary<short, string> _siteNames = new();
+    private List<DriverDto> _drivers = new();
+
+    private string GetDriverName(ContractDto contract)
+    {
+        if (_drivers.Count == 0 || contract.contractor_name == null)
+        {
+            return "-";
+        }
+
+        if (!int.TryParse(contract.contractor_name, out var driverCode))
+        {
+            return contract.contractor_name;
+        }
+
+        var driver = _drivers.FirstOrDefault(d => d.site_driver_code == driverCode);
+        if (driver == null)
+        {
+            return contract.contractor_name;
+        }
+
+        return $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+    }
 }

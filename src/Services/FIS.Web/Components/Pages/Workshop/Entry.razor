@@ -1,6 +1,10 @@
 @page "/workshop/entry"
 @rendermode InteractiveServer
+@using FIS.Web.Services
 @inject NavigationManager Navigation
+@inject WorkshopApiService WorkshopService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JS
 
 <PageTitle>WorkShop Entry</PageTitle>
 
@@ -76,7 +80,13 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @if (_entries.Count == 0)
+                    @if (_loading)
+                    {
+                        <tr>
+                            <td colspan="6">Loading entries...</td>
+                        </tr>
+                    }
+                    else if (_entries.Count == 0)
                     {
                         <tr>
                             <td colspan="6">No previous records found.</td>
@@ -120,10 +130,64 @@
     private string _deptBy = "Code";
 
     private readonly List<WorkshopEntryRow> _entries = new();
+    private List<WorkshopEntryRow> _allEntries = new();
+    private bool _loading = true;
 
-    private void Submit()
+    protected override async Task OnInitializedAsync()
     {
-        // Placeholder for search.
+        await LoadEntries();
+    }
+
+    private async Task LoadEntries()
+    {
+        _loading = true;
+        try
+        {
+            var items = await WorkshopService.GetAllAsync<WorkshopDto>();
+            _allEntries = items.Select(item => new WorkshopEntryRow
+            {
+                VmfCode = item.vmf_code,
+                VehicleNumber = item.vmf_code?.ToString() ?? "Unknown",
+                DateReceived = FormatDate(item.receive_date),
+                InquiryRefer = item.ww_code.ToString(),
+                WorkshopType = "Workshop",
+                JobClosed = item.complete_time.HasValue ? "Yes" : "No"
+            }).ToList();
+            _entries.Clear();
+            _entries.AddRange(_allEntries);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading workshop entries: {ex.Message}");
+            _entries.Clear();
+            _allEntries = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleNumber))
+        {
+            _entries.Clear();
+            _entries.AddRange(_allEntries);
+            return;
+        }
+
+        var query = _vehicleNumber.Trim();
+        var vehicles = await VehicleService.SearchVehiclesAsync(query);
+        var match = vehicles.FirstOrDefault();
+        if (match == null)
+        {
+            _entries.Clear();
+            return;
+        }
+
+        _entries.Clear();
+        _entries.AddRange(_allEntries.Where(e => e.VmfCode == match.vmf_code));
     }
 
     private void AddEntry()
@@ -136,12 +200,24 @@
         Navigation.NavigateTo("/workshop");
     }
 
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
     private sealed class WorkshopEntryRow
     {
+        public int? VmfCode { get; set; }
         public string VehicleNumber { get; set; } = "";
         public string DateReceived { get; set; } = "";
         public string InquiryRefer { get; set; } = "";
         public string WorkshopType { get; set; } = "";
         public string JobClosed { get; set; } = "";
+    }
+
+    private sealed class WorkshopDto
+    {
+        public short ww_code { get; set; }
+        public int? vmf_code { get; set; }
+        public DateTime? receive_date { get; set; }
+        public DateTime? complete_time { get; set; }
     }
 }

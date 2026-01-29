@@ -1,4 +1,10 @@
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TripApiService TripService
+@inject VehicleApiService VehicleService
+@inject DepartmentApiService DepartmentService
+@inject SiteApiService SiteService
 
 <PageTitle>Trip Authority - Fleet Information System</PageTitle>
 
@@ -85,8 +91,8 @@
                         <div class="form-field form-group-full">
                             <label class="form-label">GG or Registration Number</label>
                             <div class="contract-search-radio">
-                                <input class="form-input" placeholder="A partial number is allowed" style="max-width: 260px;" />
-                                <button class="btn btn-secondary btn-sm">Go</button>
+                                <input class="form-input" placeholder="A partial number is allowed" style="max-width: 260px;" @bind="_ggSearch" @bind:event="oninput" />
+                                <button class="btn btn-secondary btn-sm" @onclick="SearchByVehicle">Go</button>
                             </div>
                         </div>
                     </div>
@@ -97,15 +103,23 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Department</label>
-                            <select class="form-select">
-                                <option value="">Select Department</option>
-                            </select>
+                        <select class="form-select" @bind="_selectedDepartment">
+                            <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.department_code">@department.department_description</option>
+                            }
+                        </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Site</label>
-                            <select class="form-select">
-                                <option value="">Select Site</option>
-                            </select>
+                        <select class="form-select" @bind="_selectedSite">
+                            <option value="">Select Site</option>
+                            @foreach (var site in _sites)
+                            {
+                                <option value="@site.SiteCode">@site.Description</option>
+                            }
+                        </select>
                         </div>
                     </div>
                     @TripTables
@@ -115,10 +129,10 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Trip Authority Number</label>
-                            <div class="contract-search-radio">
-                                <input class="form-input" placeholder="Numbers only" style="max-width: 220px;" />
-                                <button class="btn btn-secondary btn-sm">Go</button>
-                            </div>
+                        <div class="contract-search-radio">
+                            <input class="form-input" placeholder="Numbers only" style="max-width: 220px;" @bind="_authoritySearch" @bind:event="oninput" />
+                            <button class="btn btn-secondary btn-sm" @onclick="SearchByAuthority">Go</button>
+                        </div>
                         </div>
                     </div>
                     @TripTables
@@ -130,6 +144,23 @@
 
 @code {
     private string _activeTab = "gg";
+    private string _ggSearch = "";
+    private string _authoritySearch = "";
+    private string? _selectedDepartment;
+    private string? _selectedSite;
+    private bool _loading;
+    private List<TripRow> _vehiclesOut = new();
+    private List<VehicleRow> _vehiclesIn = new();
+    private List<TripRow> _allTrips = new();
+    private List<VehicleRow> _allVehicles = new();
+    private List<DepartmentDto> _departments = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReferenceData();
+        await LoadTripsAndVehicles();
+    }
 
     private void SetActiveTab(string tab)
     {
@@ -154,9 +185,35 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="7">No vehicles were found that are currently IN and available.</td>
-                            </tr>
+                            @if (_loading)
+                            {
+                                <tr>
+                                    <td colspan="7">Loading vehicles...</td>
+                                </tr>
+                            }
+                            else if (_vehiclesIn.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="7">No vehicles were found that are currently IN and available.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var vehicle in _vehiclesIn)
+                                {
+                                    <tr>
+                                        <td>@ValueOrDash(vehicle.FleetNumber)</td>
+                                        <td>@ValueOrDash(vehicle.RegistrationNumber)</td>
+                                        <td>@FormatDate(vehicle.LicenceDueDate)</td>
+                                        <td>@ValueOrDash(vehicle.Make)</td>
+                                        <td>@ValueOrDash(vehicle.Model)</td>
+                                        <td>@ValueOrDash(vehicle.ContractType)</td>
+                                        <td>
+                                            <a class="btn btn-secondary btn-sm" href="/trips/create">Select</a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -180,13 +237,177 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="7">No vehicles were found that are currently OUT on a trip.</td>
-                            </tr>
+                            @if (_loading)
+                            {
+                                <tr>
+                                    <td colspan="7">Loading vehicles...</td>
+                                </tr>
+                            }
+                            else if (_vehiclesOut.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="7">No vehicles were found that are currently OUT on a trip.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var trip in _vehiclesOut)
+                                {
+                                    <tr>
+                                        <td>@ValueOrDash(trip.FleetNumber)</td>
+                                        <td>@ValueOrDash(trip.RegistrationNumber)</td>
+                                        <td>@FormatDate(trip.LicenceDueDate)</td>
+                                        <td>@ValueOrDash(trip.Make)</td>
+                                        <td>@ValueOrDash(trip.Model)</td>
+                                        <td>@ValueOrDash(trip.ContractType)</td>
+                                        <td>
+                                            <a class="btn btn-secondary btn-sm" href="@($"/trips/show?tripId={trip.TripId}")">View</a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>;
+
+    private async Task LoadReferenceData()
+    {
+        _departments = await DepartmentService.GetDepartmentsAsync();
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadTripsAndVehicles()
+    {
+        _loading = true;
+        try
+        {
+            var trips = await TripService.GetAllAsync();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200);
+            var vehicleList = vehicles.Data;
+            var vehicleMap = vehicleList.ToDictionary(v => v.vmf_code, v => v);
+
+            _allTrips = trips.Select(t => BuildTripRow(t, vehicleMap)).ToList();
+            _allVehicles = vehicleList.Select(BuildVehicleRow).ToList();
+
+            ApplyFilters();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SearchByVehicle()
+    {
+        if (string.IsNullOrWhiteSpace(_ggSearch))
+        {
+            ApplyFilters();
+            return;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(_ggSearch.Trim());
+        if (matches.Count == 0)
+        {
+            _vehiclesIn = new();
+            _vehiclesOut = new();
+            return;
+        }
+
+        var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
+        _vehiclesIn = _allVehicles.Where(v => v.VmfCode.HasValue && vmfCodes.Contains(v.VmfCode.Value)).ToList();
+        _vehiclesOut = _allTrips.Where(t => t.VmfCode.HasValue && vmfCodes.Contains(t.VmfCode.Value)).ToList();
+    }
+
+    private void SearchByAuthority()
+    {
+        if (!int.TryParse(_authoritySearch, out var tripId))
+        {
+            ApplyFilters();
+            return;
+        }
+
+        _vehiclesOut = _allTrips.Where(t => t.TripId == tripId).ToList();
+        _vehiclesIn = new();
+    }
+
+    private void ApplyFilters()
+    {
+        var outList = _allTrips.AsEnumerable();
+        var inList = _allVehicles.AsEnumerable();
+
+        if (short.TryParse(_selectedSite, out var siteCode))
+        {
+            outList = outList.Where(t => t.SiteCode == siteCode);
+            inList = inList.Where(v => v.SiteCode == siteCode);
+        }
+
+        _vehiclesOut = outList.ToList();
+        _vehiclesIn = inList.Where(v => !_vehiclesOut.Any(t => t.VmfCode == v.VmfCode)).ToList();
+    }
+
+    private TripRow BuildTripRow(TripDto trip, Dictionary<int, VehicleDto> vehicleMap)
+    {
+        vehicleMap.TryGetValue(trip.VmfCode, out var vehicle);
+        var status = trip.Status ?? "Open";
+        if (status.Contains("close", StringComparison.OrdinalIgnoreCase))
+        {
+            status = "Closed";
+        }
+
+        return new TripRow(
+            TripId: trip.TripId,
+            VmfCode: trip.VmfCode,
+            FleetNumber: vehicle?.fleet_number,
+            RegistrationNumber: vehicle?.registration_number,
+            LicenceDueDate: vehicle?.licence_due_date,
+            Make: vehicle?.type_name,
+            Model: vehicle?.model_name,
+            ContractType: status,
+            SiteCode: vehicle?.site_code
+        );
+    }
+
+    private VehicleRow BuildVehicleRow(VehicleDto vehicle)
+        => new(
+            VmfCode: vehicle.vmf_code,
+            FleetNumber: vehicle.fleet_number,
+            RegistrationNumber: vehicle.registration_number,
+            LicenceDueDate: vehicle.licence_due_date,
+            Make: vehicle.type_name,
+            Model: vehicle.model_name,
+            ContractType: vehicle.status_description,
+            SiteCode: vehicle.site_code
+        );
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed record TripRow(
+        int TripId,
+        int? VmfCode,
+        string? FleetNumber,
+        string? RegistrationNumber,
+        DateTime? LicenceDueDate,
+        string? Make,
+        string? Model,
+        string? ContractType,
+        short? SiteCode
+    );
+
+    private sealed record VehicleRow(
+        int? VmfCode,
+        string? FleetNumber,
+        string? RegistrationNumber,
+        DateTime? LicenceDueDate,
+        string? Make,
+        string? Model,
+        string? ContractType,
+        short? SiteCode
+    );
 }
