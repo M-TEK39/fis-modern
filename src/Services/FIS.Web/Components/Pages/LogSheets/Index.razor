@@ -1,128 +1,58 @@
 @page "/log-sheets"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject LogsheetApiService LogsheetService
-@inject IJSRuntime JS
 
-<PageTitle>Log Sheets - Fleet Information System</PageTitle>
+<PageTitle>Logsheet Maintenance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-table"></i>
-            Log Sheets
+            Logsheet Maintenance Menu
         </h1>
-        <p class="page-description">Log sheet summary from /api/logsheet.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadLogSheets">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy logsheet maintenance menu.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading log sheets...</p>
-        </div>
-    }
-    else if (_logSheets.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-table"></i>
-            <h3>No log sheets</h3>
-            <p>Awaiting log sheet API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_logSheets.Count Log sheet(s)</span>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Logsheet Maintenance Menu:</span>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Vehicle</th>
-                            <th>Trips</th>
-                            <th>Status</th>
-                            <th>Submitted By</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var sheet in _logSheets)
-                        {
-                            <tr>
-                                <td>@sheet.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@sheet.Vehicle</td>
-                                <td>@sheet.TripCount</td>
-                                <td><span class="badge">@sheet.Status</span></td>
-                                <td>@sheet.SubmittedBy</td>
-                                <td>@sheet.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-sheets/help">Logsheet Maintenance Information / Help</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Logsheet Menu</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-sheets/enter">1) Enter a Logsheet</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-sheets/delete">3) Delete a Logsheet</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-sheets/reports/captured">4) Report: Logsheets captured</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-sheets/reports/total-km">5) Report: Total Km per Class Code</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-sheets/edit">8) Edit Logsheets</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<LogSheetItem> _logSheets = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadLogSheets();
-    }
-
-    private async Task LoadLogSheets()
-    {
-        _loading = true;
-        try
-        {
-            var sheets = await LogsheetService.GetAllAsync<LogsheetDto>();
-            _logSheets = sheets.Select(s => new LogSheetItem(
-                Date: s.month,
-                Vehicle: s.vmf_code.ToString(),
-                TripCount: s.days_used ?? 0,
-                Status: s.end_odo > 0 ? "Closed" : "Open",
-                SubmittedBy: s.rek_num ?? $"Site {s.site_code}",
-                Notes: $"ODO {s.start_odo:F0}-{s.end_odo:F0}"
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading log sheets: {ex.Message}");
-            _logSheets = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record LogSheetItem(DateTime Date, string Vehicle, int TripCount, string Status, string SubmittedBy, string Notes);
-
-    private sealed class LogsheetDto
-    {
-        public int log_code { get; set; }
-        public int vmf_code { get; set; }
-        public double start_odo { get; set; }
-        public double end_odo { get; set; }
-        public DateTime month { get; set; }
-        public short site_code { get; set; }
-        public string? rek_num { get; set; }
-        public int? days_used { get; set; }
-        public int? bund_num { get; set; }
-    }
-}

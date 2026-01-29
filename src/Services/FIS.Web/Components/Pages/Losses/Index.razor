@@ -1,10 +1,5 @@
 @page "/losses"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject LossApiService LossService
-@inject NavigationManager Navigation
-@inject IJSRuntime JS
 
 <PageTitle>Losses - Fleet Information System</PageTitle>
 
@@ -14,152 +9,47 @@
             <i class="bx bx-x-circle"></i>
             Losses
         </h1>
-        <p class="page-description">Legacy loss maintenance, reporting, and a quick backlog view.</p>
     </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadLosses">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
-    </div>
-    </div>
+</div>
+
+<div class="page-content">
     <div class="menu-tiles">
         <div class="menu-tile">
-            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/add")'>
-                <span>Add Loss</span>
-                <i class="bx bx-plus"></i>
+            <button class="menu-tile-header" @onclick="ToggleHelp">
+                <span>Losses Maintenance Menu:</span>
+                <i class="bx @(_showHelp ? "bx-chevron-up" : "bx-chevron-down")"></i>
             </button>
-            <div class="menu-tile-body">
-                <p class="menu-item-text">Capture a new loss reference, SAPD/case details, and mark the vehicle status per the legacy workflow.</p>
-            </div>
+            @if (_showHelp)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <span class="menu-item-link">Losses Maintenance Information / Help</span>
+                    </div>
+                </div>
+            }
         </div>
+
         <div class="menu-tile">
-            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/edit")'>
-                <span>Edit Loss</span>
-                <i class="bx bx-edit"></i>
+            <button class="menu-tile-header" @onclick="ToggleMaintenance">
+                <span>Losses Maintenance</span>
+                <i class="bx @(_showMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
             </button>
-            <div class="menu-tile-body">
-                <p class="menu-item-text">Retrieve an existing loss by GG number or reference and update the department, status, or notes.</p>
-            </div>
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/delete")'>
-                <span>Delete Loss</span>
-                <i class="bx bx-trash"></i>
-            </button>
-            <div class="menu-tile-body">
-                <p class="menu-item-text">Remove a legacy loss entry while preserving the standard audit trail messaging.</p>
-            </div>
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/reports")'>
-                <span>Loss Reports</span>
-                <i class="bx bx-file"></i>
-            </button>
-            <div class="menu-tile-body">
-                <p class="menu-item-text">Launch the same legacy report flows (per vehicle, by site, by department) with modern controls.</p>
-            </div>
+            @if (_showMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/losses/maintenance">1) Vehicle Losses Maintenance</a>
+                    </div>
+                </div>
+            }
         </div>
     </div>
-
-    <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading losses...</p>
-        </div>
-    }
-    else if (_losses.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-x-circle"></i>
-            <h3>No losses recorded</h3>
-            <p>Awaiting losses API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_losses.Count Loss(es)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Loss #</th>
-                            <th>Category</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Amount</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var loss in _losses)
-                        {
-                            <tr>
-                                <td>@loss.Number</td>
-                                <td>@loss.Category</td>
-                                <td><span class="badge">@loss.Status</span></td>
-                                <td>@loss.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@loss.Amount.ToString("C")</td>
-                                <td>@loss.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<LossItem> _losses = new();
+    private bool _showHelp = true;
+    private bool _showMaintenance = true;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadLosses();
-    }
-
-    private async Task LoadLosses()
-    {
-        _loading = true;
-        try
-        {
-            var apiItems = await LossService.GetAllAsync<LossDto>();
-            _losses = apiItems.Select(l => new LossItem(
-                Number: l.loss_code.ToString(),
-                Category: l.loss_category ?? "N/A",
-                Status: l.loss_status ?? "Unknown",
-                Date: l.loss_date ?? DateTime.MinValue,
-                Amount: l.loss_amount ?? 0m,
-                Notes: l.loss_notes ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading losses: {ex.Message}");
-            _losses = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record LossItem(string Number, string Category, string Status, DateTime Date, decimal Amount, string Notes);
-
-    private sealed class LossDto
-    {
-        public int loss_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? loss_category { get; set; }
-        public string? loss_status { get; set; }
-        public DateTime? loss_date { get; set; }
-        public decimal? loss_amount { get; set; }
-        public string? loss_notes { get; set; }
-    }
+    private void ToggleHelp() => _showHelp = !_showHelp;
+    private void ToggleMaintenance() => _showMaintenance = !_showMaintenance;
 }

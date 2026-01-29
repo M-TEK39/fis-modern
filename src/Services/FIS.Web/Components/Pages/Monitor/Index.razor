@@ -1,127 +1,38 @@
 @page "/monitor"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject MonitorApiService MonitorService
-@inject IJSRuntime JS
 
-<PageTitle>Monitor - Fleet Information System</PageTitle>
+<PageTitle>Monitor Maintenance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-line-chart"></i>
-            Monitor
+            Monitor Maintenance Menu
         </h1>
-        <p class="page-description">Consumption/monitoring snapshot from /api/monitor.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadMonitor">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy monitor inquiry menu.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading monitor data...</p>
-        </div>
-    }
-    else if (_items.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-line-chart"></i>
-            <h3>No monitor data</h3>
-            <p>Awaiting monitor API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_items.Count Monitor item(s)</span>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>INQUIRY Section</span>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Metric</th>
-                            <th>Vehicle</th>
-                            <th>Value</th>
-                            <th>Status</th>
-                            <th>Updated</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var item in _items)
-                        {
-                            <tr>
-                                <td>@item.Metric</td>
-                                <td>@item.Vehicle</td>
-                                <td>@item.Value</td>
-                                <td><span class="badge">@item.Status</span></td>
-                                <td>@item.UpdatedOn.ToString("yyyy-MM-dd")</td>
-                                <td>@item.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/monitor/capture">1) Capture a New Inquiry</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/monitor/edit">2) Edit / Update an Existing Inquiry</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/monitor/reports">3) Reports</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
             </div>
         </div>
-    }
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<MonitorItem> _items = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadMonitor();
-    }
-
-    private async Task LoadMonitor()
-    {
-        _loading = true;
-        try
-        {
-            var apiItems = await MonitorService.GetAllAsync<MonitorDto>();
-            _items = apiItems.Select(m => new MonitorItem(
-                Metric: m.monitor_category ?? "N/A",
-                Vehicle: m.GG_number ?? m.vmf_code?.ToString() ?? "Unknown",
-                Value: m.monitor_value ?? "N/A",
-                Status: m.monitor_severity ?? "N/A",
-                UpdatedOn: m.monitor_date ?? DateTime.MinValue,
-                Notes: m.monitor_notes ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading monitor items: {ex.Message}");
-            _items = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record MonitorItem(string Metric, string Vehicle, string Value, string Status, DateTime UpdatedOn, string Notes);
-
-    private sealed class MonitorDto
-    {
-        public int monitor_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? GG_number { get; set; }
-        public string? monitor_category { get; set; }
-        public string? monitor_value { get; set; }
-        public string? monitor_severity { get; set; }
-        public DateTime? monitor_date { get; set; }
-        public string? monitor_notes { get; set; }
-    }
-}

@@ -1,142 +1,70 @@
 @page "/call-centre"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject CallCentreApiService CallCentreService
-@inject IJSRuntime JS
 
-<PageTitle>Call Centre - Fleet Information System</PageTitle>
+<PageTitle>Call Centre Maintenance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-phone-call"></i>
-            Call Centre
+            Call Centre Maintenance Menu
         </h1>
-        <p class="page-description">Call centre log summary from /api/callcentre.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadCalls">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy call centre maintenance menu.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading calls...</p>
-        </div>
-    }
-    else if (_calls.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-phone"></i>
-            <h3>No call records</h3>
-            <p>Awaiting call centre API. Provide endpoints and fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_calls.Count Call(s)</span>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Call Centre Maitenance Menu :</span>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Caller</th>
-                            <th>Reason</th>
-                            <th>Status</th>
-                            <th>Assigned To</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var call in _calls)
-                        {
-                            <tr>
-                                <td>@call.ReceivedAt.ToString("yyyy-MM-dd HH:mm")</td>
-                                <td>@call.Caller</td>
-                                <td>@call.Reason</td>
-                                <td>
-                                    <span class="badge">@call.Status</span>
-                                </td>
-                                <td>@call.AssignedTo</td>
-                                <td>@call.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/help">Call Centre Maintenance Information / Help</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Incident Section</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/incident/capture">1) Capture a New Incident</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/incident/edit">2) Edit / Update an Existing Incident</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/notifications">3) Notification List for eMail Addresses</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/reports">4) Reports</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Booking Section</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/bookings/notifications">1) Notification e-mail Addresses</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/call-centre/bookings/help">Booking information/help</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<CallEntry> _calls = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadCalls();
-    }
-
-    private async Task LoadCalls()
-    {
-        _loading = true;
-        try
-        {
-            var items = await CallCentreService.GetAllAsync<CallCentreDto>();
-            _calls = items.Select(c =>
-            {
-                var date = c.Call_date ?? DateTime.MinValue;
-                var time = c.Call_time ?? DateTime.MinValue;
-                var received = date.Date.Add(time.TimeOfDay);
-                return new CallEntry(
-                    received,
-                    c.Caller_name ?? c.Driver_name ?? "Unknown",
-                    c.Capture_name ?? c.Driver_base_station ?? "N/A",
-                    c.Driver_tel ?? "Open",
-                    c.Driver_name ?? c.Capture_name ?? "Unassigned",
-                    c.Driver_Licno ?? c.GG_number ?? ""
-                );
-            }).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading call centre: {ex.Message}");
-            _calls = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record CallEntry(DateTime ReceivedAt, string Caller, string Reason, string Status, string AssignedTo, string Notes);
-
-    private sealed class CallCentreDto
-    {
-        public short Call_centre_code { get; set; }
-        public int? vmf_code { get; set; }
-        public DateTime? Call_time { get; set; }
-        public DateTime? Call_date { get; set; }
-        public string? Capture_name { get; set; }
-        public short? User_access_code { get; set; }
-        public string? Caller_name { get; set; }
-        public string? Driver_name { get; set; }
-        public string? Driver_persalno { get; set; }
-        public string? Driver_Licno { get; set; }
-        public string? GG_number { get; set; }
-        public string? Driver_base_station { get; set; }
-        public short? Driver_Site { get; set; }
-        public string? Driver_tel { get; set; }
-        public string? Driver_cell { get; set; }
-    }
-}

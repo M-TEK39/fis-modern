@@ -1,123 +1,30 @@
 @page "/tracking"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject TrackingApiService TrackingService
-@inject IJSRuntime JS
 
-<PageTitle>Tracking - Fleet Information System</PageTitle>
+<PageTitle>Tracking - MobiTrax - Maintenance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-radar"></i>
-            Tracking
+            Tracking - MobiTrax - Maintenance Menu
         </h1>
-        <p class="page-description">Vehicle tracking snapshot from /api/tracking.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadTracking">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy tracking maintenance menu.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading tracking data...</p>
-        </div>
-    }
-    else if (_items.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-radar"></i>
-            <h3>No tracking records</h3>
-            <p>Awaiting tracking API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_items.Count Tracking item(s)</span>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Tracking - MobiTrax - Maintenance Menu:</span>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Vehicle</th>
-                            <th>Last Signal</th>
-                            <th>Status</th>
-                            <th>Location</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var item in _items)
-                        {
-                            <tr>
-                                <td>@item.Vehicle</td>
-                                <td>@item.LastSignal.ToString("yyyy-MM-dd HH:mm")</td>
-                                <td><span class="badge">@item.Status</span></td>
-                                <td>@item.Location</td>
-                                <td>@item.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/tracking/maintenance">1) Tracking Maintenance</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
             </div>
         </div>
-    }
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<TrackingItem> _items = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadTracking();
-    }
-
-    private async Task LoadTracking()
-    {
-        _loading = true;
-        try
-        {
-            var apiItems = await TrackingService.GetAllAsync<TrackingDto>();
-            _items = apiItems.Select(t => new TrackingItem(
-                Vehicle: t.GG_number ?? t.vmf_code?.ToString() ?? "Unknown",
-                LastSignal: t.Last_update ?? DateTime.MinValue,
-                Status: t.Tracking_status ?? "Unknown",
-                Location: t.Last_location ?? "N/A",
-                Notes: t.Notes ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading tracking data: {ex.Message}");
-            _items = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record TrackingItem(string Vehicle, DateTime LastSignal, string Status, string Location, string Notes);
-
-    private sealed class TrackingDto
-    {
-        public int tracking_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? GG_number { get; set; }
-        public DateTime? Last_update { get; set; }
-        public string? Tracking_status { get; set; }
-        public string? Last_location { get; set; }
-        public string? Notes { get; set; }
-    }
-}

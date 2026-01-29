@@ -1,126 +1,54 @@
 @page "/towing"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject TowingApiService TowingService
-@inject IJSRuntime JS
 
-<PageTitle>Towing - Fleet Information System</PageTitle>
+<PageTitle>Road Side Assistance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-anchor"></i>
-            Towing
+            Road Side Assistance Menu
         </h1>
-        <p class="page-description">Towing requests summary from /api/towing.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadTows">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy towing and road side assistance menu.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading towing records...</p>
-        </div>
-    }
-    else if (_tows.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-anchor"></i>
-            <h3>No towing records</h3>
-            <p>Awaiting towing API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_tows.Count Tow request(s)</span>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Road Side Assistance Section</span>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Tow #</th>
-                            <th>Vehicle</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Vendor</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var tow in _tows)
-                        {
-                            <tr>
-                                <td>@tow.Number</td>
-                                <td>@tow.Vehicle</td>
-                                <td><span class="badge">@tow.Status</span></td>
-                                <td>@tow.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@tow.Vendor</td>
-                                <td>@tow.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/towing/request">1) Capture a New Request</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/towing/request">2) Edit / Update / Delete a Existing Request</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/towing/reports">3) Road Side Request Reports</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Tow Truck Section</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/towing/tow-truck-data">4) Capture / Edit / Update Road Assistance Data</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/towing/tow-truck-data/report">5) Show All Road Assistance Data</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<TowItem> _tows = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadTows();
-    }
-
-    private async Task LoadTows()
-    {
-        _loading = true;
-        try
-        {
-            var apiTows = await TowingService.GetAllAsync<TowingDto>();
-            _tows = apiTows.Select(t => new TowItem(
-                Number: t.Call_refer?.ToString() ?? t.Towing_code.ToString(),
-                Vehicle: t.vmf_code.ToString(),
-                Status: t.Tow_completed_date.HasValue ? "Closed" : "Open",
-                Date: t.Tow_request_date ?? DateTime.MinValue,
-                Vendor: t.Tow_vendor ?? "N/A",
-                Notes: t.Notes ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading towing: {ex.Message}");
-            _tows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record TowItem(string Number, string Vehicle, string Status, DateTime Date, string Vendor, string Notes);
-
-    private sealed class TowingDto
-    {
-        public short Towing_code { get; set; }
-        public int vmf_code { get; set; }
-        public decimal? Call_refer { get; set; }
-        public DateTime? Tow_request_date { get; set; }
-        public DateTime? Tow_completed_date { get; set; }
-        public string? Tow_vendor { get; set; }
-        public string? Notes { get; set; }
-    }
-}

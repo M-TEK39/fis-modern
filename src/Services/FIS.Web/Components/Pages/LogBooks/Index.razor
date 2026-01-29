@@ -1,128 +1,50 @@
 @page "/log-books"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject LogbookApiService LogbookService
-@inject IJSRuntime JS
 
-<PageTitle>Log Books - Fleet Information System</PageTitle>
+<PageTitle>Logbook Maintenance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-notepad"></i>
-            Log Books
+            Logbook Maintenance Menu
         </h1>
-        <p class="page-description">Log book summary from /api/logbook.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadLogBooks">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy logbook maintenance menu.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading log books...</p>
-        </div>
-    }
-    else if (_logBooks.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-notepad"></i>
-            <h3>No log books</h3>
-            <p>Awaiting log book API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_logBooks.Count Log book(s)</span>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Logbook Maintenance Menu:</span>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Vehicle</th>
-                            <th>Period</th>
-                            <th>Entries</th>
-                            <th>Status</th>
-                            <th>Updated</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var log in _logBooks)
-                        {
-                            <tr>
-                                <td>@log.Vehicle</td>
-                                <td>@log.Period</td>
-                                <td>@log.EntryCount</td>
-                                <td><span class="badge">@log.Status</span></td>
-                                <td>@log.UpdatedOn.ToString("yyyy-MM-dd")</td>
-                                <td>@log.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-books/help">Logbook Maintenance Information / Help</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Logbook Maintenance Menu:</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-books/maintenance">1) Logbook Maintenance</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-books/collection">2) Collection for TWO or More Logbook's</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/log-books/delete">3) Delete a Logbook Handout</a>
+                    <span class="menu-item-badge">Legacy</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<LogBookItem> _logBooks = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadLogBooks();
-    }
-
-    private async Task LoadLogBooks()
-    {
-        _loading = true;
-        try
-        {
-            var books = await LogbookService.GetAllAsync<LogbookDto>();
-            _logBooks = books.Select(b => new LogBookItem(
-                Vehicle: b.vmf_code?.ToString() ?? "N/A",
-                Period: b.handout_date?.ToString("yyyy-MM-dd") ?? "Unknown",
-                EntryCount: (b.end_num ?? string.Empty) == string.Empty || (b.begin_num ?? string.Empty) == string.Empty ? 0 : 1,
-                Status: b.lb_comment?.Length > 0 ? "Open" : "Captured",
-                UpdatedOn: b.handout_date ?? DateTime.MinValue,
-                Notes: b.lb_comment ?? b.lb_receiver_name ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading log books: {ex.Message}");
-            _logBooks = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record LogBookItem(string Vehicle, string Period, int EntryCount, string Status, DateTime UpdatedOn, string Notes);
-
-    private sealed class LogbookDto
-    {
-        public short logbookcode { get; set; }
-        public int? vmf_code { get; set; }
-        public string? begin_num { get; set; }
-        public string? end_num { get; set; }
-        public DateTime? handout_date { get; set; }
-        public short? site_code { get; set; }
-        public string? lb_receiver_name { get; set; }
-        public string? lb_tel_num { get; set; }
-        public string? lb_comment { get; set; }
-    }
-}

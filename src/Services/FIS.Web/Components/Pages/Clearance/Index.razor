@@ -1,10 +1,5 @@
 @page "/clearance"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject ClearanceApiService ClearanceService
-@inject NavigationManager Navigation
-@inject IJSRuntime JS
 
 <PageTitle>Clearance - Fleet Information System</PageTitle>
 
@@ -14,134 +9,46 @@
             <i class="bx bx-shield-quarter"></i>
             Clearance
         </h1>
-        <p class="page-description">Legacy clearance menu, merchant maintenance, and the current queue.</p>
     </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadClearances">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
-    </div>
-    </div>
+</div>
+
+<div class="page-content">
     <div class="menu-tiles">
         <div class="menu-tile">
-            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/clearance/entry")'>
-                <span>Enter Clearance</span>
-                <i class="bx bx-send"></i>
+            <button class="menu-tile-header" @onclick="ToggleEntry">
+                <span>Clearance Maintenance Menu:</span>
+                <i class="bx @(_showEntry ? "bx-chevron-up" : "bx-chevron-down")"></i>
             </button>
-            <div class="menu-tile-body">
-                <p class="menu-item-text">Capture clearance numbers, merchant, amount, and kilos just like the legacy entry screen.</p>
-            </div>
+            @if (_showEntry)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/clearance/entry">1) Enter Clearance</a>
+                    </div>
+                </div>
+            }
         </div>
         <div class="menu-tile">
-            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/clearance/merchant")'>
-                <span>Merchant Maintenance</span>
-                <i class="bx bx-store-alt"></i>
+            <button class="menu-tile-header" @onclick="ToggleMerchants">
+                <span>Merchants</span>
+                <i class="bx @(_showMerchants ? "bx-chevron-up" : "bx-chevron-down")"></i>
             </button>
-            <div class="menu-tile-body">
-                <p class="menu-item-text">Select, add, or delete merchants in one place with the legacy flow guiding the experience.</p>
-            </div>
+            @if (_showMerchants)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/clearance/merchant">1) Merchant Maintenance</a>
+                    </div>
+                </div>
+            }
         </div>
     </div>
-
-    <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading clearance records...</p>
-        </div>
-    }
-    else if (_clearances.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-shield"></i>
-            <h3>No clearance records</h3>
-            <p>Awaiting clearance API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_clearances.Count Clearance record(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Reference</th>
-                            <th>Registration</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Updated</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var item in _clearances)
-                        {
-                            <tr>
-                                <td>@item.Reference</td>
-                                <td>@item.Registration</td>
-                                <td>@item.Type</td>
-                                <td><span class="badge">@item.Status</span></td>
-                                <td>@item.UpdatedOn.ToString("yyyy-MM-dd")</td>
-                                <td>@item.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    }
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<ClearanceItem> _clearances = new();
+    private bool _showEntry = true;
+    private bool _showMerchants = true;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadClearances();
-    }
-
-    private async Task LoadClearances()
-    {
-        _loading = true;
-        try
-        {
-            var apiItems = await ClearanceService.GetAllAsync<ClearanceDto>();
-            _clearances = apiItems.Select(c => new ClearanceItem(
-                Reference: c.clearance_code.ToString(),
-                Registration: c.registration_number ?? c.vmf_code?.ToString() ?? "Unknown",
-                Type: c.clearance_type ?? "Unknown",
-                Status: c.clearance_status ?? "Unknown",
-                UpdatedOn: c.clearance_date ?? DateTime.MinValue,
-                Notes: c.clearance_notes ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading clearance: {ex.Message}");
-            _clearances = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record ClearanceItem(string Reference, string Registration, string Type, string Status, DateTime UpdatedOn, string Notes);
-
-    private sealed class ClearanceDto
-    {
-        public int clearance_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? registration_number { get; set; }
-        public string? clearance_type { get; set; }
-        public string? clearance_status { get; set; }
-        public DateTime? clearance_date { get; set; }
-        public string? clearance_notes { get; set; }
-    }
+    private void ToggleEntry() => _showEntry = !_showEntry;
+    private void ToggleMerchants() => _showMerchants = !_showMerchants;
 }

@@ -1,0 +1,92 @@
+@page "/losses/maintenance"
+@rendermode InteractiveServer
+
+<PageTitle>Vehicle Losses Maintenance - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-x-circle"></i>
+            Vehicle Losses Maintenance
+        </h1>
+        <p class="page-description">Search by GG or GP number, then add or edit losses.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/losses">Back to Losses Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-section">
+                <h2 class="form-section-title">GG / GP Number</h2>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">
+                            <input type="radio" name="lossNumberType" checked />
+                            GG
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">
+                            <input type="radio" name="lossNumberType" />
+                            GP Number
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Number</label>
+                        <input class="form-input" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/losses">Menu</a>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2 class="form-section-title">Losses Found (Sorted by Loss Date)</h2>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Loss Date</th>
+                                    <th>Reference</th>
+                                    <th>Description</th>
+                                    <th>Amount</th>
+                                    <th>Dept Claim</th>
+                                    <th>SAPD</th>
+                                    <th>Remarks</th>
+                                    <th>HQ Reference</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>2024/01/10</td>
+                                    <td>LOSS-001</td>
+                                    <td>Damage - bumper</td>
+                                    <td>R 5,000.00</td>
+                                    <td>Yes</td>
+                                    <td>Sandton</td>
+                                    <td>Awaiting report</td>
+                                    <td>HQ-778</td>
+                                    <td>
+                                        <a href="/losses/edit">Mod</a>
+                                        &nbsp;/&nbsp;
+                                        <a href="/losses/delete">Del</a>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <a class="btn btn-primary btn-sm" href="/losses/add">Add Losses</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
