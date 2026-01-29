@@ -27,13 +27,18 @@ public record VehicleDto
     [Required]
     public string? registration_number { get; set; }
     public string? previos_gg_number { get; set; }
+    public string? previos_gg_number_2 { get; set; }
     public string? followup_gg_number { get; set; }
+    public string? recovered_gg_number { get; set; }
+    public string? renumbered_to { get; set; }
     public string? asset_number { get; set; }
     [Required]
     public string? engine_number_1 { get; set; }
     [Required]
     public string? chassis_number { get; set; }
     public string? lic_register_number { get; set; }
+    public short? site_code { get; set; }
+    public string? extended_service { get; set; }
     
     // Dates & Odometer - Required
     [Required]

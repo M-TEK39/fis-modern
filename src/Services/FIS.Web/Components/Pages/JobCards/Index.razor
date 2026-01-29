@@ -24,6 +24,29 @@
 </div>
 
 <div class="page-content">
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleJobcardMenu">
+                <span>Jobcard Menu</span>
+                <i class="bx @(_showJobcardMenu ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showJobcardMenu)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/job-cards/authorizer-vehicles">View Authoriser Vehicles</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/job-cards/authorizer-dashboard">AuthorizerDash</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/job-cards/capturer-default">Default Capturer</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
     @if (_loading)
     {
         <div class="loading-state">
@@ -79,6 +102,7 @@
 @code {
     private bool _loading = true;
     private List<JobCardItem> _jobCards = new();
+    private bool _showJobcardMenu = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -121,5 +145,10 @@
         public DateTime? workshop_date { get; set; }
         public string? workshop_tech { get; set; }
         public string? workshop_notes { get; set; }
+    }
+
+    private void ToggleJobcardMenu()
+    {
+        _showJobcardMenu = !_showJobcardMenu;
     }
 }

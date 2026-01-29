@@ -5,80 +5,234 @@
 @inject TaxiApiService TaxiService
 @inject IJSRuntime JS
 
-<PageTitle>Taxis - Fleet Information System</PageTitle>
+<PageTitle>Taxi Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-taxi"></i>
-            Taxis
+            Taxi Maintenance Menu
         </h1>
-        <p class="page-description">Taxi records summary from /api/taxi.</p>
+        <p class="page-description">Legacy taxi requisitions, logs, maintenance, and reports.</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadTaxis">
+        <button class="btn btn-secondary btn-sm" @onclick="LoadTaxis">
             <i class="bx bx-refresh"></i>
-            Refresh
+            Refresh Summary
         </button>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading taxi records...</p>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleHelp">
+                <span>Taxi Maintenance Menu</span>
+                <i class="bx @(_showHelp ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showHelp)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/help">Taxi Maintenance Information / Help</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
-    else if (_taxis.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-taxi"></i>
-            <h3>No taxi records</h3>
-            <p>Awaiting taxi API. Provide endpoint/fields to replace static data.</p>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleRequisitions">
+                <span>Taxi Requisitions</span>
+                <i class="bx @(_showRequisitions ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showRequisitions)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/enter">1) Enter Taxi Requisition</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/enter-prev-bas">1.1) Enter Taxi Requisition "using: Previous Fin Years BAS Codes"</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/edit">2) Edit Taxi Requisition</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/edit-prev-bas">2.1) Edit Taxi Requisition "using: Previous Fin Years BAS Codes"</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/cancel">3) Cancel Taxi Requisition</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/reprint">4) Re-Print A Requisition</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/pending">5) Pending Requests</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/requests/pending-jia">6) Pending JIA Pick-ups</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_taxis.Count Taxi record(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Taxi #</th>
-                            <th>Driver</th>
-                            <th>Vehicle</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var taxi in _taxis)
-                        {
-                            <tr>
-                                <td>@taxi.Number</td>
-                                <td>@taxi.Driver</td>
-                                <td>@taxi.Vehicle</td>
-                                <td><span class="badge">@taxi.Status</span></td>
-                                <td>@taxi.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@taxi.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleLogs">
+                <span>Taxi Logs</span>
+                <i class="bx @(_showLogs ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showLogs)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/logs/enter">1) Enter Taxi logsheet</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/logs/edit">2) Edit Taxi Logsheet</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/logs/reprint">3) Reprint Taxi Log</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/logs/white-log">3) Enter Taxi "white log" (GG vehicles not for claiming)</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleMaintenance">
+                <span>Maintenance</span>
+                <i class="bx @(_showMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/maintenance/info">1) Taxi Information Maintenance</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleReports">
+                <span>Taxi Reports</span>
+                <i class="bx @(_showReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/one-taxi-number">1) Report On One Taxi Number.</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/logs-per-user">2) Number Of Taxi Logs Captured Per User For Date.</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/old-requisitions">3) Old Requisitions For Period</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/taxis-per-company">4) Taxis Per Hire Company</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/taxis-per-department">5) List Of All Taxis In Various Departments</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/taxis-inservice-per-department">6) List Of All Taxis In Service In Various Departments</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/logs-requisitions-status">7) Taxi Logs and Requisitions Statuses Reports</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleOther">
+                <span>Other Taxi Maintenance Options</span>
+                <i class="bx @(_showOther ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showOther)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/scan-requisition">1) Scan Taxi Requisition</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="form-card" style="margin-top: 1.5rem;">
+        <div class="form-card-header">
+            <h2>Taxi Records Summary</h2>
+        </div>
+        <div class="form-card-body">
+            @if (_loading)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading taxi records...</p>
+                </div>
+            }
+            else if (_taxis.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bx bx-taxi"></i>
+                    <h3>No taxi records</h3>
+                    <p>Awaiting taxi API. Provide endpoint/fields to replace static data.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">@_taxis.Count Taxi record(s)</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Taxi #</th>
+                                    <th>Driver</th>
+                                    <th>Vehicle</th>
+                                    <th>Status</th>
+                                    <th>Date</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var taxi in _taxis)
+                                {
+                                    <tr>
+                                        <td>@taxi.Number</td>
+                                        <td>@taxi.Driver</td>
+                                        <td>@taxi.Vehicle</td>
+                                        <td><span class="badge">@taxi.Status</span></td>
+                                        <td>@taxi.Date.ToString("yyyy-MM-dd")</td>
+                                        <td>@taxi.Notes</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
 </div>
 
 @code {
     private bool _loading = true;
     private List<TaxiItem> _taxis = new();
+
+    private bool _showHelp = true;
+    private bool _showRequisitions = true;
+    private bool _showLogs = true;
+    private bool _showMaintenance = true;
+    private bool _showReports = true;
+    private bool _showOther = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -110,6 +264,13 @@
             _loading = false;
         }
     }
+
+    private void ToggleHelp() => _showHelp = !_showHelp;
+    private void ToggleRequisitions() => _showRequisitions = !_showRequisitions;
+    private void ToggleLogs() => _showLogs = !_showLogs;
+    private void ToggleMaintenance() => _showMaintenance = !_showMaintenance;
+    private void ToggleReports() => _showReports = !_showReports;
+    private void ToggleOther() => _showOther = !_showOther;
 
     private sealed record TaxiItem(string Number, string Driver, string Vehicle, string Status, DateTime Date, string Notes);
 

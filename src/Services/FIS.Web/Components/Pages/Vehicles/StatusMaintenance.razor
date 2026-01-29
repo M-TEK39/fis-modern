@@ -1,0 +1,39 @@
+@page "/vehicles/status-maintenance"
+@rendermode InteractiveServer
+
+<PageTitle>Vehicle Status Maintenance</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-flag"></i>
+            Vehicle Status Maintenance
+        </h1>
+        <p class="page-description">Select the vehicle for status management (UI-only until API endpoints are available).</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field form-group-full">
+                    <label class="form-label">Vehicle Search</label>
+                    <div class="search-input-wrapper">
+                        <i class="bx bx-search"></i>
+                        <input class="search-input" type="text" placeholder="Start typing GG or Registration (legacy search)" />
+                        <button class="search-clear" aria-label="Search" disabled>
+                            <i class="bx bx-check"></i>
+                        </button>
+                    </div>
+                    <span class="form-hint">Pending API mapping for legacy autocomplete search.</span>
+                </div>
+            </div>
+
+            <div class="alert alert-info" style="margin-top:1rem;">
+                <i class="bx bx-info-circle"></i>
+                <span>Status maintenance detail panels will appear after vehicle selection.</span>
+            </div>
+        </div>
+    </div>
+</div>

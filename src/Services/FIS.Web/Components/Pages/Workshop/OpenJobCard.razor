@@ -1,0 +1,46 @@
+@page "/workshop/open-job-card"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Open a Closed Job Card</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-lock-open"></i>
+            OPEN a CLOSED Job Card
+        </h1>
+        <p class="page-description">Password required to reopen a closed job card.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Password</label>
+                    <InputText class="form-input" type="password" @bind-Value="_password" maxlength="8" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="Submit">Submit</button>
+                <button class="btn btn-secondary" @onclick="GoMenu">Menu</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _password = "";
+
+    private void Submit()
+    {
+        // Placeholder for password validation.
+    }
+
+    private void GoMenu()
+    {
+        Navigation.NavigateTo("/workshop");
+    }
+}

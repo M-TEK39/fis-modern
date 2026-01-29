@@ -69,7 +69,6 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Accidents/ReportsTab.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Contracts/ContractsTable.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Departments/Index.razor.rz.scp.css
-/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Drivers/Index.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Home.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/PrivateHire/Index.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Trips/Index.razor.rz.scp.css
@@ -86,3 +85,8 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/FIS.Web.pdb
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/FIS.Web.genruntimeconfig.cache
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/ref/FIS.Web.dll
+/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Vehicles/Help.razor.rz.scp.css
+/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Contracts/Index.razor.rz.scp.css
+/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Contracts/Detail.razor.rz.scp.css
+/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Contracts/BackdatingApprovalDetail.razor.rz.scp.css
+/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/PrivateHire/Maintenance.razor.rz.scp.css

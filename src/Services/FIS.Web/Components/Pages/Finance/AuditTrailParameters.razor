@@ -1,0 +1,125 @@
+@page "/finance/audit-trail/{Mode?}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-shield-quarter"></i>
+            @PageTitleText
+        </h1>
+        <p class="page-description">Audit trail parameters aligned to legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/finance/audit-trail">Audit Trail Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>@PageTitleText</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                @if (Mode != "vehicle")
+                {
+                    <div class="form-field">
+                        <label class="form-label">Department</label>
+                        <select class="form-select">
+                            <option value="">Select Department</option>
+                        </select>
+                    </div>
+                }
+                @if (Mode == "site")
+                {
+                    <div class="form-field">
+                        <label class="form-label">Site</label>
+                        <select class="form-select">
+                            <option value="">Select Site</option>
+                        </select>
+                    </div>
+                }
+                @if (Mode == "vehicle")
+                {
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Vehicle Number</label>
+                        <div class="contract-search-radio">
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="vehicleNumType" checked />
+                                GG
+                            </label>
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="vehicleNumType" />
+                                GP
+                            </label>
+                            <input class="form-input" placeholder="Number" style="max-width: 140px;" />
+                        </div>
+                    </div>
+                }
+                <div class="form-field">
+                    <label class="form-label">Start Date</label>
+                    <input class="form-input" placeholder="Start Date" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">End Date</label>
+                    <input class="form-input" placeholder="End Date" />
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">Audit Trail PDF Reports</h3>
+                <div class="menu-item">
+                    <span class="menu-item-link">Show ELS Audit Trail</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Show Manual Kilo's Audit Trail</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Show Vehicle Contracts Audit Trail</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Show VIP &amp; TAXI Audit Trail</span>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">Audit Trail Excel Reports</h3>
+                <div class="menu-item">
+                    <span class="menu-item-link">Download Show ELS Audit Trail</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Download Manual Kilo's Audit Trail</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Download Vehicle Contracts Audit Trail</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Download VIP &amp; TAXI Audit Trail</span>
+                </div>
+            </div>
+
+            <div class="contract-action-group">
+                <a class="btn btn-secondary btn-sm" href="/finance/audit-trail">Back</a>
+            </div>
+
+            <div class="contract-banner contract-banner-info contract-banner-inline">
+                Notes: The detailed reports are big. You may have to wait a few minutes before the report is displayed.
+                Excel Note: Please save the file to disk before opening.
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Mode { get; set; }
+
+    private string PageTitleText => Mode switch
+    {
+        "site" => "Audit Trail grouped by Site",
+        "vehicle" => "Audit Trail grouped per Vehicle",
+        _ => "Audit Trail grouped by Department"
+    };
+}

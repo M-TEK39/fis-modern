@@ -1,0 +1,172 @@
+@page "/full-maintenance-lease/extend"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Extend Latest Lease Tariff Period</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-time"></i>
+            Extend Latest Lease Tariff Period
+        </h1>
+        <p class="page-description">Vehicle lease tariff management.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Vehicle Lease Tariff Management</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">GG / REG Number</label>
+                    <InputText class="form-input" @bind-Value="_searchTerm" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary" @onclick="SearchVehicle">View Details</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-card" style="margin-top: 1.5rem;">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">GG Number / R</label>
+                    <input class="form-input" type="text" value="@_selectedVehicle.GgNumber" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Registration Number</label>
+                    <input class="form-input" type="text" value="@_selectedVehicle.RegistrationNumber" readonly />
+                </div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_feedbackMessage))
+            {
+                <div class="alert alert-info">
+                    <i class="bx bx-info-circle"></i>
+                    <span>@_feedbackMessage</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top: 1.5rem;">
+        <div class="table-header">
+            <span class="table-title">Lease Tariff History</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Excess Kilo Tariff</th>
+                        <th>Lease Tariff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_tariffs.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4">No valid lease tariff found. Vehicle possibly not a lease vehicle.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in _tariffs)
+                        {
+                            <tr>
+                                <td>@item.StartDate</td>
+                                <td>@item.EndDate</td>
+                                <td>@item.ExcessKiloTariff</td>
+                                <td>@item.LeaseTariff</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="form-card" style="margin-top: 1.5rem;">
+        <div class="form-card-header">
+            <h2>Extend Lease Tariff</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Lease Tariff</label>
+                    <input class="form-input" type="text" value="@_editTariff.LeaseTariff" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Start Date</label>
+                    <input class="form-input" type="text" value="@_editTariff.StartDate" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">End Date</label>
+                    <InputDate class="form-input" @bind-Value="_editTariff.EndDate" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SubmitExtension">Submit</button>
+                <button class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+                <button class="btn btn-secondary" @onclick="GoMenu">Menu</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _searchTerm = "";
+    private string _feedbackMessage = "";
+
+    private readonly SelectedVehicle _selectedVehicle = new();
+    private readonly List<LeaseTariffItem> _tariffs = new();
+    private readonly LeaseTariffEdit _editTariff = new();
+
+    private void SearchVehicle()
+    {
+        _feedbackMessage = "";
+    }
+
+    private void SubmitExtension()
+    {
+        _feedbackMessage = "Submit pending API integration.";
+    }
+
+    private void CancelEdit()
+    {
+        _editTariff.EndDate = null;
+    }
+
+    private void GoMenu()
+    {
+        Navigation.NavigateTo("/full-maintenance-lease");
+    }
+
+    private sealed class SelectedVehicle
+    {
+        public string GgNumber { get; set; } = "";
+        public string RegistrationNumber { get; set; } = "";
+    }
+
+    private sealed class LeaseTariffItem
+    {
+        public string StartDate { get; set; } = "";
+        public string EndDate { get; set; } = "";
+        public string ExcessKiloTariff { get; set; } = "";
+        public string LeaseTariff { get; set; } = "";
+    }
+
+    private sealed class LeaseTariffEdit
+    {
+        public string LeaseTariff { get; set; } = "";
+        public string StartDate { get; set; } = "";
+        public DateTime? EndDate { get; set; }
+    }
+}

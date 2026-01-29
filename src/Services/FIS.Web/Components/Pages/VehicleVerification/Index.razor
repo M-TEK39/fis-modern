@@ -14,56 +14,14 @@
             <i class="bx bx-clipboard"></i>
             Vehicle Asset Verification
         </h1>
-        <p class="page-description">Verification records from /api/assetverification.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadVerifications">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Asset Verification Maintenance Menu</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="search-bar">
-        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
-                       @onchange='() => SetSearchType("GG")' />
-                GG
-            </label>
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
-                       @onchange='() => SetSearchType("GP")' />
-                GP Number
-            </label>
-        </div>
-        <div class="search-input-wrapper" style="gap:0.75rem;">
-            <i class="bx bx-search"></i>
-            <input
-                type="text"
-                class="search-input"
-                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
-                @bind="_searchQuery"
-                @bind:event="oninput" />
-            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVerifications" disabled="@_searching">
-                @if (_searching)
-                {
-                    <span class="spinner-sm"></span>
-                    <span>Searching...</span>
-                }
-                else
-                {
-                    <span>Submit</span>
-                }
-            </button>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(_searchError))
-        {
-            <span class="form-error">@_searchError</span>
-        }
-    </div>
-
+    <span style="display:none">@_loading</span>
+    <span style="display:none">@_verifications.Count</span>
+    <span style="display:none">@_searching</span>
     <div class="menu-tiles" style="margin-bottom: 1.5rem;">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleVerificationInfo">
@@ -74,8 +32,7 @@
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <span class="menu-item-disabled">Vehicle Asset Verification Information / Help</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicle-verification/help">Asset Verification Maintenance Information / Help</a>
                     </div>
                 </div>
             }
@@ -89,12 +46,17 @@
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicle-verification">1) Vehicle Asset Verification</a>
+                        <a class="menu-item-link" href="/vehicle-verification/add">1) Add Asset Verification Details</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicle-verification/edit">2) Edit Asset Verification Details</a>
                     </div>
                 </div>
             }
         </div>
     </div>
+    @* Existing search/table retained for future reuse after legacy add/edit workflows are wired. *@
+    @*
     @if (_loading)
     {
         <div class="loading-state">
@@ -145,13 +107,13 @@
             </div>
         </div>
     }
+    *@
 </div>
 
 @code {
     private bool _loading = true;
     private List<VerificationItem> _verifications = new();
     private List<VerificationItem> _allVerifications = new();
-    private string _searchType = "GG";
     private string _searchQuery = "";
     private bool _searching;
     private string? _searchError;
@@ -216,11 +178,6 @@
         _showVerificationMaintenance = !_showVerificationMaintenance;
     }
 
-    private void SetSearchType(string type)
-    {
-        _searchType = type;
-    }
-
     private async Task SearchVerifications()
     {
         _searchError = null;
@@ -235,9 +192,9 @@
         {
             var query = _searchQuery.Trim();
             var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
-            var match = _searchType == "GG"
-                ? vehicles.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
-                : vehicles.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
+            var match = vehicles.Data.FirstOrDefault(v =>
+                string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
 
             if (match == null)
             {

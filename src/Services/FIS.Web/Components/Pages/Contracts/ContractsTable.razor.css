@@ -49,18 +49,18 @@
 }
 
 .status-active {
-    background-color: hsl(142, 71%, 95%);
-    color: hsl(142, 76%, 36%);
+    background-color: var(--fis-success-bg);
+    color: var(--fis-success);
 }
 
 .status-upcoming {
-    background-color: hsl(217, 91%, 95%);
-    color: hsl(217, 91%, 50%);
+    background-color: var(--fis-info-bg);
+    color: var(--fis-info);
 }
 
 .status-expired {
-    background-color: hsl(0, 84%, 95%);
-    color: hsl(0, 84%, 50%);
+    background-color: var(--fis-error-bg);
+    color: var(--fis-error);
 }
 
 .status-unknown {
@@ -76,7 +76,7 @@
 
 .cost-amount {
     font-weight: 500;
-    color: hsl(142, 76%, 36%);
+    color: var(--fis-success);
 }
 
 .cost-empty {

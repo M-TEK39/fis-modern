@@ -1,0 +1,66 @@
+@page "/auction/reports"
+@rendermode InteractiveServer
+
+<PageTitle>Auction Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            Auction Reports
+        </h1>
+        <p class="page-description">Auction reports menu aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/auction">Auction Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>One Vehicle Auction Reports</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/reports/one-vehicle">1) Auction Report on ONE Vehicle</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>All Vehicle's Auction Reports</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/reports/all-vehicles">2) Auction Report on ALL Vehicle's</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Other Auction Reports</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/reports/sale-to-name">3) Auction Report on Sale to Name</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/reports/auction-gg">4) Auction Report of ONE Auction - Sort by GG Number</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/reports/auction-lot">5) Auction Report of ONE Auction - Sort by LOT Number</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction">Return To Main Page</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

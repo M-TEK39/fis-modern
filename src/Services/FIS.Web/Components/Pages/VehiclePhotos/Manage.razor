@@ -1,0 +1,68 @@
+@page "/vehicle-photos/manage/{VmfCode:int}"
+@rendermode InteractiveServer
+@using FIS.Web.Services
+@inject VehiclePhotoApiService VehiclePhotoService
+@inject IJSRuntime JS
+
+<PageTitle>Manage Vehicle Photos - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-image"></i>
+            Manage Vehicle Photos
+        </h1>
+        <p class="page-description">Vehicle photo maintenance (UI-only until full upload workflow is wired).</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Vehicle Code</label>
+                    <input class="form-input" type="text" value="@VmfCode" readonly />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Keyword))
+                {
+                    <div class="form-field">
+                        <label class="form-label">Search Keyword</label>
+                        <input class="form-input" type="text" value="@Keyword" readonly />
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:1.5rem;">
+        <div class="table-header">
+            <span class="table-title">Photo References</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>File</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="4">Photo management workflow pending.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int VmfCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "keyword")]
+    public string? Keyword { get; set; }
+}

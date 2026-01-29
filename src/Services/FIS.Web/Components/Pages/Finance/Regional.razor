@@ -1,0 +1,248 @@
+@page "/finance/regional/{Action?}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-map"></i>
+            @PageTitleText
+        </h1>
+        <p class="page-description">Regional finance module aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (Action == "assets")
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Asset List: Vehicles in FIS (New & In-Service)</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="menu-tiles">
+                    <div class="menu-tile">
+                        <button class="menu-tile-header">
+                            <span>Regional Asset Menu</span>
+                            <i class="bx bx-chevron-down"></i>
+                        </button>
+                        <div class="menu-tile-body">
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/regional/assets-all">i) Asset List: All Vehicles in FIS with status New &amp; In-Service (All Departments)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/regional/assets-province">ii) Asset List: All Vehicles in FIS with status New &amp; In-Service (View by PROVINCE)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/regional/assets-department">iii) Asset List: All Vehicles in FIS with status New &amp; In-Service (View by DEPARTMENT)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/regional/assets-site">iv) Asset List: All Vehicles in FIS with status New &amp; In-Service (View by SITE)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/status">b) View list of vehicles of a selected Vehicle Status in a Date Range</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (Action == "assets-all" || Action == "assets-province" || Action == "assets-department" || Action == "assets-site")
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Asset List: All Vehicles in FIS with status New &amp; In-Service</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    @if (Action == "assets-province")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Province</label>
+                            <select class="form-select">
+                                <option value="">Select Province</option>
+                            </select>
+                        </div>
+                    }
+                    @if (Action == "assets-department" || Action == "assets-site")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Department</label>
+                            <select class="form-select">
+                                <option value="">Select Department</option>
+                            </select>
+                        </div>
+                    }
+                    @if (Action == "assets-site")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Site</label>
+                            <select class="form-select">
+                                <option value="">Select Site</option>
+                            </select>
+                        </div>
+                    }
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">View Report</button>
+                    <a class="btn btn-secondary btn-sm" href="/finance/regional/assets">Back</a>
+                </div>
+                <div class="contract-banner contract-banner-info contract-banner-inline">
+                    Notes: The detailed reports are big. You may have to wait a few minutes before the report is displayed.
+                </div>
+            </div>
+        </div>
+    }
+    else if (Action == "summary-per-province" || Action == "summary-all")
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Summary Invoice Reports</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Posting Start Date</label>
+                        <select class="form-select">
+                            <option value="">Select Posting Month</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Posting End Date</label>
+                        <select class="form-select">
+                            <option value="">Select Posting Month</option>
+                        </select>
+                    </div>
+                    @if (Action == "summary-per-province")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Province</label>
+                            <select class="form-select">
+                                <option value="">Select Province</option>
+                            </select>
+                        </div>
+                    }
+                </div>
+                <div class="form-section">
+                    <h3 class="form-section-title">Show Reports</h3>
+                    @if (Action == "summary-per-province")
+                    {
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summary Invoice Report Per Province</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summary Invoice Report Per Province Per Department By Cost Type</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summary Invoice Report Per Province Per Department Per Site By Cost Type</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summary Invoice Report</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summary Invoice Report Per Department By Cost Type</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summary Invoice Report Per Department Per Site By Cost Type</span>
+                        </div>
+                    }
+                </div>
+                <div class="form-section">
+                    <h3 class="form-section-title">Download Reports</h3>
+                    @if (Action == "summary-per-province")
+                    {
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Summary Invoice Report Per Province</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Summary Invoice Report Per Province Per Department By Cost Type</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Summary Invoice Report Per Province Per Department Per Site By Cost Type</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Summary Invoice Report</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Summary Invoice Report Per Department By Cost Type</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Summary Invoice Report Per Department Per Site By Cost Type</span>
+                        </div>
+                    }
+                </div>
+                <div class="contract-action-group">
+                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                </div>
+                <div class="contract-banner contract-banner-info contract-banner-inline">
+                    Notes: Detailed reports may take a few minutes to display. For Excel, save to disk before opening.
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Regional Module: Finance</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="menu-tiles">
+                    <div class="menu-tile">
+                        <button class="menu-tile-header">
+                            <span>Regional Module: Finance</span>
+                            <i class="bx bx-chevron-down"></i>
+                        </button>
+                        <div class="menu-tile-body">
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/regional/summary-per-province">a) Summary Invoice Reports (Per Province)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/regional/summary-all">b) Summary Invoice Reports (All)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/reports/department">c) Print Financial Reports by (Department)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/reports/site">d) Print Financial Reports by (Site)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/reports/vehicle-billing-history">e) Vehicle Billing History (i.e. vehicle Income)</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/finance/wesbank/summary-all">f) Wesbank Expenses Reports</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+
+    private string PageTitleText => Action switch
+    {
+        "menu" => "Regional Module: Finance",
+        "assets" => "Asset List: Vehicles in FIS",
+        "assets-all" => "Asset List: Vehicles in FIS",
+        "assets-province" => "Asset List: Vehicles in FIS",
+        "assets-department" => "Asset List: Vehicles in FIS",
+        "assets-site" => "Asset List: Vehicles in FIS",
+        _ => "Regional Module: Finance"
+    };
+}

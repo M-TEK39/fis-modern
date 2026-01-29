@@ -1,0 +1,202 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject LossTypeApiService LossTypeService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading loss types...</p>
+    </div>
+}
+else if (_lossTypes.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-error-circle"></i>
+        <h3>No loss types found</h3>
+        <p>Get started by adding your first loss type</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus plus-icon"></i>
+            Add Loss Type
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Loss Type
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Loss Description</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var loss in _lossTypes)
+                    {
+                        <tr>
+                            <td>@loss.loss_description</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(loss)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(loss)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showDialog)
+{
+    <Modal IsVisible="_showDialog"
+           Title="@(_isEdit ? "Edit Loss Type" : "Add Loss Type")"
+           OnCancel="HideDialog"
+           OnSubmit="SaveLossType"
+           SubmitText="@(_isEdit ? "Update" : "Create")"
+           IsSaving="_saving"
+           Model="_currentLoss">
+        <div class="form-field">
+            <label class="form-label">Loss Description <span class="required">*</span></label>
+            <input type="text" class="form-input" @bind="_currentLoss.loss_description" />
+            <ValidationMessage For="() => _currentLoss.loss_description" />
+        </div>
+    </Modal>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>@_currentLoss.loss_description</strong>?</p>
+                <p class="warning-text">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideDeleteDialog" disabled="@_deleting">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteLossType" disabled="@_deleting">
+                    @if (_deleting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <i class="bx bx-trash"></i>
+                        <span>Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<LossTypeDto> _lossTypes = new();
+    private LossTypeDto _currentLoss = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+    private bool _deleting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLossTypes();
+    }
+
+    private async Task LoadLossTypes()
+    {
+        _loading = true;
+        _lossTypes = await LossTypeService.GetAllAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentLoss = new LossTypeDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(LossTypeDto loss)
+    {
+        _currentLoss = loss with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(LossTypeDto loss)
+    {
+        _currentLoss = loss;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentLoss = new LossTypeDto();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveLossType()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await LossTypeService.UpdateAsync(_currentLoss.loss_code, _currentLoss);
+        }
+        else
+        {
+            success = await LossTypeService.CreateAsync(_currentLoss);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadLossTypes();
+        }
+    }
+
+    private async Task DeleteLossType()
+    {
+        _deleting = true;
+        var success = await LossTypeService.DeleteAsync(_currentLoss.loss_code);
+        _deleting = false;
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadLossTypes();
+        }
+    }
+}

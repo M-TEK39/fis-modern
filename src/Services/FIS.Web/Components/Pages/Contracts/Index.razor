@@ -1,113 +1,120 @@
 @page "/contracts"
 @rendermode InteractiveServer
-@using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
-@inject SiteApiService SiteService
 @inject NavigationManager Navigation
 
-<PageTitle>Vehicle Contract Master - Fleet Information System</PageTitle>
+<PageTitle>Contracts Menu - Fleet Information System</PageTitle>
 <a id="PageTop"></a>
 
-<div class="page-container">
-    <div class="page-header">
-        <div class="page-title-section">
-            <h1>
-                <i class="bx bx-file"></i>
-                Vehicle Contract Master
-            </h1>
-            <p>Vehicle contract maintenance aligned to the legacy workflow.</p>
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            Contracts Menu
+        </h1>
+        <p class="page-description">Vehicle contract maintenance aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoContractsMenu">Contracts Menu</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div id="ContractsMenu" class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleContractsInfo">
+                <span>Contracts Information / Help</span>
+                <i class="bx @(_showContractsInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showContractsInfo)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/contracts/help">Contracts Information / Help</a>
+                    </div>
+                </div>
+            }
         </div>
-        <div class="page-actions">
-            <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoContractsMenu">Contracts Menu</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleContractMaintenance">
+                <span>Contract Maintenance</span>
+                <i class="bx @(_showContractMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showContractMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/contracts">1) Vehicle Contract Maintenance</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/contracts/backdating-approval">2) Vehicle Contract Back Date Requests - Approval</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/contracts/backdating-history">3) Vehicle Contract History Backdating</a>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleContractBookings">
+                <span>Vehicle Bookings</span>
+                <i class="bx @(_showContractBookings ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showContractBookings)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/call-centre">1) Vehicle Bookings</a>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 
-    <div class="page-content">
-        <div class="menu-tiles" style="margin-bottom: 1.5rem;">
-            <div class="menu-tile">
-                <button class="menu-tile-header" @onclick="ToggleContractsInfo">
-                    <span>Contracts Information / Help</span>
-                    <i class="bx @(_showContractsInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
-                </button>
-                @if (_showContractsInfo)
-                {
-                    <div class="menu-tile-body">
-                        <div class="menu-item">
-                            <span class="menu-item-disabled">Contracts Information / Help</span>
-                            <span class="menu-item-badge">Coming soon</span>
-                        </div>
-                    </div>
-                }
-            </div>
-            <div class="menu-tile">
-                <button class="menu-tile-header" @onclick="ToggleContractMaintenance">
-                    <span>Contract Maintenance</span>
-                    <i class="bx @(_showContractMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
-                </button>
-                @if (_showContractMaintenance)
-                {
-                    <div class="menu-tile-body">
-                        <div class="menu-item">
-                            <a class="menu-item-link" href="/contracts">1) Vehicle Contract Maintenance</a>
-                        </div>
-                        <div class="menu-item">
-                            <span class="menu-item-disabled">2) Vehicle Contract Back Date Requests - Approval</span>
-                            <span class="menu-item-badge">Coming soon</span>
-                        </div>
-                        <div class="menu-item">
-                            <span class="menu-item-disabled">3) Vehicle Contract History Backdating</span>
-                            <span class="menu-item-badge">Coming soon</span>
-                        </div>
-                    </div>
-                }
-            </div>
-            <div class="menu-tile">
-                <button class="menu-tile-header" @onclick="ToggleContractBookings">
-                    <span>Vehicle Bookings</span>
-                    <i class="bx @(_showContractBookings ? "bx-chevron-up" : "bx-chevron-down")"></i>
-                </button>
-                @if (_showContractBookings)
-                {
-                    <div class="menu-tile-body">
-                        <div class="menu-item">
-                            <span class="menu-item-disabled">1) Vehicle Bookings</span>
-                            <span class="menu-item-badge">Coming soon</span>
-                        </div>
-                    </div>
-                }
-            </div>
-        </div>
+    <div class="contract-banner contract-banner-warning">
+        <i class="bx bx-error-circle"></i>
+        <span>@_limitedAccessMessage</span>
+    </div>
+    <div class="contract-banner contract-banner-info">
+        <i class="bx bx-info-circle"></i>
+        <span>@_infoMessage</span>
+    </div>
 
-        <div class="form-card" style="margin-bottom: 1.5rem;">
-            <div class="form-card-header">
-                <h2>Vehicle Contract Maintenance</h2>
-                <p>Search for a vehicle, terminate the current contract, and open a new one.</p>
-            </div>
-            <div class="form-card-body">
-                <div class="form-section">
-                    <h3 class="form-section-title">
-                        <i class="bx bx-search"></i>
-                        Search Vehicle
-                    </h3>
-                    <div class="form-grid">
-                        <div class="form-field form-group-full">
-                            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:0.75rem;">
-                                <label class="form-label" style="margin:0; display:flex; align-items:center; gap:0.4rem;">
-                                    <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
-                                    GG
-                                </label>
-                                <label class="form-label" style="margin:0; display:flex; align-items:center; gap:0.4rem;">
-                                    <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
-                                    GP Number
-                                </label>
-                                <input type="text" class="form-input" style="max-width:240px;" placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")" @bind="_searchQuery" @bind:event="oninput" />
-                                <button class="btn btn-primary" type="button" @onclick="SearchVehicle" disabled="@_searching">
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Vehicle Contract Management</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="contract-search-row">
+                            <span class="contract-search-label">Select the vehicle to manage:</span>
+                            <div class="contract-search-inputs">
+                                <div class="contract-search-radio">
+                                    <label class="form-label">
+                                        <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
+                                        GG
+                                    </label>
+                                    <label class="form-label">
+                                        <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
+                                        GP Number
+                                    </label>
+                                </div>
+                                <input type="text"
+                                       class="form-input"
+                                       placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")"
+                                       @bind="_searchQuery"
+                                       @bind:event="oninput" />
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVehicle" disabled="@_searching">
                                     @if (_searching)
                                     {
                                         <span class="spinner-sm"></span>
@@ -115,203 +122,152 @@
                                     }
                                     else
                                     {
-                                        <span>Submit</span>
+                                        <span>Search</span>
                                     }
                                 </button>
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(_searchError))
-                            {
-                                <span class="form-error">@_searchError</span>
-                            }
-                        </div>
-                    </div>
-                </div>
-
-                @if (_selectedVehicle != null)
-                {
-                    <div class="form-section">
-                        <h3 class="form-section-title">
-                            <i class="bx bx-car"></i>
-                            Vehicle Details
-                        </h3>
-                        <div class="form-grid">
-                            <div class="form-field">
-                                <label class="form-label">GG Number</label>
-                                <input class="form-input" value="@_selectedVehicle.fleet_number" disabled />
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">GP Number</label>
-                                <input class="form-input" value="@_selectedVehicle.registration_number" disabled />
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">Make & Model</label>
-                                <input class="form-input" value="@_selectedVehicle.model_name" disabled />
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">Status</label>
-                                <input class="form-input" value="@_selectedVehicle.status_description" disabled />
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
                             </div>
                         </div>
-                        <div style="margin-top: 1rem;">
-                            <button class="btn btn-primary" type="button" @onclick="OpenNewContract" disabled="@_showContractForm">
-                                Terminate Current Contract AND Open New One
-                            </button>
-                        </div>
-                    </div>
-                }
-
-                @if (_showContractForm)
-                {
-                    <EditForm Model="_contract" OnValidSubmit="SaveContract">
-                        <DataAnnotationsValidator />
-
-                        <div class="form-section">
-                            <h3 class="form-section-title">
-                                <i class="bx bx-clipboard"></i>
-                                Contract Details
-                            </h3>
-                            <div class="form-grid">
-                                <div class="form-field">
-                                    <label class="form-label">Site <span class="required">*</span></label>
-                                    <select class="form-select" @bind="_contract.SiteCode">
-                                        <option value="0">Select Site...</option>
-                                        @foreach (var site in _sites)
-                                        {
-                                            <option value="@site.SiteCode">@site.Description</option>
-                                        }
-                                    </select>
-                                </div>
-
-                                <div class="form-field">
-                                    <label class="form-label">Contract Type</label>
-                                    <select class="form-select" @bind="_contract.ContractType">
-                                        @foreach (var contractType in _contractTypes)
-                                        {
-                                            <option value="@contractType">@contractType</option>
-                                        }
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-section">
-                            <h3 class="form-section-title">
-                                <i class="bx bx-calendar"></i>
-                                Dates & Odometer
-                            </h3>
-                            <div class="form-grid">
-                                <div class="form-field">
-                                    <label class="form-label">Start Date <span class="required">*</span></label>
-                                    <InputDate @bind-Value="_contract.StartDate" class="form-input" />
-                                </div>
-
-                                <div class="form-field">
-                                    <label class="form-label">Target Return Date</label>
-                                    <InputDate @bind-Value="_contract.TargetReturnDate" class="form-input" />
-                                </div>
-
-                                <div class="form-field">
-                                    <label class="form-label">Start Odometer</label>
-                                    <InputNumber @bind-Value="_contract.StartOdometer" class="form-input" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-section">
-                            <h3 class="form-section-title">
-                                <i class="bx bx-id-card"></i>
-                                Receiver & Codes
-                            </h3>
-                            <div class="form-grid">
-                                <div class="form-field">
-                                    <label class="form-label">Receiver ID</label>
-                                    <InputText @bind-Value="_contract.ReceiverId" class="form-input" />
-                                </div>
-
-                                <div class="form-field">
-                                    <label class="form-label">Responsibility Code</label>
-                                    <InputText @bind-Value="_contract.ResponsibilityCode" class="form-input" />
-                                </div>
-
-                                <div class="form-field">
-                                    <label class="form-label">Objective Code</label>
-                                    <InputText @bind-Value="_contract.ObjectiveCode" class="form-input" />
-                                </div>
-
-                                <div class="form-field">
-                                    <label class="form-label">Project Code</label>
-                                    <InputText @bind-Value="_contract.ProjectCode" class="form-input" />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-section">
-                            <h3 class="form-section-title">
-                                <i class="bx bx-check"></i>
-                                Authorization & Notes
-                            </h3>
-                            <div class="form-grid">
-                                <div class="form-field">
-                                    <label class="form-label">Authorization (Z186)</label>
-                                    <InputText @bind-Value="_contract.AuthorizationNumber" class="form-input" />
-                                </div>
-
-                                <div class="form-field form-group-full">
-                                    <label class="form-label">Notes</label>
-                                    <textarea class="form-input" rows="3" @bind="_contract.Notes"></textarea>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-section">
-                            <h3 class="form-section-title">
-                                <i class="bx bx-shield-quarter"></i>
-                                Approval Workflow
-                            </h3>
-                            <div class="form-grid">
-                                <div class="form-field form-group-full">
-                                    <div class="alert alert-info">
-                                        <i class="bx bx-info-circle"></i>
-                                        <span>Contract approval and backdating authorization are UI-only pending backend endpoints.</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-actions">
-                            <button class="btn btn-secondary" type="button" @onclick="CancelContract">Cancel</button>
-                            <button class="btn btn-primary" type="submit" disabled="@_savingContract">
-                                @if (_savingContract)
-                                {
-                                    <span class="spinner-sm"></span>
-                                    <span>Saving...</span>
-                                }
-                                else
-                                {
-                                    <span>Save Contract</span>
-                                }
-                            </button>
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(_contractError))
+                        @if (!string.IsNullOrWhiteSpace(_searchError))
                         {
-                            <div class="alert alert-error">
-                                <i class="bx bx-error-circle"></i>
-                                <span>@_contractError</span>
+                            <div class="form-error contract-search-error">@_searchError</div>
+                        }
+                        @if (_selectedVehicle != null)
+                        {
+                            <div class="contract-search-result">
+                                <div><strong>Selected Vehicle:</strong> @_selectedVehicle.fleet_number (@_selectedVehicle.registration_number)</div>
+                                <div>Make/Model: @_selectedVehicle.model_name | Status: @_selectedVehicle.status_description</div>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="OpenSelectedVehicle">Open Contract Management</button>
                             </div>
                         }
-                    </EditForm>
-                }
-            </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <div class="contract-filters">
+            <label class="form-label">
+                <input type="checkbox" checked="@_filterPermanent" @onchange="TogglePermanent" />
+                Permanent
+            </label>
+            <label class="form-label">
+                <input type="checkbox" checked="@_filterDaily" @onchange="ToggleDaily" />
+                Daily
+            </label>
+            <label class="form-label">
+                <input type="checkbox" checked="@_filterHourly" @onchange="ToggleHourly" />
+                Hourly
+            </label>
+            <label class="form-label">
+                <input type="checkbox" checked="@_filterRelieve" @onchange="ToggleRelieve" />
+                Relieve
+            </label>
+            <label class="form-label">
+                <input type="checkbox" checked="@_filterLease" @onchange="ToggleLease" />
+                Lease
+            </label>
         </div>
+
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Pending Contracts</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="contract-legacy-content">
+                        @if (_loadingContracts)
+                        {
+                            <div class="loading-state">
+                                <div class="spinner"></div>
+                                <p>Loading pending contracts...</p>
+                            </div>
+                        }
+                        else if (_pendingContracts.Count == 0)
+                        {
+                            <div class="empty-state">
+                                <i class="bx bx-file"></i>
+                                <h3>No pending contracts</h3>
+                                <p>Pending contracts will appear here once they require action.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var contract in _pendingContracts)
+                            {
+                                <table class="contract-subtable">
+                                    <tbody>
+                                        <tr>
+                                            <th>GG Number</th>
+                                            <td>@GetFleetNumber(contract)</td>
+                                            <th>Status</th>
+                                            <td>@GetVehicleStatus(contract)</td>
+                                            <th>Contract Type</th>
+                                            <td>@GetContractType(contract)</td>
+                                            <th>Contract Status</th>
+                                            <td>@GetContractStatus(contract)</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Reg Number</th>
+                                            <td>@GetRegNumber(contract)</td>
+                                            <th>Hire Type</th>
+                                            <td>@GetHireType(contract)</td>
+                                            <th>Start Date</th>
+                                            <td>@FormatDate(contract.start_date)</td>
+                                            <th>Status Date</th>
+                                            <td>@FormatDate(contract.end_date)</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Make</th>
+                                            <td>@GetMake(contract)</td>
+                                            <th>Location</th>
+                                            <td>@GetLocation(contract)</td>
+                                            <th>Modified</th>
+                                            <td>@FormatDate(contract.end_date)</td>
+                                            <th rowspan="2" class="contract-action-header">Action</th>
+                                            <td rowspan="2" class="contract-actions">
+                                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "view")'>View</button>
+                                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "review")'>Review</button>
+                                                <button class="btn btn-warning btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "edit")'>Edit</button>
+                                                <button class="btn btn-success btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "process")'>Process</button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Model</th>
+                                            <td colspan="3">@GetModel(contract)</td>
+                                            <th>Username</th>
+                                            <td>@GetUserName(contract)</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Department</th>
+                                            <td colspan="3">@GetDepartment(contract)</td>
+                                            <th>Site</th>
+                                            <td colspan="3">@GetSite(contract)</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div class="contract-divider"></div>
+                            }
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </div>
+
 <a id="PageBottom"></a>
 
 @code {
     private bool _showContractsInfo = true;
     private bool _showContractMaintenance = true;
-    private bool _showContractBookings;
+    private bool _showContractBookings = true;
+
+    private string _limitedAccessMessage = "Limited access: some contract actions may be restricted based on your role.";
+    private string _infoMessage = "Select a vehicle to manage or review pending contracts that require action.";
 
     private string _searchType = "GG";
     private string _searchQuery = "";
@@ -319,84 +275,68 @@
     private string? _searchError;
     private VehicleDto? _selectedVehicle;
 
-    private bool _showContractForm;
-    private bool _savingContract;
-    private string? _contractError;
+    private bool _loadingContracts = true;
+    private List<ContractDto> _pendingContracts = new();
 
-    private List<SiteResponseDto> _sites = new();
-    private readonly List<string> _contractTypes = new() { "Daily", "Monthly", "Relief", "Lease" };
-
-    private ContractFormModel _contract = new();
+    private bool _filterPermanent = true;
+    private bool _filterDaily = true;
+    private bool _filterHourly = true;
+    private bool _filterRelieve = true;
+    private bool _filterLease = true;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadSites();
+        await LoadPendingContracts();
     }
 
-    private async Task LoadSites()
+    private async Task LoadPendingContracts()
     {
-        _sites = await SiteService.GetAllAsync();
+        _loadingContracts = true;
+        try
+        {
+            _pendingContracts = await ContractService.GetContractsAsync();
+        }
+        finally
+        {
+            _loadingContracts = false;
+        }
     }
 
-    private void ToggleContractsInfo()
-    {
-        _showContractsInfo = !_showContractsInfo;
-    }
+    private void ToggleContractsInfo() => _showContractsInfo = !_showContractsInfo;
+    private void ToggleContractMaintenance() => _showContractMaintenance = !_showContractMaintenance;
+    private void ToggleContractBookings() => _showContractBookings = !_showContractBookings;
 
-    private void ToggleContractMaintenance()
-    {
-        _showContractMaintenance = !_showContractMaintenance;
-    }
-
-    private void ToggleContractBookings()
-    {
-        _showContractBookings = !_showContractBookings;
-    }
+    private void GoMainMenu() => Navigation.NavigateTo("/home");
+    private void GoContractsMenu() => Navigation.NavigateTo("/contracts#ContractsMenu");
+    private void GoTop() => Navigation.NavigateTo("/contracts#PageTop");
+    private void GoBottom() => Navigation.NavigateTo("/contracts#PageBottom");
 
     private void SetSearchType(string type)
     {
         _searchType = type;
+        _searchError = null;
     }
 
     private async Task SearchVehicle()
     {
         _searchError = null;
         _selectedVehicle = null;
-        _showContractForm = false;
 
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
-            _searchError = "Enter a GG or GP number to search.";
+            _searchError = _searchType == "GG" ? "Enter a GG number to search." : "Enter a GP number to search.";
             return;
         }
 
         _searching = true;
         try
         {
-            var result = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: _searchQuery.Trim());
-            var query = _searchQuery.Trim();
-
-            _selectedVehicle = _searchType == "GG"
-                ? result.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
-                : result.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
-
+            var results = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+            _selectedVehicle = results.FirstOrDefault();
             if (_selectedVehicle == null)
             {
-                _searchError = "Vehicle not found.";
-                return;
+                _searchError = "No vehicles matched the search criteria.";
             }
-
-            _contract = new ContractFormModel
-            {
-                VmfCode = _selectedVehicle.vmf_code,
-                StartDate = DateTime.Today,
-                StartOdometer = _selectedVehicle.current_odo,
-                ContractType = _contractTypes.First()
-            };
-        }
-        catch (Exception ex)
-        {
-            _searchError = $"Search failed: {ex.Message}";
         }
         finally
         {
@@ -404,99 +344,84 @@
         }
     }
 
-    private void OpenNewContract()
+    private void ClearSearch()
     {
-        _contractError = null;
-        _showContractForm = true;
+        _searchQuery = "";
+        _searchError = null;
+        _selectedVehicle = null;
     }
 
-    private async Task SaveContract()
+    private void OpenSelectedVehicle()
     {
-        _savingContract = true;
-        _contractError = null;
-
-        try
+        if (_selectedVehicle == null)
         {
-            if (_contract.SiteCode <= 0)
-            {
-                _contractError = "Site is required.";
-                return;
-            }
-
-            if (_contract.VmfCode <= 0)
-            {
-                _contractError = "Select a vehicle before saving a contract.";
-                return;
-            }
-
-            var request = new HireContractRequestDto
-            {
-                VmfCode = _contract.VmfCode,
-                SiteCode = _contract.SiteCode,
-                StartOdometer = _contract.StartOdometer,
-                DriverId = _contract.ReceiverId,
-                Notes = _contract.Notes,
-                TargetReturnDate = _contract.TargetReturnDate
-            };
-
-            var success = await ContractService.HireContractAsync(request);
-            if (!success)
-            {
-                _contractError = "Failed to save contract. Please check required fields or active contract status.";
-            }
-            else
-            {
-                _showContractForm = false;
-            }
+            return;
         }
-        catch (Exception ex)
-        {
-            _contractError = $"Failed to save contract: {ex.Message}";
-        }
-        finally
-        {
-            _savingContract = false;
-        }
+
+        var ggNumber = Uri.EscapeDataString(_selectedVehicle.fleet_number ?? "");
+        var regNumber = Uri.EscapeDataString(_selectedVehicle.registration_number ?? "");
+        Navigation.NavigateTo($"/contracts/detail?ggnumber={ggNumber}&regnumber={regNumber}");
     }
 
-    private void CancelContract()
+    private void OpenContractDetail(ContractDto contract, string action)
     {
-        _showContractForm = false;
+        var contractId = contract.contract_id;
+        var regNumber = Uri.EscapeDataString(contract.vehicle_registration ?? "");
+        var ggNumber = Uri.EscapeDataString(contract.Vehicle?.fleet_number ?? "");
+        Navigation.NavigateTo($"/contracts/detail?contractId={contractId}&action={action}&ggnumber={ggNumber}&regnumber={regNumber}");
     }
 
-    private void GoMainMenu()
+    private static string FormatDate(DateTime? date)
     {
-        Navigation.NavigateTo("/home");
+        return date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
     }
 
-    private void GoContractsMenu()
+    private static string FormatDate(DateTime date)
     {
-        Navigation.NavigateTo("/contracts");
+        return date.ToString("yyyy/MM/dd");
     }
 
-    private void GoTop()
-    {
-        Navigation.NavigateTo("/contracts#PageTop");
-    }
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
-    private void GoBottom()
-    {
-        Navigation.NavigateTo("/contracts#PageBottom");
-    }
+    private static string GetFleetNumber(ContractDto contract)
+        => ValueOrDash(contract.Vehicle?.fleet_number ?? contract.vehicle_registration);
 
-    private class ContractFormModel
-    {
-        public int VmfCode { get; set; }
-        public short SiteCode { get; set; }
-        public string ContractType { get; set; } = "Daily";
-        public DateTime StartDate { get; set; } = DateTime.Today;
-        public DateTime? TargetReturnDate { get; set; }
-        public int? StartOdometer { get; set; }
-        public string? ReceiverId { get; set; }
-        public string? ResponsibilityCode { get; set; }
-        public string? ObjectiveCode { get; set; }
-        public string? ProjectCode { get; set; }
-        public string? AuthorizationNumber { get; set; }
-        public string? Notes { get; set; }
-    }
+    private static string GetRegNumber(ContractDto contract)
+        => ValueOrDash(contract.vehicle_registration);
+
+    private static string GetVehicleStatus(ContractDto contract)
+        => ValueOrDash(contract.Vehicle?.status_description ?? contract.status);
+
+    private static string GetContractType(ContractDto contract)
+        => ValueOrDash(null);
+
+    private static string GetContractStatus(ContractDto contract)
+        => ValueOrDash(contract.status);
+
+    private static string GetHireType(ContractDto contract)
+        => ValueOrDash(null);
+
+    private static string GetMake(ContractDto contract)
+        => ValueOrDash(contract.vehicle_make);
+
+    private static string GetLocation(ContractDto contract)
+        => ValueOrDash(contract.Vehicle?.location_description);
+
+    private static string GetModel(ContractDto contract)
+        => ValueOrDash(contract.vehicle_model ?? contract.Vehicle?.model_name);
+
+    private static string GetUserName(ContractDto contract)
+        => ValueOrDash(null);
+
+    private static string GetDepartment(ContractDto contract)
+        => ValueOrDash(contract.department_name ?? contract.Department?.department_description);
+
+    private static string GetSite(ContractDto contract)
+        => ValueOrDash(null);
+
+    private void TogglePermanent(ChangeEventArgs _) => _filterPermanent = !_filterPermanent;
+    private void ToggleDaily(ChangeEventArgs _) => _filterDaily = !_filterDaily;
+    private void ToggleHourly(ChangeEventArgs _) => _filterHourly = !_filterHourly;
+    private void ToggleRelieve(ChangeEventArgs _) => _filterRelieve = !_filterRelieve;
+    private void ToggleLease(ChangeEventArgs _) => _filterLease = !_filterLease;
 }

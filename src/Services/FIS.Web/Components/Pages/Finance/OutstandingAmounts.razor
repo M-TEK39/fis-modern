@@ -1,0 +1,78 @@
+@page "/finance/outstanding/{Action?}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-money"></i>
+            @PageTitleText
+        </h1>
+        <p class="page-description">Outstanding amounts reporting aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>@SectionTitle</h2>
+        </div>
+        <div class="form-card-body">
+            @if (Action == "department-site-vehicle")
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Report Department</label>
+                        <select class="form-select">
+                            <option value="">Select Department</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Report Financial Year</label>
+                        <select class="form-select">
+                            <option value="">Select Financial Year</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Vehicle Registration</label>
+                        <select class="form-select">
+                            <option value="">Select Vehicle</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">View Report</button>
+                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                </div>
+            }
+            else
+            {
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">View Report</button>
+                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+
+    private string PageTitleText => Action switch
+    {
+        "department-site-vehicle" => "Outstanding Amounts per Department, Site & Vehicle",
+        "department" => "Outstanding Amounts per Department",
+        "department-site" => "Outstanding Amounts per Department & Site",
+        "month-end-vehicle" => "Outstanding Amounts at Month End per Vehicle",
+        "allocation-exception" => "Allocation Exceptions (Un-Interfaced Transactions)",
+        _ => "Outstanding Amounts Reports"
+    };
+
+    private string SectionTitle => PageTitleText;
+}

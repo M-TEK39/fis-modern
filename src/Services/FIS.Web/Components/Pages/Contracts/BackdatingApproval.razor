@@ -1,0 +1,328 @@
+@page "/contracts/backdating-approval"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject ContractApiService ContractService
+@inject NavigationManager Navigation
+
+<PageTitle>Vehicle Contract Back Date Requests - Approval</PageTitle>
+<a id="PageTop"></a>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-time-five"></i>
+            Vehicle Backdating Contract Management
+        </h1>
+        <p class="page-description">Pending authorisation for backdated contract requests.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/contracts">Contracts Menu</a>
+        <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="contract-banner contract-banner-warning">
+        <i class="bx bx-error-circle"></i>
+        <span>@_limitedAccessMessage</span>
+    </div>
+    <div class="contract-banner contract-banner-info">
+        <i class="bx bx-info-circle"></i>
+        <span>@_infoMessage</span>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="2">Vehicle Backdating Contract Management</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Select the vehicle to manage:</th>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <div class="contract-search-radio">
+                                <label class="form-label">
+                                    <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
+                                    GG
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
+                                    GP Number
+                                </label>
+                            </div>
+                            <input type="text"
+                                   class="form-input"
+                                   placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")"
+                                   @bind="_searchQuery"
+                                   @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVehicle" disabled="@_searching">
+                                @if (_searching)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>Searching...</span>
+                                }
+                                else
+                                {
+                                    <span>Search</span>
+                                }
+                            </button>
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_searchError))
+                        {
+                            <div class="form-error contract-search-error">@_searchError</div>
+                        }
+                        @if (_selectedVehicle != null)
+                        {
+                            <div class="contract-search-result">
+                                <div><strong>Selected Vehicle:</strong> @_selectedVehicle.fleet_number (@_selectedVehicle.registration_number)</div>
+                                <div>Make/Model: @_selectedVehicle.model_name | Status: @_selectedVehicle.status_description</div>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="OpenSelectedVehicle">Open Backdating Review</button>
+                            </div>
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Pending Authorisation on Backdating Contracts</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="contract-legacy-content">
+                        @if (_loadingContracts)
+                        {
+                            <div class="loading-state">
+                                <div class="spinner"></div>
+                                <p>Loading pending backdating requests...</p>
+                            </div>
+                        }
+                        else if (_pendingContracts.Count == 0)
+                        {
+                            <div class="empty-state">
+                                <i class="bx bx-file"></i>
+                                <h3>No pending backdating requests</h3>
+                                <p>Requests will appear here once submitted.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var contract in _pendingContracts)
+                            {
+                                <table class="contract-subtable">
+                                    <tbody>
+                                        <tr>
+                                            <th>GG Number</th>
+                                            <td>@GetFleetNumber(contract)</td>
+                                            <th>Status</th>
+                                            <td>@GetVehicleStatus(contract)</td>
+                                            <th>Contract Type</th>
+                                            <td>@GetContractType(contract)</td>
+                                            <th>Contract Status</th>
+                                            <td>@GetContractStatus(contract)</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Reg Number</th>
+                                            <td>@GetRegNumber(contract)</td>
+                                            <th>Hire Type</th>
+                                            <td>@GetHireType(contract)</td>
+                                            <th>Start Date</th>
+                                            <td>@FormatDate(contract.start_date)</td>
+                                            <th>Status Date</th>
+                                            <td>@FormatDate(contract.end_date)</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Make</th>
+                                            <td>@GetMake(contract)</td>
+                                            <th>Location</th>
+                                            <td>@GetLocation(contract)</td>
+                                            <th>Modified</th>
+                                            <td>@FormatDate(contract.end_date)</td>
+                                            <th rowspan="2" class="contract-action-header">Action</th>
+                                            <td rowspan="2" class="contract-actions">
+                                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "view")'>View</button>
+                                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "review")'>Review</button>
+                                                <button class="btn btn-warning btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "edit")'>Edit</button>
+                                                <button class="btn btn-success btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "process")'>Process</button>
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <th>Model</th>
+                                            <td colspan="3">@GetModel(contract)</td>
+                                            <th>Username</th>
+                                            <td>@GetUserName(contract)</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Department</th>
+                                            <td colspan="3">@GetDepartment(contract)</td>
+                                            <th>Site</th>
+                                            <td colspan="3">@GetSite(contract)</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div class="contract-divider"></div>
+                            }
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<a id="PageBottom"></a>
+
+@code {
+    private string _limitedAccessMessage = "Limited access: some backdating actions may be restricted based on your role.";
+    private string _infoMessage = "Review pending backdating requests or search for a vehicle.";
+
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _searching;
+    private string? _searchError;
+    private VehicleDto? _selectedVehicle;
+
+    private bool _loadingContracts = true;
+    private List<ContractDto> _pendingContracts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingContracts();
+    }
+
+    private async Task LoadPendingContracts()
+    {
+        _loadingContracts = true;
+        try
+        {
+            _pendingContracts = await ContractService.GetContractsAsync();
+        }
+        finally
+        {
+            _loadingContracts = false;
+        }
+    }
+
+    private void GoTop() => Navigation.NavigateTo("/contracts/backdating-approval#PageTop");
+    private void GoBottom() => Navigation.NavigateTo("/contracts/backdating-approval#PageBottom");
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+        _searchError = null;
+    }
+
+    private async Task SearchVehicle()
+    {
+        _searchError = null;
+        _selectedVehicle = null;
+
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _searchError = _searchType == "GG" ? "Enter a GG number to search." : "Enter a GP number to search.";
+            return;
+        }
+
+        _searching = true;
+        try
+        {
+            var results = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+            _selectedVehicle = results.FirstOrDefault();
+            if (_selectedVehicle == null)
+            {
+                _searchError = "No vehicles matched the search criteria.";
+            }
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private void ClearSearch()
+    {
+        _searchQuery = "";
+        _searchError = null;
+        _selectedVehicle = null;
+    }
+
+    private void OpenSelectedVehicle()
+    {
+        if (_selectedVehicle == null)
+        {
+            return;
+        }
+
+        var ggNumber = Uri.EscapeDataString(_selectedVehicle.fleet_number ?? "");
+        var regNumber = Uri.EscapeDataString(_selectedVehicle.registration_number ?? "");
+        Navigation.NavigateTo($"/contracts/backdating-approval/detail?ggnumber={ggNumber}&regnumber={regNumber}&action=review");
+    }
+
+    private void OpenContractDetail(ContractDto contract, string action)
+    {
+        var contractId = contract.contract_id;
+        var regNumber = Uri.EscapeDataString(contract.vehicle_registration ?? "");
+        var ggNumber = Uri.EscapeDataString(contract.Vehicle?.fleet_number ?? "");
+        Navigation.NavigateTo($"/contracts/backdating-approval/detail?contractId={contractId}&action={action}&ggnumber={ggNumber}&regnumber={regNumber}");
+    }
+
+    private static string FormatDate(DateTime? date)
+    {
+        return date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
+    }
+
+    private static string FormatDate(DateTime date)
+    {
+        return date.ToString("yyyy/MM/dd");
+    }
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetFleetNumber(ContractDto contract)
+        => ValueOrDash(contract.Vehicle?.fleet_number ?? contract.vehicle_registration);
+
+    private static string GetRegNumber(ContractDto contract)
+        => ValueOrDash(contract.vehicle_registration);
+
+    private static string GetVehicleStatus(ContractDto contract)
+        => ValueOrDash(contract.Vehicle?.status_description ?? contract.status);
+
+    private static string GetContractType(ContractDto contract)
+        => ValueOrDash(null);
+
+    private static string GetContractStatus(ContractDto contract)
+        => ValueOrDash(contract.status);
+
+    private static string GetHireType(ContractDto contract)
+        => ValueOrDash(null);
+
+    private static string GetMake(ContractDto contract)
+        => ValueOrDash(contract.vehicle_make);
+
+    private static string GetLocation(ContractDto contract)
+        => ValueOrDash(contract.Vehicle?.location_description);
+
+    private static string GetModel(ContractDto contract)
+        => ValueOrDash(contract.vehicle_model ?? contract.Vehicle?.model_name);
+
+    private static string GetUserName(ContractDto contract)
+        => ValueOrDash(null);
+
+    private static string GetDepartment(ContractDto contract)
+        => ValueOrDash(contract.department_name ?? contract.Department?.department_description);
+
+    private static string GetSite(ContractDto contract)
+        => ValueOrDash(null);
+}

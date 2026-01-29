@@ -1,0 +1,101 @@
+@page "/finance/tariff-parameters"
+@rendermode InteractiveServer
+
+<PageTitle>Tariff Parameter Management</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-cog"></i>
+            Tariff Parameter Management
+        </h1>
+        <p class="page-description">Annual tariff parameter maintenance aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Tariff Parameters</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Tariff Parameter Year</label>
+                    <select class="form-select">
+                        <option value="">Select Year</option>
+                    </select>
+                </div>
+            </div>
+            <div class="contract-banner contract-banner-info contract-banner-inline">
+                Tariff Parameter Year Approval
+            </div>
+            <div class="contract-action-group">
+                <button class="btn btn-primary btn-sm">Approve Year</button>
+                <button class="btn btn-secondary btn-sm">Reject Year</button>
+            </div>
+            <h3 style="margin-top: 1.5rem;">Tariff Parameters &amp; Overhead Values</h3>
+            <div class="table-container" style="margin-top: 0.75rem;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fixed Tariff</th>
+                                <th>Value</th>
+                                <th>Overhead</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4">No tariff parameter values loaded.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="table-container" style="margin-top: 0.75rem;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Kilo Tariff</th>
+                                <th>Value</th>
+                                <th>Overhead</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4">No kilo tariff values loaded.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <h3 style="margin-top: 1.5rem;">Maintenance Values</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Class</th>
+                                <th>Months Age</th>
+                                <th>KM Age</th>
+                                <th>Maintenance Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4">No maintenance values loaded.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

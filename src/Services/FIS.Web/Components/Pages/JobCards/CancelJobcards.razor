@@ -1,0 +1,72 @@
+@page "/job-cards/cancel"
+@rendermode InteractiveServer
+
+<PageTitle>Cancel Job Cards - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-x-circle"></i>
+            Cancel Job Cards
+        </h1>
+        <p class="page-description">Request cancellation for jobcards by GG number.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Jobcard Menu</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/capturer-default">Main Menu</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/list">Edit Jobcard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="form-grid" style="align-items: end;">
+            <div class="form-field">
+                <label class="form-label">Enter GG Number</label>
+                <input class="form-input" placeholder="GG Number" />
+            </div>
+            <div class="form-field">
+                <button class="btn btn-primary" type="button">Search</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Job Cards</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Action</th>
+                        <th>Job Card Number</th>
+                        <th>Job Card Description</th>
+                        <th>GG Number</th>
+                        <th>Assigned To</th>
+                        <th>Assigned Date</th>
+                        <th>Authoriser Comments</th>
+                        <th>Authoriser</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="9">No job cards found.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -109,6 +109,26 @@ public class ContractApiService
             return false;
         }
     }
+
+    public async Task<List<ContractSummaryDto>> GetActiveContractsAsync()
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync("api/Contracts/active");
+            response.EnsureSuccessStatusCode();
+
+            var contracts = await response.Content.ReadFromJsonAsync<List<ContractSummaryDto>>();
+            return contracts ?? new List<ContractSummaryDto>();
+        }
+        catch (HttpRequestException)
+        {
+            return new List<ContractSummaryDto>();
+        }
+        catch (Exception)
+        {
+            return new List<ContractSummaryDto>();
+        }
+    }
 }
 
 public class ContractCreateDto
@@ -145,4 +165,12 @@ public class HireContractRequestDto
     public string? DriverId { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
+}
+
+public class ContractSummaryDto
+{
+    public int contract_code { get; set; }
+    public int vmf_code { get; set; }
+    public short site_code { get; set; }
+    public string? still_current { get; set; }
 }

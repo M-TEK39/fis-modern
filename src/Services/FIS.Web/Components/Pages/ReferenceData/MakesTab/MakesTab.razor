@@ -37,6 +37,7 @@ else
                 <thead>
                     <tr>
                         <th>Make Name</th>
+                        <th>Last Updated</th>
                         <th class="actions-column">Actions</th>
                     </tr>
                 </thead>
@@ -45,6 +46,7 @@ else
                     {
                         <tr>
                             <td>@make.make_name</td>
+                            <td>@(make.date_updated?.ToString("yyyy-MM-dd") ?? "-")</td>
                             <td class="actions-column">
                                 <div class="table-actions">
                                     <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(make)" title="Edit">

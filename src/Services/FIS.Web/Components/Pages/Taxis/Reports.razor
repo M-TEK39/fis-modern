@@ -1,0 +1,47 @@
+@page "/taxis/reports/{Mode}"
+@rendermode InteractiveServer
+
+<PageTitle>@_pageTitle - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            @_pageTitle
+        </h1>
+        <p class="page-description">Legacy taxi reports.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/taxis">Back to Taxi Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <p class="form-hint">This report screen will be aligned to the legacy report parameters.</p>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Mode { get; set; }
+
+    private string _pageTitle = "Taxi Reports";
+
+    protected override void OnParametersSet()
+    {
+        _pageTitle = Mode switch
+        {
+            "one-taxi-number" => "Report On One Taxi Number",
+            "logs-per-user" => "Number Of Taxi Logs Captured Per User For Date",
+            "old-requisitions" => "Old Requisitions For Period",
+            "taxis-per-company" => "Taxis Per Hire Company",
+            "taxis-per-department" => "List Of All Taxis In Various Departments",
+            "taxis-inservice-per-department" => "List Of All Taxis In Service In Various Departments",
+            "logs-requisitions-status" => "Taxi Logs and Requisitions Statuses Reports",
+            _ => "Taxi Reports"
+        };
+    }
+}

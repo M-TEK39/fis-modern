@@ -1,0 +1,234 @@
+@page "/trips/show"
+@rendermode InteractiveServer
+
+<PageTitle>Show Trip Authority - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-clipboard"></i>
+            Trip Authority No: <span class="contract-muted">[Trip Number]</span>
+        </h1>
+        <p class="page-description">Trip Status: <strong>Open</strong></p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/trips">&lt; Back to Trips</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-section" style="margin-bottom: 1rem;">
+                <div class="form-hint">Trip Authority No : <strong>[Trip Number]</strong> has the following information:</div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab @(_activeTab == "vehicle" ? "active" : "")" @onclick='() => SetActiveTab("vehicle")'>
+                    Vehicle Information
+                </button>
+                <button class="tab @(_activeTab == "trip" ? "active" : "")" @onclick='() => SetActiveTab("trip")'>
+                    Trip Information
+                </button>
+                <button class="tab @(_activeTab == "drivers" ? "active" : "")" @onclick='() => SetActiveTab("drivers")'>
+                    Driver Information
+                </button>
+                <button class="tab @(_activeTab == "passengers" ? "active" : "")" @onclick='() => SetActiveTab("passengers")'>
+                    Passenger Information
+                </button>
+                <button class="tab @(_activeTab == "routes" ? "active" : "")" @onclick='() => SetActiveTab("routes")'>
+                    Route Information
+                </button>
+            </div>
+
+            <div class="tab-content">
+                @if (_activeTab == "vehicle")
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Vehicle Information</h3>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <tbody>
+                                        <tr><th>Department Name</th><td></td></tr>
+                                        <tr><th>Site Code</th><td></td></tr>
+                                        <tr><th>Site Name</th><td></td></tr>
+                                        <tr><th>Contract Code</th><td></td></tr>
+                                        <tr><th>VMF Code</th><td></td></tr>
+                                        <tr><th>Fleet Number</th><td></td></tr>
+                                        <tr><th>Make</th><td></td></tr>
+                                        <tr><th>Model</th><td></td></tr>
+                                        <tr><th>Registration Number</th><td></td></tr>
+                                        <tr><th>Start ODO Meter</th><td></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeTab == "trip")
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Trip Information</h3>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <tbody>
+                                        <tr><th>Approver Name</th><td></td></tr>
+                                        <tr><th>Approver Rank</th><td></td></tr>
+                                        <tr><th>Approver Telephone</th><td></td></tr>
+                                        <tr><th>Expiry Date</th><td></td></tr>
+                                        <tr><th>End ODO Meter</th><td></td></tr>
+                                        <tr><th>Trip Reason</th><td></td></tr>
+                                        <tr><th>Trip Type</th><td></td></tr>
+                                        <tr><th>Trip Type Code</th><td></td></tr>
+                                        <tr><th>Trip Captured by</th><td></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (_activeTab == "drivers")
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Driver Information</h3>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <tbody>
+                                        <tr><td>No drivers found.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="form-section" style="margin-top: 1rem;">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Driver Name</th><td></td></tr>
+                                    <tr><th>Driver ID</th><td></td></tr>
+                                    <tr><th>Driver Passport</th><td></td></tr>
+                                    <tr><th>Primary</th><td></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else if (_activeTab == "passengers")
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Passenger Information</h3>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <tbody>
+                                        <tr><td>No passengers found.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="form-section" style="margin-top: 1rem;">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Passenger Name</th><td></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Route Information</h3>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <tbody>
+                                        <tr><td>No routes found.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="form-section" style="margin-top: 1rem;">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Route</th><td></td></tr>
+                                    <tr><th>Start Date</th><td></td></tr>
+                                    <tr><th>Start Location</th><td></td></tr>
+                                    <tr><th>Start ODO Meter</th><td></td></tr>
+                                    <tr><th>Contract ID</th><td></td></tr>
+                                    <tr><th>End Date or closed or last modified by</th><td></td></tr>
+                                    <tr><th>End Location</th><td></td></tr>
+                                    <tr>
+                                        <th>End ODO Meter</th>
+                                        <td><input class="form-input" placeholder="Enter End ODO" /></td>
+                                    </tr>
+                                    <tr><th>Estimated Distance</th><td></td></tr>
+                                    <tr>
+                                        <th>Fund</th>
+                                        <td>
+                                            <select class="form-select">
+                                                <option value="">Select Fund</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Objective</th>
+                                        <td>
+                                            <select class="form-select">
+                                                <option value="">Select Objective</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Responsibility</th>
+                                        <td>
+                                            <select class="form-select">
+                                                <option value="">Select Responsibility</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Project</th>
+                                        <td>
+                                            <select class="form-select">
+                                                <option value="">Select Project</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Type of Incident</th>
+                                        <td>
+                                            <select class="form-select">
+                                                <option value="">Select Incident</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr><th>Edited By</th><td></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <div class="contract-action-group">
+                <button class="btn btn-secondary">&lt; Back to Trips</button>
+                <button class="btn btn-primary">Save and Close</button>
+                <button class="btn btn-secondary">Save and Renew</button>
+                <button class="btn btn-secondary">Print Trip Authority</button>
+                <button class="btn btn-secondary">Print Invoice</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _activeTab = "routes";
+
+    private void SetActiveTab(string tab)
+    {
+        _activeTab = tab;
+    }
+}

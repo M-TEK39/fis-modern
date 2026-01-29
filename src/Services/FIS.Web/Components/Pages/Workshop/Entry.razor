@@ -1,0 +1,147 @@
+@page "/workshop/entry"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>WorkShop Entry</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-wrench"></i>
+            WorkShop Entry
+        </h1>
+        <p class="page-description">Search for a vehicle to capture or update a workshop entry.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <span style="display:none">@_lookupType</span>
+    <span style="display:none">@_deptBy</span>
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">GG / GP Number</label>
+                    <InputText class="form-input" @bind-Value="_vehicleNumber" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Lookup Type</label>
+                    <div class="form-grid">
+                        <label class="form-label">
+                            <input type="radio" name="lookup" checked @onchange='() => _lookupType = "GG"' />
+                            GG
+                        </label>
+                        <label class="form-label">
+                            <input type="radio" name="lookup" @onchange='() => _lookupType = "GP"' />
+                            GP
+                        </label>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Show Dept By</label>
+                    <div class="form-grid">
+                        <label class="form-label">
+                            <input type="radio" name="dept" checked @onchange='() => _deptBy = "Code"' />
+                            Code
+                        </label>
+                        <label class="form-label">
+                            <input type="radio" name="dept" @onchange='() => _deptBy = "Name"' />
+                            Name (Description)
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="Submit">Submit</button>
+                <button class="btn btn-secondary" @onclick="GoMenu">Menu</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top: 1.5rem;">
+        <div class="table-header">
+            <span class="table-title">Previous Workshop Entries</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Vehicle Number</th>
+                        <th>Date Received</th>
+                        <th>Inquiry Refer</th>
+                        <th>Workshop</th>
+                        <th>Job Card CLOSED?</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_entries.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="6">No previous records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var entry in _entries)
+                        {
+                            <tr>
+                                <td>@entry.VehicleNumber</td>
+                                <td>@entry.DateReceived</td>
+                                <td>@entry.InquiryRefer</td>
+                                <td>@entry.WorkshopType</td>
+                                <td>@entry.JobClosed</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <a class="btn-icon btn-icon-edit" href="/workshop/entry/modify">
+                                            <i class="bx bx-edit"></i>
+                                        </a>
+                                        <a class="btn-icon btn-icon-delete" href="/workshop/entry/delete">
+                                            <i class="bx bx-trash"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="AddEntry">Add</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _vehicleNumber = "";
+    private string _lookupType = "GG";
+    private string _deptBy = "Code";
+
+    private readonly List<WorkshopEntryRow> _entries = new();
+
+    private void Submit()
+    {
+        // Placeholder for search.
+    }
+
+    private void AddEntry()
+    {
+        Navigation.NavigateTo("/workshop/entry/details");
+    }
+
+    private void GoMenu()
+    {
+        Navigation.NavigateTo("/workshop");
+    }
+
+    private sealed class WorkshopEntryRow
+    {
+        public string VehicleNumber { get; set; } = "";
+        public string DateReceived { get; set; } = "";
+        public string InquiryRefer { get; set; } = "";
+        public string WorkshopType { get; set; } = "";
+        public string JobClosed { get; set; } = "";
+    }
+}

@@ -1,0 +1,192 @@
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Trip Authority - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-clipboard"></i>
+            Trip Authority
+        </h1>
+        <p class="page-description">Select a tab below to change filtering from GG Number to Department &amp; Site to Trip Authority Number.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Select Location</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <span class="menu-item-link">My Site</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">My Department</span>
+                </div>
+                <div class="menu-item">
+                    <span class="menu-item-link">Any Department</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Trip Tools</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/trips/create">Create Trip Authority</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/trips/show">View / Close Trip Authority</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/trips/driver-maintenance">Maintain Drivers</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/trips/driver-info">Driver Information (Financial Year)</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/trips/remove-without-routes">Remove Trips Without Routes</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Trip Authority</h2>
+            <p>Select a tab to filter by GG Number, Department/Site, or Trip Authority Number.</p>
+        </div>
+        <div class="form-card-body">
+            <div class="tabs">
+                <button class="tab @(_activeTab == "gg" ? "active" : "")" @onclick='() => SetActiveTab("gg")'>
+                    <i class="bx bx-car"></i>
+                    GG Number
+                </button>
+                <button class="tab @(_activeTab == "department" ? "active" : "")" @onclick='() => SetActiveTab("department")'>
+                    <i class="bx bx-buildings"></i>
+                    Department / Site
+                </button>
+                <button class="tab @(_activeTab == "authority" ? "active" : "")" @onclick='() => SetActiveTab("authority")'>
+                    <i class="bx bx-id-card"></i>
+                    Trip Authority Number
+                </button>
+            </div>
+
+            <div class="tab-content">
+                @if (_activeTab == "gg")
+                {
+                    <div class="form-grid">
+                        <div class="form-field form-group-full">
+                            <label class="form-label">GG or Registration Number</label>
+                            <div class="contract-search-radio">
+                                <input class="form-input" placeholder="A partial number is allowed" style="max-width: 260px;" />
+                                <button class="btn btn-secondary btn-sm">Go</button>
+                            </div>
+                        </div>
+                    </div>
+                    @TripTables
+                }
+                else if (_activeTab == "department")
+                {
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Department</label>
+                            <select class="form-select">
+                                <option value="">Select Department</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Site</label>
+                            <select class="form-select">
+                                <option value="">Select Site</option>
+                            </select>
+                        </div>
+                    </div>
+                    @TripTables
+                }
+                else
+                {
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Trip Authority Number</label>
+                            <div class="contract-search-radio">
+                                <input class="form-input" placeholder="Numbers only" style="max-width: 220px;" />
+                                <button class="btn btn-secondary btn-sm">Go</button>
+                            </div>
+                        </div>
+                    </div>
+                    @TripTables
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _activeTab = "gg";
+
+    private void SetActiveTab(string tab)
+    {
+        _activeTab = tab;
+    }
+
+    private RenderFragment TripTables => @<div>
+        <div class="form-section">
+            <h3 class="form-section-title">(IN) Vehicles available for a trip.</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fleet Number</th>
+                                <th>Registration Number</th>
+                                <th>License Disk Expires</th>
+                                <th>Make Description</th>
+                                <th>Model Description</th>
+                                <th>Contract Type</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7">No vehicles were found that are currently IN and available.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h3 class="form-section-title">(OUT) Vehicles allocated to a trip.</h3>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Fleet Number</th>
+                                <th>Registration Number</th>
+                                <th>License Disk Expires</th>
+                                <th>Make Description</th>
+                                <th>Model Description</th>
+                                <th>Contract Type</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="7">No vehicles were found that are currently OUT on a trip.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>;
+}

@@ -1,0 +1,48 @@
+@page "/taxis/requests/{Mode}"
+@rendermode InteractiveServer
+
+<PageTitle>@_pageTitle - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-receipt"></i>
+            @_pageTitle
+        </h1>
+        <p class="page-description">Legacy taxi requisition workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/taxis">Back to Taxi Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <p class="form-hint">This screen will be aligned to the legacy taxi requisition form.</p>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Mode { get; set; }
+
+    private string _pageTitle = "Taxi Requisition";
+
+    protected override void OnParametersSet()
+    {
+        _pageTitle = Mode switch
+        {
+            "enter" => "Enter Taxi Requisition",
+            "enter-prev-bas" => "Enter Taxi Requisition using Previous Fin Years BAS Codes",
+            "edit" => "Edit Taxi Requisition",
+            "edit-prev-bas" => "Edit Taxi Requisition using Previous Fin Years BAS Codes",
+            "cancel" => "Cancel Taxi Requisition",
+            "reprint" => "Re-Print A Requisition",
+            "pending" => "Pending Requests",
+            "pending-jia" => "Pending JIA Pick-ups",
+            _ => "Taxi Requisition"
+        };
+    }
+}

@@ -1,9 +1,5 @@
 @page "/auction"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject AuctionApiService AuctionService
-@inject IJSRuntime JS
 
 <PageTitle>Auction - Fleet Information System</PageTitle>
 
@@ -13,113 +9,49 @@
             <i class="bx bx-dollar"></i>
             Auction
         </h1>
-        <p class="page-description">Auction overview from /api/auction.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadAuctions">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Auction maintenance and reporting aligned to the legacy workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading auctions...</p>
-        </div>
-    }
-    else if (_auctions.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-archive"></i>
-            <h3>No auction entries</h3>
-            <p>Awaiting auction API. Provide endpoints and fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_auctions.Count Auction(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Location</th>
-                            <th>Units</th>
-                            <th>Status</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var auction in _auctions)
-                        {
-                            <tr>
-                                <td>@auction.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@auction.Location</td>
-                                <td>@auction.Units</td>
-                                <td>
-                                    <span class="badge">@auction.Status</span>
-                                </td>
-                                <td>@auction.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Auction Maintenance Menu</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/help">Auction Maintenance Information / Help</a>
+                </div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Auction Maintenance for Johannesburg Garage</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/maintenance">1) Auction Maintenance</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/delete-vehicle">2) Delete a Vehicle on Auction</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Auction Reports Menu</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/auction/reports">Open Auction Reports Menu</a>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<AuctionItem> _auctions = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadAuctions();
-    }
-
-    private async Task LoadAuctions()
-    {
-        _loading = true;
-        try
-        {
-            var apiItems = await AuctionService.GetAllAsync<AuctionDto>();
-            _auctions = apiItems.Select(a => new AuctionItem(
-                Date: a.auction_date ?? DateTime.MinValue,
-                Location: a.auction_location ?? "N/A",
-                Units: a.units_to_auction ?? 0,
-                Status: a.auction_status ?? "Unknown",
-                Notes: a.auction_notes ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading auctions: {ex.Message}");
-            _auctions = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record AuctionItem(DateTime Date, string Location, int Units, string Status, string Notes);
-
-    private sealed class AuctionDto
-    {
-        public short auction_code { get; set; }
-        public int vmf_code { get; set; }
-        public DateTime? auction_date { get; set; }
-        public string? auction_location { get; set; }
-        public int? units_to_auction { get; set; }
-        public string? auction_status { get; set; }
-        public string? auction_notes { get; set; }
-    }
-}

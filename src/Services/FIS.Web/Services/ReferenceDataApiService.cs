@@ -8,6 +8,7 @@ internal class ApiMakeResponse
 {
     public short make_code { get; set; }
     public string make_description { get; set; } = string.Empty;
+    public DateTime? date_updated { get; set; }
 }
 
 internal class ApiModelResponse
@@ -21,6 +22,19 @@ internal class ApiModelResponse
     public short class_code { get; set; }
     public short fuel_type_code { get; set; }
     public short? type_code { get; set; }
+    public short? maint_trigger_code { get; set; }
+    public string? engine_type { get; set; }
+    public short? engine_capacity { get; set; }
+    public short? rated_power { get; set; }
+    public short? fuel_tank_capacity { get; set; }
+    public decimal? target_consumption { get; set; }
+    public int? target_tyre_life { get; set; }
+    public int? service_interval { get; set; }
+    public string? vemm_code { get; set; }
+    public short? licence_fee_code { get; set; }
+    public int? gvm { get; set; }
+    public string? transmission { get; set; }
+    public decimal? wesbank_kilos_per_litre { get; set; }
 }
 
 internal class ApiVehicleTypeResponse
@@ -33,6 +47,7 @@ internal class ApiFuelTypeResponse
 {
     public short fuel_type_code { get; set; }
     public string fuel_description { get; set; } = string.Empty;
+    public decimal? rate_per_litre { get; set; }
 }
 
 public class ReferenceDataApiService
@@ -58,7 +73,8 @@ public class ReferenceDataApiService
             return apiResponse.Select(make => new MakeDto
             {
                 make_code = make.make_code,
-                make_name = make.make_description
+                make_name = make.make_description,
+                date_updated = make.date_updated
             }).ToList();
         }
         catch (Exception ex)
@@ -78,7 +94,8 @@ public class ReferenceDataApiService
             return new MakeDto
             {
                 make_code = apiResponse.make_code,
-                make_name = apiResponse.make_description
+                make_name = apiResponse.make_description,
+                date_updated = apiResponse.date_updated
             };
         }
         catch (Exception ex)
@@ -161,7 +178,20 @@ public class ReferenceDataApiService
                 fuel_type_code = model.fuel_type_code,
                 licence_code = model.licence_code,
                 class_code = model.class_code,
-                type_code = model.type_code
+                type_code = model.type_code,
+                maint_trigger_code = model.maint_trigger_code,
+                engine_type = model.engine_type,
+                engine_capacity = model.engine_capacity,
+                rated_power = model.rated_power,
+                fuel_tank_capacity = model.fuel_tank_capacity,
+                target_consumption = model.target_consumption,
+                target_tyre_life = model.target_tyre_life,
+                service_interval = model.service_interval,
+                vemm_code = model.vemm_code,
+                licence_fee_code = model.licence_fee_code,
+                gvm = model.gvm,
+                transmission = model.transmission,
+                wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
             }).ToList();
         }
         catch (Exception ex)
@@ -188,7 +218,20 @@ public class ReferenceDataApiService
                 fuel_type_code = apiResponse.fuel_type_code,
                 licence_code = apiResponse.licence_code,
                 class_code = apiResponse.class_code,
-                type_code = apiResponse.type_code
+                type_code = apiResponse.type_code,
+                maint_trigger_code = apiResponse.maint_trigger_code,
+                engine_type = apiResponse.engine_type,
+                engine_capacity = apiResponse.engine_capacity,
+                rated_power = apiResponse.rated_power,
+                fuel_tank_capacity = apiResponse.fuel_tank_capacity,
+                target_consumption = apiResponse.target_consumption,
+                target_tyre_life = apiResponse.target_tyre_life,
+                service_interval = apiResponse.service_interval,
+                vemm_code = apiResponse.vemm_code,
+                licence_fee_code = apiResponse.licence_fee_code,
+                gvm = apiResponse.gvm,
+                transmission = apiResponse.transmission,
+                wesbank_kilos_per_litre = apiResponse.wesbank_kilos_per_litre
             };
         }
         catch (Exception ex)
@@ -211,7 +254,20 @@ public class ReferenceDataApiService
                 fuel_type_code = model.fuel_type_code,
                 licence_code = model.licence_code,
                 class_code = model.class_code,
-                model_description = model.model_name
+                model_description = model.model_name,
+                maint_trigger_code = model.maint_trigger_code,
+                engine_type = model.engine_type,
+                engine_capacity = model.engine_capacity,
+                rated_power = model.rated_power,
+                fuel_tank_capacity = model.fuel_tank_capacity,
+                target_consumption = model.target_consumption,
+                target_tyre_life = model.target_tyre_life,
+                service_interval = model.service_interval,
+                vemm_code = model.vemm_code,
+                licence_fee_code = model.licence_fee_code,
+                gvm = model.gvm,
+                transmission = model.transmission,
+                wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
             };
             
             var response = await _httpClient.PostAsJsonAsync("api/model", createModelDto);
@@ -238,7 +294,20 @@ public class ReferenceDataApiService
                 fuel_type_code = model.fuel_type_code,
                 licence_code = model.licence_code,
                 class_code = model.class_code,
-                model_description = model.model_name
+                model_description = model.model_name,
+                maint_trigger_code = model.maint_trigger_code,
+                engine_type = model.engine_type,
+                engine_capacity = model.engine_capacity,
+                rated_power = model.rated_power,
+                fuel_tank_capacity = model.fuel_tank_capacity,
+                target_consumption = model.target_consumption,
+                target_tyre_life = model.target_tyre_life,
+                service_interval = model.service_interval,
+                vemm_code = model.vemm_code,
+                licence_fee_code = model.licence_fee_code,
+                gvm = model.gvm,
+                transmission = model.transmission,
+                wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
             };
             
             var response = await _httpClient.PutAsJsonAsync($"api/model/{modelCode}", modelEntity);
@@ -372,7 +441,8 @@ public class ReferenceDataApiService
             return apiResponse.Select(fuelType => new FuelTypeDto
             {
                 fuel_type_code = fuelType.fuel_type_code,
-                fuel_type_name = fuelType.fuel_description
+                fuel_type_name = fuelType.fuel_description,
+                rate_per_litre = fuelType.rate_per_litre
             }).ToList();
         }
         catch (Exception ex)
@@ -392,7 +462,8 @@ public class ReferenceDataApiService
             return new FuelTypeDto
             {
                 fuel_type_code = apiResponse.fuel_type_code,
-                fuel_type_name = apiResponse.fuel_description
+                fuel_type_name = apiResponse.fuel_description,
+                rate_per_litre = apiResponse.rate_per_litre
             };
         }
         catch (Exception ex)
@@ -409,7 +480,8 @@ public class ReferenceDataApiService
             // Map FuelTypeDto to API expected format
             var createFuelTypeDto = new
             {
-                fuel_description = fuelType.fuel_type_name
+                fuel_description = fuelType.fuel_type_name,
+                rate_per_litre = fuelType.rate_per_litre
             };
             
             var response = await _httpClient.PostAsJsonAsync("api/fueltype", createFuelTypeDto);
@@ -430,7 +502,8 @@ public class ReferenceDataApiService
             var fuelTypeEntity = new
             {
                 fuel_type_code = (short)fuelTypeCode,
-                fuel_description = fuelType.fuel_type_name
+                fuel_description = fuelType.fuel_type_name,
+                rate_per_litre = fuelType.rate_per_litre
             };
             
             var response = await _httpClient.PutAsJsonAsync(

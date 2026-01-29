@@ -1,52 +1,43 @@
 @page "/vehicle-photos"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using FIS.Web.Services
-@inject VehicleApiService VehicleService
-@inject VehiclePhotoApiService VehiclePhotoService
+@using FIS.Web.Models
+@inject VehicleLookupApiService VehicleLookupService
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
-<PageTitle>Vehicle Photos - Fleet Information System</PageTitle>
+<PageTitle>Vehicle Photo Upload - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-image"></i>
-            Vehicle Photos
+            Vehicle Photo Upload
         </h1>
-        <p class="page-description">Photo references from /api/vehiclephoto.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadPhotos">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Search for vehicles by GG or registration number</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="search-bar">
-        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
-                       @onchange='() => SetSearchType("GG")' />
-                GG
-            </label>
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
-                       @onchange='() => SetSearchType("GP")' />
-                GP Number
-            </label>
-        </div>
+    <form class="search-bar" @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
         <div class="search-input-wrapper" style="gap:0.75rem;">
             <i class="bx bx-search"></i>
             <input
+                id="keyword"
                 type="text"
                 class="search-input"
-                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
+                placeholder="GG or registration number"
                 @bind="_searchQuery"
-                @bind:event="oninput" />
-            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchPhotos" disabled="@_searching">
+                @bind:event="oninput"
+                list="vehicle-keywords"
+                autocomplete="off" />
+            <datalist id="vehicle-keywords">
+                @foreach (var keyword in _keywords)
+                {
+                    <option value="@keyword"></option>
+                }
+            </datalist>
+            <button class="btn btn-primary btn-sm" type="submit" disabled="@(!_isLoaded || _searching)">
                 @if (_searching)
                 {
                     <span class="spinner-sm"></span>
@@ -62,81 +53,54 @@
         {
             <span class="form-error">@_searchError</span>
         }
-    </div>
+        @if (!_isLoaded)
+        {
+            <span class="form-hint">Loading search criteria...</span>
+        }
+    </form>
 
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="TogglePhotosInfo">
-                <span>Vehicle Photos Information / Help</span>
-                <i class="bx @(_showPhotosInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showPhotosInfo)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <span class="menu-item-disabled">Vehicle Photos Information / Help</span>
-                        <span class="menu-item-badge">Coming soon</span>
-                    </div>
-                </div>
-            }
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="TogglePhotosMaintenance">
-                <span>Vehicle Photos Maintenance</span>
-                <i class="bx @(_showPhotosMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showPhotosMaintenance)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicle-photos">1) Vehicle Photos</a>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading vehicle photos...</p>
-        </div>
-    }
-    else if (_photos.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-image"></i>
-            <h3>No vehicle photos</h3>
-            <p>Awaiting vehicle photos API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
+    @if (_searchResults.Count > 0)
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@_photos.Count Photo reference(s)</span>
+                <span class="table-title">@_searchResults.Count Vehicle(s)</span>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Vehicle</th>
-                            <th>Type</th>
+                            <th>GG Number</th>
+                            <th>Registration Number</th>
+                            <th>Make and Model</th>
+                            <th>Year Manufactured</th>
+                            <th>Colour</th>
+                            <th>Hire Type</th>
                             <th>Status</th>
-                            <th>Date</th>
-                            <th>Notes</th>
+                            <th>Hired From</th>
+                            <th>Status Date</th>
+                            <th class="actions-column">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var photo in _photos)
+                        @foreach (var vehicle in _searchResults)
                         {
                             <tr>
-                                <td>@photo.Vehicle</td>
-                                <td>@photo.Type</td>
-                                <td><span class="badge">@photo.Status</span></td>
-                                <td>@photo.Date.ToString("yyyy-MM-dd")</td>
-                                <td>@photo.Notes</td>
+                                <td>@vehicle.GGNumber</td>
+                                <td>@vehicle.RegistrationNumber</td>
+                                <td>@vehicle.MakeAndModel</td>
+                                <td>@(vehicle.YearManufactured?.ToString() ?? "N/A")</td>
+                                <td>@vehicle.Colour</td>
+                                <td>@vehicle.HireType</td>
+                                <td>@vehicle.Status</td>
+                                <td>@vehicle.HiredFrom</td>
+                                <td>@(vehicle.StatusDate?.ToString("yyyy-MM-dd") ?? "N/A")</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-view" @onclick="() => ManagePhotos(vehicle)">
+                                            <i class="bx bx-image"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -147,105 +111,52 @@
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<PhotoItem> _photos = new();
-    private List<PhotoItem> _allPhotos = new();
-    private string _searchType = "GG";
+    private bool _isLoaded;
     private string _searchQuery = "";
     private bool _searching;
     private string? _searchError;
-    private bool _showPhotosInfo = true;
-    private bool _showPhotosMaintenance = true;
+    private List<string> _keywords = new();
+    private List<VehicleLookupDto> _searchResults = new();
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadPhotos();
+        await LoadSearchCriteria();
     }
 
-    private async Task LoadPhotos()
+    private async Task LoadSearchCriteria()
     {
-        _loading = true;
+        _isLoaded = false;
         try
         {
-            var apiItems = await VehiclePhotoService.GetAllAsync<VehiclePhotoDto>();
-            _allPhotos = apiItems.Select(p => new PhotoItem(
-                VmfCode: p.VehicleMasterCode,
-                Vehicle: p.VehicleMasterCode.ToString(),
-                Type: p.Orientation?.ToString() ?? "N/A",
-                Status: string.IsNullOrWhiteSpace(p.FileUrl) ? "Pending" : "Available",
-                Date: DateTime.MinValue,
-                Notes: p.Description ?? string.Empty
-            )).ToList();
-            _photos = new List<PhotoItem>(_allPhotos);
+            _keywords = await VehicleLookupService.GetSearchCriteriaAsync();
+            _isLoaded = true;
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("console.error", $"Error loading vehicle photos: {ex.Message}");
-            _photos = new();
-            _allPhotos = new();
+            await JS.InvokeVoidAsync("console.error", $"Error loading vehicle search criteria: {ex.Message}");
+            _keywords = new();
+            _isLoaded = false;
         }
-        finally
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (_searching)
         {
-            _loading = false;
+            return;
         }
-    }
 
-    private sealed record PhotoItem(int VmfCode, string Vehicle, string Type, string Status, DateTime Date, string Notes);
-
-    private sealed class VehiclePhotoDto
-    {
-        public int VehiclePhotoInfoCode { get; set; }
-        public int VehicleMasterCode { get; set; }
-        public string? FileUrl { get; set; }
-        public int? Orientation { get; set; }
-        public string? Description { get; set; }
-    }
-
-    private void TogglePhotosInfo()
-    {
-        _showPhotosInfo = !_showPhotosInfo;
-    }
-
-    private void TogglePhotosMaintenance()
-    {
-        _showPhotosMaintenance = !_showPhotosMaintenance;
-    }
-
-    private void SetSearchType(string type)
-    {
-        _searchType = type;
-    }
-
-    private async Task SearchPhotos()
-    {
         _searchError = null;
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
-            _photos = new List<PhotoItem>(_allPhotos);
+            _searchError = "Please enter a search keyword.";
             return;
         }
 
         _searching = true;
         try
         {
-            var query = _searchQuery.Trim();
-            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
-            var match = _searchType == "GG"
-                ? vehicles.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
-                : vehicles.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
-
-            if (match == null)
-            {
-                _photos = new List<PhotoItem>();
-                _searchError = "Vehicle not found.";
-                return;
-            }
-
-            _photos = _allPhotos.Where(p => p.VmfCode == match.vmf_code).ToList();
-            if (_photos.Count == 0)
-            {
-                _searchError = "No vehicle photos found for this vehicle.";
-            }
+            _searchResults = await VehicleLookupService.SearchAsync(_searchQuery.Trim());
         }
         catch (Exception ex)
         {
@@ -255,5 +166,10 @@
         {
             _searching = false;
         }
+    }
+
+    private void ManagePhotos(VehicleLookupDto vehicle)
+    {
+        Navigation.NavigateTo($"/vehicle-photos/manage/{vehicle.VmfCode}?keyword={Uri.EscapeDataString(_searchQuery)}");
     }
 }

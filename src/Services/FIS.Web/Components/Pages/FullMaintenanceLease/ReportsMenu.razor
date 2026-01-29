@@ -1,0 +1,55 @@
+@page "/full-maintenance-lease/reports"
+@rendermode InteractiveServer
+
+<PageTitle>FML Reports</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            FML Reports
+        </h1>
+        <p class="page-description">NOM / FML Reports Menu.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Reports</span>
+                <i class="bx bx-chevron-down"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/full-maintenance-lease/reports/filter?report=maintenance-history">
+                        1) FML Vehicle Maintenance History.
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/full-maintenance-lease/reports/contracts-expiring">
+                        2) FML Contracts that will expire in the next 3 months.
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/full-maintenance-lease/reports/expired-contracts-open">
+                        3) List of Expired FML contracts but still having open contracts with clients.
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/full-maintenance-lease/reports/vehicles-no-contracts">
+                        4) List of FML vehicles that do not have contracts with Clients.
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/full-maintenance-lease/reports/filter?report=over-utilized">
+                        5) List of over utilized FML vehicles (based on km's).
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/full-maintenance-lease">Return to Main Report Page.</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

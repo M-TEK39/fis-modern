@@ -1,0 +1,66 @@
+@page "/fuel-cards/private-hire/collection-multiple"
+@rendermode InteractiveServer
+
+<PageTitle>Collection for TWO or MORE Fuelcards (Private Hire)</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-credit-card"></i>
+            Collection for TWO or MORE Fuelcards (Private Hire)
+        </h1>
+        <p class="page-description">Collect multiple fuelcards for a private hire vehicle.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/fuel-cards">Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field form-group-full">
+                    <label class="form-label">GG / GP Number</label>
+                    <div class="contract-search-inputs">
+                        <div class="contract-search-radio">
+                            <label class="form-label">
+                                <input type="radio" name="searchType" value="GG" checked />
+                                GG
+                            </label>
+                            <label class="form-label">
+                                <input type="radio" name="searchType" value="GP" />
+                                GP Number
+                            </label>
+                        </div>
+                        <input class="form-input" placeholder="Enter number" />
+                        <button class="btn btn-primary btn-sm" type="button">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/fuel-cards">Menu</a>
+                    </div>
+                </div>
+            </div>
+            <div class="table-container" style="margin-top: 1rem;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Vehicle Number</th>
+                                <th>Hire Type</th>
+                                <th>GG Counter</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4">No records found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary btn-sm">Add</button>
+            </div>
+        </div>
+    </div>
+</div>

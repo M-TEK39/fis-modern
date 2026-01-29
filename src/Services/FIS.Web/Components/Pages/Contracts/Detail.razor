@@ -1,0 +1,609 @@
+@page "/contracts/detail"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Vehicle Contract Detail Management</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-clipboard"></i>
+            Vehicle Contract Management
+        </h1>
+        <p class="page-description">Vehicle contract detail management aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/contracts">Return to Search</a>
+        <a class="btn btn-secondary btn-sm" href="/contracts">Active Contract Overview</a>
+        <button class="btn btn-secondary btn-sm" type="button" onclick="window.print()">Print</button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="contract-banner contract-banner-warning">
+        <i class="bx bx-error-circle"></i>
+        <span>Limited access: some contract actions may be restricted based on your role.</span>
+    </div>
+    <div class="contract-banner contract-banner-info">
+        <i class="bx bx-info-circle"></i>
+        <span>Contract for <strong>@GetQuery("ggnumber")</strong> || <strong>@GetQuery("regnumber")</strong></span>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Vehicle Contract Management</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th class="contract-cell-label">Available Actions:</th>
+                    <td colspan="3">
+                        <div class="contract-action-group">
+                            <button class="btn btn-primary btn-sm" type="button">Open a Contract</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Extend Active Contract</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Reassign Contract</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Close Active Contract</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Create Relief Contract</button>
+                        </div>
+                        <div class="contract-action-group">
+                            <button class="btn btn-warning btn-sm" type="button">Validate Form Data</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Submit Form</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Cancel Loaded Contract</button>
+                        </div>
+                        <div class="contract-action-group">
+                            <button class="btn btn-warning btn-sm" type="button">Validate Form Data</button>
+                            <button class="btn btn-secondary btn-sm" type="button">Approve</button>
+                            <button class="btn btn-success btn-sm" type="button">Approve and Activate</button>
+                            <button class="btn btn-warning btn-sm" type="button">Decline For Correction</button>
+                            <button class="btn btn-danger btn-sm" type="button">Decline</button>
+                        </div>
+                        <div class="contract-action-group">
+                            <button class="btn btn-danger btn-sm" type="button">Pending Contract Exists : Click to Review</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <div class="contract-banner contract-banner-info">
+            <i class="bx bx-link-alt"></i>
+            <span>
+                This vehicle is currently assigned as Relief Vehicle for contract of <strong>GG-000</strong> / <strong>REG-000</strong>.
+                | The vehicle <strong>GG-000</strong> / <strong>REG-000</strong> is currently assigned as Relief Vehicle for this contract.
+            </span>
+            <a class="btn btn-secondary btn-sm" href="/contracts/detail">View Linked Relief Contract</a>
+        </div>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Approval Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <textarea class="form-input contract-notes" rows="4" placeholder="Approval notes..."></textarea>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Vehicle Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <th>GG Number</th>
+                                    <td>@GetQuery("ggnumber")</td>
+                                    <th>Registration Number</th>
+                                    <td>@GetQuery("regnumber")</td>
+                                    <th>Identification</th>
+                                    <td rowspan="5" class="contract-photo-cell">
+                                        <div class="contract-photo-box">Vehicle Photos</div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>VIN / Chassis Number</th>
+                                    <td>-</td>
+                                    <th>Engine Number</th>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <th>Make &amp; Model</th>
+                                    <td>-</td>
+                                    <th>Year Manufactured</th>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <th>Colour</th>
+                                    <td>-</td>
+                                    <th>Depot Location</th>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <th>Hire Type</th>
+                                    <td>-</td>
+                                    <th>Hired From</th>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <th>Status</th>
+                                    <td>-</td>
+                                    <th>Status Date</th>
+                                    <td>-</td>
+                                    <td colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="contract-banner contract-banner-warning contract-banner-inline">
+                            The vehicle is no longer in service and thus no contracts can be activated against it.
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Contract Readiness</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <th rowspan="3">Contract Client<br /><span class="contract-muted">* Intended or current active contract</span></th>
+                                    <th>Department</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Department</option>
+                                        </select>
+                                    </td>
+                                    <td rowspan="4" class="contract-tariff-cell">
+                                        <table class="contract-subtable">
+                                            <thead>
+                                                <tr>
+                                                    <th colspan="4">Tariff Detail</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <th>Tariff Type</th>
+                                                    <td>-</td>
+                                                    <td colspan="2">
+                                                        <input type="checkbox" /> Active / Valid Tariff
+                                                    </td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Monthly Rate</th>
+                                                    <th>Daily Rate</th>
+                                                    <th>KM Rate</th>
+                                                    <th>Excess KM Rate</th>
+                                                </tr>
+                                                <tr>
+                                                    <td>R -</td>
+                                                    <td>R -</td>
+                                                    <td>R -</td>
+                                                    <td>R -</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Site</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Site</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th colspan="2"></th>
+                                    <td></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3">
+                                        <input type="checkbox" /> Valid Financial System &amp; Codes
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3">
+                                        <input type="checkbox" /> Active Fuelcard <span class="contract-muted">[Fuel Card #]</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3">
+                                        <input type="checkbox" /> Current Contract
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="contract-banner contract-banner-warning contract-banner-inline">
+                            [Invalid Financial Configuration]: The selected department does not have a valid financial system configuration.
+                        </div>
+                        <div class="contract-banner contract-banner-info contract-banner-inline">
+                            [No valid Fuel Card]: The selected vehicle does not have a valid fuel card.
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Vehicle Assessment Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <label class="contract-inline-label">Sets of Keys</label>
+                                        <select class="form-select contract-inline-select">
+                                            <option>--</option>
+                                            <option>1</option>
+                                            <option>2</option>
+                                            <option>3</option>
+                                        </select>
+                                    </td>
+                                    <td><input type="checkbox" /> License Disc</td>
+                                    <td><input type="checkbox" /> Wheel Spanner</td>
+                                    <td><input type="checkbox" /> Jack</td>
+                                    <td><input type="checkbox" /> Fuel Card (Card #)</td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" /> Wheel Lock Key</td>
+                                    <td><input type="checkbox" /> COF Disc</td>
+                                    <td><input type="checkbox" /> Spare Wheel</td>
+                                    <td><input type="checkbox" /> Smash &amp; Grab</td>
+                                    <td>
+                                        <input type="checkbox" /> Logbook
+                                        <input class="form-input contract-input-sm" placeholder="Start #" />
+                                        <input class="form-input contract-input-sm" placeholder="End #" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" /> Gear Lock</td>
+                                    <td><input type="checkbox" /> Tracker</td>
+                                    <td><input type="checkbox" /> Radio</td>
+                                    <td><input type="checkbox" /> Fire Extinguisher</td>
+                                    <td><input type="checkbox" /> Damages</td>
+                                </tr>
+                                <tr>
+                                    <th>Notes</th>
+                                    <td colspan="4">
+                                        <textarea class="form-input contract-notes" rows="3" placeholder="Assessment notes..."></textarea>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Client Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <th rowspan="3">Contract Client</th>
+                                    <th>Department</th>
+                                    <td colspan="3">
+                                        <select class="form-select">
+                                            <option value="">Select Department</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Site</th>
+                                    <td colspan="3">
+                                        <select class="form-select">
+                                            <option value="">Select Site</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th colspan="4"></th>
+                                </tr>
+                                <tr>
+                                    <th>Authoriser Name</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Authoriser</option>
+                                        </select>
+                                    </td>
+                                    <th>Authorization</th>
+                                    <td>
+                                        <input class="form-input" />
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Driver Name</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Driver</option>
+                                        </select>
+                                    </td>
+                                    <td colspan="2">
+                                        <input type="checkbox" /> Valid Driver's License <span class="contract-muted">(expiry)</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Collected By Detail</th>
+                                    <td colspan="4">
+                                        <table class="contract-subtable">
+                                            <tbody>
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <td><input class="form-input" /></td>
+                                                    <th>Surname</th>
+                                                    <td><input class="form-input" /></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>ID Number</th>
+                                                    <td><input class="form-input" /></td>
+                                                    <th>Passport Number</th>
+                                                    <td><input class="form-input" /></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Office Telephone</th>
+                                                    <td><input class="form-input" /></td>
+                                                    <th>Cellphone</th>
+                                                    <td><input class="form-input" /></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Office / Section</th>
+                                                    <td><input class="form-input" /></td>
+                                                    <th>Designation / Rank</th>
+                                                    <td><input class="form-input" /></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Notes</th>
+                                    <td colspan="4">
+                                        <textarea class="form-input contract-notes" rows="3"></textarea>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Billing Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <th>Financial System</th>
+                                    <td>-</td>
+                                    <td colspan="3">
+                                        <input type="checkbox" /> Valid Financial System &amp; Codes
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Project</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Project</option>
+                                        </select>
+                                    </td>
+                                    <th>Fund</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Fund</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th>Responsibility</th>
+                                    <td colspan="2">
+                                        <select class="form-select">
+                                            <option value="">Select Responsibility</option>
+                                        </select>
+                                    </td>
+                                    <th>Objective</th>
+                                    <td>
+                                        <select class="form-select">
+                                            <option value="">Select Objective</option>
+                                        </select>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Contract Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <th>Contract Type</th>
+                                    <td>
+                                        <select class="form-select">
+                                            <option value="">Select Type</option>
+                                        </select>
+                                    </td>
+                                    <td colspan="2">
+                                        <input type="checkbox" /> Opt-In for Relief Vehicle
+                                    </td>
+                                    <th>Contract Status</th>
+                                    <td>-</td>
+                                    <th>Last Billed Date</th>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <th>Start Date</th>
+                                    <td><input type="date" class="form-input" /></td>
+                                    <th>End Date</th>
+                                    <td><input type="date" class="form-input" disabled /></td>
+                                    <th>Contract Period</th>
+                                    <td>
+                                        <select class="form-select contract-inline-select">
+                                            <option value="">--</option>
+                                            <option>12</option>
+                                            <option>24</option>
+                                            <option>36</option>
+                                            <option>48</option>
+                                            <option>60</option>
+                                            <option>72</option>
+                                            <option>84</option>
+                                        </select>
+                                        <span class="contract-muted">Lease Months</span>
+                                    </td>
+                                    <th>Return Date</th>
+                                    <td><input type="date" class="form-input" /></td>
+                                </tr>
+                                <tr>
+                                    <th>Back Dating Required</th>
+                                    <td><input type="checkbox" /></td>
+                                    <th>Back Dating Start Date</th>
+                                    <td><input type="date" class="form-input" /></td>
+                                    <th>Back Dating Status</th>
+                                    <td colspan="3">Requested / Declined / Approved</td>
+                                </tr>
+                                <tr>
+                                    <th>Start Odometer</th>
+                                    <td><input type="number" class="form-input" /></td>
+                                    <th>End Odometer</th>
+                                    <td><input type="number" class="form-input" disabled /></td>
+                                    <th>Contract Kilometers</th>
+                                    <td><input type="number" class="form-input" /></td>
+                                    <th>End Kilometers</th>
+                                    <td><input type="number" class="form-input" disabled /></td>
+                                </tr>
+                                <tr>
+                                    <th>Notes</th>
+                                    <td colspan="7">
+                                        <textarea class="form-input contract-notes" rows="3"></textarea>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Tariff Summary Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <table class="contract-subtable">
+                            <tbody>
+                                <tr>
+                                    <th>Monthly Tariff (p/m) / Daily Tariff (p/d)</th>
+                                    <td>R -</td>
+                                    <th>KM Tariff (p/km)</th>
+                                    <td>R -</td>
+                                    <th>Excess KM Tariff (p/km)</th>
+                                    <td>R -</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="6"><em>* Estimated Total of Tariff Charges Over the Contract Period (excluding fuel, oil, tolls, fines, losses, damages, excess charges)</em></td>
+                                </tr>
+                                <tr>
+                                    <th>Total Fixed Tariff Charges</th>
+                                    <td>R -</td>
+                                    <th>Total KM Charges</th>
+                                    <td>R -</td>
+                                    <th>Sub-Total (All Charges)</th>
+                                    <td>R -</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "ggnumber")] public string? GgNumber { get; set; }
+    [SupplyParameterFromQuery(Name = "regnumber")] public string? RegNumber { get; set; }
+    [SupplyParameterFromQuery(Name = "contractId")] public string? ContractId { get; set; }
+    [SupplyParameterFromQuery(Name = "action")] public string? Action { get; set; }
+
+    private string GetQuery(string key)
+    {
+        return key switch
+        {
+            "ggnumber" => GgNumber ?? "-",
+            "regnumber" => RegNumber ?? "-",
+            "contractId" => ContractId ?? "-",
+            "action" => Action ?? "-",
+            _ => "-"
+        };
+    }
+}

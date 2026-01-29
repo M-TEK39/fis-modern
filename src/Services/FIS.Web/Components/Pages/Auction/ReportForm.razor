@@ -1,0 +1,142 @@
+@page "/auction/reports/{Mode}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>@PageTitleText - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file-blank"></i>
+            @PageTitleText
+        </h1>
+        <p class="page-description">Auction report parameters aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/auction/reports">Reports Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>@PageTitleText</h2>
+        </div>
+        <div class="form-card-body">
+            @if (Mode == "one-vehicle")
+            {
+                <div class="form-grid">
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Number Type</label>
+                        <div class="contract-search-radio">
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionNumberType" />
+                                GP
+                            </label>
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionNumberType" checked />
+                                GG
+                            </label>
+                            <input class="form-input" placeholder="Number" style="max-width: 140px;" />
+                        </div>
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
+                </div>
+            }
+            else if (Mode == "all-vehicles")
+            {
+                <div class="form-grid">
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Garage</label>
+                        <div class="contract-search-radio">
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionGarage" checked />
+                                JHB
+                            </label>
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionGarage" />
+                                PTA
+                            </label>
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionGarage" />
+                                ALL
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Auction Number</label>
+                        <input class="form-input" placeholder="e.g. 2003/03" />
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
+                </div>
+            }
+            else if (Mode == "sale-to-name")
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Buyer Name</label>
+                        <input class="form-input" placeholder="Buyer Name" />
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
+                </div>
+            }
+            else if (Mode == "auction-gg" || Mode == "auction-lot")
+            {
+                <div class="form-grid">
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Garage</label>
+                        <div class="contract-search-radio">
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionGarage" checked />
+                                JHB
+                            </label>
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionGarage" />
+                                PTA
+                            </label>
+                            <label class="form-label form-checkbox">
+                                <input type="radio" name="auctionGarage" />
+                                ALL
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Auction Number</label>
+                        <input class="form-input" placeholder="e.g. 2003/03" />
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
+                </div>
+            }
+            else
+            {
+                <p>Invalid report mode.</p>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Mode { get; set; } = string.Empty;
+
+    private string PageTitleText => Mode switch
+    {
+        "one-vehicle" => "Auction Report on ONE Vehicle",
+        "all-vehicles" => "Auction Report on ALL Vehicles",
+        "sale-to-name" => "Auction Report on Sale to Name",
+        "auction-gg" => "Auction Report - Sort by GG Number",
+        "auction-lot" => "Auction Report - Sort by LOT Number",
+        _ => "Auction Report"
+    };
+}

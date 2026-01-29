@@ -95,6 +95,7 @@ public class SiteRequestDto
     public string? Address2 { get; set; }
     public string? Address3 { get; set; }
     public string? PostalCode { get; set; }
+    public string? ProvinceCode { get; set; }
     public string? Telephone { get; set; }
     public string? Fax { get; set; }
     public string? NetAddress { get; set; }
@@ -119,6 +120,7 @@ public class SiteResponseDto
     public string? Address2 { get; set; }
     public string? Address3 { get; set; }
     public string? PostalCode { get; set; }
+    public string? ProvinceCode { get; set; }
     public string? Telephone { get; set; }
     public string? Fax { get; set; }
     public string? NetAddress { get; set; }

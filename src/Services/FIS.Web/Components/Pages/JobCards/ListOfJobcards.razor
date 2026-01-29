@@ -1,0 +1,156 @@
+@page "/job-cards/list"
+@rendermode InteractiveServer
+
+<PageTitle>List of Jobcards - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-list-check"></i>
+            g-FleeT Permanent Section Job Cards
+        </h1>
+        <p class="page-description">Search, select, and edit jobcards as per the legacy list view.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Jobcard Menu</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/capturer-default">Main Menu</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/select-vehicle">Add New Job Card</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="form-grid" style="align-items: end;">
+            <div class="form-field">
+                <label class="form-label">Enter GG Number</label>
+                <input class="form-input" placeholder="GG Number" />
+            </div>
+            <div class="form-field">
+                <button class="btn btn-primary" type="button">Search</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-bottom: 1.5rem;">
+        <div class="table-header">
+            <span class="table-title">Select a Job Card</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Extra Description</th>
+                        <th>Job Card Number</th>
+                        <th>GG Number</th>
+                        <th>Registration Number</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="6">No jobcards found for the selected vehicle.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0;">Selected Job Card Details</h3>
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="form-label">Job Card Number</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Job Card Description</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">GG Number</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Jobcard Capturer</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Captured Date</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Barcode</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Vehicle Received By</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Vehicle Received Date</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Authoriser</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Authorised Date</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field" style="grid-column: 1 / -1;">
+                <label class="form-label">Authoriser Comments</label>
+                <textarea class="form-input" rows="3" disabled></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top: 0;">Required Information</h3>
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="form-label">Assign Job Card To</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Assign Job Card Date</label>
+                <input class="form-input" value="-" disabled />
+            </div>
+            <div class="form-field" style="grid-column: 1 / -1;">
+                <label class="form-label">Job Card Comments</label>
+                <textarea class="form-input" rows="3" disabled></textarea>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Damages To Vehicle</label>
+                <div class="form-grid" style="grid-template-columns: repeat(2, minmax(0, 1fr));">
+                    <label class="form-label form-checkbox"><input type="radio" name="damages" /> Yes</label>
+                    <label class="form-label form-checkbox"><input type="radio" name="damages" /> No</label>
+                </div>
+            </div>
+            <div class="form-field" style="grid-column: 1 / -1;">
+                <label class="form-label">Damages Comments</label>
+                <textarea class="form-input" rows="3" disabled></textarea>
+            </div>
+            <div class="form-field" style="grid-column: 1 / -1;">
+                <label class="form-label">Add New Damages</label>
+                <textarea class="form-input" rows="3" placeholder="Add new damages"></textarea>
+            </div>
+        </div>
+        <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+            <button class="btn btn-secondary" type="button" disabled>Edit Job Card</button>
+        </div>
+        <p class="form-hint" style="margin-top: 0.5rem;">Editing is disabled until jobcard APIs are wired.</p>
+    </div>
+</div>

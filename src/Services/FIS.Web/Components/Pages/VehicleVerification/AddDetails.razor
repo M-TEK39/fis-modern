@@ -1,0 +1,622 @@
+@page "/vehicle-verification/add/details"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject ReferenceDataApiService ReferenceDataService
+@inject AssetVerificationApiService AssetVerificationService
+@inject ContractApiService ContractService
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+<PageTitle>Asset Verification Details - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-clipboard"></i>
+            Asset Verification Details
+        </h1>
+        <p class="page-description">Capture asset verification details.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading asset verification form...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error-circle"></i>
+            <span>@_errorMessage</span>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" @onclick="GoMenu">Menu</button>
+        </div>
+    }
+    else
+    {
+        <EditForm Model="_form" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <div class="form-card">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Province <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.Province">
+                                @foreach (var option in ProvinceOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Department Name</label>
+                            <input class="form-input" type="text" value="@_departmentName" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Site Name</label>
+                            <input class="form-input" type="text" value="@_siteName" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Responsible Manager <span class="required">*</span></label>
+                            <InputText class="form-input" @bind-Value="_form.ResponsibleManager" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Tel. No <span class="required">*</span></label>
+                            <InputText class="form-input" @bind-Value="_form.TelNo" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Fax No <span class="required">*</span></label>
+                            <InputText class="form-input" @bind-Value="_form.FaxNo" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Reg. No</label>
+                            <input class="form-input" type="text" value="@_vehicle?.registration_number" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">GG No</label>
+                            <input class="form-input" type="text" value="@_vehicle?.fleet_number" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Make</label>
+                            <input class="form-input" type="text" value="@_vehicleMake" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Colour</label>
+                            <input class="form-input" type="text" value="@_vehicle?.colour" readonly />
+                        </div>
+                        <div class="form-field form-group-full">
+                            <label class="form-label">Vehicle Model</label>
+                            <input class="form-input" type="text" value="@_vehicleModel" readonly />
+                        </div>
+                        <div class="form-field form-group-full">
+                            <label class="form-label">Vehicle Photo</label>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <img src="@_photoUrl" alt="Vehicle photo" style="max-width: 100%; border-radius: 0.5rem;" />
+                                </div>
+                                <div class="form-field">
+                                    <a class="btn btn-secondary" href="@_photoUrl" target="_blank">Open Full Photo</a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Mobitrack Fitted <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.MobitrackFitted">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Petrol Card <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.PetrolCard">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Lamination <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.Lamination">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Tyre Bands <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.TyreBands">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Barcode <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.Barcode">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Logbook <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.Logbook">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Gearlock <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.Gearlock">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Radio <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.Radio">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Car Keys <span class="required">*</span></label>
+                            <InputSelect class="form-select" @bind-Value="_form.CarKeys">
+                                @foreach (var option in YesNoOptions)
+                                {
+                                    <option value="@option">@option</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Licence Expiry Date</label>
+                            <input class="form-input" type="text" value="@LicenceExpiryDisplay" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Barcode Number</label>
+                            <InputText class="form-input" @bind-Value="_form.BarcodeNumber" disabled="@IsBarcodeNumberDisabled" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Engine Number</label>
+                            <input class="form-input" type="text" value="@_vehicle?.engine_number_1" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Chassis Number</label>
+                            <input class="form-input" type="text" value="@_vehicle?.chassis_number" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Current KM (from vehicle) <span class="required">*</span></label>
+                            <InputText class="form-input" @bind-Value="_form.CurrentKm" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Last Verified <span class="required">*</span></label>
+                            <InputDate class="form-input" @bind-Value="_form.LastVerified" />
+                        </div>
+                        <div class="form-field form-group-full">
+                            <label class="form-label">Comments <span class="required">*</span></label>
+                            <InputTextArea class="form-input" @bind-Value="_form.Comments" rows="3" />
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_formError))
+                    {
+                        <div class="alert alert-error">
+                            <i class="bx bx-error-circle"></i>
+                            <span>@_formError</span>
+                        </div>
+                    }
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" disabled="@_saving">Save</button>
+                        <button type="button" class="btn btn-secondary" @onclick="GoMenu">Menu</button>
+                    </div>
+                </div>
+            </div>
+        </EditForm>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "gg")]
+    public string? GG { get; set; }
+
+    private const string SelectValue = "Select...";
+    private static readonly string[] YesNoOptions = [SelectValue, "Yes", "No"];
+    private static readonly (string Value, string Label)[] ProvinceOptions =
+    [
+        (SelectValue, "Select..."),
+        ("Eatern Cape", "Eastern Cape"),
+        ("Free State", "Free State"),
+        ("Gauteng", "Gauteng"),
+        ("Kwazulu-Namtal", "Kwazulu-Natal"),
+        ("Limpopo", "Limpopo"),
+        ("Mpumalanga", "Mpumalanga"),
+        ("Northern Cape", "Northern Cape"),
+        ("North West", "North West"),
+        ("Western Cape", "Western Cape")
+    ];
+
+    private readonly AssetVerificationFormModel _form = new();
+    private VehicleDto? _vehicle;
+    private string _vehicleMake = "";
+    private string _vehicleModel = "";
+    private string _departmentName = "";
+    private string _siteName = "";
+    private string _photoUrl = "";
+    private bool _loading = true;
+    private bool _saving;
+    private string? _errorMessage;
+    private string? _formError;
+
+    private string LicenceExpiryDisplay =>
+        _vehicle?.licence_due_date.HasValue == true
+            ? _vehicle.licence_due_date.Value.ToString("yyyy/MM/dd")
+            : "";
+
+    private bool IsBarcodeNumberDisabled => string.Equals(_form.Barcode, "No", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(GG))
+        {
+            _errorMessage = "GG/GP number is missing.";
+            _loading = false;
+            return;
+        }
+
+        await LoadVehicleAndContext();
+    }
+
+    private async Task LoadVehicleAndContext()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var vehicles = await VehicleService.SearchVehiclesAsync(GG ?? string.Empty);
+            _vehicle = MatchVehicle(vehicles, GG);
+
+            if (_vehicle == null)
+            {
+                _errorMessage = $"No records found for this vehicle [{GG}]. Please contact the HelpDesk to add the vehicle and open a contract before adding it to asset verification.";
+                return;
+            }
+
+            var existing = await AssetVerificationService.GetAllAsync<AssetVerificationRecord>();
+            if (existing.Any(v =>
+                    (!string.IsNullOrWhiteSpace(_vehicle.registration_number) && string.Equals(v.vehicle_reg_no, _vehicle.registration_number, StringComparison.OrdinalIgnoreCase)) ||
+                    (v.vmf_code.HasValue && v.vmf_code.Value == _vehicle.vmf_code)))
+            {
+                _errorMessage = "This Registration Number has already been added. Please click the Edit menu option to edit the vehicle.";
+                return;
+            }
+
+            await LoadVehicleDetails();
+            await LoadContractContext();
+
+            _photoUrl = $"/images/vehicles/{_vehicle.fleet_number ?? GG}.jpg";
+            SeedDefaults();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading asset verification: {ex.Message}");
+            _errorMessage = "Unable to load asset verification details. Please try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static VehicleDto? MatchVehicle(List<VehicleDto> vehicles, string? query)
+    {
+        if (vehicles.Count == 0)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return vehicles.FirstOrDefault();
+        }
+
+        return vehicles.FirstOrDefault(v =>
+                   string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase))
+               ?? vehicles.FirstOrDefault();
+    }
+
+    private async Task LoadVehicleDetails()
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        var model = await ReferenceDataService.GetModelAsync(_vehicle.model_code);
+        _vehicleModel = model?.model_name ?? _vehicle.model_name ?? "";
+
+        if (model?.make_code != null)
+        {
+            var make = await ReferenceDataService.GetMakeAsync(model.make_code.Value);
+            _vehicleMake = make?.make_name ?? "";
+        }
+    }
+
+    private async Task LoadContractContext()
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        var activeContracts = await ContractService.GetActiveContractsAsync();
+        var contract = activeContracts.FirstOrDefault(c => c.vmf_code == _vehicle.vmf_code);
+
+        if (contract == null)
+        {
+            _errorMessage = $"No Contract was found for this vehicle [{GG}]. Please contact the HelpDesk to open a contract before adding it to asset verification.";
+            return;
+        }
+
+        var site = await SiteService.GetByIdAsync(contract.site_code);
+        if (site == null)
+        {
+            _errorMessage = $"No Site found for this vehicle [{GG}]. Please contact the HelpDesk to load or investigate this vehicle.";
+            return;
+        }
+
+        _siteName = site.Description ?? "";
+
+        var department = site.DepartmentCode.HasValue
+            ? await DepartmentService.GetDepartmentAsync(site.DepartmentCode.Value)
+            : null;
+        _departmentName = department?.department_description ?? "";
+
+        _form.ResponsibleManager = site.ResponsiblePerson ?? "";
+        _form.TelNo = site.Telephone ?? "";
+        _form.FaxNo = site.Fax ?? "";
+    }
+
+    private void SeedDefaults()
+    {
+        _form.Province = SelectValue;
+        _form.MobitrackFitted = SelectValue;
+        _form.PetrolCard = SelectValue;
+        _form.Lamination = SelectValue;
+        _form.TyreBands = SelectValue;
+        _form.Barcode = SelectValue;
+        _form.Logbook = SelectValue;
+        _form.Gearlock = SelectValue;
+        _form.Radio = SelectValue;
+        _form.CarKeys = SelectValue;
+        _form.BarcodeNumber ??= "";
+        _form.CurrentKm ??= _vehicle?.current_odo.ToString();
+    }
+
+    private async Task HandleSubmit()
+    {
+        _formError = null;
+        if (!ValidateForm())
+        {
+            return;
+        }
+
+        if (_vehicle == null)
+        {
+            _formError = "Vehicle data is missing.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var payload = BuildPayload();
+            var created = await AssetVerificationService.CreateAsync(payload);
+            if (created == null)
+            {
+                _formError = "Save failed. Please try again.";
+                return;
+            }
+
+            NavigationManager.NavigateTo("/vehicle-verification");
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving asset verification: {ex.Message}");
+            _formError = "Unable to save asset verification record.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private AssetVerificationRecord BuildPayload()
+    {
+        return new AssetVerificationRecord
+        {
+            province = _form.Province,
+            department_name = _departmentName,
+            site_name = _siteName,
+            responsible_manager = _form.ResponsibleManager,
+            tel_no = _form.TelNo,
+            fax_no = _form.FaxNo,
+            vehicle_reg_no = _vehicle?.registration_number,
+            vmf_code = _vehicle?.vmf_code,
+            vehicle_make = _vehicleMake,
+            vehicle_model = _vehicleModel,
+            vehicle_colour = _vehicle?.colour,
+            mobitrack_fitted = _form.MobitrackFitted,
+            petrol_card = _form.PetrolCard,
+            lamination = _form.Lamination,
+            tyre_bands = _form.TyreBands,
+            barcode = _form.Barcode,
+            logbook = _form.Logbook,
+            gearlock = _form.Gearlock,
+            radio = _form.Radio,
+            car_keys = _form.CarKeys,
+            licence_expiry_date = _vehicle?.licence_due_date,
+            barcode_number = _form.BarcodeNumber,
+            vehicle_engine_num = _vehicle?.engine_number_1,
+            vehicle_chassis_num = _vehicle?.chassis_number,
+            current_km = ParseKm(_form.CurrentKm),
+            date_last_verified = _form.LastVerified,
+            comments = _form.Comments,
+            notes = _form.Comments,
+            verification_date = _form.LastVerified
+        };
+    }
+
+    private int? ParseKm(string? value)
+    {
+        if (int.TryParse(value, out var km))
+        {
+            return km;
+        }
+
+        return null;
+    }
+
+    private bool ValidateForm()
+    {
+        if (IsSelectValue(_form.Province))
+        {
+            _formError = "Please select a Province.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_form.ResponsibleManager))
+        {
+            _formError = "Please enter the responsible manager's first name and surname.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_form.TelNo))
+        {
+            _formError = "Please enter the responsible manager's telephone number.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_form.FaxNo))
+        {
+            _formError = "Please enter the responsible manager's fax number.";
+            return false;
+        }
+        if (IsSelectValue(_form.MobitrackFitted))
+        {
+            _formError = "Please indicate whether mobitrack was fitted or not.";
+            return false;
+        }
+        if (IsSelectValue(_form.PetrolCard))
+        {
+            _formError = "Please indicate whether the vehicle has a petrol card or not.";
+            return false;
+        }
+        if (IsSelectValue(_form.Lamination))
+        {
+            _formError = "Please indicate whether lamination has been done.";
+            return false;
+        }
+        if (IsSelectValue(_form.TyreBands))
+        {
+            _formError = "Please select an option for tyre bands.";
+            return false;
+        }
+        if (IsSelectValue(_form.Barcode))
+        {
+            _formError = "Please indicate whether the vehicle has a bar code or not.";
+            return false;
+        }
+        if (IsSelectValue(_form.Logbook))
+        {
+            _formError = "Please indicate whether the vehicle has a log book or not.";
+            return false;
+        }
+        if (IsSelectValue(_form.Gearlock))
+        {
+            _formError = "Please indicate whether the vehicle has a gear lock or not.";
+            return false;
+        }
+        if (IsSelectValue(_form.Radio))
+        {
+            _formError = "Please indicate whether the vehicle has a radio or not.";
+            return false;
+        }
+        if (IsSelectValue(_form.CarKeys))
+        {
+            _formError = "Please indicate whether the vehicle has a key or not.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_form.CurrentKm))
+        {
+            _formError = "Please enter the vehicle's current km.";
+            return false;
+        }
+        if (!int.TryParse(_form.CurrentKm, out _))
+        {
+            _formError = "Kilometers can only contain numeric values.";
+            return false;
+        }
+        if (!_form.LastVerified.HasValue)
+        {
+            _formError = "Please enter the verification date.";
+            return false;
+        }
+        if (string.IsNullOrWhiteSpace(_form.Comments))
+        {
+            _formError = "Please enter your comments. If you have no comments please type NONE.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsSelectValue(string? value)
+        => string.IsNullOrWhiteSpace(value) || string.Equals(value, SelectValue, StringComparison.OrdinalIgnoreCase);
+
+    private void GoMenu()
+    {
+        NavigationManager.NavigateTo("/vehicle-verification");
+    }
+
+    private sealed class AssetVerificationFormModel
+    {
+        public string? Province { get; set; }
+        public string? ResponsibleManager { get; set; }
+        public string? TelNo { get; set; }
+        public string? FaxNo { get; set; }
+        public string? MobitrackFitted { get; set; }
+        public string? PetrolCard { get; set; }
+        public string? Lamination { get; set; }
+        public string? TyreBands { get; set; }
+        public string? Barcode { get; set; }
+        public string? Logbook { get; set; }
+        public string? Gearlock { get; set; }
+        public string? Radio { get; set; }
+        public string? CarKeys { get; set; }
+        public string? BarcodeNumber { get; set; }
+        public string? CurrentKm { get; set; }
+        public DateTime? LastVerified { get; set; }
+        public string? Comments { get; set; }
+    }
+}

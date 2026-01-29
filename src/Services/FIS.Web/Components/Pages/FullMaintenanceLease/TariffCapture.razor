@@ -1,0 +1,249 @@
+@page "/full-maintenance-lease/tariffs"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Capturing of Tariffs for Lease Vehicles</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-cog"></i>
+            Capturing of Tariffs for Lease Vehicles
+        </h1>
+        <p class="page-description">Lease vehicle tariff capture and approval queue.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Quick Search</h2>
+            <p>Search by GG/REG number or status.</p>
+        </div>
+        <div class="form-card-body">
+            <EditForm OnValidSubmit="HandleSearch">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">GGNum / REGNum</label>
+                        <InputText class="form-input" @bind-Value="_searchTerm" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Status</label>
+                        <InputSelect class="form-select" @bind-Value="_statusFilter">
+                            @foreach (var option in StatusOptions)
+                            {
+                                <option value="@option">@option</option>
+                            }
+                        </InputSelect>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <button type="button" class="btn btn-secondary" @onclick="ReturnToInitialView">Return to Initial View</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+
+    <div class="form-card" style="margin-top: 1.5rem;">
+        <div class="form-card-header">
+            <h2>Recall</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">GGNum / REGNum</label>
+                    <InputText class="form-input" @bind-Value="_recallTerm" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="Recall">Recall</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top: 1.5rem;">
+        <div class="table-header">
+            <span class="table-title">New Lease Vehicles Captured in FIS without Tariffs (Capturer's Responsibility)</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>GG Number</th>
+                        <th>Hired From</th>
+                        <th>Veh. Status</th>
+                        <th>Veh. Status Date</th>
+                        <th>Location</th>
+                        <th>Year Model</th>
+                        <th>Model Description</th>
+                        <th>Purchase Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_capturerItems.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="10">No records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in _capturerItems)
+                        {
+                            <tr>
+                                <td>@item.RowNumber</td>
+                                <td>
+                                    <a href="@($"/full-maintenance-lease/tariffs/details?gg={Uri.EscapeDataString(item.GgNumber)}")">
+                                        @item.GgNumber
+                                    </a>
+                                </td>
+                                <td>@item.HiredFrom</td>
+                                <td>@item.VehicleStatus</td>
+                                <td>@item.VehicleStatusDate</td>
+                                <td>@item.Location</td>
+                                <td>@item.YearModel</td>
+                                <td>@item.ModelDescription</td>
+                                <td>@item.PurchaseAmount</td>
+                                <td>@item.Status</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" @onclick="ViewAllCapturer">View All</button>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top: 2rem;">
+        <div class="table-header">
+            <span class="table-title">New Lease Vehicles with newly assigned tariffs Awaiting next level Authorisation (Authoriser's Responsibility)</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>GG Number</th>
+                        <th>Hired From</th>
+                        <th>Veh. Status</th>
+                        <th>Veh. Status Date</th>
+                        <th>Location</th>
+                        <th>Year Model</th>
+                        <th>Model Description</th>
+                        <th>Purchase Amount</th>
+                        <th>Status</th>
+                        <th>Captured By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_authoriserItems.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="11">No records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in _authoriserItems)
+                        {
+                            <tr>
+                                <td>@item.RowNumber</td>
+                                <td>
+                                    <a href="@($"/full-maintenance-lease/tariffs/details?gg={Uri.EscapeDataString(item.GgNumber)}")">
+                                        @item.GgNumber
+                                    </a>
+                                </td>
+                                <td>@item.HiredFrom</td>
+                                <td>@item.VehicleStatus</td>
+                                <td>@item.VehicleStatusDate</td>
+                                <td>@item.Location</td>
+                                <td>@item.YearModel</td>
+                                <td>@item.ModelDescription</td>
+                                <td>@item.PurchaseAmount</td>
+                                <td>@item.Status</td>
+                                <td>@item.CapturedBy</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-secondary" @onclick="ViewAllAuthoriser">View All</button>
+        </div>
+    </div>
+
+    <div class="form-actions" style="margin-top: 1.5rem;">
+        <button class="btn btn-secondary" @onclick="ReturnToInitialView">Return to Initial View</button>
+        <button class="btn btn-secondary" @onclick="GoMenu">Menu</button>
+    </div>
+</div>
+
+@code {
+    private string _searchTerm = "";
+    private string _statusFilter = "Select...";
+    private string _recallTerm = "";
+
+    private readonly List<string> StatusOptions = new()
+    {
+        "Select...",
+        "Rejected",
+        "Pending",
+        "Approved"
+    };
+
+    private List<LeaseQueueItem> _capturerItems = new();
+    private List<LeaseQueueItem> _authoriserItems = new();
+
+    private void HandleSearch()
+    {
+        // Placeholder for future API filtering.
+    }
+
+    private void ReturnToInitialView()
+    {
+        _searchTerm = "";
+        _statusFilter = "Select...";
+        _recallTerm = "";
+    }
+
+    private void Recall()
+    {
+        // Placeholder for recall workflow.
+    }
+
+    private void ViewAllCapturer()
+    {
+        // Placeholder for view all.
+    }
+
+    private void ViewAllAuthoriser()
+    {
+        // Placeholder for view all.
+    }
+
+    private void GoMenu()
+    {
+        Navigation.NavigateTo("/full-maintenance-lease");
+    }
+
+    private sealed class LeaseQueueItem
+    {
+        public int RowNumber { get; set; }
+        public string GgNumber { get; set; } = "";
+        public string HiredFrom { get; set; } = "";
+        public string VehicleStatus { get; set; } = "";
+        public string VehicleStatusDate { get; set; } = "";
+        public string Location { get; set; } = "";
+        public string YearModel { get; set; } = "";
+        public string ModelDescription { get; set; } = "";
+        public string PurchaseAmount { get; set; } = "";
+        public string Status { get; set; } = "";
+        public string CapturedBy { get; set; } = "";
+    }
+}

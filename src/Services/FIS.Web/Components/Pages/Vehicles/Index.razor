@@ -12,20 +12,26 @@
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bxs-car-mechanic"></i>
-            Vehicle Master
+            Vehicle Master Menu
         </h1>
-        <p class="page-description">Manage fleet vehicles, registrations, and vehicle information</p>
+        <p class="page-description">Legacy vehicle master navigation and maintenance options</p>
     </div>
+    @* UX enhancement kept for future merge. Do not remove. *@
+    @*
     <div class="page-actions">
         <button class="btn btn-primary" @onclick="NavigateToCreate">
             <i class="bx bx-plus"></i>
             Add Vehicle
         </button>
     </div>
+    *@
 </div>
 <a id="PageBottom"></a>
 
 <div class="page-content">
+    <span style="display:none">@_loading</span>
+    @* Legacy menu is primary. Search/table UX kept for future reuse. *@
+    @*
     <div class="search-bar">
         <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
             <label class="form-label" style="margin:0;">
@@ -62,6 +68,7 @@
             <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
         </div>
     </div>
+    *@
 
     <div class="menu-tiles" style="margin: 1.5rem 0;">
         <div class="menu-tile">
@@ -73,8 +80,7 @@
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <span class="menu-item-disabled">Vehicle Master Information / Help</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/help">Vehicle Master Information / Help</a>
                     </div>
                 </div>
             }
@@ -91,23 +97,19 @@
                         <a class="menu-item-link" href="/vehicles/create">1) Add New Vehicle</a>
                     </div>
                     <div class="menu-item">
-                        <span class="menu-item-disabled">1) Authorize Captured Vehicle Information</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/authorize">1) Authorize Captured Vehicle Information</a>
                     </div>
                     <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles">2) Edit A Vehicle</a>
+                        <a class="menu-item-link" href="/vehicles/edit">2) Edit A Vehicle</a>
                     </div>
                     <div class="menu-item">
-                        <span class="menu-item-disabled">3) Vehicle Status Maintenance</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/status-maintenance">3) Vehicle Status Maintenance</a>
                     </div>
                     <div class="menu-item">
-                        <span class="menu-item-disabled">4) Add/Edit Barcode</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/barcode">4) Add/Edit Barcode</a>
                     </div>
                     <div class="menu-item">
-                        <span class="menu-item-disabled">5) Add GG Block Number(s)</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/gg-block-numbers">5) Add GG Block Number(s)</a>
                     </div>
                 </div>
             }
@@ -121,33 +123,54 @@
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <span class="menu-item-disabled">1) Vehicle Source Maintenance</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/source-maintenance">1) Vehicle Source Maintenance</a>
+                    </div>
+                </div>
+            }
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleRecoveredVehicles">
+                <span>Stolen & Recovered Vehicles</span>
+                <i class="bx @(_showRecoveredVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showRecoveredVehicles)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicles/recovered">1) Update Recovered GG</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicles/renumbered-report">2) Report All Renumbered vehicles</a>
                     </div>
                 </div>
             }
         </div>
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleDemoVehicles">
-                <span>Demo & Stolen Vehicles</span>
+                <span>Demo Vehicles</span>
                 <i class="bx @(_showDemoVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
             </button>
             @if (_showDemoVehicles)
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <span class="menu-item-disabled">Stolen & Recovered Vehicles</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/demo/add">1) Add a Demo Vehicle</a>
                     </div>
                     <div class="menu-item">
-                        <span class="menu-item-disabled">Demo Vehicles</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <a class="menu-item-link" href="/vehicles/demo/edit">2) Edit a Demo Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicles/demo/delete">3) Delete a Demo Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/vehicles/demo/report">4) Report All Demo Vehicle</a>
                     </div>
                 </div>
             }
         </div>
     </div>
 
+    @*
     @if (_loading)
     {
         <div class="loading-state">
@@ -249,6 +272,7 @@
             </div>
         }
     }
+    *@
 </div>
 
 @code {
@@ -262,8 +286,9 @@
     private System.Threading.Timer? _searchTimer;
     private bool _showVehicleInfo = true;
     private bool _showVehicleMaintenance = true;
-    private bool _showVehicleSource = false;
-    private bool _showDemoVehicles = false;
+    private bool _showVehicleSource = true;
+    private bool _showRecoveredVehicles = true;
+    private bool _showDemoVehicles = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -395,6 +420,11 @@
     private void ToggleDemoVehicles()
     {
         _showDemoVehicles = !_showDemoVehicles;
+    }
+
+    private void ToggleRecoveredVehicles()
+    {
+        _showRecoveredVehicles = !_showRecoveredVehicles;
     }
 
     private List<VehicleDto> ApplyLegacyFilter(List<VehicleDto> vehicles)

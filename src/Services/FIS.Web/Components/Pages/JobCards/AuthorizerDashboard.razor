@@ -1,0 +1,44 @@
+@page "/job-cards/authorizer-dashboard"
+@rendermode InteractiveServer
+
+<PageTitle>Authorizer Dashboard - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-bar-chart-alt-2"></i>
+            AuthorizerDash
+        </h1>
+        <p class="page-description">Legacy report viewer for jobcard authoriser statistics.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Jobcard Menu</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards">Back to Jobcard Menu</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/authorizer-vehicles">View Authoriser Vehicles</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/capturer-default">Default Capturer</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin-top: 0;">Jobcard Stats Report</h3>
+        <div class="empty-state" style="margin: 1.5rem 0;">
+            <i class="bx bx-chart"></i>
+            <h3>Report viewer pending</h3>
+            <p>Legacy report: /GG/JobcardStats. Wire reporting API to render the dashboard.</p>
+        </div>
+    </div>
+</div>

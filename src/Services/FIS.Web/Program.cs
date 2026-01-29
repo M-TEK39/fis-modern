@@ -118,6 +118,31 @@ builder.Services.AddHttpClient<LicenseApiService>(client =>
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<LicenseFeeApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<DriverLicenceApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<ExtraCodeApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<LossTypeApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<ProvinceApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<LocationApiService>(client =>
 {
@@ -251,6 +276,11 @@ builder.Services.AddHttpClient<VehicleOrderApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<VehiclePhotoApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<VehicleLookupApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);

@@ -6,14 +6,37 @@ namespace FIS.Web.Services;
 // Internal API response model for mapping
 internal class ApiDepartmentResponse
 {
-    public short department_code { get; set; }
-    public string? description { get; set; }
-    public string? res_person { get; set; }
-    public string? address1 { get; set; }
-    public string? address2 { get; set; }
-    public string? telephone { get; set; }
-    public string? fax { get; set; }
-    public string? email { get; set; }
+    public short DepartmentCode { get; set; }
+    public short CompanyCode { get; set; }
+    public string? Description { get; set; }
+    public string? ResponsiblePerson { get; set; }
+    public string? Address1 { get; set; }
+    public string? Address2 { get; set; }
+    public string? Address3 { get; set; }
+    public string? PostalCode { get; set; }
+    public string? Telephone { get; set; }
+    public string? Telephone2 { get; set; }
+    public string? Fax { get; set; }
+    public string? Fax2 { get; set; }
+    public string? NetAddress { get; set; }
+    public string? DepartmentNumber { get; set; }
+    public string? CellNumber { get; set; }
+    public string? Notes { get; set; }
+    public string? DepartmentAbbr { get; set; }
+    public string? BasInstallationCode { get; set; }
+    public bool DeptActive { get; set; }
+    public string? CloEmail { get; set; }
+    public byte? FinancialSystemCode { get; set; }
+    public bool? FinancialSystemActive { get; set; }
+    public DateTime? FinancialSystemActivateDate { get; set; }
+    public short? DefaultSite { get; set; }
+    public bool? ExportIsActive { get; set; }
+    public DateTime? DateLastExported { get; set; }
+    public int ServiceKilometres { get; set; }
+    public byte ServiceYears { get; set; }
+    public decimal OverheadPercentage { get; set; }
+    public int? UserAccessCode { get; set; }
+    public string? Comments { get; set; }
 }
 
 public class DepartmentApiService
@@ -36,14 +59,38 @@ public class DepartmentApiService
             
             return apiResponse.Select(dept => new DepartmentDto
             {
-                department_code = dept.department_code,
-                department_description = dept.description,
-                contact_person = dept.res_person,
-                telephone = dept.telephone,
-                fax = dept.fax,
-                email = dept.email,
-                physical_address = dept.address1,
-                postal_address = dept.address2
+                department_code = dept.DepartmentCode,
+                department_description = dept.Description,
+                contact_person = dept.ResponsiblePerson,
+                telephone = dept.Telephone,
+                telephone2 = dept.Telephone2,
+                fax = dept.Fax,
+                fax2 = dept.Fax2,
+                email = dept.NetAddress,
+                physical_address = dept.Address1,
+                physical_address_line2 = dept.Address2,
+                physical_address_line3 = dept.Address3,
+                postal_address = dept.Address2,
+                postal_code = dept.PostalCode,
+                net_address = dept.NetAddress,
+                department_number = dept.DepartmentNumber,
+                cell_number = dept.CellNumber,
+                notes = dept.Notes,
+                department_abbr = dept.DepartmentAbbr,
+                bas_installation_code = dept.BasInstallationCode,
+                dept_active = dept.DeptActive,
+                clo_email = dept.CloEmail,
+                financial_system_code = dept.FinancialSystemCode,
+                financial_system_active = dept.FinancialSystemActive,
+                financial_system_activate_date = dept.FinancialSystemActivateDate,
+                default_site = dept.DefaultSite,
+                export_is_active = dept.ExportIsActive,
+                date_last_exported = dept.DateLastExported,
+                service_kilometres = dept.ServiceKilometres,
+                service_years = dept.ServiceYears,
+                overhead_percentage = dept.OverheadPercentage,
+                user_access_code = dept.UserAccessCode,
+                comments = dept.Comments
             }).ToList();
         }
         catch (Exception ex)
@@ -64,14 +111,38 @@ public class DepartmentApiService
             
             return new DepartmentDto
             {
-                department_code = apiResponse.department_code,
-                department_description = apiResponse.description,
-                contact_person = apiResponse.res_person,
-                telephone = apiResponse.telephone,
-                fax = apiResponse.fax,
-                email = apiResponse.email,
-                physical_address = apiResponse.address1,
-                postal_address = apiResponse.address2
+                department_code = apiResponse.DepartmentCode,
+                department_description = apiResponse.Description,
+                contact_person = apiResponse.ResponsiblePerson,
+                telephone = apiResponse.Telephone,
+                telephone2 = apiResponse.Telephone2,
+                fax = apiResponse.Fax,
+                fax2 = apiResponse.Fax2,
+                email = apiResponse.NetAddress,
+                physical_address = apiResponse.Address1,
+                physical_address_line2 = apiResponse.Address2,
+                physical_address_line3 = apiResponse.Address3,
+                postal_address = apiResponse.Address2,
+                postal_code = apiResponse.PostalCode,
+                net_address = apiResponse.NetAddress,
+                department_number = apiResponse.DepartmentNumber,
+                cell_number = apiResponse.CellNumber,
+                notes = apiResponse.Notes,
+                department_abbr = apiResponse.DepartmentAbbr,
+                bas_installation_code = apiResponse.BasInstallationCode,
+                dept_active = apiResponse.DeptActive,
+                clo_email = apiResponse.CloEmail,
+                financial_system_code = apiResponse.FinancialSystemCode,
+                financial_system_active = apiResponse.FinancialSystemActive,
+                financial_system_activate_date = apiResponse.FinancialSystemActivateDate,
+                default_site = apiResponse.DefaultSite,
+                export_is_active = apiResponse.ExportIsActive,
+                date_last_exported = apiResponse.DateLastExported,
+                service_kilometres = apiResponse.ServiceKilometres,
+                service_years = apiResponse.ServiceYears,
+                overhead_percentage = apiResponse.OverheadPercentage,
+                user_access_code = apiResponse.UserAccessCode,
+                comments = apiResponse.Comments
             };
         }
         catch (Exception ex)
@@ -88,13 +159,35 @@ public class DepartmentApiService
             // Map DepartmentDto to API expected format
             var createDepartmentDto = new
             {
+                companyCode = (short)0,
                 description = department.department_description,
-                res_person = department.contact_person,
+                responsiblePerson = department.contact_person,
                 address1 = department.physical_address,
-                address2 = department.postal_address,
+                address2 = department.physical_address_line2,
+                address3 = department.physical_address_line3,
+                postalCode = department.postal_code,
                 telephone = department.telephone,
+                telephone2 = department.telephone2,
                 fax = department.fax,
-                email = department.email
+                fax2 = department.fax2,
+                netAddress = department.net_address ?? department.email,
+                departmentNumber = department.department_number,
+                cellNumber = department.cell_number,
+                notes = department.notes,
+                departmentAbbr = department.department_abbr,
+                basInstallationCode = department.bas_installation_code,
+                deptActive = department.dept_active,
+                cloEmail = department.clo_email,
+                financialSystemCode = department.financial_system_code,
+                financialSystemActive = department.financial_system_active,
+                financialSystemActivateDate = department.financial_system_activate_date,
+                defaultSite = department.default_site,
+                exportIsActive = department.export_is_active,
+                serviceKilometres = department.service_kilometres,
+                serviceYears = department.service_years,
+                overheadPercentage = department.overhead_percentage,
+                userAccessCode = department.user_access_code,
+                comments = department.comments
             };
             
             var response = await _httpClient.PostAsJsonAsync("api/department", createDepartmentDto);
@@ -114,14 +207,36 @@ public class DepartmentApiService
             // Map DepartmentDto to Department entity for API
             var departmentEntity = new
             {
-                department_code = (short)departmentCode,
+                departmentCode = (short)departmentCode,
+                companyCode = (short)0,
                 description = department.department_description,
-                res_person = department.contact_person,
+                responsiblePerson = department.contact_person,
                 address1 = department.physical_address,
-                address2 = department.postal_address,
+                address2 = department.physical_address_line2,
+                address3 = department.physical_address_line3,
+                postalCode = department.postal_code,
                 telephone = department.telephone,
+                telephone2 = department.telephone2,
                 fax = department.fax,
-                email = department.email
+                fax2 = department.fax2,
+                netAddress = department.net_address ?? department.email,
+                departmentNumber = department.department_number,
+                cellNumber = department.cell_number,
+                notes = department.notes,
+                departmentAbbr = department.department_abbr,
+                basInstallationCode = department.bas_installation_code,
+                deptActive = department.dept_active,
+                cloEmail = department.clo_email,
+                financialSystemCode = department.financial_system_code,
+                financialSystemActive = department.financial_system_active,
+                financialSystemActivateDate = department.financial_system_activate_date,
+                defaultSite = department.default_site,
+                exportIsActive = department.export_is_active,
+                serviceKilometres = department.service_kilometres,
+                serviceYears = department.service_years,
+                overheadPercentage = department.overhead_percentage,
+                userAccessCode = department.user_access_code,
+                comments = department.comments
             };
             
             var response = await _httpClient.PutAsJsonAsync(

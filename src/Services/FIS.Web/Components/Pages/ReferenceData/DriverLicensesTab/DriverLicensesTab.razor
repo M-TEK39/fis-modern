@@ -1,0 +1,202 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject DriverLicenceApiService DriverLicenceService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading driver licenses...</p>
+    </div>
+}
+else if (_licences.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-id-card"></i>
+        <h3>No driver licenses found</h3>
+        <p>Get started by adding your first driver license</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus plus-icon"></i>
+            Add Driver License
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Driver License
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Description</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var licence in _licences)
+                    {
+                        <tr>
+                            <td>@licence.description</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(licence)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(licence)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showDialog)
+{
+    <Modal IsVisible="_showDialog"
+           Title="@(_isEdit ? "Edit Driver License" : "Add Driver License")"
+           OnCancel="HideDialog"
+           OnSubmit="SaveLicence"
+           SubmitText="@(_isEdit ? "Update" : "Create")"
+           IsSaving="_saving"
+           Model="_currentLicence">
+        <div class="form-field">
+            <label class="form-label">Description <span class="required">*</span></label>
+            <input type="text" class="form-input" @bind="_currentLicence.description" />
+            <ValidationMessage For="() => _currentLicence.description" />
+        </div>
+    </Modal>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>@_currentLicence.description</strong>?</p>
+                <p class="warning-text">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideDeleteDialog" disabled="@_deleting">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteLicence" disabled="@_deleting">
+                    @if (_deleting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <i class="bx bx-trash"></i>
+                        <span>Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<DriverLicenceDto> _licences = new();
+    private DriverLicenceDto _currentLicence = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+    private bool _deleting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLicences();
+    }
+
+    private async Task LoadLicences()
+    {
+        _loading = true;
+        _licences = await DriverLicenceService.GetAllAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentLicence = new DriverLicenceDto();
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(DriverLicenceDto licence)
+    {
+        _currentLicence = licence with { };
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(DriverLicenceDto licence)
+    {
+        _currentLicence = licence;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentLicence = new DriverLicenceDto();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveLicence()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            success = await DriverLicenceService.UpdateAsync(_currentLicence.licence_code, _currentLicence);
+        }
+        else
+        {
+            success = await DriverLicenceService.CreateAsync(_currentLicence);
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadLicences();
+        }
+    }
+
+    private async Task DeleteLicence()
+    {
+        _deleting = true;
+        var success = await DriverLicenceService.DeleteAsync(_currentLicence.licence_code);
+        _deleting = false;
+
+        if (success)
+        {
+            HideDeleteDialog();
+            await LoadLicences();
+        }
+    }
+}

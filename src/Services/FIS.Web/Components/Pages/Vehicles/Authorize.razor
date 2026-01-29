@@ -1,0 +1,101 @@
+@page "/vehicles/authorize"
+@rendermode InteractiveServer
+
+<PageTitle>Authorize Captured Vehicle Information</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-check-shield"></i>
+            Authorize Captured Vehicle Master Information
+        </h1>
+        <p class="page-description">Legacy authorization workflow (UI-only until endpoints are available).</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">REJECTED VEHICLE LIST</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Chassis NO</th>
+                        <th>Model</th>
+                        <th>Year Model</th>
+                        <th>Engine NO</th>
+                        <th>Hire Type</th>
+                        <th>Hired From</th>
+                        <th>Notes</th>
+                        <th>Authority Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="8">No Rejected Vehicles</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:1.5rem;">
+        <div class="table-header">
+            <span class="table-title">AWAITING AUTHORIZATION VEHICLE LIST</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Chassis NO</th>
+                        <th>Model</th>
+                        <th>Year Model</th>
+                        <th>Engine Number</th>
+                        <th>Location</th>
+                        <th>Hire Type</th>
+                        <th>Hired From</th>
+                        <th>Purchase Amount</th>
+                        <th>Purchase From</th>
+                        <th>Site Name</th>
+                        <th>Authority Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="11">No Vehicles awaiting Authorization</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:1.5rem;">
+        <div class="table-header">
+            <span class="table-title">AUTHORIZED VEHICLES READY FOR PRINTING AND INCEPTION INTO THE DATABASE</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Chassis NO</th>
+                        <th>GG Number</th>
+                        <th>Model</th>
+                        <th>Year Model</th>
+                        <th>Engine NO</th>
+                        <th>Hire Type</th>
+                        <th>Hired From</th>
+                        <th>Notes</th>
+                        <th>Authority Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="9">No Authorized Vehicles</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

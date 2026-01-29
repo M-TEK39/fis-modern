@@ -1,0 +1,239 @@
+@page "/contracts/backdating-history"
+@rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject NavigationManager Navigation
+
+<PageTitle>Vehicle Contract History Backdating</PageTitle>
+<a id="PageTop"></a>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-history"></i>
+            Vehicle Contract History Backdating Management
+        </h1>
+        <p class="page-description">Review historical backdating records by vehicle.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/contracts">Contracts Menu</a>
+        <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="contract-banner contract-banner-warning">
+        <i class="bx bx-error-circle"></i>
+        <span>@_limitedAccessMessage</span>
+    </div>
+    <div class="contract-banner contract-banner-info">
+        <i class="bx bx-info-circle"></i>
+        <span>@_infoMessage</span>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="2">Vehicle Contract History Backdating Management</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Select the vehicle to manage:</th>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <div class="contract-search-radio">
+                                <label class="form-label">
+                                    <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
+                                    GG
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
+                                    GP Number
+                                </label>
+                            </div>
+                            <input type="text"
+                                   class="form-input"
+                                   placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")"
+                                   @bind="_searchQuery"
+                                   @bind:event="oninput" />
+                            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVehicle" disabled="@_searching">
+                                @if (_searching)
+                                {
+                                    <span class="spinner-sm"></span>
+                                    <span>Searching...</span>
+                                }
+                                else
+                                {
+                                    <span>Search</span>
+                                }
+                            </button>
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_searchError))
+                        {
+                            <div class="form-error contract-search-error">@_searchError</div>
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <tbody>
+                <tr>
+                    <th>GG Number / R:</th>
+                    <td>@(_selectedVehicle?.fleet_number ?? "-")</td>
+                    <td>&nbsp;</td>
+                </tr>
+                <tr>
+                    <th>Registration Number:</th>
+                    <td>@(_selectedVehicle?.registration_number ?? "-")</td>
+                    <td>&nbsp;</td>
+                </tr>
+                <tr>
+                    <td colspan="3">@_feedbackMessage</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Contract Code</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Start Odometer</th>
+                            <th>End Odometer</th>
+                            <th>Status</th>
+                            <th>Department Number</th>
+                            <th>Department</th>
+                            <th>Site</th>
+                            <th>Driver</th>
+                            <th>Still Current</th>
+                            <th>Capturer Lastname</th>
+                            <th>Capturer Firstname</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td colspan="14">No Contract History Found</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="contract-section contract-history-edit">
+        <table class="contract-legacy-table">
+            <tbody>
+                <tr>
+                    <td>Contract Code:</td>
+                    <td><input class="form-input" /></td>
+                </tr>
+                <tr>
+                    <td>Department:</td>
+                    <td><input class="form-input" /></td>
+                </tr>
+                <tr>
+                    <td>Site:</td>
+                    <td><input class="form-input" /></td>
+                </tr>
+                <tr>
+                    <td>Start Date:</td>
+                    <td><input type="date" class="form-input" /></td>
+                </tr>
+                <tr>
+                    <td>End Date:</td>
+                    <td><input type="date" class="form-input" /></td>
+                </tr>
+                <tr>
+                    <td>Start Odometer:</td>
+                    <td><input type="number" class="form-input" /></td>
+                </tr>
+                <tr>
+                    <td>End Odometer:</td>
+                    <td>
+                        <input type="number" class="form-input" />
+                        <span class="contract-muted" style="margin-left: 0.5rem;">Selected Index</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<a id="PageBottom"></a>
+
+@code {
+    private string _limitedAccessMessage = "Limited access: some history actions may be restricted based on your role.";
+    private string _infoMessage = "Search for a vehicle to view contract history backdating.";
+    private string _feedbackMessage = "";
+
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _searching;
+    private string? _searchError;
+    private VehicleDto? _selectedVehicle;
+
+    private void GoTop() => Navigation.NavigateTo("/contracts/backdating-history#PageTop");
+    private void GoBottom() => Navigation.NavigateTo("/contracts/backdating-history#PageBottom");
+
+    private void SetSearchType(string type)
+    {
+        _searchType = type;
+        _searchError = null;
+    }
+
+    private async Task SearchVehicle()
+    {
+        _searchError = null;
+        _selectedVehicle = null;
+        _feedbackMessage = "";
+
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _searchError = _searchType == "GG" ? "Enter a GG number to search." : "Enter a GP number to search.";
+            return;
+        }
+
+        _searching = true;
+        try
+        {
+            var results = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+            _selectedVehicle = results.FirstOrDefault();
+            if (_selectedVehicle == null)
+            {
+                _searchError = "No vehicles matched the search criteria.";
+            }
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private void ClearSearch()
+    {
+        _searchQuery = "";
+        _searchError = null;
+        _selectedVehicle = null;
+        _feedbackMessage = "";
+    }
+}

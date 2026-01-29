@@ -1,0 +1,120 @@
+@page "/private-hire/maintenance-menu"
+@rendermode InteractiveServer
+
+<PageTitle>Private Hire Maintenance Menu - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-wrench"></i>
+            Private Hire Maintenance Menu
+        </h1>
+        <p class="page-description">Legacy private hire maintenance options.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/private-hire">Back to Private Hire Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleHelp">
+                <span>Private Hire Maintenance Menu</span>
+                <i class="bx @(_showHelp ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showHelp)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/help">Private Hire Maintenance Information / Help</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleVehicles">
+                <span>Private Hire Vehicles</span>
+                <i class="bx @(_showVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showVehicles)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=vehicles">1) Add Private Hire Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=vehicles">2) Edit Private Hire Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=vehicles">3) Delete Private Hire Vehicle</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleContractors">
+                <span>Private Hire Contractors</span>
+                <i class="bx @(_showContractors ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showContractors)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=contractors">4) Add Private Hire Contractor</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=contractors">5) Edit Private Hire Contractor</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleReports">
+                <span>Reports</span>
+                <i class="bx @(_showReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">1) All Private Hire Vehicles</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">2) One Private Hire Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">3) Private Hire Contractors</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">4) Private Hire Vehicles Per Site</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">5) Private Hire Vehicles Per Department ( All )</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">6) Private Hire Vehicles Per Department ( In Service )</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/private-hire/maintenance?tab=reports">7) Private Hire Vehicles Per Hire Company</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _showHelp = true;
+    private bool _showVehicles = true;
+    private bool _showContractors = true;
+    private bool _showReports = true;
+
+    private void ToggleHelp() => _showHelp = !_showHelp;
+    private void ToggleVehicles() => _showVehicles = !_showVehicles;
+    private void ToggleContractors() => _showContractors = !_showContractors;
+    private void ToggleReports() => _showReports = !_showReports;
+}

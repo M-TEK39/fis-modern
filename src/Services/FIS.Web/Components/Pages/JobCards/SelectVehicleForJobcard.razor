@@ -1,0 +1,89 @@
+@page "/job-cards/select-vehicle"
+@rendermode InteractiveServer
+
+<PageTitle>Select Vehicle - Job Cards</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-car"></i>
+            Select a Vehicle to Create a Job Card
+        </h1>
+        <p class="page-description">Choose a vehicle before starting a new jobcard (legacy selection list).</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Jobcard Menu</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/capturer-default">Main Menu</a>
+                </div>
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/job-cards/list">Edit Jobcard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <h3 style="margin-top: 0;">Check the Columns You Want to View</h3>
+        <div class="form-grid">
+            <label class="form-label form-checkbox"><input type="checkbox" /> GG Number</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Registration Number</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Date Delivered</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Odo Reading</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> VIN Number</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Engine Number</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Model Description</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Year Model</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Class Description</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Hire Type</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Hired From</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Location</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Status</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Status Date</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Purchased From</label>
+            <label class="form-label form-checkbox"><input type="checkbox" /> Purchased Date</label>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">List of Available Vehicles</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>Registration Number</th>
+                        <th>Date Delivered</th>
+                        <th>Odo Reading</th>
+                        <th>VIN Number</th>
+                        <th>Engine Number</th>
+                        <th>Model</th>
+                        <th>Year Model</th>
+                        <th>Class Description</th>
+                        <th>Hire Type</th>
+                        <th>Hired From</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                        <th>Status Date</th>
+                        <th>Purchased From</th>
+                        <th>Purchased Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td colspan="16">Awaiting vehicles API for jobcard selection.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -52,6 +52,26 @@
             <i class="bx bx-buildings"></i>
             Departments
         </button>
+        <button class="tab @(_activeTab == "sites" ? "active" : "")" @onclick='() => SetActiveTab("sites")'>
+            <i class="bx bx-map-pin"></i>
+            Sites
+        </button>
+        <button class="tab @(_activeTab == "licensefees" ? "active" : "")" @onclick='() => SetActiveTab("licensefees")'>
+            <i class="bx bx-dollar-circle"></i>
+            License Fees
+        </button>
+        <button class="tab @(_activeTab == "driverlicenses" ? "active" : "")" @onclick='() => SetActiveTab("driverlicenses")'>
+            <i class="bx bx-id-card"></i>
+            Drivers Licenses
+        </button>
+        <button class="tab @(_activeTab == "extras" ? "active" : "")" @onclick='() => SetActiveTab("extras")'>
+            <i class="bx bx-plus-circle"></i>
+            Extras
+        </button>
+        <button class="tab @(_activeTab == "losstypes" ? "active" : "")" @onclick='() => SetActiveTab("losstypes")'>
+            <i class="bx bx-error-circle"></i>
+            Loss Types
+        </button>
     </div>
 
     <div class="tab-content">
@@ -86,6 +106,26 @@
         else if (_activeTab == "departments")
         {
             <DepartmentsTab />
+        }
+        else if (_activeTab == "sites")
+        {
+            <SitesTab />
+        }
+        else if (_activeTab == "licensefees")
+        {
+            <LicenseFeesTab />
+        }
+        else if (_activeTab == "driverlicenses")
+        {
+            <DriverLicensesTab />
+        }
+        else if (_activeTab == "extras")
+        {
+            <ExtrasTab />
+        }
+        else if (_activeTab == "losstypes")
+        {
+            <LossTypesTab />
         }
     </div>
 </div>

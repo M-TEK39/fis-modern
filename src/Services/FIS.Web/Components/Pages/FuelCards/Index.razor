@@ -1,106 +1,119 @@
 @page "/fuel-cards"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject IJSRuntime JS
 
-<PageTitle>Fuel Cards - Fleet Information System</PageTitle>
+<PageTitle>Fuelcard Maintenance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-credit-card"></i>
-            Fuel Cards
+            Fuelcard Maintenance Menu
         </h1>
-        <p class="page-description">Fuel card register (live from FleetManagement).</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadCards">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Fuelcard maintenance aligned to the legacy workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading fuel cards...</p>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleHelp">
+                <span>Fuelcard Maintenance Information / Help</span>
+                <i class="bx @(_showHelp ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showHelp)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/help">Fuelcard Maintenance Information / Help</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
-    else if (_cards.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-credit-card"></i>
-            <h3>No fuel cards</h3>
-            <p>Awaiting fuel card API. Provide endpoint/fields to replace static data.</p>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleMaintenance">
+                <span>Fuelcard Maintenance</span>
+                <i class="bx @(_showMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/vehicle">1) Fuelcard Maintenance for a Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/collection-multiple">2) Collection for TWO or MORE Fuelcards</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/delete">3) Delete a Fuelcard</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_cards.Count Card(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Card</th>
-                            <th>Vehicle</th>
-                            <th>Status</th>
-                            <th>Issued</th>
-                            <th>Returned</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var card in _cards)
-                        {
-                            <tr>
-                                <td>@card.CardNumber</td>
-                                <td>@card.Vehicle</td>
-                                <td><span class="badge">@card.Status</span></td>
-                                <td>@card.IssueDate?.ToString("yyyy-MM-dd")</td>
-                                <td>@card.ReturnDate?.ToString("yyyy-MM-dd")</td>
-                                <td>@card.VehicleCode</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleReports">
+                <span>Fuelcards Report</span>
+                <i class="bx @(_showReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/report/latest">1) Latest Fuelcard Report for a GG Vehicle</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="TogglePrivateHireMaintenance">
+                <span>Private Hire Vehicle Fuelcards - Maintenance</span>
+                <i class="bx @(_showPrivateHireMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showPrivateHireMaintenance)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/private-hire/vehicle">1) Private Hire Vehicle Fuelcards for a Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/private-hire/collection-multiple">2) Collection for TWO or MORE Fuelcards (Private Hire)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/private-hire/delete">3) Delete a Fuelcard (Private Hire)</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="TogglePrivateHireReports">
+                <span>Private Hire Vehicle Fuelcards - Reports</span>
+                <i class="bx @(_showPrivateHireReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showPrivateHireReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/fuel-cards/private-hire/report-all">1) Report for ALL Private Hire Vehicle Fuelcards</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
 </div>
 
-@inject FleetManagementApiService FleetService
-
 @code {
-    private bool _loading = true;
-    private List<FuelCardAllocationReportDto> _cards = new();
+    private bool _showHelp = true;
+    private bool _showMaintenance = true;
+    private bool _showReports = true;
+    private bool _showPrivateHireMaintenance = true;
+    private bool _showPrivateHireReports = true;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadCards();
-    }
-
-    private async Task LoadCards()
-    {
-        _loading = true;
-
-        try
-        {
-            _cards = await FleetService.GetFuelCardAllocationAsync();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading fuel cards: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
+    private void ToggleHelp() => _showHelp = !_showHelp;
+    private void ToggleMaintenance() => _showMaintenance = !_showMaintenance;
+    private void ToggleReports() => _showReports = !_showReports;
+    private void TogglePrivateHireMaintenance() => _showPrivateHireMaintenance = !_showPrivateHireMaintenance;
+    private void TogglePrivateHireReports() => _showPrivateHireReports = !_showPrivateHireReports;
 }

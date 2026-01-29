@@ -14,56 +14,14 @@
             <i class="bx bx-cog"></i>
             Full Maintenance Lease
         </h1>
-        <p class="page-description">Maintenance lease summary from /api/leasecontractterms.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadLeases">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Full Maintenance Lease (FML) Menu</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="search-bar">
-        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
-                       @onchange='() => SetSearchType("GG")' />
-                GG
-            </label>
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
-                       @onchange='() => SetSearchType("GP")' />
-                GP Number
-            </label>
-        </div>
-        <div class="search-input-wrapper" style="gap:0.75rem;">
-            <i class="bx bx-search"></i>
-            <input
-                type="text"
-                class="search-input"
-                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
-                @bind="_searchQuery"
-                @bind:event="oninput" />
-            <button class="btn btn-primary btn-sm" type="button" @onclick="SearchLeases" disabled="@_searching">
-                @if (_searching)
-                {
-                    <span class="spinner-sm"></span>
-                    <span>Searching...</span>
-                }
-                else
-                {
-                    <span>Submit</span>
-                }
-            </button>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(_searchError))
-        {
-            <span class="form-error">@_searchError</span>
-        }
-    </div>
-
+    <span style="display:none">@_loading</span>
+    <span style="display:none">@_leases.Count</span>
+    <span style="display:none">@_searching</span>
     <div class="menu-tiles" style="margin-bottom: 1.5rem;">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleLeaseInfo">
@@ -82,19 +40,33 @@
         </div>
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleLeaseMaintenance">
-                <span>Full Maintenance Lease Maintenance</span>
+                <span>Lease Vehicle Section</span>
                 <i class="bx @(_showLeaseMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
             </button>
             @if (_showLeaseMaintenance)
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <a class="menu-item-link" href="/full-maintenance-lease">1) Full Maintenance Lease</a>
+                        <a class="menu-item-link" href="/full-maintenance-lease/tariffs">1) Capturing of Tariffs for Lease Vehicles</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/full-maintenance-lease/upload">2) Import the Tariff File</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/full-maintenance-lease/extend">3) Extend Latest Lease Tariff Period</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/full-maintenance-lease/add-lease">4) Add Lease Tariff for In Service Vehicles</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/full-maintenance-lease/reports">4) FML Reports</a>
                     </div>
                 </div>
             }
         </div>
     </div>
+    @* Existing search/table retained for future reuse once tariff pages are wired. *@
+    @*
     @if (_loading)
     {
         <div class="loading-state">
@@ -145,13 +117,13 @@
             </div>
         </div>
     }
+    *@
 </div>
 
 @code {
     private bool _loading = true;
     private List<FmlItem> _leases = new();
     private List<FmlItem> _allLeases = new();
-    private string _searchType = "GG";
     private string _searchQuery = "";
     private bool _searching;
     private string? _searchError;
@@ -214,11 +186,6 @@
         _showLeaseMaintenance = !_showLeaseMaintenance;
     }
 
-    private void SetSearchType(string type)
-    {
-        _searchType = type;
-    }
-
     private async Task SearchLeases()
     {
         _searchError = null;
@@ -233,9 +200,9 @@
         {
             var query = _searchQuery.Trim();
             var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
-            var match = _searchType == "GG"
-                ? vehicles.Data.FirstOrDefault(v => string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase))
-                : vehicles.Data.FirstOrDefault(v => string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
+            var match = vehicles.Data.FirstOrDefault(v =>
+                string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
 
             if (match == null)
             {

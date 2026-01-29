@@ -1,0 +1,105 @@
+@page "/full-maintenance-lease/reports/contracts-expiring"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>FML Contracts Expire In Next Three Months</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            FML Contracts Expire In Next Three Months Report
+        </h1>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-actions" style="margin-bottom: 1rem;">
+        <button class="btn btn-primary" @onclick="Download">Download to Excel</button>
+        <button class="btn btn-secondary" @onclick="GoBack">&lt;&lt; Back to Reports selection screen</button>
+    </div>
+
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Click on the table headers to sort</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>No.</th>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Model</th>
+                        <th>Year Model</th>
+                        <th>Hired From</th>
+                        <th>Hire Type</th>
+                        <th>Still Current</th>
+                        <th>Contract Start Date</th>
+                        <th>Target Return Date</th>
+                        <th>Contract Type</th>
+                        <th>Site Name</th>
+                        <th>Fixed Tariff</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_rows.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="13">No records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.RowNumber</td>
+                                <td>@row.GgNumber</td>
+                                <td>@row.GpNumber</td>
+                                <td>@row.Model</td>
+                                <td>@row.YearModel</td>
+                                <td>@row.HiredFrom</td>
+                                <td>@row.HireType</td>
+                                <td>@row.StillCurrent</td>
+                                <td>@row.ContractStartDate</td>
+                                <td>@row.TargetReturnDate</td>
+                                <td>@row.ContractType</td>
+                                <td>@row.SiteName</td>
+                                <td>@row.FixedTariff</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly List<ContractsExpiringRow> _rows = new();
+
+    private void Download() { }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/full-maintenance-lease/reports");
+    }
+
+    private sealed class ContractsExpiringRow
+    {
+        public string RowNumber { get; set; } = "";
+        public string GgNumber { get; set; } = "";
+        public string GpNumber { get; set; } = "";
+        public string Model { get; set; } = "";
+        public string YearModel { get; set; } = "";
+        public string HiredFrom { get; set; } = "";
+        public string HireType { get; set; } = "";
+        public string StillCurrent { get; set; } = "";
+        public string ContractStartDate { get; set; } = "";
+        public string TargetReturnDate { get; set; } = "";
+        public string ContractType { get; set; } = "";
+        public string SiteName { get; set; } = "";
+        public string FixedTariff { get; set; } = "";
+    }
+}

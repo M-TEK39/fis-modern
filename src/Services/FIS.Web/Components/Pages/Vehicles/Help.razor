@@ -1,0 +1,71 @@
+@page "/vehicles/help"
+@rendermode InteractiveServer
+
+<PageTitle>Vehicle Master Information - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-info-circle"></i>
+            Vehicle Master Information / Help
+        </h1>
+        <p class="page-description">Legacy help documentation for Vehicle Master.</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <article class="legacy-doc">
+        <div class="legacy-doc-hero">
+            <img src="/legacy/addVehicle.jpg" alt="Vehicle Master" />
+        </div>
+
+        <h2>FIS PROGRAM: VEHICLE MASTER FILE</h2>
+
+        <h3>Current Operators</h3>
+        <p>1. Sarie Koen - Bedfordview Depot (011) 372-9008 - sariek@gpg.gov.za</p>
+        <p>2. Violet Small - Bedfordview Depot (011) 372-9006 - violets@gpg.gov.za</p>
+
+        <h3>Purpose of vehicle master file</h3>
+        <ul>
+            <li>To capture vehicle data on FIS</li>
+            <li>To obtain management reports and discrepancies</li>
+            <li>To control vehicle list</li>
+        </ul>
+
+        <h3>Programmer</h3>
+        <p><strong>Add a Vehicle:</strong> Louis Coetzee - Directorate Systems</p>
+        <p><strong>Edit a Vehicle:</strong> Walter Luwes - Directorate Systems (012) 310-2279 - walterl@gpg.gov.za</p>
+
+        <hr />
+
+        <h3>SCREEN: Add a Vehicle</h3>
+        <ol>
+            <li><strong>GG Number allocated to vehicle:</strong> Delivery note of vehicle.</li>
+            <li><strong>Current Registration Number:</strong> If a provincial reg no. has been allocated this will be captured here. If not the GG number will also be captured here.</li>
+            <li><strong>Make &amp; Model:</strong> Choose correct make &amp; model from drop down box. Info on delivery note – if not on system contact Rico Hein.</li>
+            <li><strong>Color:</strong> Choose from drop down box – delivery &amp; inspection form. If not in box click “Other”.</li>
+            <li><strong>Specify Color:</strong> Type the correct color in this block – delivery &amp; inspection form.</li>
+            <li><strong>Year Manufactured:</strong> Year as on delivery note.</li>
+            <li><strong>Tare:</strong> Will be on delivery note or on registration document of vehicle.</li>
+            <li><strong>VIN (Chassis) Number:</strong> As on delivery note &amp; inspection form – must be compared at Government Garage with vehicle.</li>
+            <li><strong>Engine Number:</strong> As on delivery note &amp; inspection form – must be compared at Government Garage with vehicle.</li>
+            <li><strong>Take On Odo:</strong> Capture kilometers on odo meter as on date of delivery – delivery note / inspection form.</li>
+            <li><strong>Additional fuel tank:</strong> This field will be 0 except when the vehicle has been fitted with an additional fuel tank.</li>
+            <li><strong>Take On Date:</strong> The date when vehicle has been captured on FIS.</li>
+            <li><strong>Location:</strong> Government Garage where vehicle is allocated to – only Johannesburg or Pretoria – location unknown must not be used.</li>
+            <li><strong>Status:</strong> Choose applicable status on drop down box. First time vehicle is loaded onto FIS status will be <strong>New</strong>. When put on contract status should be changed to <strong>In Service</strong>.</li>
+            <li><strong>Status Date:</strong> Date of status change. First time will be same as take-on date. Will change every time status change from e.g. <strong>New → In Service → Withdrawn</strong>.</li>
+            <li><strong>Hire Type:</strong> Choose from drop down box, i.e. Permanent Hire, Hire Pool, or VIP Service.</li>
+            <li><strong>Specifications:</strong> Click on applicable box to indicate extras, e.g. Radio, air conditioning, etc.</li>
+            <li><strong>Submit:</strong> When all info has been correctly entered press the submit button to save information on the FIS.</li>
+        </ol>
+
+        <h3>SCREEN: Edit a Vehicle</h3>
+        <p><strong>Screen 1:</strong> Type in the GG number or registration number of the vehicle to be edited. Press “Submit”.</p>
+        <p><strong>Screen 2:</strong> Edit a vehicle.</p>
+        <ol>
+            <li><strong>Only information that can be changed:</strong> current GG Number, current Reg. No., Color, Tare, Location, Status (excluding stolen which must be changed using the Losses screen), status changed date, hire type, comment, extras, engine number, chassis number.</li>
+            <li>Click on relevant block and change the information needing updating.</li>
+        </ol>
+    </article>
+</div>

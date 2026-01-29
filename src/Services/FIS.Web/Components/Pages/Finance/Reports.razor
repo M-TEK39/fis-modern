@@ -1,0 +1,227 @@
+@page "/finance/reports/{Action?}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>@PageTitleText</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-bar-chart-square"></i>
+            @PageTitleText
+        </h1>
+        <p class="page-description">Financial reporting aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>@SectionTitle</h2>
+            <p>@SectionDescription</p>
+        </div>
+        <div class="form-card-body">
+            @if (IsFinancialYear)
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Financial Year</label>
+                        <select class="form-select">
+                            <option value="">Select Financial Year</option>
+                        </select>
+                    </div>
+                    @if (Action == "vehicle-billing-history")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Registration Number</label>
+                            <input class="form-input" placeholder="Optional" />
+                        </div>
+                    }
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                </div>
+            }
+            else if (IsDateRange)
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Start Date</label>
+                        <select class="form-select">
+                            <option value="">Select Start Date</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">End Date</label>
+                        <select class="form-select">
+                            <option value="">Select End Date</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                </div>
+            }
+            else if (IsJournal)
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Reversal Journal Number</label>
+                        <input class="form-input" placeholder="Enter journal number" />
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Submit Details</button>
+                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                </div>
+            }
+            else
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Department</label>
+                        <select class="form-select">
+                            <option value="">Select Department</option>
+                        </select>
+                    </div>
+                    @if (Action == "site")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Site</label>
+                            <select class="form-select">
+                                <option value="">Select Site</option>
+                            </select>
+                        </div>
+                    }
+                    @if (Action == "province")
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Province</label>
+                            <select class="form-select">
+                                <option value="">Select Province</option>
+                            </select>
+                        </div>
+                    }
+                    <div class="form-field">
+                        <label class="form-label">Posting Date</label>
+                        <select class="form-select">
+                            <option value="">Select Posting Month</option>
+                        </select>
+                    </div>
+                </div>
+
+                @if (Action == "province")
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Detailed Report</h3>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show HTML invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show PDF invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Invoice in a Table</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Excel invoice</span>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-section">
+                        <h3 class="form-section-title">Summary Report</h3>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Summarised Invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Invoice by Cost Type, Site Name &amp; Journal</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show HTML invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show PDF invoice</span>
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h3 class="form-section-title">Detailed Report</h3>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show HTML invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show PDF invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Invoice in a Table</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download Excel invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show TAXI &amp; VIP transactions</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show detailed FUEL Invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download detailed FUEL invoice in Excel</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show detailed TOLL &amp; OIL Invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Download detailed TOLL &amp; OIL invoice in Excel</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Show Surcharge Invoice</span>
+                        </div>
+                        <div class="menu-item">
+                            <span class="menu-item-link">Surcharge invoice in Excel</span>
+                        </div>
+                    </div>
+                }
+
+                <div class="contract-banner contract-banner-info contract-banner-inline">
+                    Notes: The detailed reports are big. You may have to wait a few minutes before the report is displayed.
+                    Excel Note: Please save the file to disk before opening.
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+
+    private bool IsFinancialYear => Action is "vehicle-billing-history" or "income-split-summary" or "income-split-detailed";
+    private bool IsDateRange => Action is "income-department" or "income-department-site" or "download-income-department" or "download-income-department-site" or "download-income-department-site-vehicle";
+    private bool IsJournal => Action == "reversals-tree";
+
+    private string PageTitleText => Action switch
+    {
+        "department" => "Print Financial Reports by Department",
+        "province" => "Print Financial Reports by Province",
+        "site" => "Print Financial Reports by Site",
+        "vehicle-billing-history" => "Vehicle Billing History Report by Financial Year",
+        "reversals-tree" => "Reversals Tree Report from Journal Number",
+        "income-department" => "Income Report by Department",
+        "income-split-summary" => "Summary Income Split Report",
+        "income-split-detailed" => "Detailed Income Split Report",
+        "income-department-site" => "Income Report by Department & Site",
+        "download-income-department" => "Download Income Report by Department",
+        "download-income-department-site" => "Download Income Report by Department & Site",
+        "download-income-department-site-vehicle" => "Download Income Report by Department, Site & Vehicle",
+        _ => "Financial Reports"
+    };
+
+    private string SectionTitle => PageTitleText;
+
+    private string SectionDescription => "Select parameters to generate the report.";
+}

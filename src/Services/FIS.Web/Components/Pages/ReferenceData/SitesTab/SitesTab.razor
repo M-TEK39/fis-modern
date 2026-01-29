@@ -1,0 +1,361 @@
+@namespace FIS.Web.Components.Pages.ReferenceData
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
+@inject ProvinceApiService ProvinceService
+
+@if (_loading)
+{
+    <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading sites...</p>
+    </div>
+}
+else if (_sites.Count == 0)
+{
+    <div class="empty-state">
+        <i class="bx bx-map-pin"></i>
+        <h3>No sites found</h3>
+        <p>Get started by adding your first site</p>
+        <button class="btn btn-primary" @onclick="ShowAddDialog">
+            <i class="bx bx-plus plus-icon"></i>
+            Add Site
+        </button>
+    </div>
+}
+else
+{
+    <div class="table-container">
+        <div class="table-header">
+            <button class="btn btn-primary" @onclick="ShowAddDialog">
+                <i class="bx bx-plus"></i>
+                Add Site
+            </button>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Site</th>
+                        <th>Department</th>
+                        <th>Telephone</th>
+                        <th>Status</th>
+                        <th class="actions-column">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var site in _sites)
+                    {
+                        <tr>
+                            <td>@site.Description</td>
+                            <td>@GetDepartmentName(site.DepartmentCode)</td>
+                            <td>@(site.Telephone ?? "-")</td>
+                            <td>@(site.SiteActive ? "Active" : "Inactive")</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <button class="btn-icon btn-icon-edit" @onclick="() => ShowEditDialog(site)" title="Edit">
+                                        <i class="bx bx-edit"></i>
+                                    </button>
+                                    <button class="btn-icon btn-icon-delete" @onclick="() => ShowDeleteDialog(site)" title="Delete">
+                                        <i class="bx bx-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (_showDialog)
+{
+    <Modal IsVisible="_showDialog"
+           Title="@(_isEdit ? "Edit Site" : "Add Site")"
+           OnCancel="HideDialog"
+           OnSubmit="SaveSite"
+           SubmitText="@(_isEdit ? "Update" : "Create")"
+           IsSaving="_saving"
+           Size="Modal.ModalSize.Large"
+           Model="_currentSite">
+        <div class="form-section">
+            <h4 class="form-section-title"><i class="bx bx-map-pin"></i> Site Details</h4>
+            <div class="form-grid">
+                <div class="form-field form-group-full">
+                    <label class="form-label">Site Name <span class="required">*</span></label>
+                    <input type="text" class="form-input" @bind="_currentSite.Description" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Responsible Person</label>
+                    <input type="text" class="form-input" @bind="_currentSite.ResponsiblePerson" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Site Number</label>
+                    <input type="text" class="form-input" @bind="_currentSite.DepartmentNumber" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Department <span class="required">*</span></label>
+                    <select class="form-input" @bind="_currentSite.DepartmentCode">
+                        <option value="">Select department</option>
+                        @foreach (var dept in _departments)
+                        {
+                            <option value="@dept.department_code">@dept.department_description</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Province</label>
+                    <select class="form-input" @bind="_currentSite.ProvinceCode">
+                        <option value="">Select province</option>
+                        @foreach (var province in _provinces)
+                        {
+                            <option value="@province.province_code">@province.province_name</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Active</label>
+                    <select class="form-input" @bind="_currentSite.SiteActive">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="form-section">
+            <h4 class="form-section-title"><i class="bx bx-map"></i> Address</h4>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Address Line 1</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Address1" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Address Line 2</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Address2" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Address Line 3</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Address3" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Postal Code</label>
+                    <input type="text" class="form-input" @bind="_currentSite.PostalCode" />
+                </div>
+            </div>
+        </div>
+        <div class="form-section">
+            <h4 class="form-section-title"><i class="bx bx-phone"></i> Contact</h4>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Telephone</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Telephone" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Telephone 2</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Telephone2" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Fax</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Fax" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Fax 2</label>
+                    <input type="text" class="form-input" @bind="_currentSite.Fax1" />
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-input" @bind="_currentSite.NetAddress" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Cell Number</label>
+                    <input type="text" class="form-input" @bind="_currentSite.CellNumber" />
+                </div>
+            </div>
+        </div>
+        <div class="form-section">
+            <h4 class="form-section-title"><i class="bx bx-map-alt"></i> Mapping</h4>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Map Reference</label>
+                    <input type="text" class="form-input" @bind="_currentSite.MapReference" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Map Description</label>
+                    <input type="text" class="form-input" @bind="_currentSite.MapDescription" />
+                </div>
+            </div>
+        </div>
+    </Modal>
+}
+
+@if (_showDeleteConfirm)
+{
+    <div class="modal-overlay">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Confirm Delete</h3>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong>@_currentSite.Description</strong>?</p>
+                <p class="warning-text">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideDeleteDialog" disabled="@_deleting">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteSite" disabled="@_deleting">
+                    @if (_deleting)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Deleting...</span>
+                    }
+                    else
+                    {
+                        <i class="bx bx-trash"></i>
+                        <span>Delete</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SiteResponseDto> _sites = new();
+    private SiteRequestDto _currentSite = new();
+    private List<DepartmentDto> _departments = new();
+    private List<ProvinceDto> _provinces = new();
+    private bool _loading = true;
+    private bool _showDialog = false;
+    private bool _showDeleteConfirm = false;
+    private bool _isEdit = false;
+    private bool _saving = false;
+    private bool _deleting = false;
+    private short _editSiteCode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSites();
+        await LoadReferenceData();
+    }
+
+    private async Task LoadSites()
+    {
+        _loading = true;
+        _sites = await SiteService.GetAllAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadReferenceData()
+    {
+        _departments = await DepartmentService.GetDepartmentsAsync();
+        _provinces = await ProvinceService.GetAllAsync();
+    }
+
+    private void ShowAddDialog()
+    {
+        _currentSite = new SiteRequestDto();
+        _editSiteCode = 0;
+        _isEdit = false;
+        _showDialog = true;
+    }
+
+    private void ShowEditDialog(SiteResponseDto site)
+    {
+        _currentSite = new SiteRequestDto
+        {
+            DepartmentCode = site.DepartmentCode,
+            Description = site.Description ?? string.Empty,
+            ResponsiblePerson = site.ResponsiblePerson,
+            Address1 = site.Address1,
+            Address2 = site.Address2,
+            Address3 = site.Address3,
+            PostalCode = site.PostalCode,
+            ProvinceCode = site.ProvinceCode,
+            Telephone = site.Telephone,
+            Telephone2 = site.Telephone2,
+            Fax = site.Fax,
+            Fax1 = site.Fax1,
+            NetAddress = site.NetAddress,
+            DepartmentNumber = site.DepartmentNumber,
+            MapReference = site.MapReference,
+            MapDescription = site.MapDescription,
+            CellNumber = site.CellNumber,
+            SiteActive = site.SiteActive,
+            FinancialSystemCode = site.FinancialSystemCode,
+            FinancialSystemActive = site.FinancialSystemActive
+        };
+        _editSiteCode = site.SiteCode;
+        _isEdit = true;
+        _showDialog = true;
+    }
+
+    private void ShowDeleteDialog(SiteResponseDto site)
+    {
+        _currentSite = new SiteRequestDto
+        {
+            Description = site.Description ?? string.Empty
+        };
+        _editSiteCode = site.SiteCode;
+        _showDeleteConfirm = true;
+    }
+
+    private void HideDialog()
+    {
+        _showDialog = false;
+        _currentSite = new SiteRequestDto();
+    }
+
+    private void HideDeleteDialog()
+    {
+        _showDeleteConfirm = false;
+    }
+
+    private async Task SaveSite()
+    {
+        _saving = true;
+        bool success;
+
+        if (_isEdit)
+        {
+            var result = await SiteService.UpdateAsync(_editSiteCode, _currentSite);
+            success = result != null;
+        }
+        else
+        {
+            var result = await SiteService.CreateAsync(_currentSite);
+            success = result != null;
+        }
+
+        _saving = false;
+
+        if (success)
+        {
+            HideDialog();
+            await LoadSites();
+        }
+    }
+
+    private async Task DeleteSite()
+    {
+        _deleting = true;
+        await SiteService.DeleteAsync(_editSiteCode);
+        _deleting = false;
+
+        HideDeleteDialog();
+        await LoadSites();
+    }
+
+    private string GetDepartmentName(short? departmentCode)
+    {
+        if (departmentCode == null)
+        {
+            return "-";
+        }
+
+        var dept = _departments.FirstOrDefault(d => d.department_code == departmentCode);
+        return dept?.department_description ?? "-";
+    }
+}

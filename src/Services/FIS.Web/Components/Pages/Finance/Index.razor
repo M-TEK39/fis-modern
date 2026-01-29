@@ -1,112 +1,319 @@
 @page "/finance"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject TariffApiService TariffService
-@inject IJSRuntime JS
 
-<PageTitle>Finance - Fleet Information System</PageTitle>
+<PageTitle>Finance Menu - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-wallet"></i>
-            Finance
+            Finance Menu
         </h1>
-        <p class="page-description">Finance tasks overview with live tariff checks.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadFinanceTasks">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Finance functions and reports aligned to the legacy workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading finance tasks...</p>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleFinancialAllocation">
+                <span>1) Financial Allocation Codes</span>
+                <i class="bx @(_showFinancialAllocation ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showFinancialAllocation)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/import-bas">a) Import BAS Segment Codes</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/activate-bas">b) Activate / De-activate BAS Segment Codes</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/view-bas">c) View BAS Segment Codes</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/invalid-journals">d) Un-Invoiced Journals with Invalid BAS Codes</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/fix-invalid-journals">e) Fix Invalid BAS Codes</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/allocate-fund-codes">f) Allocate Fund Codes to Vehicle Journals</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/departments-no-bas">g) Departments with No BAS Codes</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/financial-allocation/departments-missing-financial-system">h) Departments with Missing Financial System</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
-    else if (_tasks.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-wallet"></i>
-            <h3>No finance items</h3>
-            <p>Awaiting finance API. Provide endpoint/fields to replace static data.</p>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleFinancialReports">
+                <span>2) Financial Reports</span>
+                <i class="bx @(_showFinancialReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showFinancialReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/department">a) Print Financial Reports by Department</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/province">b) Print Financial Reports by Province</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/site">b) Print Financial Reports by Site</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/vehicle-billing-history">c) Vehicle Billing History report by financial year</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/reversals-tree">d) Reversals Tree Report</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/income-department">e) Income Report by Department (date range)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/income-split-summary">f) Summary Income Split Report</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/income-split-detailed">g) Detailed Income Split Report</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/income-department-site">h) Income Report by Department & Site</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/download-income-department">i) Download Income Report by Department</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/download-income-department-site">j) Download Income Report by Department & Site</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/reports/download-income-department-site-vehicle">k) Download Income Report by Department, Site & Vehicle</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_tasks.Count Finance item(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Process</th>
-                            <th>Status</th>
-                            <th>Last Run</th>
-                            <th>Owner</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var task in _tasks)
-                        {
-                            <tr>
-                                <td>@task.Process</td>
-                                <td><span class="badge">@task.Status</span></td>
-                                <td>@task.LastRun.ToString("yyyy-MM-dd")</td>
-                                <td>@task.Owner</td>
-                                <td>@task.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleInterface">
+                <span>2.1) Interface with GPG-SAP System</span>
+                <i class="bx @(_showInterface ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showInterface)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/interface/pastel-csv">a) Download Pastel CSV Interface File</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/interface/pastel-csv-customer">b) Download Pastel CSV Interface File with Customer column</a>
+                    </div>
+                </div>
+            }
         </div>
-    }
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleOutstandingReports">
+                <span>2.2) Outstanding Amounts Reports</span>
+                <i class="bx @(_showOutstandingReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showOutstandingReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/outstanding/department-site-vehicle">a) Outstanding Amounts per Department, Site & Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/outstanding/department">b) Outstanding Amounts per Department</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/outstanding/department-site">c) Outstanding Amounts per Department & Site</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/outstanding/month-end-vehicle">d) Outstanding Amounts at Month End per Vehicle</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/outstanding/allocation-exception">e) Allocation Exceptions (Un-Interfaced)</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleMissingKilometres">
+                <span>3) Missing Kilometres</span>
+                <i class="bx @(_showMissingKilometres ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showMissingKilometres)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/missing-kilometres/fuel-consumption">a.1) Missing Kilometres from Fuel Consumption (Date Range)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/missing-kilometres/no-kilos-consuming-fuel">a.2) Vehicles with No Kilos but Consumed Fuel</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/missing-kilometres/kilo-gaps-pdf">b.1) Missing Kilometres Report (PDF)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/missing-kilometres/kilo-gaps-xls">b.2) Missing Kilometres Report (Excel)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/missing-kilometres/close-gaps">c) Automatically Capture Missing Kilos</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleAuditTrail">
+                <span>5) Audit Trail Reports</span>
+                <i class="bx @(_showAuditTrail ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showAuditTrail)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/audit-trail">a) Audit Trail Reports</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleTariffParameters">
+                <span>6) Annual Tariff Parameters</span>
+                <i class="bx @(_showTariffParameters ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showTariffParameters)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/tariff-parameters">a) Tariff Parameter Management</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleWesbankReports">
+                <span>7) Wesbank Expenses Reports</span>
+                <i class="bx @(_showWesbankReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showWesbankReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/wesbank/summary-all">a) Summary Expenses Reports (All Inclusive)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/wesbank/summary-selection">b) Summary Expenses Reports (Selection)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/wesbank/detailed-all">c) Detailed Expenses Reports (All Inclusive)</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/wesbank/detailed-selection">d) Detailed Expenses Reports (Selection)</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleRegionalModule">
+                <span>8) Regional Module: Finance</span>
+                <i class="bx @(_showRegionalModule ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showRegionalModule)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/regional/menu">a) Regional Module: Finance</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/regional/assets">b) Asset List: Vehicles in FIS (New & In-Service)</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleProfitability">
+                <span>9) Vehicles Profitability Report</span>
+                <i class="bx @(_showProfitability ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showProfitability)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/profitability">a) VIP & Pool Vehicles Profitability Report</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleStandardBankImport">
+                <span>10) Import Standard Bank Transactions</span>
+                <i class="bx @(_showStandardBankImport ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showStandardBankImport)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/standard-bank-import">a) Import monthly Standard Bank Transactions File</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleBatchManagement">
+                <span>11) Batch Management</span>
+                <i class="bx @(_showBatchManagement ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showBatchManagement)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/finance/batch-management">Batch management</a>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<FinanceTask> _tasks = new();
+    private bool _showFinancialAllocation = true;
+    private bool _showFinancialReports = true;
+    private bool _showInterface = true;
+    private bool _showOutstandingReports = true;
+    private bool _showMissingKilometres = true;
+    private bool _showAuditTrail = true;
+    private bool _showTariffParameters = true;
+    private bool _showWesbankReports = true;
+    private bool _showRegionalModule = true;
+    private bool _showProfitability = true;
+    private bool _showStandardBankImport = true;
+    private bool _showBatchManagement = true;
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadFinanceTasks();
-    }
-
-    private async Task LoadFinanceTasks()
-    {
-        _loading = true;
-        try
-        {
-            // Example: check tariffs for a few contract codes (1-3) to populate finance view
-            var financeRows = new List<FinanceTask>
-            {
-                new("Tariff Check", "Live", DateTime.Now, "Tariff API", "Using /api/Tariff/contract/{contractCode}."),
-                new("Billing History", "Available", DateTime.Now, "Report API", "Use /api/Report/billing/history/{vmfCode}."),
-                new("Maintenance Cost", "Available", DateTime.Now, "Report API", "Use /api/Report/maintenance/cost.")
-            };
-            _tasks = financeRows;
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading finance tasks: {ex.Message}");
-            _tasks = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record FinanceTask(string Process, string Status, DateTime LastRun, string Owner, string Notes);
+    private void ToggleFinancialAllocation() => _showFinancialAllocation = !_showFinancialAllocation;
+    private void ToggleFinancialReports() => _showFinancialReports = !_showFinancialReports;
+    private void ToggleInterface() => _showInterface = !_showInterface;
+    private void ToggleOutstandingReports() => _showOutstandingReports = !_showOutstandingReports;
+    private void ToggleMissingKilometres() => _showMissingKilometres = !_showMissingKilometres;
+    private void ToggleAuditTrail() => _showAuditTrail = !_showAuditTrail;
+    private void ToggleTariffParameters() => _showTariffParameters = !_showTariffParameters;
+    private void ToggleWesbankReports() => _showWesbankReports = !_showWesbankReports;
+    private void ToggleRegionalModule() => _showRegionalModule = !_showRegionalModule;
+    private void ToggleProfitability() => _showProfitability = !_showProfitability;
+    private void ToggleStandardBankImport() => _showStandardBankImport = !_showStandardBankImport;
+    private void ToggleBatchManagement() => _showBatchManagement = !_showBatchManagement;
 }

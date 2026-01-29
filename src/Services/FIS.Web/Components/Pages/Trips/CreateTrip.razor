@@ -1,0 +1,392 @@
+@page "/trips/create"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+
+<PageTitle>Create Trip Authority - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-plus-circle"></i>
+            Create Trip Authority
+        </h1>
+        <p class="page-description">Legacy trip authority creation workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/trips">&lt; Back to Trips</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Trip Authority # <span class="contract-muted">&lt;Number to be assigned&gt;</span></h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-section">
+                <div class="form-section-title">Selected Vehicle: <span class="contract-muted">[Vehicle]</span></div>
+                <div class="form-hint">* BOLD fields are REQUIRED</div>
+                <div class="form-grid" style="margin-top: 0.75rem;">
+                    <div class="form-field">
+                        <label class="form-label"><strong>Start ODO Meter Reading:</strong> <span class="contract-muted">[Start ODO]</span></label>
+                        <input class="form-input" placeholder="Enter start ODO" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">General Information</h3>
+                <div class="form-grid">
+                    <div class="form-field form-group-full">
+                        <label class="form-label"><strong>Reason for trip:</strong></label>
+                        <textarea class="form-textarea" rows="3"></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label"><strong>Trip Type:</strong></label>
+                        <select class="form-select">
+                            <option value="">Select Trip Type</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">Approval Information</h3>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label"><strong>Select the trip Approver:</strong></label>
+                        <select class="form-select">
+                            <option value="">-- Please Select Approver --</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-secondary btn-sm" @onclick="ShowApproverModal">Add/Edit Approver</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">Trip Driver(s) Information</h3>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Driver Detail</th>
+                                    <th>Primary Driver</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="3">No Drivers Added</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="form-grid" style="margin-top: 1rem;">
+                    <div class="form-field">
+                        <label class="form-label"><strong>Select Driver:</strong></label>
+                        <select class="form-select">
+                            <option value="0">-- Please Select Driver --</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">This is a Primary Driver:</label>
+                        <label class="form-label form-checkbox">
+                            <input type="checkbox" />
+                            YES
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-secondary btn-sm" @onclick="ShowDriverModal">Open Driver Maintenance Panel</button>
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Add Driver to Trip</button>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">Passenger Information</h3>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Passenger details</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="2">No Passengers Added</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="form-grid" style="margin-top: 1rem;">
+                    <div class="form-field form-group-full">
+                        <label class="form-label"><strong>Passenger Name:</strong></label>
+                        <input class="form-input" />
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Add Passenger</button>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">Route Information</h3>
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Departure Location</th>
+                                    <th>Departure Date</th>
+                                    <th>Arrival Location</th>
+                                    <th>Arrival Date</th>
+                                    <th>Estimated distance</th>
+                                    <th>Responsibility</th>
+                                    <th>Objective</th>
+                                    <th>Project</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="9">No Routes Currentley</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="form-grid" style="margin-top: 1rem;">
+                    <div class="form-field">
+                        <label class="form-label"><strong>Estimated Distance:</strong></label>
+                        <input class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label"><strong>Departure Location:</strong></label>
+                        <input class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label"><strong>Arrival Location:</strong></label>
+                        <input class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label"><strong>Departure Date:</strong></label>
+                        <input class="form-input" placeholder="Select date" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label"><strong>Arrival Date:</strong></label>
+                        <input class="form-input" placeholder="Select date" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Fund</label>
+                        <select class="form-select">
+                            <option value="">Select Fund</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Responsibility</label>
+                        <select class="form-select">
+                            <option value="">Select Responsibility</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Objective</label>
+                        <select class="form-select">
+                            <option value="">Select Objective</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Project</label>
+                        <select class="form-select">
+                            <option value="">Select Project</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm">Add Route</button>
+                </div>
+            </div>
+
+            <div class="contract-action-group">
+                <button class="btn btn-secondary">&lt; Back to Trips</button>
+                <button class="btn btn-primary">Save Trip Authority</button>
+                <button class="btn btn-secondary">Print Trip Authority</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_showApproverModal)
+{
+    <Modal IsVisible="_showApproverModal"
+           Title="Maintain Approvers"
+           Size="Modal.ModalSize.Large"
+           ShowFooter="false"
+           ShowCloseButton="true"
+           OnCancel="HideApproverModal">
+        <ChildContent>
+            <div class="form-grid">
+                <div class="form-field form-group-full">
+                    <label class="form-label">Approver(s)</label>
+                    <select class="form-select">
+                        <option value="0">-- Please Select Approver --</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Approver Surname</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Approver Firstname(s)</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Approver Rank</label>
+                    <select class="form-select">
+                        <option value="">Select Rank</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Approver Site</label>
+                    <select class="form-select">
+                        <option value="">Select Site</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Telephone Number</label>
+                    <input class="form-input" />
+                </div>
+            </div>
+            <div class="contract-action-group" style="margin-top: 1rem;">
+                <button class="btn btn-primary btn-sm">Add New</button>
+                <button class="btn btn-secondary btn-sm" @onclick="HideApproverModal">Close and Load Changes</button>
+            </div>
+        </ChildContent>
+    </Modal>
+}
+
+@if (_showDriverModal)
+{
+    <Modal IsVisible="_showDriverModal"
+           Title="Maintain Drivers"
+           Size="Modal.ModalSize.Large"
+           ShowFooter="false"
+           ShowCloseButton="true"
+           OnCancel="HideDriverModal">
+        <ChildContent>
+            <div class="form-grid">
+                <div class="form-field form-group-full">
+                    <label class="form-label">Driver(s)</label>
+                    <select class="form-select">
+                        <option value="0">-- Please Select Driver --</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Surname</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Firstname</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">SA ID Number</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Passport Number</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Site</label>
+                    <select class="form-select">
+                        <option value="">Select Site</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Persal Number</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Employment Contract Number</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">License Type Code</label>
+                    <select class="form-select">
+                        <option value="">Select License Type</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Has PDP</label>
+                    <label class="form-label form-checkbox">
+                        <input type="checkbox" />
+                        Yes
+                    </label>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">PDP Expiry Date</label>
+                    <input class="form-input" placeholder="Select date" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">License Number</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Licence Issue Date</label>
+                    <input class="form-input" placeholder="Select date" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Licence Last Verified Date</label>
+                    <input class="form-input" placeholder="Select date" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Licence Expiry Date</label>
+                    <input class="form-input" placeholder="Select date" />
+                </div>
+            </div>
+            <div class="contract-action-group" style="margin-top: 1rem;">
+                <button class="btn btn-primary btn-sm">Add New</button>
+                <button class="btn btn-secondary btn-sm" @onclick="HideDriverModal">Close and Load Changes</button>
+            </div>
+        </ChildContent>
+    </Modal>
+}
+
+@code {
+    private bool _showApproverModal;
+    private bool _showDriverModal;
+
+    private void ShowApproverModal()
+    {
+        _showApproverModal = true;
+    }
+
+    private Task HideApproverModal()
+    {
+        _showApproverModal = false;
+        return Task.CompletedTask;
+    }
+
+    private void ShowDriverModal()
+    {
+        _showDriverModal = true;
+    }
+
+    private Task HideDriverModal()
+    {
+        _showDriverModal = false;
+        return Task.CompletedTask;
+    }
+}

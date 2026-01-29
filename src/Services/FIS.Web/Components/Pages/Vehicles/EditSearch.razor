@@ -1,0 +1,113 @@
+@page "/vehicles/edit"
+@rendermode InteractiveServer
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject NavigationManager Navigation
+
+<PageTitle>Vehicle Master - Edit Vehicle Search</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bxs-car-mechanic"></i>
+            Vehicle Master
+        </h1>
+        <p class="page-description">Edit a vehicle</p>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>GG or GP number</h2>
+            <p>Enter a valid GG or GP number (7–8 characters) to open the vehicle record.</p>
+        </div>
+        <div class="form-card-body">
+            <EditForm OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="validation-summary" />
+
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">GG or GP number <span class="required">*</span></label>
+                        <InputText class="form-input" @bind-Value="_searchNumber" maxlength="8" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_errorMessage))
+                {
+                    <div class="alert alert-error" style="margin-top: 1rem;">
+                        <i class="bx bx-error-circle"></i>
+                        <span>@_errorMessage</span>
+                    </div>
+                }
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" @onclick="NavigateToMenu" disabled="@_loading">
+                        Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary" disabled="@_loading">
+                        @if (_loading)
+                        {
+                            <span class="spinner-sm"></span>
+                            <span>Searching...</span>
+                        }
+                        else
+                        {
+                            <span>Submit</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _searchNumber = string.Empty;
+    private bool _loading;
+    private string _errorMessage = string.Empty;
+
+    private async Task HandleSubmit()
+    {
+        _errorMessage = string.Empty;
+        var query = (_searchNumber ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (query.Length < 7 || query.Length > 8)
+        {
+            _errorMessage = "Please enter a valid GG/GP number (7–8 characters).";
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var result = await VehicleService.GetVehiclesAsync(1, 5000, query);
+            var match = result.Data.FirstOrDefault(v =>
+                string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+            );
+
+            if (match is null)
+            {
+                _errorMessage = "Number not found.";
+                return;
+            }
+
+            Navigation.NavigateTo($"/vehicles/{match.vmf_code}/edit");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Search failed: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NavigateToMenu()
+    {
+        Navigation.NavigateTo("/vehicles");
+    }
+}

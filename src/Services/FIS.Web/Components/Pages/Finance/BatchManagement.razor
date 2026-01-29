@@ -1,0 +1,52 @@
+@page "/finance/batch-management"
+@rendermode InteractiveServer
+
+<PageTitle>Batch Management</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-layer"></i>
+            Batch Management
+        </h1>
+        <p class="page-description">Batch processing management aligned to the legacy workflow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Batch Management</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="menu-tiles">
+                <div class="menu-tile">
+                    <button class="menu-tile-header">
+                        <span>Batch Management</span>
+                        <i class="bx bx-chevron-down"></i>
+                    </button>
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/batch-management/start">Start batch process and take site offline</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance">Access Finance menu</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/batch-management/check-scoa">Check the SCOA version and update where needed</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/batch-management/rollback">Roll back batch</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/batch-management/finish">Finish batch process and bring site back online</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

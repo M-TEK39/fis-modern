@@ -102,6 +102,28 @@ public class VehicleApiService
         }
     }
 
+    public async Task<List<VehicleDto>> SearchVehiclesAsync(string searchTerm)
+    {
+        try
+        {
+            AddAuthorizationHeader();
+
+            if (string.IsNullOrWhiteSpace(searchTerm))
+            {
+                return new List<VehicleDto>();
+            }
+
+            var url = $"api/vehicles/search?searchTerm={Uri.EscapeDataString(searchTerm)}";
+            var result = await _httpClient.GetFromJsonAsync<List<VehicleDto>>(url);
+            return result ?? new List<VehicleDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching vehicles with term {SearchTerm}", searchTerm);
+            return new List<VehicleDto>();
+        }
+    }
+
     public async Task<bool> CreateVehicleAsync(VehicleDto vehicle)
     {
         try

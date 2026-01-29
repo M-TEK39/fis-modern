@@ -1,0 +1,76 @@
+@page "/contracts/relief-vehicle-search"
+@rendermode InteractiveServer
+
+<PageTitle>Vehicle Contract Relief Vehicle Search</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-search"></i>
+            Relief Vehicle Search
+        </h1>
+        <p class="page-description">Search for relief vehicles linked to contracts.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/contracts">Contracts Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Relief Vehicle Search</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">GG Number</label>
+                    <input class="form-input" placeholder="Enter GG number" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Registration Number</label>
+                    <input class="form-input" placeholder="Enter registration number" />
+                </div>
+            </div>
+            <div style="margin-top: 1rem;">
+                <button class="btn btn-primary btn-sm">Search</button>
+                <button class="btn btn-secondary btn-sm">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-card" style="margin-top: 1rem;">
+        <div class="form-card-header">
+            <h2>Search Results</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>GG Number</th>
+                                <th>Registration</th>
+                                <th>Make</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="6">
+                                    <div class="empty-state">
+                                        <i class="bx bx-car"></i>
+                                        <h3>No relief vehicles found</h3>
+                                        <p>Search results will appear here.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
