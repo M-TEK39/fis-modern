@@ -1,13 +1,5 @@
 @page "/accidents"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@inject AccidentApiService AccidentApiService
-@inject VehicleApiService VehicleApiService
-@inject DriverApiService DriverApiService
-@inject ReportCatalogApiService ReportService
-@inject IJSRuntime JSRuntime
 
 <PageTitle>Accidents - Fleet Information System</PageTitle>
 
@@ -15,412 +7,90 @@
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bxs-car-crash"></i>
-            Accident Management
+            Accident Maintenance Menu
         </h1>
-        <p class="page-description">Manage vehicle accidents, track claims, and generate reports</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-primary" @onclick="ShowAddAccidentDialog">
-            <i class="bx bx-plus"></i>
-            Report Accident
-        </button>
+        <p class="page-description">Legacy accident maintenance workflows and reports.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="tabs">
-        <button class="tab @(_activeTab == "accidents" ? "active" : "")" @onclick='() => SetActiveTab("accidents")'>
-            <i class="bx bx-list-ul"></i>
-            Accidents
-        </button>
-        <button class="tab @(_activeTab == "claims" ? "active" : "")" @onclick='() => SetActiveTab("claims")'>
-            <i class="bx bx-money"></i>
-            Claims & Costs
-        </button>
-        <button class="tab @(_activeTab == "reports" ? "active" : "")" @onclick='() => SetActiveTab("reports")'>
-            <i class="bx bx-file"></i>
-            Reports
-        </button>
-    </div>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleHelp">
+                <span>Accident Maintenance Information / Help</span>
+                <i class="bx @(_showHelp ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showHelp)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/accidents/help">Help / Documentation</a>
+                    </div>
+                </div>
+            }
+        </div>
 
-    <div class="tab-content">
-        @if (_activeTab == "accidents")
-        {
-            <AccidentsTab
-                FilteredAccidents="_filteredAccidents"
-                Loading="_loading"
-                SearchTerm="_searchTerm"
-                OnSearchChange="HandleSearchChange"
-                OnAddAccident="ShowAddAccidentDialog"
-                OnRefresh="LoadAccidents"
-                OnView="ViewAccident"
-                OnEdit="EditAccident"
-                OnDelete="DeleteAccident" />
-        }
-        else if (_activeTab == "claims")
-        {
-            <ClaimsTab
-                Loading="_loading"
-                ClaimsSummary="_claimsSummary"
-                RecentHighValueClaims="GetHighValueClaims()"
-                OnRefresh="LoadClaimsData" />
-        }
-        else if (_activeTab == "reports")
-        {
-            <ReportsTab
-                RecentReports="_recentReports"
-                GeneratingReport="_generatingReport"
-                OnRefreshReports="LoadRecentReports"
-                OnGenerateReport="GenerateReport"
-                OnConfigureReport="ConfigureReport"
-                OnDownloadReport="DownloadReport"
-                OnDeleteReport="DeleteReport" />
-        }
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleGarage">
+                <span>Accident Maintenance for Garage</span>
+                <i class="bx @(_showGarage ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showGarage)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/accidents/garage">1) Accident Maintenance</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/accidents/garage/delete">2) Delete an Accident</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleHq">
+                <span>Accident Maintenance for HQ</span>
+                <i class="bx @(_showHq ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showHq)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/accidents/hq">3) Accident Maintenance</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/accidents/hq/delete">4) Delete an Accident</a>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick="ToggleReports">
+                <span>Accident Reports</span>
+                <i class="bx @(_showReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
+            </button>
+            @if (_showReports)
+            {
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/accidents/reports">1) Accidents Reports</a>
+                    </div>
+                </div>
+            }
+        </div>
     </div>
 </div>
 
-@if (_showAccidentForm)
-{
-    <Modal IsVisible="_showAccidentForm"
-           Title="@(_selectedAccident == null ? "Report New Accident" : "Edit Accident")"
-           Size="Modal.ModalSize.Large"
-           ShowFooter="false"
-           ShowCloseButton="true"
-           OnCancel="HideAccidentDialog">
-        <ChildContent>
-            <AccidentForm
-                Accident="_selectedAccident ?? new AccidentDto()"
-                AvailableVehicles="_vehicles"
-                AvailableDrivers="_drivers"
-                IsEditMode="@(_selectedAccident != null)"
-                IsSaving="_isSaving"
-                OnSave="SaveAccident"
-                OnCancel="HideAccidentDialog" />
-        </ChildContent>
-    </Modal>
-}
-
-@if (_showDeleteConfirmation)
-{
-    <ConfirmationModal
-        IsVisible="_showDeleteConfirmation"
-        Title="Delete Accident"
-        Message="@($"Are you sure you want to delete accident {_accidentToDelete?.accident_reference}? This action cannot be undone.")"
-        ConfirmText="Delete"
-        CancelText="Cancel"
-        IsDeleting="_isDeleting"
-        OnConfirm="ConfirmDelete"
-        OnCancel="CancelDelete" />
-}
-
 @code {
-    // State management - using standard C# naming conventions
-    private string _activeTab = "accidents";
-    private bool _loading = true;
-    private bool _generatingReport = false;
-    private bool _showAccidentForm = false;
-    private bool _showDeleteConfirmation = false;
-    private bool _isSaving = false;
-    private bool _isDeleting = false;
-    private string _searchTerm = "";
+    private bool _showHelp = true;
+    private bool _showGarage = true;
+    private bool _showHq = true;
+    private bool _showReports = true;
 
-    // Data collections
-    private List<AccidentDto> _allAccidents = new();
-    private List<AccidentDto> _filteredAccidents = new();
-    private List<VehicleDto> _vehicles = new();
-    private List<DriverDto> _drivers = new();
-    private List<ReportDto> _recentReports = new();
-    private ClaimsSummaryDto _claimsSummary = new();
-
-    // Selected items
-    private AccidentDto? _selectedAccident = null;
-    private AccidentDto? _accidentToDelete = null;
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadInitialData();
-    }
-
-    private async Task LoadInitialData()
-    {
-        _loading = true;
-        try
-        {
-            await Task.WhenAll(
-                LoadAccidents(),
-                LoadVehicles(),
-                LoadDrivers(),
-                LoadClaimsData(),
-                LoadRecentReports()
-            );
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading data: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task LoadAccidents()
-    {
-        try
-        {
-            _allAccidents = await AccidentApiService.GetAccidentsAsync();
-            ApplySearchFilter();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading accidents: {ex.Message}");
-        }
-    }
-
-    private async Task LoadVehicles()
-    {
-        try
-        {
-            var pagedVehicles = await VehicleApiService.GetVehiclesAsync(pageNumber: 1, pageSize: 500);
-            _vehicles = pagedVehicles.Data;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles: {ex.Message}");
-        }
-    }
-
-    private async Task LoadDrivers()
-    {
-        try
-        {
-            _drivers = await DriverApiService.GetDriversAsync();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading drivers: {ex.Message}");
-        }
-    }
-
-    private async Task LoadClaimsData()
-    {
-        try
-        {
-            _claimsSummary = new ClaimsSummaryDto
-            {
-                TotalClaims = _allAccidents.Count,
-                TotalRepairCosts = _allAccidents.Sum(a => a.cost_of_repair ?? 0),
-                TotalThirdPartyClaims = _allAccidents.Sum(a => a.third_party_claim ?? 0),
-                PendingClaims = _allAccidents.Count(a => a.status == "Pending" || a.status == "Under Investigation"),
-                CostByCategory = new Dictionary<string, decimal>
-                {
-                    ["Minor Damage"] = _allAccidents.Where(a => a.severity == "Minor").Sum(a => a.cost_of_repair ?? 0),
-                    ["Moderate Damage"] = _allAccidents.Where(a => a.severity == "Moderate").Sum(a => a.cost_of_repair ?? 0),
-                    ["Major Damage"] = _allAccidents.Where(a => a.severity == "Major").Sum(a => a.cost_of_repair ?? 0),
-                    ["Total Loss"] = _allAccidents.Where(a => a.severity == "Total Loss").Sum(a => a.cost_of_repair ?? 0)
-                },
-                MonthlyTrend = new Dictionary<string, decimal>
-                {
-                    ["Jul"] = 25000,
-                    ["Aug"] = 32000,
-                    ["Sep"] = 18000,
-                    ["Oct"] = 45000,
-                    ["Nov"] = 28000,
-                    ["Dec"] = 0
-                }
-            };
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading claims data: {ex.Message}");
-        }
-    }
-
-    private async Task LoadRecentReports()
-    {
-        try
-        {
-            _recentReports = await ReportService.GetAvailableAsync();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading recent reports: {ex.Message}");
-        }
-    }
-
-    private void SetActiveTab(string tab)
-    {
-        _activeTab = tab;
-    }
-
-    private void ApplySearchFilter()
-    {
-        if (string.IsNullOrWhiteSpace(_searchTerm))
-        {
-            _filteredAccidents = _allAccidents.ToList();
-        }
-        else
-        {
-            var searchLower = _searchTerm.ToLower();
-            _filteredAccidents = _allAccidents.Where(a =>
-                a.accident_reference.ToLower().Contains(searchLower) ||
-                a.vehicle_registration.ToLower().Contains(searchLower) ||
-                a.accident_location.ToLower().Contains(searchLower) ||
-                a.description?.ToLower().Contains(searchLower) == true
-            ).ToList();
-        }
-    }
-
-    private async Task HandleSearchChange(string searchTerm)
-    {
-        _searchTerm = searchTerm;
-        ApplySearchFilter();
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private List<AccidentDto> GetHighValueClaims()
-    {
-        return _allAccidents
-            .Where(a => (a.cost_of_repair ?? 0) + (a.third_party_claim ?? 0) > 10000)
-            .OrderByDescending(a => (a.cost_of_repair ?? 0) + (a.third_party_claim ?? 0))
-            .ToList();
-    }
-
-    // Accident management
-    private void ShowAddAccidentDialog()
-    {
-        _selectedAccident = null;
-        _showAccidentForm = true;
-    }
-
-    private void ViewAccident(AccidentDto accident)
-    {
-        _selectedAccident = accident;
-        _showAccidentForm = true;
-    }
-
-    private void EditAccident(AccidentDto accident)
-    {
-        _selectedAccident = accident;
-        _showAccidentForm = true;
-    }
-
-    private async Task SaveAccident()
-    {
-        _isSaving = true;
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            if (_selectedAccident == null)
-            {
-                var newAccident = new AccidentDto
-                {
-                    accident_reference = $"ACC-{DateTime.Now:yyyyMMddHHmmss}",
-                    accident_date = DateTime.Now,
-                    status = "Pending"
-                };
-                await AccidentApiService.CreateAccidentAsync(newAccident);
-            }
-            else
-            {
-                await AccidentApiService.UpdateAccidentAsync(_selectedAccident.accident_code, _selectedAccident);
-            }
-
-            await HideAccidentDialog();
-            await LoadAccidents();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("alert", $"Error saving accident: {ex.Message}");
-        }
-        finally
-        {
-            _isSaving = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task HideAccidentDialog()
-    {
-        _showAccidentForm = false;
-        _selectedAccident = null;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    private void DeleteAccident(AccidentDto accident)
-    {
-        _accidentToDelete = accident;
-        _showDeleteConfirmation = true;
-    }
-
-    private async Task ConfirmDelete()
-    {
-        if (_accidentToDelete != null)
-        {
-            _isDeleting = true;
-            await InvokeAsync(StateHasChanged);
-
-            try
-            {
-                await AccidentApiService.DeleteAccidentAsync(_accidentToDelete.accident_code);
-                await CancelDelete();
-                await LoadAccidents();
-            }
-            catch (Exception ex)
-            {
-                await JSRuntime.InvokeVoidAsync("alert", $"Error deleting accident: {ex.Message}");
-            }
-            finally
-            {
-                _isDeleting = false;
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-    }
-
-    private async Task CancelDelete()
-    {
-        _showDeleteConfirmation = false;
-        _accidentToDelete = null;
-        await InvokeAsync(StateHasChanged);
-    }
-
-    // Report management
-    private async Task GenerateReport(ReportsTab.ReportType reportType)
-    {
-        _generatingReport = true;
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            // Map report types to available endpoints; for now refresh available list
-            _recentReports = await ReportService.GetAvailableAsync();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error generating report: {ex.Message}");
-        }
-        finally
-        {
-            _generatingReport = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    private async Task ConfigureReport(ReportsTab.ReportType reportType)
-    {
-        await JSRuntime.InvokeVoidAsync("alert", $"Configure report: {reportType}");
-    }
-
-    private async Task DownloadReport(ReportDto report)
-    {
-        await JSRuntime.InvokeVoidAsync("alert", $"Downloading: {report.Name}");
-    }
-
-    private async Task DeleteReport(ReportDto report)
-    {
-        await JSRuntime.InvokeVoidAsync("alert", $"Deleted: {report.Name}");
-        await LoadRecentReports();
-    }
+    private void ToggleHelp() => _showHelp = !_showHelp;
+    private void ToggleGarage() => _showGarage = !_showGarage;
+    private void ToggleHq() => _showHq = !_showHq;
+    private void ToggleReports() => _showReports = !_showReports;
 }

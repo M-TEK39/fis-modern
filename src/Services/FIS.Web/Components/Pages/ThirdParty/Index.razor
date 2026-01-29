@@ -1,124 +1,410 @@
 @page "/third-party"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject PrivateHireApiService PrivateHireService
-@inject IJSRuntime JS
 
 <PageTitle>Third Party Rentals - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
-            <i class="bx bx-building-house"></i>
-            Third Party Rentals
+            <i class="bx bx-buildings"></i>
+            Third Party Rental Suppliers
         </h1>
-        <p class="page-description">Third party rental summary from Private Hire API.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadRentals">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy supplier, project, and allocation maintenance.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading rentals...</p>
-        </div>
-    }
-    else if (_rentals.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-building-house"></i>
-            <h3>No rental records</h3>
-            <p>Awaiting third party rental API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_rentals.Count Rental(s)</span>
+    <div class="tabs">
+        <button class="tab @(_activeTab == "suppliers" ? "active" : "")" @onclick='() => SetActiveTab("suppliers")'>Suppliers</button>
+        <button class="tab @(_activeTab == "projects" ? "active" : "")" @onclick='() => SetActiveTab("projects")'>Project</button>
+        <button class="tab @(_activeTab == "allocation" ? "active" : "")" @onclick='() => SetActiveTab("allocation")'>Supplier & Vehicle Allocation</button>
+    </div>
+
+    <div class="tab-content">
+        @if (_activeTab == "suppliers")
+        {
+            <div class="form-card">
+                <div class="form-card-header">
+                    <h2>Suppliers Maintenance</h2>
+                </div>
+                <div class="form-card-body">
+                    <div class="form-actions" style="justify-content: flex-start;">
+                        <button class="btn btn-secondary" @onclick='() => SetSupplierMode("add")'>Add New Supplier</button>
+                        <button class="btn btn-secondary" @onclick='() => SetSupplierMode("edit")'>Edit Supplier</button>
+                    </div>
+
+                    @if (_supplierMode == "intro")
+                    {
+                        <div class="form-section">
+                            <p>Welcome to the supplier info screen. Please select a task using the buttons above.</p>
+                        </div>
+                    }
+                    else if (_supplierMode == "add")
+                    {
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-user-plus"></i>
+                                Add New Supplier
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Supplier Name</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Physical Address</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Postal Address</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Office Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Cell Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Fax Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">E-Mail Address</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Contact Person</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Notes</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-section">
+                                <h4 class="form-section-title"><i class="bx bx-list-check"></i> Services</h4>
+                                <div class="form-grid">
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Vehicle Rental</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Chauffeur Service</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Maintenance</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Insurance</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Other</label>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-secondary">Clear Fields</button>
+                                <button class="btn btn-primary">Submit</button>
+                            </div>
+                        </div>
+                    }
+                    else if (_supplierMode == "edit")
+                    {
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-edit"></i>
+                                Edit Suppliers
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Select a Supplier</label>
+                                    <select class="form-select">
+                                        <option value="0">Select...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Supplier Name</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Physical Address</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Postal Address</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Office Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Cell Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Fax Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">E-Mail Address</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Contact Person</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Notes</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-section">
+                                <h4 class="form-section-title"><i class="bx bx-list-check"></i> Services</h4>
+                                <div class="form-grid">
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Vehicle Rental</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Chauffeur Service</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Maintenance</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Insurance</label>
+                                    <label class="form-label form-checkbox"><input type="checkbox" /> Other</label>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary">Submit</button>
+                            </div>
+                        </div>
+                    }
+                </div>
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Rental #</th>
-                            <th>Provider</th>
-                            <th>Vehicle</th>
-                            <th>Status</th>
-                            <th>Start</th>
-                            <th>End</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var rental in _rentals)
-                        {
-                            <tr>
-                                <td>@rental.Number</td>
-                                <td>@rental.Provider</td>
-                                <td>@rental.Vehicle</td>
-                                <td><span class="badge">@rental.Status</span></td>
-                                <td>@rental.Start.ToString("yyyy-MM-dd")</td>
-                                <td>@rental.End.ToString("yyyy-MM-dd")</td>
-                                <td>@rental.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+        }
+        else if (_activeTab == "projects")
+        {
+            <div class="form-card">
+                <div class="form-card-header">
+                    <h2>Project Maintenance</h2>
+                </div>
+                <div class="form-card-body">
+                    <div class="form-actions" style="justify-content: flex-start;">
+                        <button class="btn btn-secondary" @onclick='() => SetProjectMode("add")'>Add New Project</button>
+                        <button class="btn btn-secondary" @onclick='() => SetProjectMode("edit")'>Edit Project</button>
+                    </div>
+
+                    @if (_projectMode == "intro")
+                    {
+                        <div class="form-section">
+                            <p>Welcome to the project info screen. Please select a task using the buttons above.</p>
+                        </div>
+                    }
+                    else if (_projectMode == "add")
+                    {
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-folder-plus"></i>
+                                Add New Project
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Project Description</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project Start Date</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project End Date</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project Responsible Person</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Tel Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Cell Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Fax Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Project Notes</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-secondary">Clear Fields</button>
+                                <button class="btn btn-primary">Submit</button>
+                            </div>
+                        </div>
+                    }
+                    else if (_projectMode == "edit")
+                    {
+                        <div class="form-section">
+                            <h3 class="form-section-title">
+                                <i class="bx bx-edit"></i>
+                                Edit Project
+                            </h3>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Department</label>
+                                    <select class="form-select">
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project</label>
+                                    <select class="form-select">
+                                        <option value="">Select...</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label class="form-label">Project Description</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project Start Date</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project End Date</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Project Responsible Person</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Tel Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Cell Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Fax Number</label>
+                                    <input class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Project Notes</label>
+                                    <textarea class="form-input"></textarea>
+                                </div>
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary">Submit</button>
+                            </div>
+                        </div>
+                    }
+                </div>
             </div>
-        </div>
-    }
+        }
+        else if (_activeTab == "allocation")
+        {
+            <div class="form-card">
+                <div class="form-card-header">
+                    <h2>Supplier & Vehicle Allocation</h2>
+                </div>
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Supplier</label>
+                            <select class="form-select">
+                                <option value="">Select supplier...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="tabs" style="margin-top: 1rem;">
+                        <button class="tab @(_allocationTab == "tp1" ? "active" : "")" @onclick='() => SetAllocationTab("tp1")'>Category 1</button>
+                        <button class="tab @(_allocationTab == "tp2" ? "active" : "")" @onclick='() => SetAllocationTab("tp2")'>Category 2</button>
+                        <button class="tab @(_allocationTab == "tp3" ? "active" : "")" @onclick='() => SetAllocationTab("tp3")'>Category 3</button>
+                        <button class="tab @(_allocationTab == "tp4" ? "active" : "")" @onclick='() => SetAllocationTab("tp4")'>Category 4</button>
+                    </div>
+
+                    <div class="table-container" style="margin-top: 1rem;">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Registration Number</th>
+                                        <th>Model Description</th>
+                                        <th>Model Year</th>
+                                        <th>Chassis Number</th>
+                                        <th>Select</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="6">No vehicles found.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h3 class="form-section-title">
+                            <i class="bx bx-info-circle"></i>
+                            Supplier Vehicle Detail
+                        </h3>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Vehicle ID</label>
+                                <input class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Registration Number</label>
+                                <input class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Model Description</label>
+                                <input class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Model Year</label>
+                                <input class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Chassis Number</label>
+                                <input class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button class="btn btn-primary">Allocate</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<RentalItem> _rentals = new();
+    private string _activeTab = "suppliers";
+    private string _supplierMode = "intro";
+    private string _projectMode = "intro";
+    private string _allocationTab = "tp1";
 
-    protected override async Task OnInitializedAsync()
+    private void SetActiveTab(string tab)
     {
-        await LoadRentals();
+        _activeTab = tab;
     }
 
-    private async Task LoadRentals()
+    private void SetSupplierMode(string mode)
     {
-        _loading = true;
-        try
-        {
-            var vehicles = await PrivateHireService.GetVehiclesAsync();
-            var contractors = await PrivateHireService.GetContractorsAsync();
-
-            _rentals = vehicles.Select(v =>
-            {
-                var contractor = contractors.FirstOrDefault(c => c.contractor_id == v.contractor_id);
-                return new RentalItem(
-                    Number: v.vehicle_id.ToString(),
-                    Provider: contractor?.company_name ?? v.contractor_name,
-                    Vehicle: v.registration_number,
-                    Status: v.hire_status,
-                    Start: v.hire_start_date ?? DateTime.MinValue,
-                    End: v.hire_end_date ?? DateTime.MinValue,
-                    Notes: v.notes ?? string.Empty
-                );
-            }).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading rentals: {ex.Message}");
-            _rentals = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
+        _supplierMode = mode;
     }
 
-    private sealed record RentalItem(string Number, string Provider, string Vehicle, string Status, DateTime Start, DateTime End, string Notes);
+    private void SetProjectMode(string mode)
+    {
+        _projectMode = mode;
+    }
+
+    private void SetAllocationTab(string tab)
+    {
+        _allocationTab = tab;
+    }
 }

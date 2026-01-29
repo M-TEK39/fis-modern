@@ -1,0 +1,1446 @@
+@page "/accidents/reports/{Mode}"
+@rendermode InteractiveServer
+
+<PageTitle>@_pageTitle - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            @_pageTitle
+        </h1>
+        <p class="page-description">Legacy accident report parameters will be aligned here.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Back to Accident Reports</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            @if (Mode == "one-vehicle")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Search Parameters</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="oneVehicleType" checked />
+                                GP
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="oneVehicleType" />
+                                GG
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Number</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var field in OneVehicleFields)
+                                    {
+                                        <tr>
+                                            <td>@field</td>
+                                            <td>@GetSampleValue(field)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "private-vehicle" || Mode == "private-vehicle-capture-desc")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Search Parameters</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Private Vehicle Number</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Field</th>
+                                        <th>Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var field in PrivateVehicleFields)
+                                    {
+                                        <tr>
+                                            <td>@field</td>
+                                            <td>@GetSampleValue(field)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "all-detail")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Date Range</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="allDetailPeriod" checked />
+                                2002 - Current
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="allDetailPeriod" />
+                                1999 - 2001
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="allDetailPeriod" />
+                                Before 1999
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in AllDetailColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0001</td>
+                                        <td>GG12345</td>
+                                        <td>JHB</td>
+                                        <td>2024/01/15</td>
+                                        <td>Johannesburg</td>
+                                        <td>2023/24</td>
+                                        <td>Rear-end collision</td>
+                                        <td>Minor</td>
+                                        <td>TA-447</td>
+                                        <td>J. Dlamini</td>
+                                        <td>8001015009087</td>
+                                        <td>SITE-01</td>
+                                        <td>M. Nkosi</td>
+                                        <td>011-555-1234</td>
+                                        <td>HQ-9021</td>
+                                        <td>GG-4589</td>
+                                        <td>SA-110</td>
+                                        <td>CASE-334</td>
+                                        <td>12500</td>
+                                        <td>Front bumper</td>
+                                        <td>TP-9912</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "all-garage-detail")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Garage</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="allGarage" checked />
+                                JHB
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="allGarage" />
+                                PTA
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="allGarage" />
+                                ALL
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in AllGarageColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0002</td>
+                                        <td>GG45678</td>
+                                        <td>PTA</td>
+                                        <td>2024/02/10</td>
+                                        <td>08:30</td>
+                                        <td>Pretoria</td>
+                                        <td>2023/24</td>
+                                        <td>2024/02/12</td>
+                                        <td>Yes</td>
+                                        <td>2024/02/12</td>
+                                        <td>Side impact</td>
+                                        <td>Moderate</td>
+                                        <td>TA-889</td>
+                                        <td>S. Mokoena</td>
+                                        <td>8205056009082</td>
+                                        <td>SITE-02</td>
+                                        <td>P. Williams</td>
+                                        <td>012-555-0101</td>
+                                        <td>HQ-9981</td>
+                                        <td>GG-8890</td>
+                                        <td>CASE-662</td>
+                                        <td>22000</td>
+                                        <td>Door panel</td>
+                                        <td>No</td>
+                                        <td>No</td>
+                                        <td>0</td>
+                                        <td>TP-4521</td>
+                                        <td>Mr. Smith</td>
+                                        <td>35000</td>
+                                        <td>2024/03/15</td>
+                                        <td>Under assessment</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "new-accidents")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Report On</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="newAccidents" checked />
+                                New Accident's Reported by Call Centre
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="newAccidents" />
+                                New Accident's Reported to HQ, by Garage
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="newAccidents" />
+                                Conformation of receipt by HQ
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="newAccidents" />
+                                Both
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in NewAccidentsColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0003</td>
+                                        <td>GG78321</td>
+                                        <td>JHB</td>
+                                        <td>2024/03/05</td>
+                                        <td>11:10</td>
+                                        <td>Soweto</td>
+                                        <td>2023/24</td>
+                                        <td>2024/03/06</td>
+                                        <td>No</td>
+                                        <td>2024/03/06</td>
+                                        <td>Hit and run</td>
+                                        <td>TA-233</td>
+                                        <td>K. Naidoo</td>
+                                        <td>9009097009083</td>
+                                        <td>SITE-03</td>
+                                        <td>R. Kgatla</td>
+                                        <td>011-555-6677</td>
+                                        <td>HQ-5011</td>
+                                        <td>GG-7001</td>
+                                        <td>CASE-990</td>
+                                        <td>18000</td>
+                                        <td>Rear bumper</td>
+                                        <td>No</td>
+                                        <td>No</td>
+                                        <td>0</td>
+                                        <td>TP-3009</td>
+                                        <td>Unknown</td>
+                                        <td>0</td>
+                                        <td>2024/04/02</td>
+                                        <td>Pending police report</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "department-period")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Department/Site Period</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Garage</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="deptPeriodGarage" checked />
+                                    JHB
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptPeriodGarage" />
+                                    PTA
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptPeriodGarage" />
+                                    ALL
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Begin Date (e.g. 2002/03/01)</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">End Date (e.g. 2002/03/31)</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Dept/Site Code (first 5 characters)</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in DeptPeriodColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0020</td>
+                                        <td>GG55555</td>
+                                        <td>CALL-77</td>
+                                        <td>JHB</td>
+                                        <td>2024/01/22</td>
+                                        <td>Sandton</td>
+                                        <td>Minor</td>
+                                        <td>TA-118</td>
+                                        <td>A. Patel</td>
+                                        <td>SITE-04</td>
+                                        <td>Finance HQ</td>
+                                        <td>N. Mthembu</td>
+                                        <td>011-555-4444</td>
+                                        <td>HQ-2231</td>
+                                        <td>GG-7788</td>
+                                        <td>CASE-420</td>
+                                        <td>9500</td>
+                                        <td>15000</td>
+                                        <td>5000</td>
+                                        <td>Settled by insurer</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "site-period-vip")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Site Period (VIP/GG/Hire Type)</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Site list by</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="siteListBy" />
+                                    Name
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="siteListBy" checked />
+                                    Code
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Site Code</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Begin Date</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">End Date</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Hire Type</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="hireTypeVip" checked />
+                                    ALL
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="hireTypeVip" />
+                                    VIP
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="hireTypeVip" />
+                                    Pool
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="hireTypeVip" />
+                                    Permanent
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in SitePeriodVipColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0333</td>
+                                        <td>GG90909</td>
+                                        <td>2024/02/18</td>
+                                        <td>SITE-07</td>
+                                        <td>Operations West</td>
+                                        <td>VIP</td>
+                                        <td>Minor collision</td>
+                                        <td>R. Sithole</td>
+                                        <td>J. Hadebe</td>
+                                        <td>CALL-123</td>
+                                        <td>12000</td>
+                                        <td>3500</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "department-month")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Department/Site Month/Year</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Garage</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthGarage" checked />
+                                    JHB
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthGarage" />
+                                    PTA
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthGarage" />
+                                    ALL
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Period</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthPeriod" checked />
+                                    Month
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthPeriod" />
+                                    Year
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthPeriod" />
+                                    02/03
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptMonthPeriod" />
+                                    01/02
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Accident Year (e.g. 2002)</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Accident Month (1-12)</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Dept/Site Code (first 5 characters)</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in DeptMonthColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0045</td>
+                                        <td>GG66666</td>
+                                        <td>PTA</td>
+                                        <td>2024/03/12</td>
+                                        <td>Pretoria</td>
+                                        <td>2023/24</td>
+                                        <td>TA-402</td>
+                                        <td>C. Molefe</td>
+                                        <td>SITE-05</td>
+                                        <td>Supply Chain</td>
+                                        <td>S. Govender</td>
+                                        <td>012-555-1818</td>
+                                        <td>HQ-3311</td>
+                                        <td>GG-6631</td>
+                                        <td>CASE-880</td>
+                                        <td>7800</td>
+                                        <td>5400</td>
+                                        <td>2100</td>
+                                        <td>Awaiting claim</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "department-finyear")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Department/Site Financial Year</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Garage</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="deptFinGarage" checked />
+                                    JHB
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptFinGarage" />
+                                    PTA
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="deptFinGarage" />
+                                    ALL
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Book / Financial Year (e.g. 02/03)</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Dept/Site Code (first 5 characters)</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in DeptFinyearColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0099</td>
+                                        <td>GG77777</td>
+                                        <td>ALL</td>
+                                        <td>2023/24</td>
+                                        <td>2024/01/09</td>
+                                        <td>Midrand</td>
+                                        <td>Major</td>
+                                        <td>TA-009</td>
+                                        <td>T. Khumalo</td>
+                                        <td>SITE-09</td>
+                                        <td>IT Services</td>
+                                        <td>G. Naicker</td>
+                                        <td>011-555-3344</td>
+                                        <td>HQ-9081</td>
+                                        <td>GG-9980</td>
+                                        <td>CASE-700</td>
+                                        <td>56000</td>
+                                        <td>22000</td>
+                                        <td>34000</td>
+                                        <td>Closed</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "accident-costs-finyear")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Costs Financial Year</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Financial Year (e.g. 04/05)</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Costs Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in AccidentCostsColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0101</td>
+                                        <td>GG88888</td>
+                                        <td>2023/24</td>
+                                        <td>2024/01/30</td>
+                                        <td>2024/02/01</td>
+                                        <td>Infrastructure</td>
+                                        <td>HQ-7701</td>
+                                        <td>GG-7701</td>
+                                        <td>42000</td>
+                                        <td>15000</td>
+                                        <td>Yes</td>
+                                        <td>23000</td>
+                                        <td>12000</td>
+                                        <td>2024/03/28</td>
+                                        <td>Paid in part</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "letter-outstanding-docs" || Mode == "letter-inspection")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Vehicle Search</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="letterType" checked />
+                                GP
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="letterType" />
+                                GG
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Number</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Records</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in LetterColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GG12345</td>
+                                        <td>GG-4589</td>
+                                        <td>2024/01/15</td>
+                                        <td><a href="#">Report</a></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "categories")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Categories</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in CategoryColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>01</td>
+                                        <td>Minor collision</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+            }
+            else if (Mode == "last-gg-reference")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Last GG Reference Numbers</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in LastGgReferenceColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GG-8890</td>
+                                        <td>GPA-0002</td>
+                                        <td>GG45678</td>
+                                        <td>19780</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+            }
+            else if (Mode == "weekly-quarterly-yearly")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Period Report</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Site list by</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="periodSiteListBy" />
+                                    Name
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="periodSiteListBy" checked />
+                                    Code
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Site Code</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Begin Date</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">End Date</label>
+                            <input class="form-input" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Accidents</label>
+                            <div class="form-grid">
+                                <label class="form-label">
+                                    <input type="radio" name="accidentStatus" checked />
+                                    Open
+                                </label>
+                                <label class="form-label">
+                                    <input type="radio" name="accidentStatus" />
+                                    Closed
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in PeriodReportColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0221</td>
+                                        <td>GG45454</td>
+                                        <td>2024/02/05</td>
+                                        <td>SITE-06</td>
+                                        <td>Regional Ops</td>
+                                        <td>Pool</td>
+                                        <td>Skid in rain</td>
+                                        <td>L. Moyo</td>
+                                        <td>T. Jacobs</td>
+                                        <td>CALL-901</td>
+                                        <td>6500</td>
+                                        <td>2024/03/20</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else if (Mode == "driver-report")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Driver Search</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="driverSearchType" checked />
+                                Driver Name
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">
+                                <input type="radio" name="driverSearchType" />
+                                ID Number
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Driver Name or ID Number</label>
+                            <input class="form-input" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in DriverReportColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>GPA-0402</td>
+                                        <td>GG12121</td>
+                                        <td>P. Dube</td>
+                                        <td>7901015009088</td>
+                                        <td>2024/02/27</td>
+                                        <td>SITE-11</td>
+                                        <td>Facilities</td>
+                                        <td>9000</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="form-hint">This report screen will be aligned to the legacy report parameters and output tables.</p>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public string? Mode { get; set; }
+
+    private string _pageTitle = "Accident Report";
+
+    protected override void OnParametersSet()
+    {
+        _pageTitle = Mode switch
+        {
+            "one-vehicle" => "One Vehicle Accidents",
+            "private-vehicle" => "Private Vehicle Accidents",
+            "private-vehicle-capture-desc" => "Private Vehicle Accidents (Capture under Description of Accident)",
+            "all-detail" => "All Accidents - ALL DETAIL",
+            "all-garage-detail" => "All Accidents - GARAGE DETAIL",
+            "new-accidents" => "Report on New Accident's",
+            "department-period" => "Report for a Department/Site, for a Period",
+            "site-period-vip" => "Report for a Site, for a Period, for VIP/GG, for Hire Type",
+            "department-month" => "Report for a Department/Site, for a Month/Year",
+            "department-finyear" => "Report for a Department/Site, for a Book / Financial Year",
+            "accident-costs-finyear" => "Report on Accident Costs for a Financial Year",
+            "letter-outstanding-docs" => "LETTER for Outstanding Accident documents",
+            "letter-inspection" => "LETTER for Inspection",
+            "categories" => "List of Accident Categories",
+            "last-gg-reference" => "Last GG Reference Number Used",
+            "weekly-quarterly-yearly" => "Weekly, Quarterly And Yearly Report - Opened And Closed Accidents",
+            "driver-report" => "Report By Driver Name Or ID Number",
+            _ => "Accident Report"
+        };
+    }
+
+    private static readonly string[] OneVehicleFields =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Accident Date",
+        "Accident Time",
+        "Accident Place",
+        "Fin year",
+        "Date Updated",
+        "Notified Garage",
+        "Notified Gar Date",
+        "Notified - Trip Auth",
+        "Notified - Trip Auth Date",
+        "Description of Accident",
+        "Accident Category",
+        "Trip Authority",
+        "Driver Name",
+        "Driver ID Number",
+        "Driver Site",
+        "Transport Officer",
+        "Transport Officer Tel",
+        "HQ Reference",
+        "GG Reference",
+        "SA Reference",
+        "Case Number",
+        "Job Number",
+        "GG Car Damage Amount",
+        "GG Car Damage Desc",
+        "Driver Fault",
+        "Death",
+        "Injured",
+        "Private Party Regno",
+        "Third Party Owner",
+        "Private Car Damage",
+        "Priv Damage Pay Date",
+        "Claim Against Dept",
+        "Claim Received",
+        "Cost Claim Agains Dept",
+        "Claim Accept/Reject",
+        "Claim Reject Reason",
+        "Write Off Amount",
+        "Write Off Date",
+        "LetterHead",
+        "Z181",
+        "File Close Date",
+        "Notes"
+    };
+
+    private static readonly string[] PrivateVehicleFields =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Accident Date",
+        "Accident Time",
+        "Accident Place",
+        "Fin year",
+        "Date Updated",
+        "Notified Garage",
+        "Notified Gar Date",
+        "Notified - Trip Auth",
+        "Notified - Trip Auth Date",
+        "Description of Accident",
+        "Trip Authority",
+        "Driver Name",
+        "Driver ID Number",
+        "Driver Site",
+        "Transport Officer",
+        "Transport Officer Tel",
+        "HQ Reference",
+        "GG Reference",
+        "SA Reference",
+        "Case Number",
+        "GG Car Damage Amount",
+        "GG Car Damage Desc",
+        "Driver Fault",
+        "Death",
+        "Injured",
+        "Private Party Regno",
+        "Third Party Owner",
+        "Private Car Damage",
+        "Priv Damage Pay Date",
+        "Claim Against Dept",
+        "Claim Received",
+        "Cost Claim Agains Dept",
+        "Claim Accept/Reject",
+        "Claim Reject Reason",
+        "Write Off Amount",
+        "Write Off Date",
+        "File Close Date",
+        "Notes"
+    };
+
+    private static readonly string[] AllDetailColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Accid Date",
+        "Accid Place",
+        "Fin Year",
+        "Accident Description",
+        "Accident Category",
+        "Trip Auth",
+        "Driver Name",
+        "ID Number",
+        "Site",
+        "Trans Officer",
+        "TO Tel",
+        "HQ Ref",
+        "GG Ref",
+        "SA Ref",
+        "Case Num",
+        "GG Car Damage",
+        "GG Car Damage",
+        "Private Party Regno"
+    };
+
+    private static readonly string[] AllGarageColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Accid Date",
+        "Accid Time",
+        "Accid Place",
+        "Fin Year",
+        "Date Updated",
+        "Notify Garage",
+        "Notify Garage Date",
+        "Accident Description",
+        "Accident Category",
+        "Trip Auth",
+        "Driver Name",
+        "ID Number",
+        "Site",
+        "Trans Officer",
+        "TO Tel",
+        "HQ Ref",
+        "GG Ref",
+        "Case Num",
+        "GG Car Damage",
+        "GG Car Damage",
+        "Driver Fault",
+        "Death",
+        "Injured",
+        "Private Party Regno",
+        "Private Party",
+        "Priv Car Damage",
+        "File Close Date",
+        "Notes"
+    };
+
+    private static readonly string[] NewAccidentsColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Accid Date",
+        "Accid Time",
+        "Accid Place",
+        "Fin Year",
+        "Date Updated",
+        "Notify Garage",
+        "Notify Garage Date",
+        "Accident Description",
+        "Trip Auth",
+        "Driver Name",
+        "ID Number",
+        "Site",
+        "Trans Officer",
+        "TO Tel",
+        "HQ Ref",
+        "GG Ref",
+        "Case Num",
+        "GG Car Damage",
+        "GG Car Damage",
+        "Driver Fault",
+        "Death",
+        "Injured",
+        "Private Party Regno",
+        "Private Party",
+        "Priv Car Damage",
+        "File Close Date",
+        "Notes"
+    };
+
+    private static readonly string[] DeptPeriodColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Call Refer",
+        "Garage",
+        "Accid Date",
+        "Accid Place",
+        "Accident Category",
+        "Trip Auth",
+        "Driver Name",
+        "Dept/Site Code",
+        "Dept/Site",
+        "Trans Officer",
+        "TO Tel",
+        "HQ Ref",
+        "GG Ref",
+        "Case Num",
+        "GG Car Damage",
+        "Priv Car Damage",
+        "Cost Claim Agains Dept",
+        "Notes"
+    };
+
+    private static readonly string[] SitePeriodVipColumns =
+    {
+        "Reg Number",
+        "GG Number",
+        "Accid Date",
+        "Dept/Site Code",
+        "Dept/Site",
+        "Hire Type",
+        "Accident Description",
+        "Driver",
+        "Trans Officer",
+        "Call Refer",
+        "GG Car Damage",
+        "Cost Claim Against Dept"
+    };
+
+    private static readonly string[] DeptMonthColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Accid Date",
+        "Accid Place",
+        "Fin Year",
+        "Trip Auth",
+        "Driver Name",
+        "Dept/Site Code",
+        "Dept/Site",
+        "Trans Officer",
+        "TO Tel",
+        "HQ Ref",
+        "GG Ref",
+        "Case Num",
+        "GG Car Damage",
+        "Priv Car Damage",
+        "Cost Claim Agains Dept",
+        "Notes"
+    };
+
+    private static readonly string[] DeptFinyearColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Garage",
+        "Fin Year",
+        "Accid Date",
+        "Accid Place",
+        "Accident Category",
+        "Trip Auth",
+        "Driver Name",
+        "Dept/Site Code",
+        "Dept/Site",
+        "Trans Officer",
+        "TO Tel",
+        "HQ Ref",
+        "GG Ref",
+        "Case Num",
+        "GG Car Damage",
+        "Priv Car Damage",
+        "Cost Claim Agains Dept",
+        "Notes"
+    };
+
+    private static readonly string[] AccidentCostsColumns =
+    {
+        "Prov Reg Number",
+        "GG Number",
+        "Fin Year",
+        "Accid Date",
+        "Date Reported",
+        "Dept/Site",
+        "HQ Ref",
+        "GG Ref",
+        "GG cost of Damages",
+        "Value Written Off",
+        "Third Party Claim ?",
+        "Third Party Damages",
+        "Third Party Claim Amount",
+        "File Close Date",
+        "Notes"
+    };
+
+    private static readonly string[] LetterColumns =
+    {
+        "Vehicle Number",
+        "Refer Number (GMT Number)",
+        "Accident Date",
+        "Report"
+    };
+
+    private static readonly string[] CategoryColumns =
+    {
+        "Category Number",
+        "Accident Category Description"
+    };
+
+    private static readonly string[] LastGgReferenceColumns =
+    {
+        "GG Reference Number",
+        "Prov Reg Number",
+        "GG Number",
+        "Teller"
+    };
+
+    private static readonly string[] PeriodReportColumns =
+    {
+        "Reg Number",
+        "GG Number",
+        "Accid Date",
+        "Dept/Site Code",
+        "Dept/Site",
+        "Hire Type",
+        "Accident Description",
+        "Driver",
+        "Trans Officer",
+        "Call Refer",
+        "GG Car Damage",
+        "File Close Date"
+    };
+
+    private static readonly string[] DriverReportColumns =
+    {
+        "Registration Number",
+        "Fleet Number",
+        "Driver Name",
+        "ID Number",
+        "Accident Date",
+        "Dept/Site Number",
+        "Department/Site Desciption",
+        "Damage Amount"
+    };
+
+    private static string GetSampleValue(string field) =>
+        field switch
+        {
+            "Prov Reg Number" => "GPA-0001",
+            "GG Number" => "GG12345",
+            "Garage" => "JHB",
+            "Accident Date" => "2024/01/15",
+            "Accident Time" => "09:40",
+            "Accident Place" => "Johannesburg",
+            "Fin year" => "2023/24",
+            "Date Updated" => "2024/01/18",
+            "Notified Garage" => "Yes",
+            "Notified Gar Date" => "2024/01/18",
+            "Notified - Trip Auth" => "Yes",
+            "Notified - Trip Auth Date" => "2024/01/19",
+            "Description of Accident" => "Rear-end collision",
+            "Accident Category" => "Minor",
+            "Trip Authority" => "TA-447",
+            "Driver Name" => "J. Dlamini",
+            "Driver ID Number" => "8001015009087",
+            "Driver Site" => "SITE-01",
+            "Transport Officer" => "M. Nkosi",
+            "Transport Officer Tel" => "011-555-1234",
+            "HQ Reference" => "HQ-9021",
+            "GG Reference" => "GG-4589",
+            "SA Reference" => "SA-110",
+            "Case Number" => "CASE-334",
+            "Job Number" => "JOB-208",
+            "GG Car Damage Amount" => "12500",
+            "GG Car Damage Desc" => "Front bumper",
+            "Driver Fault" => "No",
+            "Death" => "No",
+            "Injured" => "No",
+            "Private Party Regno" => "TP-9912",
+            "Third Party Owner" => "Mr. Smith",
+            "Private Car Damage" => "35000",
+            "Priv Damage Pay Date" => "2024/02/20",
+            "Claim Against Dept" => "No",
+            "Claim Received" => "No",
+            "Cost Claim Agains Dept" => "0",
+            "Claim Accept/Reject" => "N/A",
+            "Claim Reject Reason" => "N/A",
+            "Write Off Amount" => "0",
+            "Write Off Date" => "N/A",
+            "LetterHead" => "Yes",
+            "Z181" => "Yes",
+            "File Close Date" => "2024/03/15",
+            "Notes" => "Pending final inspection",
+            _ => "-"
+        };
+}

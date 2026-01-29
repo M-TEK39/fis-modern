@@ -1,0 +1,150 @@
+@page "/losses/edit"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Edit Loss - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-edit"></i>
+            Edit Loss
+        </h1>
+        <p class="page-description">Locate an existing loss by reference or GG number and update its critical metadata.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/losses")'>
+            <i class="bx bx-arrow-back"></i>
+            Back to Losses Menu
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <h2 class="form-section-title">Lookup</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Loss Reference</label>
+                    <InputText class="form-input" @bind-Value="_searchReference" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">GG/Registration</label>
+                    <InputText class="form-input" @bind-Value="_searchVehicle" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-primary btn-sm" @onclick="LoadMockLoss">
+                        <i class="bx bx-search"></i>
+                        Find
+                    </button>
+                </div>
+            </div>
+            @if (_loaded)
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Loss Details</h2>
+                    <EditForm Model="_form" OnValidSubmit="HandleSubmit">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Loss Reference</label>
+                                <InputText class="form-input" @bind-Value="_form.LossReference" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Loss Status</label>
+                                <select class="form-select" @bind="_form.LossStatus">
+                                    @foreach (var status in _lossStatuses)
+                                    {
+                                        <option value="@status">@status</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Loss Type</label>
+                                <select class="form-select" @bind="_form.LossType">
+                                    @foreach (var type in _lossTypes)
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Dept Contact</label>
+                                <InputText class="form-input" @bind-Value="_form.DeptContact" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Call Reference</label>
+                                <InputText class="form-input" @bind-Value="_form.CallReference" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Remarks</label>
+                                <InputTextArea class="form-input" rows="3" @bind-Value="_form.Remarks" />
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="bx bx-save"></i>
+                                Update (mock)
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _searchReference = string.Empty;
+    private string _searchVehicle = string.Empty;
+    private bool _loaded;
+    private readonly LossFormModel _form = new();
+
+    private static readonly string[] _lossTypes =
+    {
+        "Theft",
+        "Collision",
+        "Mechanical Failure",
+        "Other"
+    };
+
+    private static readonly string[] _lossStatuses =
+    {
+        "Open",
+        "Reported to SAPD",
+        "Closed"
+    };
+
+    private Task HandleSubmit()
+    {
+        _loaded = true;
+        return Task.CompletedTask;
+    }
+
+    private void LoadMockLoss()
+    {
+        _form.LossReference = string.IsNullOrWhiteSpace(_searchReference) ? "Loss-001" : _searchReference;
+        _form.LossStatus = "Open";
+        _form.LossType = "Theft";
+        _form.DeptContact = "Ops Control";
+        _form.CallReference = "CALL-2025-001";
+        _form.Remarks = "Mock loaded from legacy lookup.";
+        _loaded = true;
+    }
+
+    private sealed class LossFormModel
+    {
+        public string LossReference { get; set; } = string.Empty;
+        public string LossStatus { get; set; } = "Open";
+        public string LossType { get; set; } = "Theft";
+        public string DeptContact { get; set; } = string.Empty;
+        public string CallReference { get; set; } = string.Empty;
+        public string Remarks { get; set; } = string.Empty;
+    }
+}

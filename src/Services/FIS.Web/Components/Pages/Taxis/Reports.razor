@@ -1,5 +1,7 @@
 @page "/taxis/reports/{Mode}"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -9,7 +11,7 @@
             <i class="bx bx-file"></i>
             @_pageTitle
         </h1>
-        <p class="page-description">Legacy taxi reports.</p>
+        <p class="page-description">@_pageDescription</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/taxis">Back to Taxi Menu</a>
@@ -17,11 +19,382 @@
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-card-body">
-            <p class="form-hint">This report screen will be aligned to the legacy report parameters.</p>
+    @if (_isOneTaxiNumber)
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>One Taxi Report</h2>
+                <p>Enter the registration number of the taxi you wish to see.</p>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">
+                            <input type="radio" name="TaxiNumberType" />
+                            GP
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">
+                            <input type="radio" name="TaxiNumberType" checked />
+                            GG
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">
+                            <input type="radio" name="TaxiNumberType" />
+                            Private Number
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Registration Number</label>
+                        <input class="form-input" maxlength="8" style="text-transform: uppercase" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Submit</button>
+                    <a class="btn btn-secondary" href="/taxis">Menu</a>
+                </div>
+            </div>
         </div>
-    </div>
+    }
+    else if (_isLogsPerUser)
+    {
+        <div class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="form-card-header">
+                <h2>Report: Taxi Requisitions/Logs Captured</h2>
+                <p>Select a date range and user.</p>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">From</label>
+                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">To</label>
+                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">User</label>
+                        <select class="form-select">
+                            <option>All users</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Submit</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Results</h2>
+                <p>Report Date: @DateTime.Now</p>
+            </div>
+            <div class="form-card-body">
+                <div class="form-section">
+                    <h3 class="form-section-title">
+                        <i class="bx bx-clipboard"></i>
+                        Taxi Requisitions Captured
+                    </h3>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Number</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="2">No records found.</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th>Total</th>
+                                        <th>0</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3 class="form-section-title">
+                        <i class="bx bx-clipboard-check"></i>
+                        Taxi Logs Captured
+                    </h3>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Number</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="2">No records found.</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th>Total</th>
+                                        <th>0</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_isOldRequisitions)
+    {
+        <div class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="form-card-header">
+                <h2>Old Requisitions For Period</h2>
+                <p>Select a period to view older taxi requisitions.</p>
+            </div>
+            <div class="form-card-body">
+                <div class="alert alert-info">
+                    Legacy source file not present in backup. Layout will be refined when the page becomes available.
+                </div>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">From</label>
+                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">To</label>
+                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Submit</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Requisition</th>
+                                    <th>Date</th>
+                                    <th>Official</th>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Department</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="6">No records found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_isTaxisPerCompany)
+    {
+        <div class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="form-card-header">
+                <h2>Taxis Per Hire Company</h2>
+                <p>Select a hire company from the drop down list below.</p>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Company</label>
+                        <select class="form-select">
+                            <option value="">Select...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary">Submit</button>
+                    <a class="btn btn-secondary" href="/taxis">Menu</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No</th>
+                                    <th>Reg Number</th>
+                                    <th>Contractor Name</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="3">No records found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <a class="btn btn-secondary" href="/taxis/reports/taxis-per-company">Back</a>
+                    <a class="btn btn-secondary" href="/taxis">Menu</a>
+                </div>
+            </div>
+        </div>
+    }
+    else if (_isTaxisPerDepartment)
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Report On All Taxis In Various Departments</h2>
+                <p>Date Of Report: @DateTime.Now</p>
+            </div>
+            <div class="form-card-body">
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    <th>Requisition Number</th>
+                                    <th>Department</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="3">No records found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="form-hint" style="margin-top: 1rem;">Page End</div>
+                <div class="form-actions">
+                    <a class="btn btn-secondary" href="#page-top">Page Top</a>
+                </div>
+                <a id="page-top"></a>
+            </div>
+        </div>
+    }
+    else if (_isTaxisInServicePerDepartment)
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Report On All Taxis In Service In Various Departments</h2>
+                <p>Date Of Report: @DateTime.Now</p>
+            </div>
+            <div class="form-card-body">
+                <div class="table-container">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>No.</th>
+                                    <th>Requisition Number</th>
+                                    <th>Department</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="3">No records found.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="form-hint" style="margin-top: 1rem;">Page End</div>
+                <div class="form-actions">
+                    <a class="btn btn-secondary" href="#page-top">Page Top</a>
+                </div>
+                <a id="page-top"></a>
+            </div>
+        </div>
+    }
+    else if (_isLogsRequisitionsStatus)
+    {
+        <div class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="form-card-header">
+                <h2>Taxi Logs and Requisitions Statuses Reports Menu</h2>
+                <p>Select a report type, then choose date range or financial year.</p>
+            </div>
+            <div class="form-card-body">
+                <div class="menu-tiles">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/logs-requisitions-status?type=all">1) All Taxi Logs and Requisitions Statuses Report.</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/logs-requisitions-status?type=outstanding">2) Outstanding Taxi Logs vs Captured Requisitions.</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/logs-requisitions-status?type=cancelled">3) Cancelled Requisitions.</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/taxis/reports/logs-requisitions-status?type=invoiced">4) Requisitions Captured With Logs Closed Off.</a>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <a class="btn btn-secondary" href="/taxis">Return to Main Report Page</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>@_statusReportTitle</h2>
+                <p>Select Type of Search</p>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label form-checkbox">
+                            <input type="radio" name="statusRange" checked />
+                            Date Range
+                        </label>
+                        <div class="form-grid" style="margin-top: 0.75rem;">
+                            <div class="form-field">
+                                <label class="form-label">Start Date</label>
+                                <input class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">End Date</label>
+                                <input class="form-input" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label form-checkbox">
+                            <input type="radio" name="statusRange" />
+                            Financial Year
+                        </label>
+                        <select class="form-select" style="margin-top: 0.75rem;">
+                            <option value="">Select financial year</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-secondary">Back</button>
+                    <button class="btn btn-primary">Submit</button>
+                </div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -29,9 +402,26 @@
     public string? Mode { get; set; }
 
     private string _pageTitle = "Taxi Reports";
+    private string _pageDescription = "Legacy taxi reports.";
+    private string _statusReportTitle = "Report";
+    private bool _isOneTaxiNumber;
+    private bool _isLogsPerUser;
+    private bool _isOldRequisitions;
+    private bool _isTaxisPerCompany;
+    private bool _isTaxisPerDepartment;
+    private bool _isTaxisInServicePerDepartment;
+    private bool _isLogsRequisitionsStatus;
 
     protected override void OnParametersSet()
     {
+        _isOneTaxiNumber = Mode == "one-taxi-number";
+        _isLogsPerUser = Mode == "logs-per-user";
+        _isOldRequisitions = Mode == "old-requisitions";
+        _isTaxisPerCompany = Mode == "taxis-per-company";
+        _isTaxisPerDepartment = Mode == "taxis-per-department";
+        _isTaxisInServicePerDepartment = Mode == "taxis-inservice-per-department";
+        _isLogsRequisitionsStatus = Mode == "logs-requisitions-status";
+
         _pageTitle = Mode switch
         {
             "one-taxi-number" => "Report On One Taxi Number",
@@ -43,5 +433,38 @@
             "logs-requisitions-status" => "Taxi Logs and Requisitions Statuses Reports",
             _ => "Taxi Reports"
         };
+
+        _pageDescription = Mode switch
+        {
+            "one-taxi-number" => "Search by taxi registration number.",
+            "logs-per-user" => "Taxi requisitions and logs captured by user.",
+            "old-requisitions" => "Legacy requisitions report for a period.",
+            "taxis-per-company" => "Report taxis per hire company.",
+            "taxis-per-department" => "Report taxis by department.",
+            "taxis-inservice-per-department" => "Report taxis in service by department.",
+            "logs-requisitions-status" => "Status reports for taxi logs and requisitions.",
+            _ => "Legacy taxi reports."
+        };
+
+        _statusReportTitle = GetStatusReportTitle();
+    }
+
+    private string GetStatusReportTitle()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("type", out var typeValue))
+        {
+            return typeValue.ToString() switch
+            {
+                "all" => "All Taxi Logs and Requisitions Statuses Report",
+                "outstanding" => "Outstanding Taxi Logs vs Captured Requisitions",
+                "cancelled" => "Cancelled Requisitions",
+                "invoiced" => "Requisitions Captured With Logs Closed Off",
+                _ => "Report"
+            };
+        }
+
+        return "Report";
     }
 }

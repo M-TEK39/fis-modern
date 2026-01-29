@@ -1,0 +1,95 @@
+@page "/fines/maintenance/detail"
+@rendermode InteractiveServer
+
+<PageTitle>Fine Maintenance Detail - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-receipt"></i>
+            Fine Maintenance Detail
+        </h1>
+        <p class="page-description">Add or update a fine record.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/fines/maintenance">Back to Fine Maintenance</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Date of Offence</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Reference Number</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Issued by</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Traffic Dept</label>
+                    <select class="form-select">
+                        <option>Select Traffic Dept</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Amount of Fine</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Due Date of Payment</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Due Date to Appear in Court</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Document Type</label>
+                    <select class="form-select">
+                        <option>Notice of Traffic Offence</option>
+                        <option>Notice of Summons to be Issued</option>
+                        <option>Summons in Criminal Case</option>
+                        <option>Warrent for Arrest</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Date Received at GMT</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Date of Notification to Issuer</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Date of Notification to Dept</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Dept Code</label>
+                    <select class="form-select">
+                        <option>Select Dept/Site</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Name Responsible person at Dept</label>
+                    <input class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">ID Responsible person at Dept</label>
+                    <input class="form-input" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary btn-sm">Submit</button>
+                <a class="btn btn-secondary btn-sm" href="/fines/maintenance">Menu</a>
+            </div>
+        </div>
+    </div>
+</div>

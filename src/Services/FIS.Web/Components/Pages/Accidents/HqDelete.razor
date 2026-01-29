@@ -1,0 +1,66 @@
+@page "/accidents/hq/delete"
+@rendermode InteractiveServer
+
+<PageTitle>Delete Accident (HQ) - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-trash"></i>
+            Delete an Accident (HQ)
+        </h1>
+        <p class="page-description">Find an accident by GG/GP number and delete it.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/accidents">Back to Accident Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">
+                        <input type="radio" name="HqDeleteType" />
+                        GG
+                    </label>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">
+                        <input type="radio" name="HqDeleteType" checked />
+                        GP
+                    </label>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Number</label>
+                    <input class="form-input" maxlength="8" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary">Submit</button>
+                <a class="btn btn-secondary" href="/accidents">Menu</a>
+            </div>
+
+            <div class="table-container" style="margin-top: 1.5rem;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Reg Number</th>
+                                <th>Hire Type</th>
+                                <th>Accident Date</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="4">No records found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

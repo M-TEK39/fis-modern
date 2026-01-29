@@ -1,0 +1,69 @@
+@page "/private-hire/reports/contractors"
+@rendermode InteractiveServer
+
+<PageTitle>Private Hire Contractors - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-building"></i>
+            Report On Private Hire Contractors
+        </h1>
+        <p class="page-description">Select contractor scope for the report.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Back to Reports</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">
+                        <input type="radio" name="contractorsScope" checked />
+                        All Contractors
+                    </label>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">
+                        <input type="radio" name="contractorsScope" />
+                        Private Hire Contractors
+                    </label>
+                </div>
+            </div>
+            <div class="contract-action-group">
+                <button class="btn btn-primary btn-sm">Submit</button>
+                <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
+            </div>
+            <div class="table-container" style="margin-top: 1.5rem;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Contractor Name</th>
+                                <th>Physical Address</th>
+                                <th>Postal Address</th>
+                                <th>Tel. No.</th>
+                                <th>Fax No.</th>
+                                <th>E-Mail Address</th>
+                                <th>Contact Person</th>
+                                <th>Quotations</th>
+                                <th>Type</th>
+                                <th>Project Name</th>
+                                <th>Project Begin Date</th>
+                                <th>Project End Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td colspan="12">No records found.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

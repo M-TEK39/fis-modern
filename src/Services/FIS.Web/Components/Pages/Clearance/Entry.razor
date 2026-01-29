@@ -1,0 +1,120 @@
+@page "/clearance/entry"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@inject NavigationManager Navigation
+
+<PageTitle>Clearance Entry - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-shield"></i>
+            Clearance Entry
+        </h1>
+        <p class="page-description">Legacy clearance entry screen that captures number, merchant, amount, kilos.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/clearance")'>
+            <i class="bx bx-arrow-back"></i>
+            Back to Clearance Menu
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    <EditForm Model="_form" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="form-label">Clearance Number</label>
+                <InputText class="form-input" @bind-Value="_form.ClearanceNumber" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Clearance Date</label>
+                <InputDate class="form-input" @bind-Value="_form.ClearanceDate" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Merchant</label>
+                <select class="form-select" @bind="_form.Merchant">
+                    @foreach (var merchant in _merchants)
+                    {
+                        <option value="@merchant">@merchant</option>
+                    }
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Clearance Amount</label>
+                <InputNumber class="form-input" @bind-Value="_form.Amount" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Clearance Kilos</label>
+                <InputNumber class="form-input" @bind-Value="_form.Kilos" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Comments</label>
+                <InputTextArea class="form-input" rows="3" @bind-Value="_form.Comment" />
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary">
+                <i class="bx bx-save"></i>
+                Save (mock)
+            </button>
+            <button class="btn btn-secondary" type="button" @onclick="ResetForm">
+                Reset
+            </button>
+        </div>
+        @if (_saved)
+        {
+            <div class="alert alert-success">
+                Clearance saved (UI placeholder) for @(_form.ClearanceNumber).
+            </div>
+        }
+    </EditForm>
+</div>
+
+@code {
+    private readonly ClearanceForm _form = new();
+    private bool _saved;
+
+    private readonly List<string> _merchants = new()
+    {
+        "Merchant A",
+        "Merchant B",
+        "Merchant C"
+    };
+
+    private Task HandleSubmit()
+    {
+        _saved = true;
+        return Task.CompletedTask;
+    }
+
+    private void ResetForm()
+    {
+        _form.Reset();
+        _saved = false;
+    }
+
+    private sealed class ClearanceForm
+    {
+        public string ClearanceNumber { get; set; } = string.Empty;
+        public DateTime ClearanceDate { get; set; } = DateTime.Today;
+        public string Merchant { get; set; } = "Merchant A";
+        public decimal? Amount { get; set; }
+        public decimal? Kilos { get; set; }
+        public string Comment { get; set; } = string.Empty;
+
+        public void Reset()
+        {
+            ClearanceNumber = string.Empty;
+            ClearanceDate = DateTime.Today;
+            Merchant = "Merchant A";
+            Amount = null;
+            Kilos = null;
+            Comment = string.Empty;
+        }
+    }
+}

@@ -1,0 +1,45 @@
+@page "/fines/reports"
+@rendermode InteractiveServer
+
+<PageTitle>Fines Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-file"></i>
+            Fines Reports Menu
+        </h1>
+        <p class="page-description">Legacy reports grouped by category.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/fines">Back to Fines Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>One Vehicle Fines Reports</span>
+                <i class="bx bx-list-ul"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/one-vehicle">1) Fines Report on ONE Vehicle</a></div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Other Fines Reports</span>
+                <i class="bx bx-list-ul"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/select">2) Fines Report, for a Dept / Site, for a period</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/appear-date">3) Fines Report on Appear Date</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/letter">4) Submission to Re-Issue Fine in Transport Officer's Name</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/traffic-dept">5) Traffic Dept Detail</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/reports">Return To Main Page</a></div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -3,6 +3,7 @@
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject ClearanceApiService ClearanceService
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <PageTitle>Clearance - Fleet Information System</PageTitle>
@@ -13,7 +14,7 @@
             <i class="bx bx-shield-quarter"></i>
             Clearance
         </h1>
-        <p class="page-description">Clearance queue from /api/clearance.</p>
+        <p class="page-description">Legacy clearance menu, merchant maintenance, and the current queue.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadClearances">
@@ -21,9 +22,29 @@
             Refresh
         </button>
     </div>
-</div>
+    </div>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/clearance/entry")'>
+                <span>Enter Clearance</span>
+                <i class="bx bx-send"></i>
+            </button>
+            <div class="menu-tile-body">
+                <p class="menu-item-text">Capture clearance numbers, merchant, amount, and kilos just like the legacy entry screen.</p>
+            </div>
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/clearance/merchant")'>
+                <span>Merchant Maintenance</span>
+                <i class="bx bx-store-alt"></i>
+            </button>
+            <div class="menu-tile-body">
+                <p class="menu-item-text">Select, add, or delete merchants in one place with the legacy flow guiding the experience.</p>
+            </div>
+        </div>
+    </div>
 
-<div class="page-content">
+    <div class="page-content">
     @if (_loading)
     {
         <div class="loading-state">

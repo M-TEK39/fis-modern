@@ -1,9 +1,5 @@
 @page "/fines"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject FineApiService FineService
-@inject IJSRuntime JS
 
 <PageTitle>Fines - Fleet Information System</PageTitle>
 
@@ -11,123 +7,35 @@
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-receipt"></i>
-            Fines
+            Fines Maintenance Menu
         </h1>
-        <p class="page-description">Traffic fine register from /api/fine.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadFines">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy maintenance and report workflows.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading fines...</p>
-        </div>
-    }
-    else if (_fines.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-receipt"></i>
-            <h3>No fines recorded</h3>
-            <p>Awaiting fines API. Provide endpoint/fields to replace static data.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_fines.Count Fine(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Fine #</th>
-                            <th>Driver / Vehicle</th>
-                            <th>Issued</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>Due</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var fine in _fines)
-                        {
-                            <tr>
-                                <td>@fine.Number</td>
-                                <td>@fine.DriverOrVehicle</td>
-                                <td>@fine.IssuedOn.ToString("yyyy-MM-dd")</td>
-                                <td>@fine.Amount.ToString("C")</td>
-                                <td><span class="badge">@fine.Status</span></td>
-                                <td>@fine.DueDate.ToString("yyyy-MM-dd")</td>
-                                <td>@fine.Notes</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Fines Maintenance</span>
+                <i class="bx bx-wrench"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><span class="menu-item-link">Fines Maintenance Information / Help</span></div>
+                <div class="menu-item"><a class="menu-item-link" href="/fines/maintenance">1) Fine Maintenance</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/fines/delete">2) Delete a Fine</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/fines/traffic-dept">3) Add / Update &amp; Delete Traffic Dept</a></div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Fines Reports</span>
+                <i class="bx bx-file"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><a class="menu-item-link" href="/fines/reports">Fines Reports Menu</a></div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@code {
-    private bool _loading = true;
-    private List<FineItem> _fines = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadFines();
-    }
-
-    private async Task LoadFines()
-    {
-        _loading = true;
-        try
-        {
-            var fines = await FineService.GetAllAsync<FineDto>();
-            _fines = fines.Select(f => new FineItem(
-                Number: f.Offence_reference ?? $"F-{f.Fine_code}",
-                DriverOrVehicle: f.GG_number ?? $"vmf:{f.vmf_code?.ToString() ?? "-"}",
-                IssuedOn: f.Offence_date ?? DateTime.MinValue,
-                Amount: f.Fine_amount ?? 0m,
-                Status: f.Fine_pay_date.HasValue ? "Paid" : f.Pay_due_date.HasValue && f.Pay_due_date < DateTime.Today ? "Overdue" : "Open",
-                DueDate: f.Pay_due_date ?? f.Appear_date ?? f.Offence_date ?? DateTime.MinValue,
-                Notes: f.Offence_name ?? f.Offence_issuer ?? string.Empty
-            )).ToList();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading fines: {ex.Message}");
-            _fines = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private sealed record FineItem(string Number, string DriverOrVehicle, DateTime IssuedOn, decimal Amount, string Status, DateTime DueDate, string Notes);
-
-    private sealed class FineDto
-    {
-        public int Fine_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? GG_number { get; set; }
-        public DateTime? Offence_date { get; set; }
-        public string? Offence_reference { get; set; }
-        public string? Offence_issuer { get; set; }
-        public decimal? Fine_amount { get; set; }
-        public DateTime? Appear_date { get; set; }
-        public DateTime? Pay_due_date { get; set; }
-        public DateTime? Fine_pay_date { get; set; }
-        public string? Offence_name { get; set; }
-    }
-}

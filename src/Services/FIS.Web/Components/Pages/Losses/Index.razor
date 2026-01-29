@@ -3,6 +3,7 @@
 @using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject LossApiService LossService
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <PageTitle>Losses - Fleet Information System</PageTitle>
@@ -13,7 +14,7 @@
             <i class="bx bx-x-circle"></i>
             Losses
         </h1>
-        <p class="page-description">Losses summary from /api/loss.</p>
+        <p class="page-description">Legacy loss maintenance, reporting, and a quick backlog view.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary" @onclick="LoadLosses">
@@ -21,9 +22,47 @@
             Refresh
         </button>
     </div>
-</div>
+    </div>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/add")'>
+                <span>Add Loss</span>
+                <i class="bx bx-plus"></i>
+            </button>
+            <div class="menu-tile-body">
+                <p class="menu-item-text">Capture a new loss reference, SAPD/case details, and mark the vehicle status per the legacy workflow.</p>
+            </div>
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/edit")'>
+                <span>Edit Loss</span>
+                <i class="bx bx-edit"></i>
+            </button>
+            <div class="menu-tile-body">
+                <p class="menu-item-text">Retrieve an existing loss by GG number or reference and update the department, status, or notes.</p>
+            </div>
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/delete")'>
+                <span>Delete Loss</span>
+                <i class="bx bx-trash"></i>
+            </button>
+            <div class="menu-tile-body">
+                <p class="menu-item-text">Remove a legacy loss entry while preserving the standard audit trail messaging.</p>
+            </div>
+        </div>
+        <div class="menu-tile">
+            <button class="menu-tile-header" @onclick='() => Navigation.NavigateTo("/losses/reports")'>
+                <span>Loss Reports</span>
+                <i class="bx bx-file"></i>
+            </button>
+            <div class="menu-tile-body">
+                <p class="menu-item-text">Launch the same legacy report flows (per vehicle, by site, by department) with modern controls.</p>
+            </div>
+        </div>
+    </div>
 
-<div class="page-content">
+    <div class="page-content">
     @if (_loading)
     {
         <div class="loading-state">

@@ -1,0 +1,200 @@
+@page "/losses/add"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Add Loss - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-plus-circle"></i>
+            Add Loss
+        </h1>
+        <p class="page-description">Legacy loss creation form with the critical fields required in the old system.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/losses")'>
+            <i class="bx bx-arrow-back"></i>
+            Back to Losses Menu
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    <EditForm Model="_form" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="form-label">Loss Reference</label>
+                <InputText class="form-input" @bind-Value="_form.LossReference" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Vehicle Identifier (GG/Reg)</label>
+                <InputText class="form-input" @bind-Value="_form.VehicleIdentifier" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">VMF Code</label>
+                <InputNumber class="form-input" @bind-Value="_form.VmfCode" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Loss Date</label>
+                <InputDate class="form-input" @bind-Value="_form.LossDate" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Loss Type</label>
+                <select class="form-select" @bind="_form.LossType">
+                    @foreach (var type in _lossTypes)
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Loss Status</label>
+                <select class="form-select" @bind="_form.LossStatus">
+                    @foreach (var status in _lossStatuses)
+                    {
+                        <option value="@status">@status</option>
+                    }
+                </select>
+            </div>
+            <div class="form-field">
+                <label class="form-label">Loss Amount</label>
+                <InputNumber class="form-input" @bind-Value="_form.LossAmount" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Case Number</label>
+                <InputText class="form-input" @bind-Value="_form.CaseNumber" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Place of Loss</label>
+                <InputText class="form-input" @bind-Value="_form.PlaceOfLoss" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Department Contact</label>
+                <InputText class="form-input" @bind-Value="_form.DeptContact" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">SAPD Station</label>
+                <InputText class="form-input" @bind-Value="_form.SapdStation" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Inspector</label>
+                <InputText class="form-input" @bind-Value="_form.Inspector" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Driver Name</label>
+                <InputText class="form-input" @bind-Value="_form.DriverName" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Call Reference</label>
+                <InputText class="form-input" @bind-Value="_form.CallReference" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">HQ Reference</label>
+                <InputText class="form-input" @bind-Value="_form.HqReference" />
+            </div>
+            <div class="form-field">
+                <label class="form-label">Remarks</label>
+                <InputTextArea class="form-input" rows="3" @bind-Value="_form.Remarks" />
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button class="btn btn-primary" type="submit">
+                <i class="bx bx-save"></i>
+                Save (mock)
+            </button>
+            <button class="btn btn-secondary" type="button" @onclick="ResetForm">
+                Reset
+            </button>
+        </div>
+
+        @if (_saved)
+        {
+            <div class="alert alert-success">
+                Loss reference saved (UI mock, no backend change).
+            </div>
+        }
+    </EditForm>
+</div>
+
+@code {
+    private readonly LossFormModel _form = new();
+    private bool _saved;
+
+    private static readonly string[] _lossTypes =
+    {
+        "Theft",
+        "Collision",
+        "Malicious Damage",
+        "Vandalism",
+        "Mechanical Failure",
+        "Other"
+    };
+
+    private static readonly string[] _lossStatuses =
+    {
+        "Open",
+        "Under Investigation",
+        "Reported to SAPD",
+        "Closed"
+    };
+
+    private Task HandleSubmit()
+    {
+        _saved = true;
+        return Task.CompletedTask;
+    }
+
+    private void ResetForm()
+    {
+        _form.Reset();
+        _saved = false;
+    }
+
+    private sealed class LossFormModel
+    {
+        public string LossReference { get; set; } = string.Empty;
+        public string VehicleIdentifier { get; set; } = string.Empty;
+        public int? VmfCode { get; set; }
+        public DateTime LossDate { get; set; } = DateTime.Today;
+        public string LossType { get; set; } = "Theft";
+        public string LossStatus { get; set; } = "Open";
+        public decimal? LossAmount { get; set; }
+        public string CaseNumber { get; set; } = string.Empty;
+        public string PlaceOfLoss { get; set; } = string.Empty;
+        public string DeptContact { get; set; } = string.Empty;
+        public string SapdStation { get; set; } = string.Empty;
+        public string Inspector { get; set; } = string.Empty;
+        public string DriverName { get; set; } = string.Empty;
+        public string CallReference { get; set; } = string.Empty;
+        public string HqReference { get; set; } = string.Empty;
+        public string Remarks { get; set; } = string.Empty;
+
+        public void Reset()
+        {
+            LossReference = string.Empty;
+            VehicleIdentifier = string.Empty;
+            VmfCode = null;
+            LossDate = DateTime.Today;
+            LossType = "Theft";
+            LossStatus = "Open";
+            LossAmount = null;
+            CaseNumber = string.Empty;
+            PlaceOfLoss = string.Empty;
+            DeptContact = string.Empty;
+            SapdStation = string.Empty;
+            Inspector = string.Empty;
+            DriverName = string.Empty;
+            CallReference = string.Empty;
+            HqReference = string.Empty;
+            Remarks = string.Empty;
+        }
+    }
+}

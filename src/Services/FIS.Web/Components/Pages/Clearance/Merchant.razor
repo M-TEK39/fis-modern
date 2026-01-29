@@ -1,0 +1,186 @@
+@page "/clearance/merchant"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Forms
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Merchant Maintenance - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-store"></i>
+            Merchant Maintenance
+        </h1>
+        <p class="page-description">Legacy merchant lookup, add, edit, and delete workflow.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/clearance")'>
+            <i class="bx bx-arrow-back"></i>
+            Back to Clearance Menu
+        </button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-section">
+                <h2 class="form-section-title">Select Merchant to Edit or Delete</h2>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Merchant</label>
+                        <select class="form-select" @bind="_selectedMerchant">
+                            @foreach (var merchant in _merchants)
+                            {
+                                <option value="@merchant">@merchant</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="form-actions">
+                            <button class="btn btn-primary btn-sm" @onclick="EditMerchant">
+                                <i class="bx bx-edit"></i>
+                                Edit
+                            </button>
+                            <button class="btn btn-danger btn-sm" @onclick="DeleteMerchant">
+                                <i class="bx bx-trash"></i>
+                                Delete
+                            </button>
+                            <button class="btn btn-secondary btn-sm" @onclick="AddMerchant">
+                                <i class="bx bx-plus"></i>
+                                Add New
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="form-section">
+                <h2 class="form-section-title">Add Merchant</h2>
+                <EditForm Model="_form" OnValidSubmit="HandleAdd">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Merchant Code</label>
+                            <InputText class="form-input" @bind-Value="_form.Code" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Merchant Name</label>
+                            <InputText class="form-input" @bind-Value="_form.Name" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Contact Person</label>
+                            <InputText class="form-input" @bind-Value="_form.Contact" />
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm">
+                            <i class="bx bx-save"></i>
+                            Save Merchant (mock)
+                        </button>
+                    </div>
+                </EditForm>
+                @if (_merchantSaved)
+                {
+                    <div class="alert alert-success">
+                        Merchant @_form.Name added (placeholder).
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="table-container mt-4">
+        <div class="table-header">
+            <span class="table-title">Existing Merchants</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Last Updated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var merchant in _merchantList)
+                    {
+                        <tr>
+                            <td>@merchant.Code</td>
+                            <td>@merchant.Name</td>
+                            <td>@merchant.Contact</td>
+                            <td>@merchant.UpdatedOn.ToString("yyyy-MM-dd")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _selectedMerchant = "Merchant A";
+    private readonly MerchantForm _form = new();
+    private bool _merchantSaved;
+
+    private readonly List<string> _merchants = new()
+    {
+        "Merchant A",
+        "Merchant B",
+        "Merchant C"
+    };
+
+    private readonly List<MerchantSummary> _merchantList = new()
+    {
+        new("M001", "Merchant A", "Sipho Khumalo", DateTime.Today.AddDays(-20)),
+        new("M002", "Merchant B", "Lindiwe Mhlongo", DateTime.Today.AddDays(-10)),
+        new("M003", "Merchant C", "Nkosana Dlamini", DateTime.Today.AddDays(-5))
+    };
+
+    private void EditMerchant()
+    {
+        JSRuntimeHelper($"Editing {_selectedMerchant} (placeholder).");
+    }
+
+    private void DeleteMerchant()
+    {
+        JSRuntimeHelper($"Deleting {_selectedMerchant} (placeholder).");
+    }
+
+    private void AddMerchant()
+    {
+        _form.Reset();
+        _merchantSaved = false;
+    }
+
+    private Task HandleAdd()
+    {
+        _merchantSaved = true;
+        return Task.CompletedTask;
+    }
+
+    private void JSRuntimeHelper(string message)
+    {
+        JS.InvokeVoidAsync("console.info", message);
+    }
+
+    private sealed class MerchantForm
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Contact { get; set; } = string.Empty;
+
+        public void Reset()
+        {
+            Code = string.Empty;
+            Name = string.Empty;
+            Contact = string.Empty;
+        }
+    }
+
+    private sealed record MerchantSummary(string Code, string Name, string Contact, DateTime UpdatedOn);
+}

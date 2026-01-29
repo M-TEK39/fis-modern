@@ -1,101 +1,53 @@
 @page "/licenses"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Components.Shared
-@using FIS.Web.Services
-@inject IJSRuntime JS
 
-<PageTitle>Licenses - Fleet Information System</PageTitle>
+<PageTitle>Licences - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bxs-user-badge"></i>
-            Licenses
+            Licence Maintenance Menu
         </h1>
-        <p class="page-description">Manage license types used for vehicle and driver requirements.</p>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-secondary" @onclick="LoadLicenses">
-            <i class="bx bx-refresh"></i>
-            Refresh
-        </button>
+        <p class="page-description">Legacy licence maintenance workflows.</p>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading licenses...</p>
-        </div>
-    }
-    else if (_licenses.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bxs-user-badge"></i>
-            <h3>No licenses found</h3>
-            <p>Get started by adding your first license type.</p>
-        </div>
-    }
-    else
-    {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_licenses.Count License(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>License Code</th>
-                            <th>Description</th>
-                            <th>Category</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var license in _licenses)
-                        {
-                            <tr>
-                                <td>@license.licence_code</td>
-                                <td>@license.licence_description</td>
-                                <td>@(string.IsNullOrWhiteSpace(license.licence_category) ? "-" : license.licence_category)</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Licence Maintenance</span>
+                <i class="bx bx-wrench"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><span class="menu-item-link">Licence Maintenance Information / Help</span></div>
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/one-vehicle">1) Licence Maintenance for ONE Vehicle</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/multi-collection">2) Collection for TWO or MORE Licences</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/garage">3) Licence Available at Garage</a></div>
             </div>
         </div>
-    }
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Other Licence Options</span>
+                <i class="bx bx-layer"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/model-fees">4) Table : Make &amp; Model with Licence Fees</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/scan-certificate">5) Scan Licence Certificate</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/reports/workgroup-latest">6) Workgroup Report</a></div>
+            </div>
+        </div>
+
+        <div class="menu-tile">
+            <button class="menu-tile-header">
+                <span>Licence Reports</span>
+                <i class="bx bx-file"></i>
+            </button>
+            <div class="menu-tile-body">
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/reports">Licence Reports Menu</a></div>
+            </div>
+        </div>
+    </div>
 </div>
-
-@inject LicenseApiService LicenseService
-
-@code {
-    private bool _loading = true;
-    private List<LicenseTypeDto> _licenses = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadLicenses();
-    }
-
-    private async Task LoadLicenses()
-    {
-        _loading = true;
-
-        try
-        {
-            _licenses = await LicenseService.GetAllAsync();
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading licenses: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-}
