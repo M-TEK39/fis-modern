@@ -1,5 +1,10 @@
 @page "/fines/maintenance/detail"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FineApiService FineService
+@inject TrafficDeptApiService TrafficDeptService
+@inject SiteApiService SiteService
 
 <PageTitle>Fine Maintenance Detail - Fleet Information System</PageTitle>
 
@@ -22,74 +27,126 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Date of Offence</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Offence_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Reference Number</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_fine.Offence_reference" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Issued by</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_fine.Offence_issuer" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Traffic Dept</label>
-                    <select class="form-select">
-                        <option>Select Traffic Dept</option>
+                    <select class="form-select" @bind="_selectedTrafficDept">
+                        <option value="">Select Traffic Dept</option>
+                        @foreach (var dept in _trafficDepts)
+                        {
+                            <option value="@dept.Traffic_dept_code">@dept.Traf_name</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Amount of Fine</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="number" step="0.01" @bind="_fine.Fine_amount" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Due Date of Payment</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Pay_due_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Due Date to Appear in Court</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Appear_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Document Type</label>
-                    <select class="form-select">
-                        <option>Notice of Traffic Offence</option>
-                        <option>Notice of Summons to be Issued</option>
-                        <option>Summons in Criminal Case</option>
-                        <option>Warrent for Arrest</option>
+                    <select class="form-select" @bind="_fine.Offence_name">
+                        <option value="">Select Document Type</option>
+                        <option value="Notice of Traffic Offence">Notice of Traffic Offence</option>
+                        <option value="Notice of Summons to be Issued">Notice of Summons to be Issued</option>
+                        <option value="Summons in Criminal Case">Summons in Criminal Case</option>
+                        <option value="Warrant for Arrest">Warrant for Arrest</option>
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date Received at GMT</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Receive_gg_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date of Notification to Issuer</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Issuer_notify_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date of Notification to Dept</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Notify_dept_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Dept Code</label>
-                    <select class="form-select">
-                        <option>Select Dept/Site</option>
+                    <select class="form-select" @bind="_fine.Site_code">
+                        <option value="">Select Dept/Site</option>
+                        @foreach (var site in _sites)
+                        {
+                            <option value="@site.SiteCode">@site.Description</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Name Responsible person at Dept</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_deptResponsibleName" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">ID Responsible person at Dept</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_deptResponsibleId" />
                 </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="SaveFine">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/fines/maintenance">Menu</a>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "fineId")]
+    public int? FineId { get; set; }
+
+    private FineDto _fine = new();
+    private short? _selectedTrafficDept;
+    private string _deptResponsibleName = "";
+    private string _deptResponsibleId = "";
+    private List<TrafficDeptDto> _trafficDepts = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookups();
+        if (FineId.HasValue)
+        {
+            var existing = await FineService.GetByIdAsync<FineDto>(FineId.Value);
+            if (existing is not null)
+            {
+                _fine = existing;
+            }
+        }
+    }
+
+    private async Task LoadLookups()
+    {
+        _trafficDepts = await TrafficDeptService.GetAllAsync<TrafficDeptDto>();
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task SaveFine()
+    {
+        if (FineId.HasValue)
+        {
+            await FineService.UpdateAsync(FineId.Value, _fine);
+        }
+        else
+        {
+            await FineService.CreateAsync(_fine);
+        }
+    }
+}

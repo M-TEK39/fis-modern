@@ -1,5 +1,10 @@
 @page "/licenses/one-vehicle"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject LicenseMaintenanceApiService LicenseMaintenanceService
+@inject SiteApiService SiteService
+@inject IJSRuntime JS
 
 <PageTitle>Licence Maintenance - One Vehicle</PageTitle>
 
@@ -24,11 +29,13 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" />
+                        <input type="password" class="form-input" @bind="_password" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SubmitPassword" disabled="@_passwordSubmitting">
+                        @(_passwordSubmitting ? "Submitting..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
@@ -38,23 +45,25 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="oneVehicleType" checked />
+                            <input type="radio" name="oneVehicleType" value="GG" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GG")" />
                             GG
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="oneVehicleType" />
+                            <input type="radio" name="oneVehicleType" value="GP" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GP")" />
                             GP
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_vehicleNumber" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="LoadVehicle" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
@@ -64,60 +73,162 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Exp Date</label>
-                        <input class="form-input" />
+                        <input type="date" class="form-input" @bind="_details.ExpDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Register Num</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.RegisterNumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Reg Doc</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.RegDoc" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Tare</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.Tare" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Receiver</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.Receiver" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Rec ID</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.ReceiverId" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Rec Tel</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.ReceiverTel" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Rec Site</label>
-                        <select class="form-select">
-                            <option>Select Site</option>
+                        <select class="form-select" @bind="_details.ReceiverSiteCode">
+                            <option value="">Select Site</option>
+                            @foreach (var site in _sites)
+                            {
+                                <option value="@site.SiteCode">@site.Description</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Date Collected</label>
-                        <input class="form-input" />
+                        <input type="date" class="form-input" @bind="_details.DateCollected" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Cof Required</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.CofRequired" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Cof Exp Date</label>
-                        <input class="form-input" />
+                        <input type="date" class="form-input" @bind="_details.CofExpDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Comments</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_details.Comments" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveDetails" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private string _password = string.Empty;
+    private bool _passwordSubmitting;
+    private string _numberType = "GG";
+    private string _vehicleNumber = string.Empty;
+    private bool _loading;
+    private bool _saving;
+    private LicenseDetailsModel _details = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task SubmitPassword()
+    {
+        _passwordSubmitting = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitPasswordAsync("api/license/one-vehicle/password", _password);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error submitting password: {ex.Message}");
+        }
+        finally
+        {
+            _passwordSubmitting = false;
+        }
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var payload = new
+            {
+                number_type = _numberType,
+                number = _vehicleNumber
+            };
+            var response = await LicenseMaintenanceService.SubmitAsync<LicenseDetailsModel>(
+                "api/license/one-vehicle/lookup",
+                payload);
+            _details = response ?? new LicenseDetailsModel();
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading licence details: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveDetails()
+    {
+        _saving = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitAsync<object>("api/license/one-vehicle/save", _details);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving licence details: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void OnNumberTypeChanged(ChangeEventArgs args)
+    {
+        _numberType = args.Value?.ToString() ?? "GG";
+    }
+
+    private sealed class LicenseDetailsModel
+    {
+        public DateTime? ExpDate { get; set; }
+        public string? RegisterNumber { get; set; }
+        public string? RegDoc { get; set; }
+        public string? Tare { get; set; }
+        public string? Receiver { get; set; }
+        public string? ReceiverId { get; set; }
+        public string? ReceiverTel { get; set; }
+        public short? ReceiverSiteCode { get; set; }
+        public DateTime? DateCollected { get; set; }
+        public string? CofRequired { get; set; }
+        public DateTime? CofExpDate { get; set; }
+        public string? Comments { get; set; }
+    }
+}

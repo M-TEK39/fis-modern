@@ -1,5 +1,9 @@
 @page "/reports/licences"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject NavigationManager Navigation
+@inject LicenseReportApiService ReportService
+@inject IJSRuntime JS
 
 <PageTitle>Licence Reports - Fleet Information System</PageTitle>
 
@@ -11,6 +15,9 @@
         </h1>
         <p class="page-description">Legacy placeholder for License/RPTlicence.aspx.</p>
     </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/licenses/reports")'>Open Licence Reports</button>
+    </div>
 </div>
 
 <div class="page-content">
@@ -18,5 +25,20 @@
         <i class="bx bx-file"></i>
         <h3>Licence Reports pending</h3>
         <p>This page will mirror the legacy report.</p>
+        <button class="btn btn-primary btn-sm" @onclick="TestEndpoint">Ping Licence Report Endpoint</button>
     </div>
 </div>
+
+@code {
+    private async Task TestEndpoint()
+    {
+        try
+        {
+            await ReportService.GetAllAsync<Dictionary<string, object>>(new { });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error pinging licence report endpoint: {ex.Message}");
+        }
+    }
+}

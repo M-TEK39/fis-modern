@@ -1,5 +1,10 @@
 @page "/auction/maintenance"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AuctionApiService AuctionService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JS
 
 <PageTitle>Auction Maintenance - Fleet Information System</PageTitle>
 
@@ -27,19 +32,19 @@
                     <label class="form-label">Number Type</label>
                     <div class="contract-search-radio">
                         <label class="form-label form-checkbox">
-                            <input type="radio" name="auctionNumberType" checked />
+                            <input type="radio" name="auctionNumberType" checked="@(_searchType == "GG")" @onchange='() => _searchType = "GG"' />
                             GG
                         </label>
                         <label class="form-label form-checkbox">
-                            <input type="radio" name="auctionNumberType" />
+                            <input type="radio" name="auctionNumberType" checked="@(_searchType == "GP")" @onchange='() => _searchType = "GP"' />
                             GP
                         </label>
-                        <input class="form-input" placeholder="Number" style="max-width: 140px;" />
+                        <input class="form-input" placeholder="Number" style="max-width: 140px;" @bind="_searchQuery" @bind:event="oninput" />
                     </div>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="SearchAuctions">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/auction">Menu</a>
             </div>
         </div>
@@ -60,11 +65,106 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td colspan="4">No records found.</td>
-                    </tr>
+                    @if (_loading)
+                    {
+                        <tr>
+                            <td colspan="4">Loading auctions...</td>
+                        </tr>
+                    }
+                    else if (_auctions.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4">No records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in _auctions)
+                        {
+                            <tr>
+                                <td>@item.VehicleNumber</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.AuctionNumber) ? "-" : item.AuctionNumber)</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.AuctionGarage) ? "-" : item.AuctionGarage)</td>
+                                <td>
+                                    <button class="btn btn-secondary btn-sm" @onclick="() => SelectAuction(item)">Select</button>
+                                </td>
+                            </tr>
+                        }
+                    }
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+
+@code {
+    private string _searchType = "GG";
+    private string _searchQuery = "";
+    private bool _loading;
+    private List<AuctionRow> _auctions = new();
+    private List<AuctionRow> _allAuctions = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuctions();
+    }
+
+    private async Task LoadAuctions()
+    {
+        _loading = true;
+        try
+        {
+            var apiItems = await AuctionService.GetAllAsync<AuctionDto>();
+            _allAuctions = apiItems.Select(a => new AuctionRow(
+                AuctionCode: a.auction_code,
+                VmfCode: a.vmf_code,
+                AuctionNumber: a.auction_number,
+                AuctionGarage: a.camp ?? a.auction_garage?.ToString(),
+                VehicleNumber: a.vmf_code.ToString()
+            )).ToList();
+            _auctions = new List<AuctionRow>(_allAuctions);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading auctions: {ex.Message}");
+            _auctions = new();
+            _allAuctions = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SearchAuctions()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _auctions = new List<AuctionRow>(_allAuctions);
+            return;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+        if (matches.Count == 0)
+        {
+            _auctions = new();
+            return;
+        }
+
+        var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
+        _auctions = _allAuctions.Where(a => vmfCodes.Contains(a.VmfCode)).ToList();
+    }
+
+    private void SelectAuction(AuctionRow item)
+    {
+        _searchQuery = item.VehicleNumber;
+    }
+
+    private sealed record AuctionRow(
+        short AuctionCode,
+        int VmfCode,
+        string? AuctionNumber,
+        string? AuctionGarage,
+        string VehicleNumber
+    );
+}

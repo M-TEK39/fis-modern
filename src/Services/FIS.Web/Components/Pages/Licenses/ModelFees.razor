@@ -1,5 +1,11 @@
 @page "/licenses/model-fees"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject ReferenceDataApiService ReferenceDataService
+@inject LicenseFeeApiService LicenseFeeService
+@inject LicenseMaintenanceApiService LicenseMaintenanceService
+@inject IJSRuntime JS
 
 <PageTitle>Licence Fees Maintenance</PageTitle>
 
@@ -24,13 +30,19 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Model Description</label>
-                        <select class="form-select">
-                            <option>Select Model</option>
+                        <select class="form-select" @bind="_selectedModelCode">
+                            <option value="">Select Model</option>
+                            @foreach (var model in _models)
+                            {
+                                <option value="@model.model_code">@model.model_name</option>
+                            }
                         </select>
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="LoadModel" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Submit")
+                    </button>
                 </div>
             </div>
 
@@ -39,24 +51,103 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Make Description</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_selectedMake" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Model Description</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_selectedModelName" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Description</label>
-                        <select class="form-select">
-                            <option>Select Licence Description</option>
+                        <select class="form-select" @bind="_selectedLicenseFeeCode">
+                            <option value="">Select Licence Description</option>
+                            @foreach (var fee in _licenseFees)
+                            {
+                                <option value="@fee.licence_fee_code">@fee.licence_description</option>
+                            }
                         </select>
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveFee" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading;
+    private bool _saving;
+    private int? _selectedModelCode;
+    private int? _selectedLicenseFeeCode;
+    private string _selectedMake = string.Empty;
+    private string _selectedModelName = string.Empty;
+    private List<ModelDto> _models = new();
+    private List<LicenseFeeDto> _licenseFees = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _models = await ReferenceDataService.GetModelsAsync();
+        _licenseFees = await LicenseFeeService.GetAllAsync();
+    }
+
+    private async Task LoadModel()
+    {
+        if (_selectedModelCode == null)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var model = _models.FirstOrDefault(m => m.model_code == _selectedModelCode);
+            _selectedModelName = model?.model_name ?? string.Empty;
+            _selectedMake = model?.make_name ?? string.Empty;
+
+            await LicenseMaintenanceService.SubmitAsync<object>(
+                "api/license/model-fees/lookup",
+                new { model_code = _selectedModelCode });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading model fee: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveFee()
+    {
+        if (_selectedModelCode == null || _selectedLicenseFeeCode == null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitAsync<object>(
+                "api/license/model-fees/save",
+                new
+                {
+                    model_code = _selectedModelCode,
+                    licence_fee_code = _selectedLicenseFeeCode
+                });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving model fee: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

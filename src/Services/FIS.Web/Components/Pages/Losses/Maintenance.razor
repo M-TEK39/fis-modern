@@ -1,5 +1,9 @@
 @page "/losses/maintenance"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LossApiService LossService
+@inject IJSRuntime JS
 
 <PageTitle>Vehicle Losses Maintenance - Fleet Information System</PageTitle>
 
@@ -24,65 +28,88 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="lossNumberType" checked />
+                            <input type="radio" name="lossNumberType" value="GG" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GG")" />
                             GG
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="lossNumberType" />
+                            <input type="radio" name="lossNumberType" value="GP" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GP")" />
                             GP Number
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_vehicleNumber" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SearchLosses" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/losses">Menu</a>
                 </div>
             </div>
 
             <div class="form-section">
                 <h2 class="form-section-title">Losses Found (Sorted by Loss Date)</h2>
-                <div class="table-container">
-                    <div class="table-wrapper">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Loss Date</th>
-                                    <th>Reference</th>
-                                    <th>Description</th>
-                                    <th>Amount</th>
-                                    <th>Dept Claim</th>
-                                    <th>SAPD</th>
-                                    <th>Remarks</th>
-                                    <th>HQ Reference</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>2024/01/10</td>
-                                    <td>LOSS-001</td>
-                                    <td>Damage - bumper</td>
-                                    <td>R 5,000.00</td>
-                                    <td>Yes</td>
-                                    <td>Sandton</td>
-                                    <td>Awaiting report</td>
-                                    <td>HQ-778</td>
-                                    <td>
-                                        <a href="/losses/edit">Mod</a>
-                                        &nbsp;/&nbsp;
-                                        <a href="/losses/delete">Del</a>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                @if (_loading)
+                {
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Loading losses...</p>
                     </div>
-                </div>
+                }
+                else if (_losses.Count == 0)
+                {
+                    <div class="empty-state">
+                        <i class="bx bx-x-circle"></i>
+                        <h3>No losses found</h3>
+                        <p>Search by GG/GP number to see loss records.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Loss Date</th>
+                                        <th>Reference</th>
+                                        <th>Description</th>
+                                        <th>Amount</th>
+                                        <th>Dept Claim</th>
+                                        <th>SAPD</th>
+                                        <th>Remarks</th>
+                                        <th>HQ Reference</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var loss in _losses)
+                                    {
+                                        <tr>
+                                            <td>@loss.loss_date?.ToString("yyyy/MM/dd")</td>
+                                            <td>@loss.loss_reference</td>
+                                            <td>@loss.loss_type_description</td>
+                                            <td>@(loss.loss_amount?.ToString("0.00") ?? "-")</td>
+                                            <td>@(string.IsNullOrWhiteSpace(loss.dept_claim) ? "-" : loss.dept_claim)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(loss.sapd_station) ? "-" : loss.sapd_station)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(loss.remarks) ? "-" : loss.remarks)</td>
+                                            <td>@(string.IsNullOrWhiteSpace(loss.hq_reference) ? "-" : loss.hq_reference)</td>
+                                            <td>
+                                                <a href="/losses/edit">Mod</a>
+                                                &nbsp;/&nbsp;
+                                                <a href="/losses/delete">Del</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
                 <div class="form-actions">
                     <a class="btn btn-primary btn-sm" href="/losses/add">Add Losses</a>
                 </div>
@@ -90,3 +117,39 @@
         </div>
     </div>
 </div>
+
+@code {
+    private string _numberType = "GG";
+    private string _vehicleNumber = string.Empty;
+    private bool _loading;
+    private List<LossDto> _losses = new();
+
+    private async Task SearchLosses()
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleNumber))
+        {
+            _losses = new();
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _losses = await LossService.GetByVehicleAsync<LossDto>(_vehicleNumber.Trim());
+        }
+        catch (Exception ex)
+        {
+            _losses = new();
+            await JS.InvokeVoidAsync("console.error", $"Error loading losses: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnNumberTypeChanged(ChangeEventArgs args)
+    {
+        _numberType = args.Value?.ToString() ?? "GG";
+    }
+}

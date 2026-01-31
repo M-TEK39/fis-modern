@@ -203,17 +203,7 @@ public class AuctionApiService(HttpClient httpClient, TokenService tokenService,
 
     public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
     public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
-
-public class ClearanceApiService(HttpClient httpClient, TokenService tokenService, ILogger<ClearanceApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/clearance";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
+    public Task<List<T>> GetByVehicleAsync<T>(int vmfCode) => GetListAsync<T>($"{BasePath}/vehicle/{vmfCode}");
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
@@ -225,9 +215,62 @@ public class LossApiService(HttpClient httpClient, TokenService tokenService, IL
 
     public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
     public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
+    public Task<List<T>> GetByVehicleAsync<T>(string vehicleIdentifier) =>
+        GetListAsync<T>($"{BasePath}/vehicle/{Uri.EscapeDataString(vehicleIdentifier)}");
+    public Task<List<T>> GetByVmfCodeAsync<T>(int vmfCode) => GetListAsync<T>($"{BasePath}/vmf/{vmfCode}");
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+}
+
+public class LossReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossReportApiService> logger) : BaseApiService(httpClient, tokenService, logger)
+{
+    private const string BasePath = "api/report/losses";
+
+    public async Task<List<T>> GetVehicleAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/vehicle", payload) ?? new List<T>();
+    public async Task<List<T>> GetAllAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/all", payload) ?? new List<T>();
+    public async Task<List<T>> GetNoReportAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/no-report", payload) ?? new List<T>();
+    public async Task<List<T>> GetWithReportAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/with-report", payload) ?? new List<T>();
+    public async Task<List<T>> GetDeptPeriodAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/dept-period", payload) ?? new List<T>();
+}
+
+public class LicenseReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<LicenseReportApiService> logger) : BaseApiService(httpClient, tokenService, logger)
+{
+    private const string BasePath = "api/report/licences";
+
+    public async Task<List<T>> GetByIdentifierAsync<T>(string mode, object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/{mode}", payload) ?? new List<T>();
+    public async Task<List<T>> GetAllAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/all", payload) ?? new List<T>();
+    public async Task<List<T>> GetDeptPeriodAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/dept-period", payload) ?? new List<T>();
+    public async Task<List<T>> GetExpireDateAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/expire-date", payload) ?? new List<T>();
+    public async Task<List<T>> GetMonthFeesAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/month-fees", payload) ?? new List<T>();
+    public async Task<List<T>> GetOldExpireAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/old-expire", payload) ?? new List<T>();
+    public async Task<List<T>> GetSapAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/sap", payload) ?? new List<T>();
+    public async Task<List<T>> GetCofAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/cof", payload) ?? new List<T>();
+    public async Task<List<T>> GetModelFeesAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/model-fees", payload) ?? new List<T>();
+    public async Task<List<T>> GetGgModelFeesAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/gg-model-fees", payload) ?? new List<T>();
+    public async Task<List<T>> GetWorkgroupAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/workgroup", payload) ?? new List<T>();
+    public async Task<List<T>> GetWorkgroupLatestAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/workgroup-latest", payload) ?? new List<T>();
+    public async Task<List<T>> GetGgmtReceivedAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/ggmt-received", payload) ?? new List<T>();
+    public async Task<List<T>> GetSiteAsync<T>(object payload) =>
+        await PostAsync<object, List<T>>($"{BasePath}/site", payload) ?? new List<T>();
 }
 
 public class VehicleOrderApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleOrderApiService> logger) : BaseApiService(httpClient, tokenService, logger)

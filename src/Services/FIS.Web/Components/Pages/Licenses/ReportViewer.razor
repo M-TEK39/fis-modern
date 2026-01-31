@@ -1,5 +1,11 @@
 @page "/licenses/reports/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject LicenseReportApiService ReportService
+@inject ReferenceDataApiService ReferenceDataService
+@inject LicenseFeeApiService LicenseFeeService
+@inject IJSRuntime JS
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -26,11 +32,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">@GetLicenseLabel(Mode)</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.Identifier" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadIdentifierReport" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Report Menu</a>
                     </div>
                 </div>
@@ -46,12 +52,22 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var field in LicenceDetailFields)
+                                    @if (_results.Count == 0)
                                     {
                                         <tr>
-                                            <td>@field</td>
-                                            <td>@GetLicenceSampleValue(field)</td>
+                                            <td colspan="2">No records found.</td>
                                         </tr>
+                                    }
+                                    else
+                                    {
+                                        var row = _results.FirstOrDefault() ?? new Dictionary<string, object>();
+                                        @foreach (var field in LicenceDetailFields)
+                                        {
+                                            <tr>
+                                                <td>@field</td>
+                                                <td>@GetValue(row, field)</td>
+                                            </tr>
+                                        }
                                     }
                                 </tbody>
                             </table>
@@ -66,11 +82,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Dept Code</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.DepartmentCode" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadSiteReport" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Report Menu</a>
                     </div>
                 </div>
@@ -88,17 +104,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>GPA-0001</td>
-                                        <td>GG12345</td>
-                                        <td>Make X / Model A</td>
-                                        <td>2024/05/31</td>
-                                        <td>S. Molefe</td>
-                                        <td>8001015009087</td>
-                                        <td>011-555-1234</td>
-                                        <td>2024/04/15</td>
-                                        <td>FIN-01</td>
-                                    </tr>
+                                    @RenderRows(LicenceDeptPeriodColumns)
                                 </tbody>
                             </table>
                         </div>
@@ -109,6 +115,9 @@
             {
                 <div class="form-section">
                     <h2 class="form-section-title">All Vehicles</h2>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="LoadAllReport" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
+                    </div>
                     <div class="table-container">
                         <div class="table-wrapper">
                             <table class="data-table">
@@ -121,34 +130,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>1</td>
-                                        <td>GG90001</td>
-                                        <td>GPA-0101</td>
-                                        <td>Garage Central</td>
-                                        <td>Pool</td>
-                                        <td>Active</td>
-                                        <td>REG-100</td>
-                                        <td>REG-100</td>
-                                        <td>VIN-123456</td>
-                                        <td>ENG-7890</td>
-                                        <td>Make Y</td>
-                                        <td>Class 01</td>
-                                        <td>Class A</td>
-                                        <td>VEMM-001</td>
-                                        <td>2.4L</td>
-                                        <td>1200</td>
-                                        <td>4750</td>
-                                        <td>2024/06/30</td>
-                                        <td>2024</td>
-                                        <td>Blue</td>
-                                        <td>GovFleet</td>
-                                        <td>2023/07/15</td>
-                                        <td>1,200,000</td>
-                                        <td>Yes</td>
-                                        <td>Extra Tank</td>
-                                        <td>Notes about vehicle</td>
-                                    </tr>
+                                    @RenderRows(LicenceAllColumns)
                                 </tbody>
                             </table>
                         </div>
@@ -163,27 +145,25 @@
                         <div class="form-field">
                             <label class="form-label">Dept Scope</label>
                             <div class="form-grid">
-                                <label class="form-label"><input type="radio" name="deptScope" /> ALL Dept</label>
-                                <label class="form-label"><input type="radio" name="deptScope" checked /> Only ONE Dept</label>
+                                <label class="form-label"><input type="radio" name="deptScope" value="ALL" @onchange="OnDeptScopeChanged" /> ALL Dept</label>
+                                <label class="form-label"><input type="radio" name="deptScope" value="ONE" @onchange="OnDeptScopeChanged" checked /> Only ONE Dept</label>
                             </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Dept</label>
-                            <select class="form-select">
-                                <option>Select Dept</option>
-                            </select>
+                            <input class="form-input" @bind="_filter.DepartmentCode" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Expire Begin Date</label>
-                            <input class="form-input" />
+                            <input type="date" class="form-input" @bind="_filter.BeginDate" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Expire End Date</label>
-                            <input class="form-input" />
+                            <input type="date" class="form-input" @bind="_filter.EndDate" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadDeptPeriodReport" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
@@ -201,17 +181,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>GPA-0505</td>
-                                        <td>GG40201</td>
-                                        <td>Make Z / Model C</td>
-                                        <td>2024/04/30</td>
-                                        <td>T. van der Merwe</td>
-                                        <td>8010109009088</td>
-                                        <td>011-555-3344</td>
-                                        <td>2024/04/10</td>
-                                        <td>OPS-02</td>
-                                    </tr>
+                                    @RenderRows(LicenceDeptPeriodColumns)
                                 </tbody>
                             </table>
                         </div>
@@ -225,50 +195,38 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Month</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.Month" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Year</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.Year" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadMonthFees" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
-                    <div class="form-section">
-                        <h2 class="form-section-title">Licence Fees Output</h2>
-                        <div class="table-container">
-                            <div class="table-wrapper">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            @foreach (var column in LicenceMonthFeesColumns)
-                                            {
-                                                <th>@column</th>
-                                            }
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>GPA-0110</td>
-                                            <td>GG77777</td>
-                                            <td>REG-123</td>
-                                            <td>1500</td>
-                                            <td>2024/07/31</td>
-                                            <td>011-555-2222</td>
-                                            <td>OPS-03</td>
-                                            <td>Y</td>
-                                            <td>2024/06/15</td>
-                                            <td>Active</td>
-                                            <td>Garage North</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                <div class="form-section">
+                    <h2 class="form-section-title">Licence Fees Output</h2>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        @foreach (var column in LicenceMonthFeesColumns)
+                                        {
+                                            <th>@column</th>
+                                        }
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @RenderRows(LicenceMonthFeesColumns)
+                                </tbody>
+                            </table>
                         </div>
                     </div>
+                </div>
             }
             else if (Mode == "old-expire")
             {
@@ -277,11 +235,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Expire Date Cutoff</label>
-                            <input class="form-input" />
+                            <input type="date" class="form-input" @bind="_filter.ExpireCutoff" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadOldExpire" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
@@ -299,17 +257,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>GPA-0333</td>
-                                        <td>GG64532</td>
-                                        <td>Make A / Model D</td>
-                                        <td>2021/12/31</td>
-                                        <td>H. Nkosi</td>
-                                        <td>8101015009089</td>
-                                        <td>011-555-8790</td>
-                                        <td>2021/11/10</td>
-                                        <td>Region 04</td>
-                                    </tr>
+                                    @RenderRows(LicenceDeptPeriodColumns)
                                 </tbody>
                             </table>
                         </div>
@@ -323,11 +271,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">GG Number</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.Identifier" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadSapCof" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
@@ -345,12 +293,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>GG33445</td>
-                                        <td>GPA-0344</td>
-                                        <td>@(Mode == "sap" ? "SAP Field" : "COF Field")</td>
-                                        <td>2024/03/01</td>
-                                    </tr>
+                                    @RenderRows(new[] { "GG Number", "Prov Reg Number", "Info", "Date" })
                                 </tbody>
                             </table>
                         </div>
@@ -364,13 +307,17 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Model</label>
-                            <select class="form-select">
-                                <option>Select Model</option>
+                            <select class="form-select" @bind="_filter.ModelCode">
+                                <option value="">Select Model</option>
+                                @foreach (var model in _models)
+                                {
+                                    <option value="@model.model_code">@model.model_name</option>
+                                }
                             </select>
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadModelFees" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
@@ -388,17 +335,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>Class 01</td>
-                                        <td>Make X</td>
-                                        <td>Model A</td>
-                                        <td>GG12345</td>
-                                        <td>1200</td>
-                                        <td>Licence Description</td>
-                                        <td>1500</td>
-                                        <td>.Active</td>
-                                        <td>Garage South</td>
-                                    </tr>
+                                    @RenderRows(LicenceModelFeeColumns)
                                 </tbody>
                             </table>
                         </div>
@@ -412,11 +349,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Group or Vehicle</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.GroupOrVehicle" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadWorkgroup" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
@@ -434,24 +371,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>Fleet Engineer</td>
-                                        <td>GG22110</td>
-                                        <td>GPA-0221</td>
-                                        <td>GG00010</td>
-                                        <td>GG99999</td>
-                                        <td>Active</td>
-                                        <td>2024/02/01</td>
-                                        <td>REG-777</td>
-                                        <td>REG-777</td>
-                                        <td>VIN-555</td>
-                                        <td>2024/03/01</td>
-                                        <td>GG00001</td>
-                                        <td>GG33333</td>
-                                        <td>GG44444</td>
-                                        <td>2024/01/15</td>
-                                        <td>2024/01/20</td>
-                                    </tr>
+                                    @RenderRows(LicenceWorkgroupColumns)
                                 </tbody>
                             </table>
                         </div>
@@ -465,11 +385,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">GG Number</label>
-                            <input class="form-input" />
+                            <input class="form-input" @bind="_filter.Identifier" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadGgmtReceived" disabled="@_loading">@(_loading ? "Loading..." : "Submit")</button>
                         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Menu</a>
                     </div>
                 </div>
@@ -486,11 +406,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>GG10001</td>
-                                        <td>J. Dlamini</td>
-                                        <td>2024/01/12</td>
-                                    </tr>
+                                    @RenderRows(new[] { "GG Number", "Receiver Name", "Received Date" })
                                 </tbody>
                             </table>
                         </div>
@@ -510,6 +426,17 @@
     public string? Mode { get; set; }
 
     private string _pageTitle = "Licence Report";
+    private bool _loading;
+    private List<Dictionary<string, object>> _results = new();
+    private LicenseReportFilter _filter = new();
+    private List<ModelDto> _models = new();
+    private List<LicenseFeeDto> _licenseFees = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _models = await ReferenceDataService.GetModelsAsync();
+        _licenseFees = await LicenseFeeService.GetAllAsync();
+    }
 
     protected override void OnParametersSet()
     {
@@ -535,6 +462,132 @@
             "ggmt-received" => "Licence Received by GGMT : Receiver Name and Date",
             _ => "Licence Report"
         };
+        _results = new();
+    }
+
+    private async Task LoadIdentifierReport() =>
+        await LoadReport(() => ReportService.GetByIdentifierAsync<Dictionary<string, object>>(Mode ?? string.Empty, _filter.ToPayload()));
+
+    private async Task LoadSiteReport() =>
+        await LoadReport(() => ReportService.GetSiteAsync<Dictionary<string, object>>(_filter.ToPayload()));
+
+    private async Task LoadAllReport() =>
+        await LoadReport(() => ReportService.GetAllAsync<Dictionary<string, object>>(_filter.ToPayload()));
+
+    private async Task LoadDeptPeriodReport()
+    {
+        if (Mode == "expire-date")
+        {
+            await LoadReport(() => ReportService.GetExpireDateAsync<Dictionary<string, object>>(_filter.ToPayload()));
+            return;
+        }
+
+        await LoadReport(() => ReportService.GetDeptPeriodAsync<Dictionary<string, object>>(_filter.ToPayload()));
+    }
+
+    private async Task LoadMonthFees() =>
+        await LoadReport(() => ReportService.GetMonthFeesAsync<Dictionary<string, object>>(_filter.ToPayload()));
+
+    private async Task LoadOldExpire() =>
+        await LoadReport(() => ReportService.GetOldExpireAsync<Dictionary<string, object>>(_filter.ToPayload()));
+
+    private async Task LoadSapCof()
+    {
+        if (Mode == "sap")
+        {
+            await LoadReport(() => ReportService.GetSapAsync<Dictionary<string, object>>(_filter.ToPayload()));
+            return;
+        }
+
+        await LoadReport(() => ReportService.GetCofAsync<Dictionary<string, object>>(_filter.ToPayload()));
+    }
+
+    private async Task LoadModelFees()
+    {
+        if (Mode == "gg-model-fees")
+        {
+            await LoadReport(() => ReportService.GetGgModelFeesAsync<Dictionary<string, object>>(_filter.ToPayload()));
+            return;
+        }
+
+        await LoadReport(() => ReportService.GetModelFeesAsync<Dictionary<string, object>>(_filter.ToPayload()));
+    }
+
+    private async Task LoadWorkgroup()
+    {
+        if (Mode == "workgroup-latest")
+        {
+            await LoadReport(() => ReportService.GetWorkgroupLatestAsync<Dictionary<string, object>>(_filter.ToPayload()));
+            return;
+        }
+
+        await LoadReport(() => ReportService.GetWorkgroupAsync<Dictionary<string, object>>(_filter.ToPayload()));
+    }
+
+    private async Task LoadGgmtReceived() =>
+        await LoadReport(() => ReportService.GetGgmtReceivedAsync<Dictionary<string, object>>(_filter.ToPayload()));
+
+    private async Task LoadReport(Func<Task<List<Dictionary<string, object>>>> loader)
+    {
+        _loading = true;
+        try
+        {
+            _results = await loader();
+        }
+        catch (Exception ex)
+        {
+            _results = new();
+            await JS.InvokeVoidAsync("console.error", $"Error loading licence report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private RenderFragment RenderRows(string[] columns) => builder =>
+    {
+        if (_results.Count == 0)
+        {
+            builder.OpenElement(0, "tr");
+            builder.OpenElement(1, "td");
+            builder.AddAttribute(2, "colspan", columns.Length.ToString());
+            builder.AddContent(3, "No records found.");
+            builder.CloseElement();
+            builder.CloseElement();
+            return;
+        }
+
+        var rowIndex = 0;
+        foreach (var row in _results)
+        {
+            builder.OpenElement(10 + rowIndex, "tr");
+            var columnIndex = 0;
+            foreach (var column in columns)
+            {
+                builder.OpenElement(100 + columnIndex, "td");
+                builder.AddContent(101 + columnIndex, GetValue(row, column));
+                builder.CloseElement();
+                columnIndex++;
+            }
+            builder.CloseElement();
+            rowIndex++;
+        }
+    };
+
+    private static string GetValue(Dictionary<string, object> row, string column)
+    {
+        if (row.TryGetValue(column, out var value) && value != null)
+        {
+            return value.ToString() ?? "-";
+        }
+
+        return "-";
+    }
+
+    private void OnDeptScopeChanged(ChangeEventArgs args)
+    {
+        _filter.DeptScope = args.Value?.ToString() ?? "ONE";
     }
 
     private static readonly string[] LicenceDetailFields =
@@ -664,30 +717,31 @@
             _ => "Number"
         };
 
-    private static string GetLicenceSampleValue(string field) =>
-        field switch
+    private sealed class LicenseReportFilter
+    {
+        public string? Identifier { get; set; }
+        public string? DepartmentCode { get; set; }
+        public DateTime? BeginDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public int? Month { get; set; }
+        public int? Year { get; set; }
+        public DateTime? ExpireCutoff { get; set; }
+        public int? ModelCode { get; set; }
+        public string? GroupOrVehicle { get; set; }
+        public string? DeptScope { get; set; }
+
+        public object ToPayload() => new
         {
-            "Prov Reg Number" => "GPA-0001",
-            "GG Number" => "GG12345",
-            "Garage" => "Garage Central",
-            "Status" => "Active",
-            "Hire Type" => "Pool",
-            "Register Number" => "REG-889",
-            "Register Doc" => "DOC-587",
-            "Licence Fee" => "1200",
-            "Licence Description" => "Annual Licence",
-            "Licence Exp Date" => "2024/05/31",
-            "Receiver" => "S. Molefe",
-            "Receiver ID" => "8001015009087",
-            "Receiver Tel" => "011-555-1234",
-            "Receiver Site" => "FIN-01",
-            "Date Collected" => "2024/04/15",
-            "COF Required" => "Y",
-            "COF Last Done" => "2024/02/28",
-            "COF Exp Date" => "2024/12/31",
-            "COF Amount" => "450",
-            "Comments" => "Licence on hand",
-            "Tare" => "1200",
-            _ => "-"
+            identifier = Identifier,
+            department_code = DepartmentCode,
+            begin_date = BeginDate,
+            end_date = EndDate,
+            month = Month,
+            year = Year,
+            expire_cutoff = ExpireCutoff,
+            model_code = ModelCode,
+            group_or_vehicle = GroupOrVehicle,
+            dept_scope = DeptScope
         };
+    }
 }

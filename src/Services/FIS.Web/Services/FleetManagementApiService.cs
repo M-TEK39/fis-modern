@@ -8,6 +8,10 @@ public class FleetManagementApiService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<FleetManagementApiService> _logger;
+    private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public FleetManagementApiService(HttpClient httpClient, ILogger<FleetManagementApiService> logger)
     {
@@ -15,83 +19,98 @@ public class FleetManagementApiService
         _logger = logger;
     }
 
-    public async Task<bool> IssueFuelCardAsync(FuelCardIssueDto request)
+    public async Task<FuelCardIssueResponse?> IssueFuelCardAsync(IssueFuelCardRequest request)
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/FleetManagement/fuelcards/issue", request);
-            return response.IsSuccessStatusCode;
+            var response = await _httpClient.PostAsJsonAsync("api/fleetmanagement/fuelcards/issue", request);
+            var payload = await response.Content.ReadFromJsonAsync<FuelCardIssueResponse>(_jsonOptions);
+            if (response.IsSuccessStatusCode)
+            {
+                return payload;
+            }
+
+            return payload ?? new FuelCardIssueResponse
+            {
+                Success = false,
+                Message = "Failed to issue fuel card."
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error issuing fuel card");
-            return false;
+            return new FuelCardIssueResponse
+            {
+                Success = false,
+                Message = "Error issuing fuel card.",
+                Error = ex.Message
+            };
         }
     }
 
-    public async Task<bool> ReturnFuelCardAsync(int fuelCardCode)
+    public async Task<ApiResponse?> ReturnFuelCardAsync(int fuelCardCode, ReturnFuelCardRequest request)
     {
         try
         {
-            var response = await _httpClient.PutAsync($"api/FleetManagement/fuelcards/{fuelCardCode}/return", null);
-            return response.IsSuccessStatusCode;
+            var response = await _httpClient.PutAsJsonAsync(
+                $"api/fleetmanagement/fuelcards/{fuelCardCode}/return",
+                request);
+            var payload = await response.Content.ReadFromJsonAsync<ApiResponse>(_jsonOptions);
+            if (response.IsSuccessStatusCode)
+            {
+                return payload;
+            }
+
+            return payload ?? new ApiResponse
+            {
+                Success = false,
+                Message = "Failed to return fuel card."
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error returning fuel card {FuelCardCode}", fuelCardCode);
-            return false;
+            return new ApiResponse
+            {
+                Success = false,
+                Message = $"Error returning fuel card {fuelCardCode}.",
+                Error = ex.Message
+            };
         }
     }
 
-    public async Task<List<FuelCardAllocationReportDto>> GetFuelCardAllocationAsync()
+    public async Task<FuelCardReportResponse?> GetFuelCardAllocationAsync(int? siteCode = null)
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/FleetManagement/reports/fuelcard-allocation");
-            response.EnsureSuccessStatusCode();
-
-            var content = await response.Content.ReadAsStringAsync();
-            var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
+            var url = "api/fleetmanagement/reports/fuelcard-allocation";
+            if (siteCode.HasValue)
             {
-                PropertyNameCaseInsensitive = true
+                url = $"{url}?siteCode={siteCode.Value}";
+            }
+
+            var response = await _httpClient.GetAsync(url);
+            var payload = await response.Content.ReadFromJsonAsync<FuelCardReportResponse>(_jsonOptions);
+            if (response.IsSuccessStatusCode)
+            {
+                return payload;
+            }
+
+            return payload ?? new FuelCardReportResponse
+            {
+                Success = false,
+                Message = "Failed to fetch fuel card allocation report."
             };
-
-            try
-            {
-                var list = JsonSerializer.Deserialize<List<FuelCardAllocationReportDto>>(content, options) ?? new List<FuelCardAllocationReportDto>();
-                if (list is not null)
-                {
-                    return list;
-                }
-            }
-            catch (JsonException)
-            {
-                // fall through to alternate shapes
-            }
-
-            try
-            {
-                var single = JsonSerializer.Deserialize<FuelCardAllocationReportDto>(content, options);
-                if (single is not null)
-                {
-                    return new List<FuelCardAllocationReportDto> { single };
-                }
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, "Error parsing fuel card allocation response: {Content}", content);
-            }
-
-            return new List<FuelCardAllocationReportDto>();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching fuel card allocation report");
-            return new List<FuelCardAllocationReportDto>();
+            return new FuelCardReportResponse
+            {
+                Success = false,
+                Message = "Error fetching fuel card allocation report.",
+                Error = ex.Message
+            };
         }
     }
 }
-
-public record FuelCardIssueDto(string CardNumber, int VehicleCode, DateTime IssueDate, string? Notes);
-
-public record FuelCardAllocationReportDto(string CardNumber, int VehicleCode, string? Vehicle, string? Status, DateTime? IssueDate, DateTime? ReturnDate);

@@ -2,8 +2,10 @@
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
+@using FIS.Web.Services
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject LossApiService LossService
 
 <PageTitle>Delete Loss - Fleet Information System</PageTitle>
 
@@ -46,9 +48,9 @@
             </div>
         </div>
         <div class="form-actions">
-            <button class="btn btn-danger" type="submit">
+            <button class="btn btn-danger" type="submit" disabled="@_deleting">
                 <i class="bx bx-trash"></i>
-                Confirm Delete (mock)
+                @(_deleting ? "Deleting..." : "Confirm Delete")
             </button>
         </div>
         @if (_deleted)
@@ -63,11 +65,31 @@
 @code {
     private readonly DeleteModel _deleteModel = new();
     private bool _deleted;
+    private bool _deleting;
 
-    private Task HandleDelete()
+    private async Task HandleDelete()
     {
-        _deleted = true;
-        return Task.CompletedTask;
+        if (!int.TryParse(_deleteModel.LossReference, out var lossId))
+        {
+            _deleted = false;
+            return;
+        }
+
+        _deleting = true;
+        try
+        {
+            await LossService.DeleteAsync(lossId);
+            _deleted = true;
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error deleting loss: {ex.Message}");
+            _deleted = false;
+        }
+        finally
+        {
+            _deleting = false;
+        }
     }
 
     private sealed class DeleteModel

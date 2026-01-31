@@ -1,5 +1,9 @@
 @page "/fines/delete/detail"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FineApiService FineService
+@inject SiteApiService SiteService
 
 <PageTitle>Delete Fine Detail - Fleet Information System</PageTitle>
 
@@ -22,55 +26,88 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Offence Date</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Offence_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Refer Number</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_fine.Offence_reference" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Issuer</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_fine.Offence_issuer" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Fine Amount</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="number" step="0.01" @bind="_fine.Fine_amount" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Appear Date</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Appear_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date at GG</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Receive_gg_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date Dept Notify</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Notify_dept_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Dept Code</label>
-                    <select class="form-select">
-                        <option>Select Dept/Site</option>
+                    <select class="form-select" @bind="_fine.Site_code">
+                        <option value="">Select Dept/Site</option>
+                        @foreach (var site in _sites)
+                        {
+                            <option value="@site.SiteCode">@site.Description</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Name Offencer</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_fine.Offence_name" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date Fine Pay</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Fine_pay_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date Withdraw</label>
-                    <input class="form-input" />
+                    <input class="form-input" type="date" @bind="_fine.Withdraw_date" />
                 </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-danger btn-sm">DELETE</button>
+                <button class="btn btn-danger btn-sm" @onclick="DeleteFine">DELETE</button>
                 <a class="btn btn-secondary btn-sm" href="/fines/delete">Menu</a>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "fineId")]
+    public int? FineId { get; set; }
+
+    private FineDto _fine = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+        if (FineId.HasValue)
+        {
+            var existing = await FineService.GetByIdAsync<FineDto>(FineId.Value);
+            if (existing is not null)
+            {
+                _fine = existing;
+            }
+        }
+    }
+
+    private async Task DeleteFine()
+    {
+        if (FineId.HasValue)
+        {
+            await FineService.DeleteAsync(FineId.Value);
+        }
+    }
+}

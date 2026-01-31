@@ -1,5 +1,9 @@
 @page "/accidents/garage"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AccidentApiService AccidentService
+@inject VehicleApiService VehicleService
 
 <PageTitle>Accident Maintenance (Garage) - Fleet Information System</PageTitle>
 
@@ -25,23 +29,23 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">
-                        <input type="radio" name="GarageSearchType" />
+                        <input type="radio" name="GarageSearchType" checked="@(_searchType == "GG")" @onchange='() => _searchType = "GG"' />
                         GG
                     </label>
                 </div>
                 <div class="form-field">
                     <label class="form-label">
-                        <input type="radio" name="GarageSearchType" checked />
+                        <input type="radio" name="GarageSearchType" checked="@(_searchType == "GP")" @onchange='() => _searchType = "GP"' />
                         GP
                     </label>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Number</label>
-                    <input class="form-input" maxlength="8" />
+                    <input class="form-input" maxlength="8" @bind="_searchQuery" @bind:event="oninput" />
                 </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary">Submit</button>
+                <button class="btn btn-primary" @onclick="SearchAccidents">Submit</button>
                 <a class="btn btn-secondary" href="/accidents">Menu</a>
             </div>
 
@@ -58,9 +62,33 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="5">No records found.</td>
-                            </tr>
+                            @if (_loading)
+                            {
+                                <tr>
+                                    <td colspan="5">Loading accidents...</td>
+                                </tr>
+                            }
+                            else if (_accidents.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="5">No records found.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var item in _accidents)
+                                {
+                                    <tr>
+                                        <td>@ValueOrDash(item.VehicleNumber)</td>
+                                        <td>@ValueOrDash(item.HireType)</td>
+                                        <td>@FormatDate(item.AccidentDate)</td>
+                                        <td>@ValueOrDash(item.Reference)</td>
+                                        <td>
+                                            <a class="btn btn-secondary btn-sm" href="@($"/accidents/garage/edit?accidentId={item.AccidentId}")">Edit</a>
+                                        </td>
+                                    </tr>
+                                }
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -73,3 +101,72 @@
         </div>
     </div>
 </div>
+
+@code {
+    private string _searchType = "GP";
+    private string _searchQuery = "";
+    private bool _loading;
+    private List<AccidentRow> _accidents = new();
+    private List<AccidentRow> _allAccidents = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccidents();
+    }
+
+    private async Task LoadAccidents()
+    {
+        _loading = true;
+        try
+        {
+            var apiItems = await AccidentService.GetAccidentsAsync();
+            _allAccidents = apiItems.Select(a => new AccidentRow(
+                AccidentId: a.accident_code,
+                VehicleId: a.vehicle_id,
+                VehicleNumber: a.vehicle_registration,
+                HireType: string.IsNullOrWhiteSpace(a.severity) ? a.status : a.severity,
+                AccidentDate: a.accident_date,
+                Reference: a.accident_reference
+            )).ToList();
+            _accidents = new List<AccidentRow>(_allAccidents);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SearchAccidents()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _accidents = new List<AccidentRow>(_allAccidents);
+            return;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+        if (matches.Count == 0)
+        {
+            _accidents = new();
+            return;
+        }
+
+        var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
+        _accidents = _allAccidents.Where(a => a.VehicleId.HasValue && vmfCodes.Contains(a.VehicleId.Value)).ToList();
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed record AccidentRow(
+        int AccidentId,
+        int? VehicleId,
+        string? VehicleNumber,
+        string? HireType,
+        DateTime? AccidentDate,
+        string? Reference
+    );
+}

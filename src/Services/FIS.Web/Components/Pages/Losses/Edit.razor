@@ -2,8 +2,12 @@
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
+@using FIS.Web.Models
+@using FIS.Web.Services
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject LossApiService LossService
+@inject LossTypeApiService LossTypeService
 
 <PageTitle>Edit Loss - Fleet Information System</PageTitle>
 
@@ -38,9 +42,9 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-primary btn-sm" @onclick="LoadMockLoss">
+                    <button class="btn btn-primary btn-sm" @onclick="LoadLoss" disabled="@_loading">
                         <i class="bx bx-search"></i>
-                        Find
+                        @(_loading ? "Loading..." : "Find")
                     </button>
                 </div>
             </div>
@@ -58,21 +62,21 @@
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Loss Status</label>
-                                <select class="form-select" @bind="_form.LossStatus">
-                                    @foreach (var status in _lossStatuses)
-                                    {
-                                        <option value="@status">@status</option>
-                                    }
-                                </select>
+                            <select class="form-select" @bind="_form.LossStatus">
+                                @foreach (var status in _lossStatuses)
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </select>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Loss Type</label>
-                                <select class="form-select" @bind="_form.LossType">
-                                    @foreach (var type in _lossTypes)
-                                    {
-                                        <option value="@type">@type</option>
-                                    }
-                                </select>
+                            <select class="form-select" @bind="_form.LossTypeCode">
+                                @foreach (var type in _lossTypes)
+                                {
+                                    <option value="@type.loss_code">@type.loss_description</option>
+                                }
+                            </select>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Dept Contact</label>
@@ -88,9 +92,9 @@
                             </div>
                         </div>
                         <div class="form-actions">
-                            <button class="btn btn-primary" type="submit">
+                            <button class="btn btn-primary" type="submit" disabled="@_saving">
                                 <i class="bx bx-save"></i>
-                                Update (mock)
+                                @(_saving ? "Saving..." : "Update")
                             </button>
                         </div>
                     </EditForm>
@@ -104,15 +108,10 @@
     private string _searchReference = string.Empty;
     private string _searchVehicle = string.Empty;
     private bool _loaded;
+    private bool _loading;
+    private bool _saving;
     private readonly LossFormModel _form = new();
-
-    private static readonly string[] _lossTypes =
-    {
-        "Theft",
-        "Collision",
-        "Mechanical Failure",
-        "Other"
-    };
+    private List<LossTypeDto> _lossTypes = new();
 
     private static readonly string[] _lossStatuses =
     {
@@ -121,30 +120,101 @@
         "Closed"
     };
 
-    private Task HandleSubmit()
+    protected override async Task OnInitializedAsync()
     {
-        _loaded = true;
-        return Task.CompletedTask;
+        _lossTypes = await LossTypeService.GetAllAsync();
     }
 
-    private void LoadMockLoss()
+    private async Task HandleSubmit()
     {
-        _form.LossReference = string.IsNullOrWhiteSpace(_searchReference) ? "Loss-001" : _searchReference;
-        _form.LossStatus = "Open";
-        _form.LossType = "Theft";
-        _form.DeptContact = "Ops Control";
-        _form.CallReference = "CALL-2025-001";
-        _form.Remarks = "Mock loaded from legacy lookup.";
-        _loaded = true;
+        if (!_loaded || _form.LossCode == null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await LossService.UpdateAsync(_form.LossCode.Value, _form.ToDto());
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error updating loss: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task LoadLoss()
+    {
+        _loading = true;
+        try
+        {
+            LossDto? loss = null;
+            if (int.TryParse(_searchReference, out var referenceId))
+            {
+                loss = await LossService.GetByIdAsync<LossDto>(referenceId);
+            }
+
+            if (loss == null && !string.IsNullOrWhiteSpace(_searchVehicle))
+            {
+                var matches = await LossService.GetByVehicleAsync<LossDto>(_searchVehicle.Trim());
+                loss = matches.FirstOrDefault();
+            }
+
+            if (loss == null)
+            {
+                _loaded = false;
+                return;
+            }
+
+            _form.LoadFrom(loss);
+            _loaded = true;
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading loss: {ex.Message}");
+            _loaded = false;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private sealed class LossFormModel
     {
+        public int? LossCode { get; set; }
         public string LossReference { get; set; } = string.Empty;
         public string LossStatus { get; set; } = "Open";
-        public string LossType { get; set; } = "Theft";
+        public int? LossTypeCode { get; set; }
         public string DeptContact { get; set; } = string.Empty;
         public string CallReference { get; set; } = string.Empty;
         public string Remarks { get; set; } = string.Empty;
+
+        public void LoadFrom(LossDto loss)
+        {
+            LossCode = loss.loss_code;
+            LossReference = loss.loss_reference ?? string.Empty;
+            LossStatus = loss.loss_status ?? "Open";
+            LossTypeCode = loss.loss_type_code;
+            DeptContact = loss.dept_contact ?? string.Empty;
+            CallReference = loss.call_reference ?? string.Empty;
+            Remarks = loss.remarks ?? string.Empty;
+        }
+
+        public LossDto ToDto() =>
+            new()
+            {
+                loss_code = LossCode ?? 0,
+                loss_reference = LossReference,
+                loss_status = LossStatus,
+                loss_type_code = LossTypeCode,
+                dept_contact = DeptContact,
+                call_reference = CallReference,
+                remarks = Remarks
+            };
     }
 }

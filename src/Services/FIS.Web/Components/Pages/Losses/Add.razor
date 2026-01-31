@@ -2,8 +2,13 @@
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
+@using FIS.Web.Services
+@using FIS.Web.Models
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject LossApiService LossService
+@inject LossTypeApiService LossTypeService
+@inject SiteApiService SiteService
 
 <PageTitle>Add Loss - Fleet Information System</PageTitle>
 
@@ -47,10 +52,11 @@
             </div>
             <div class="form-field">
                 <label class="form-label">Loss Type</label>
-                <select class="form-select" @bind="_form.LossType">
+                <select class="form-select" @bind="_form.LossTypeCode">
+                    <option value="">Select Loss Type</option>
                     @foreach (var type in _lossTypes)
                     {
-                        <option value="@type">@type</option>
+                        <option value="@type.loss_code">@type.loss_description</option>
                     }
                 </select>
             </div>
@@ -106,9 +112,9 @@
         </div>
 
         <div class="form-actions">
-            <button class="btn btn-primary" type="submit">
+            <button class="btn btn-primary" type="submit" disabled="@_saving">
                 <i class="bx bx-save"></i>
-                Save (mock)
+                @(_saving ? "Saving..." : "Save")
             </button>
             <button class="btn btn-secondary" type="button" @onclick="ResetForm">
                 Reset
@@ -118,7 +124,7 @@
         @if (_saved)
         {
             <div class="alert alert-success">
-                Loss reference saved (UI mock, no backend change).
+                Loss reference saved.
             </div>
         }
     </EditForm>
@@ -127,16 +133,9 @@
 @code {
     private readonly LossFormModel _form = new();
     private bool _saved;
-
-    private static readonly string[] _lossTypes =
-    {
-        "Theft",
-        "Collision",
-        "Malicious Damage",
-        "Vandalism",
-        "Mechanical Failure",
-        "Other"
-    };
+    private bool _saving;
+    private List<LossTypeDto> _lossTypes = new();
+    private List<SiteResponseDto> _sites = new();
 
     private static readonly string[] _lossStatuses =
     {
@@ -146,10 +145,34 @@
         "Closed"
     };
 
-    private Task HandleSubmit()
+    protected override async Task OnInitializedAsync()
     {
-        _saved = true;
-        return Task.CompletedTask;
+        await LoadReferenceData();
+    }
+
+    private async Task LoadReferenceData()
+    {
+        _lossTypes = await LossTypeService.GetAllAsync();
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task HandleSubmit()
+    {
+        _saving = true;
+        try
+        {
+            var payload = _form.ToDto();
+            await LossService.CreateAsync(payload);
+            _saved = true;
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving loss: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private void ResetForm()
@@ -164,7 +187,7 @@
         public string VehicleIdentifier { get; set; } = string.Empty;
         public int? VmfCode { get; set; }
         public DateTime LossDate { get; set; } = DateTime.Today;
-        public string LossType { get; set; } = "Theft";
+        public int? LossTypeCode { get; set; }
         public string LossStatus { get; set; } = "Open";
         public decimal? LossAmount { get; set; }
         public string CaseNumber { get; set; } = string.Empty;
@@ -176,6 +199,7 @@
         public string CallReference { get; set; } = string.Empty;
         public string HqReference { get; set; } = string.Empty;
         public string Remarks { get; set; } = string.Empty;
+        public short? SiteCode { get; set; }
 
         public void Reset()
         {
@@ -183,7 +207,7 @@
             VehicleIdentifier = string.Empty;
             VmfCode = null;
             LossDate = DateTime.Today;
-            LossType = "Theft";
+            LossTypeCode = null;
             LossStatus = "Open";
             LossAmount = null;
             CaseNumber = string.Empty;
@@ -195,6 +219,39 @@
             CallReference = string.Empty;
             HqReference = string.Empty;
             Remarks = string.Empty;
+            SiteCode = null;
         }
+
+        public LossDto ToDto() =>
+            new()
+            {
+                loss_reference = LossReference,
+                vehicle_identifier = VehicleIdentifier,
+                vmf_code = VmfCode,
+                loss_date = LossDate,
+                loss_type_code = LossTypeCode,
+                loss_status = LossStatus,
+                loss_amount = LossAmount,
+                case_number = CaseNumber,
+                place_of_loss = PlaceOfLoss,
+                dept_contact = DeptContact,
+                sapd_station = SapdStation,
+                inspector = Inspector,
+                driver_name = DriverName,
+                call_reference = CallReference,
+                hq_reference = HqReference,
+                remarks = Remarks,
+                site_code = SiteCode
+            };
     }
 }
+            <div class="form-field">
+                <label class="form-label">Receiver Site</label>
+                <select class="form-select" @bind="_form.SiteCode">
+                    <option value="">Select Site</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.SiteCode">@site.Description</option>
+                    }
+                </select>
+            </div>

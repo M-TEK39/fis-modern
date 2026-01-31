@@ -1,5 +1,9 @@
 @page "/reports/losses"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject NavigationManager Navigation
+@inject LossReportApiService ReportService
+@inject IJSRuntime JS
 
 <PageTitle>Losses Reports - Fleet Information System</PageTitle>
 
@@ -11,6 +15,9 @@
         </h1>
         <p class="page-description">Legacy placeholder for losses/Losses.aspx.</p>
     </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/losses/reports")'>Open Losses Reports</button>
+    </div>
 </div>
 
 <div class="page-content">
@@ -18,5 +25,20 @@
         <i class="bx bx-file"></i>
         <h3>Losses Reports pending</h3>
         <p>This page will mirror the legacy report.</p>
+        <button class="btn btn-primary btn-sm" @onclick="TestEndpoint">Ping Losses Report Endpoint</button>
     </div>
 </div>
+
+@code {
+    private async Task TestEndpoint()
+    {
+        try
+        {
+            await ReportService.GetAllAsync<Dictionary<string, object>>(new { });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error pinging losses report endpoint: {ex.Message}");
+        }
+    }
+}

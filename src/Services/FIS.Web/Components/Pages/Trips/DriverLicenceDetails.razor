@@ -1,5 +1,9 @@
 @page "/trips/driver-licence-details"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject DriverApiService DriverService
+@inject IJSRuntime JS
 
 <PageTitle>Driver Licence Details - Fleet Information System</PageTitle>
 
@@ -25,11 +29,13 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Site Driver Code</label>
-                    <input class="form-input" placeholder="Enter Site Driver Code" />
+                    <input class="form-input" placeholder="Enter Site Driver Code" @bind="_driverCode" />
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Fetch Details</button>
+                <button class="btn btn-primary btn-sm" @onclick="LoadDriver" disabled="@_loading">
+                    @(_loading ? "Loading..." : "Fetch Details")
+                </button>
                 <a class="btn btn-secondary btn-sm" href="/trips">Back</a>
             </div>
         </div>
@@ -48,11 +54,76 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td colspan="2">No records found.</td>
-                    </tr>
+                    @if (_driver == null)
+                    {
+                        <tr>
+                            <td colspan="2">No records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _details)
+                        {
+                            <tr>
+                                <td>@row.Label</td>
+                                <td>@row.Value</td>
+                            </tr>
+                        }
+                    }
                 </tbody>
             </table>
         </div>
     </div>
 </div>
+
+@code {
+    private string _driverCode = string.Empty;
+    private bool _loading;
+    private DriverDto? _driver;
+    private List<(string Label, string Value)> _details = new();
+
+    private async Task LoadDriver()
+    {
+        if (!int.TryParse(_driverCode, out var code))
+        {
+            _driver = null;
+            _details = new();
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _driver = await DriverService.GetDriverAsync(code);
+            if (_driver == null)
+            {
+                _details = new();
+                return;
+            }
+
+            _details = new List<(string Label, string Value)>
+            {
+                ("Site Driver Code", _driver.site_driver_code.ToString()),
+                ("Site Code", _driver.site_code.ToString()),
+                ("Licence Type", _driver.driver_licence_type_id.ToString()),
+                ("Licence Number", _driver.driver_licence_number ?? "-"),
+                ("Licence Issue Date", _driver.driver_licence_issuedate?.ToString("yyyy-MM-dd") ?? "-"),
+                ("Licence Expiry Date", _driver.driver_licence_ExpiryDate?.ToString("yyyy-MM-dd") ?? "-"),
+                ("Last Verified", _driver.driver_licence_lastVerifiedDate?.ToString("yyyy-MM-dd") ?? "-"),
+                ("PDP", _driver.driver_hasPDP ? "Yes" : "No"),
+                ("PDP Expiry", _driver.driver_PDP_ExpiryDate?.ToString("yyyy-MM-dd") ?? "-"),
+                ("Driver Active", _driver.driver_active ? "Yes" : "No")
+            };
+        }
+        catch (Exception ex)
+        {
+            _driver = null;
+            _details = new();
+            await JS.InvokeVoidAsync("console.error", $"Error loading driver licence details: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

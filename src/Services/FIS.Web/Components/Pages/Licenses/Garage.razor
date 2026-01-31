@@ -1,5 +1,8 @@
 @page "/licenses/garage"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject LicenseMaintenanceApiService LicenseMaintenanceService
+@inject IJSRuntime JS
 
 <PageTitle>Licence Available at Garage</PageTitle>
 
@@ -24,11 +27,13 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" />
+                        <input type="password" class="form-input" @bind="_password" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SubmitPassword" disabled="@_passwordSubmitting">
+                        @(_passwordSubmitting ? "Submitting..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
@@ -38,23 +43,25 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="garageVehicleType" checked />
+                            <input type="radio" name="garageVehicleType" value="GG" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GG")" />
                             GG
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="garageVehicleType" />
+                            <input type="radio" name="garageVehicleType" value="GP" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GP")" />
                             GP
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_vehicleNumber" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="LoadVehicle" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
@@ -114,10 +121,82 @@
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveDetails" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private string _password = string.Empty;
+    private bool _passwordSubmitting;
+    private string _numberType = "GG";
+    private string _vehicleNumber = string.Empty;
+    private bool _loading;
+    private bool _saving;
+
+    private async Task SubmitPassword()
+    {
+        _passwordSubmitting = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitPasswordAsync("api/license/garage/password", _password);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error submitting password: {ex.Message}");
+        }
+        finally
+        {
+            _passwordSubmitting = false;
+        }
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var payload = new
+            {
+                number_type = _numberType,
+                number = _vehicleNumber
+            };
+            await LicenseMaintenanceService.SubmitAsync<object>("api/license/garage/lookup", payload);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading licence details: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveDetails()
+    {
+        _saving = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitAsync<object>("api/license/garage/save", new { });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving licence details: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void OnNumberTypeChanged(ChangeEventArgs args)
+    {
+        _numberType = args.Value?.ToString() ?? "GG";
+    }
+}

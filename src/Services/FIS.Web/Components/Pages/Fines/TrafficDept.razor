@@ -1,5 +1,8 @@
 @page "/fines/traffic-dept"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TrafficDeptApiService TrafficDeptService
 
 <PageTitle>Traffic Dept Maintenance - Fleet Information System</PageTitle>
 
@@ -24,11 +27,11 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Traffic Dept Name</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_searchQuery" @bind:event="oninput" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SearchTrafficDepts">Submit</button>
                     <a class="btn btn-secondary btn-sm" href="/fines">Menu</a>
                 </div>
             </div>
@@ -45,14 +48,32 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>Johannesburg Metro Police</td>
-                                    <td>
-                                        <a href="/fines/traffic-dept/detail">Mod</a>
-                                        &nbsp;|&nbsp;
-                                        <a href="/fines/traffic-dept/detail">Del</a>
-                                    </td>
-                                </tr>
+                                @if (_loading)
+                                {
+                                    <tr>
+                                        <td colspan="2">Loading traffic departments...</td>
+                                    </tr>
+                                }
+                                else if (_trafficDepts.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="2">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var dept in _trafficDepts)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(dept.Name)</td>
+                                            <td>
+                                                <a href="@($"/fines/traffic-dept/detail?trafficDeptId={dept.TrafficDeptId}")">Mod</a>
+                                                &nbsp;|&nbsp;
+                                                <a href="@($"/fines/traffic-dept/detail?trafficDeptId={dept.TrafficDeptId}")">Del</a>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -64,3 +85,56 @@
         </div>
     </div>
 </div>
+
+@code {
+    private string _searchQuery = "";
+    private bool _loading;
+    private List<TrafficDeptRow> _trafficDepts = new();
+    private List<TrafficDeptRow> _allTrafficDepts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTrafficDepts();
+    }
+
+    private async Task LoadTrafficDepts()
+    {
+        _loading = true;
+        try
+        {
+            var apiItems = await TrafficDeptService.GetAllAsync<TrafficDeptDto>();
+            _allTrafficDepts = apiItems.Select(t => new TrafficDeptRow(
+                TrafficDeptId: t.Traffic_dept_code,
+                Name: t.Traf_name
+            )).ToList();
+            _trafficDepts = new List<TrafficDeptRow>(_allTrafficDepts);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task SearchTrafficDepts()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _trafficDepts = new List<TrafficDeptRow>(_allTrafficDepts);
+            return Task.CompletedTask;
+        }
+
+        var term = _searchQuery.Trim();
+        _trafficDepts = _allTrafficDepts
+            .Where(t => t.Name?.Contains(term, StringComparison.OrdinalIgnoreCase) == true)
+            .ToList();
+        return Task.CompletedTask;
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed record TrafficDeptRow(
+        short TrafficDeptId,
+        string? Name
+    );
+}

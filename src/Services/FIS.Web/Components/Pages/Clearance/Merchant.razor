@@ -1,8 +1,12 @@
 @page "/clearance/merchant"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations
 @inject NavigationManager Navigation
+@inject MerchantApiService MerchantService
 @inject IJSRuntime JS
 
 <PageTitle>Merchant Maintenance - Fleet Information System</PageTitle>
@@ -31,10 +35,11 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Merchant</label>
-                        <select class="form-select" @bind="_selectedMerchant">
+                        <select class="form-select" @bind="_selectedMerchantId">
+                            <option value="">Select...</option>
                             @foreach (var merchant in _merchants)
                             {
-                                <option value="@merchant">@merchant</option>
+                                <option value="@merchant.Merchant_code">@merchant.Merchant_Name</option>
                             }
                         </select>
                     </div>
@@ -64,31 +69,29 @@
                     <ValidationSummary />
                     <div class="form-grid">
                         <div class="form-field">
-                            <label class="form-label">Merchant Code</label>
-                            <InputText class="form-input" @bind-Value="_form.Code" />
-                        </div>
-                        <div class="form-field">
                             <label class="form-label">Merchant Name</label>
                             <InputText class="form-input" @bind-Value="_form.Name" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Contact Person</label>
-                            <InputText class="form-input" @bind-Value="_form.Contact" />
                         </div>
                     </div>
                     <div class="form-actions">
                         <button class="btn btn-primary btn-sm">
                             <i class="bx bx-save"></i>
-                            Save Merchant (mock)
+                            Save Merchant
                         </button>
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(_error))
+                    {
+                        <div class="alert alert-danger">
+                            @_error
+                        </div>
+                    }
+                    @if (_merchantSaved)
+                    {
+                        <div class="alert alert-success">
+                            Merchant @_form.Name saved.
+                        </div>
+                    }
                 </EditForm>
-                @if (_merchantSaved)
-                {
-                    <div class="alert alert-success">
-                        Merchant @_form.Name added (placeholder).
-                    </div>
-                }
             </div>
         </div>
     </div>
@@ -107,13 +110,13 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var merchant in _merchantList)
+                    @foreach (var merchant in _merchants)
                     {
                         <tr>
-                            <td>@merchant.Code</td>
-                            <td>@merchant.Name</td>
-                            <td>@merchant.Contact</td>
-                            <td>@merchant.UpdatedOn.ToString("yyyy-MM-dd")</td>
+                            <td>@merchant.Merchant_code</td>
+                            <td>@merchant.Merchant_Name</td>
+                            <td>-</td>
+                            <td>-</td>
                         </tr>
                     }
                 </tbody>
@@ -123,64 +126,121 @@
 </div>
 
 @code {
-    private string _selectedMerchant = "Merchant A";
+    private int? _selectedMerchantId;
     private readonly MerchantForm _form = new();
     private bool _merchantSaved;
+    private string? _error;
+    private List<MerchantDto> _merchants = new();
 
-    private readonly List<string> _merchants = new()
+    protected override async Task OnInitializedAsync()
     {
-        "Merchant A",
-        "Merchant B",
-        "Merchant C"
-    };
-
-    private readonly List<MerchantSummary> _merchantList = new()
-    {
-        new("M001", "Merchant A", "Sipho Khumalo", DateTime.Today.AddDays(-20)),
-        new("M002", "Merchant B", "Lindiwe Mhlongo", DateTime.Today.AddDays(-10)),
-        new("M003", "Merchant C", "Nkosana Dlamini", DateTime.Today.AddDays(-5))
-    };
-
-    private void EditMerchant()
-    {
-        JSRuntimeHelper($"Editing {_selectedMerchant} (placeholder).");
+        await LoadMerchants();
     }
 
-    private void DeleteMerchant()
+    private async Task LoadMerchants()
     {
-        JSRuntimeHelper($"Deleting {_selectedMerchant} (placeholder).");
+        try
+        {
+            _merchants = await MerchantService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to load merchants.";
+            await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally { }
+    }
+
+    private async Task EditMerchant()
+    {
+        if (_selectedMerchantId is null)
+        {
+            _error = "Select a merchant to edit.";
+            return;
+        }
+
+        var selected = _merchants.FirstOrDefault(m => m.Merchant_code == _selectedMerchantId);
+        if (selected == null)
+        {
+            _error = "Selected merchant not found.";
+            return;
+        }
+
+        _form.Name = selected.Merchant_Name ?? string.Empty;
+        _merchantSaved = false;
+        _error = null;
+        await JS.InvokeVoidAsync("console.info", $"Editing merchant {selected.Merchant_code}");
+    }
+
+    private async Task DeleteMerchant()
+    {
+        if (_selectedMerchantId is null)
+        {
+            _error = "Select a merchant to delete.";
+            return;
+        }
+
+        try
+        {
+            await MerchantService.DeleteAsync(_selectedMerchantId.Value);
+            await LoadMerchants();
+            _merchantSaved = false;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to delete merchant.";
+            await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
     }
 
     private void AddMerchant()
     {
         _form.Reset();
         _merchantSaved = false;
+        _error = null;
+        _selectedMerchantId = null;
     }
 
-    private Task HandleAdd()
+    private async Task HandleAdd()
     {
-        _merchantSaved = true;
-        return Task.CompletedTask;
-    }
+        _merchantSaved = false;
+        _error = null;
+        var payload = new MerchantCreateDto
+        {
+            Merchant_Name = _form.Name
+        };
 
-    private void JSRuntimeHelper(string message)
-    {
-        JS.InvokeVoidAsync("console.info", message);
+        try
+        {
+            if (_selectedMerchantId.HasValue)
+            {
+                await MerchantService.UpdateAsync(_selectedMerchantId.Value, payload);
+            }
+            else
+            {
+                await MerchantService.CreateAsync(payload);
+            }
+
+            await LoadMerchants();
+            _merchantSaved = true;
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to save merchant.";
+            await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
     }
 
     private sealed class MerchantForm
     {
-        public string Code { get; set; } = string.Empty;
+        [Required]
+        [MaxLength(30)]
         public string Name { get; set; } = string.Empty;
-        public string Contact { get; set; } = string.Empty;
 
         public void Reset()
         {
-            Code = string.Empty;
             Name = string.Empty;
-            Contact = string.Empty;
         }
     }
-
-    private sealed record MerchantSummary(string Code, string Name, string Contact, DateTime UpdatedOn);
 }

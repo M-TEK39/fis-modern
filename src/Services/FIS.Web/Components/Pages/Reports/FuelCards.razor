@@ -1,5 +1,9 @@
 @page "/reports/fuel-cards"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FleetManagementApiService FleetService
+@inject IJSRuntime JS
 
 <PageTitle>Fuel Card Reports - Fleet Information System</PageTitle>
 
@@ -9,14 +13,149 @@
             <i class="bx bx-file"></i>
             Fuel Card Reports
         </h1>
-        <p class="page-description">Legacy placeholder for Fuelcard/RPTFuelcard.aspx.</p>
+        <p class="page-description">Legacy report summary for Fuelcard/RPTFuelcard.aspx.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Fuel Card Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
+    <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card-header">
+            <h2>Fuel Card Allocation Summary</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Site Code (optional)</label>
+                    <input class="form-input" type="number" @bind="_siteCodeInput" />
+                </div>
+            </div>
+            <div class="contract-action-group">
+                <button class="btn btn-primary btn-sm" @onclick="LoadReport" disabled="@_loading">
+                    @(_loading ? "Loading..." : "Load Report")
+                </button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <div class="alert alert-error" style="margin-top: 1rem;">@_errorMessage</div>
+            }
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading fuel card allocation...</p>
+        </div>
+    }
+    else if (_report?.Report is null)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file"></i>
+            <h3>Fuel Card Reports pending</h3>
+            <p>Load a report to view allocation details.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Allocation Summary</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <tbody>
+                        <tr>
+                            <th>Total Cards</th>
+                            <td>@_report.Report.TotalCards</td>
+                            <th>Active Cards</th>
+                            <td>@_report.Report.ActiveCards</td>
+                        </tr>
+                        <tr>
+                            <th>Returned Cards</th>
+                            <td>@_report.Report.ReturnedCards</td>
+                            <th>Expiring (90 days)</th>
+                            <td>@_report.Report.ExpiringCards</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-container" style="margin-top: 1.5rem;">
+            <div class="table-header">
+                <span class="table-title">Recent Activity</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Card Number</th>
+                            <th>VMF Code</th>
+                            <th>Action</th>
+                            <th>Date</th>
+                            <th>Receiver</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_report.Report.RecentActivity.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5">No recent activity.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var activity in _report.Report.RecentActivity)
+                            {
+                                <tr>
+                                    <td>@activity.CardNumber</td>
+                                    <td>@activity.VmfCode</td>
+                                    <td>@activity.Action</td>
+                                    <td>@activity.Date.ToString("yyyy-MM-dd")</td>
+                                    <td>@activity.Receiver</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private FuelCardReportResponse? _report;
+    private bool _loading;
+    private string? _errorMessage;
+    private int? _siteCodeInput;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReport();
+    }
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        try
+        {
+            _report = await FleetService.GetFuelCardAllocationAsync(_siteCodeInput);
+            if (_report is null || !_report.Success)
+            {
+                _errorMessage = _report?.Message ?? "Unable to load fuel card report.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Unable to load fuel card report.";
+            await JS.InvokeVoidAsync("console.error", $"Fuel card report error: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

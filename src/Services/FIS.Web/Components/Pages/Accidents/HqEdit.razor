@@ -1,5 +1,8 @@
 @page "/accidents/hq/edit"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AccidentApiService AccidentService
 
 <PageTitle>Edit Accident (HQ) - Fleet Information System</PageTitle>
 
@@ -260,9 +263,36 @@
             </div>
 
             <div class="form-actions">
-                <button class="btn btn-primary">Submit</button>
+                <button class="btn btn-primary" @onclick="SaveAccident">Submit</button>
                 <a class="btn btn-secondary" href="/accidents/hq">Back</a>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "accidentId")]
+    public int? AccidentId { get; set; }
+
+    private AccidentDto _accident = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AccidentId.HasValue)
+        {
+            var existing = await AccidentService.GetAccidentAsync(AccidentId.Value);
+            if (existing is not null)
+            {
+                _accident = existing;
+            }
+        }
+    }
+
+    private async Task SaveAccident()
+    {
+        if (AccidentId.HasValue)
+        {
+            await AccidentService.UpdateAccidentAsync(AccidentId.Value, _accident);
+        }
+    }
+}

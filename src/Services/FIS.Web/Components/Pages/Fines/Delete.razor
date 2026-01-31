@@ -1,5 +1,9 @@
 @page "/fines/delete"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FineApiService FineService
+@inject VehicleApiService VehicleService
 
 <PageTitle>Delete Fines - Fleet Information System</PageTitle>
 
@@ -24,14 +28,14 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">REG Number</label>
-                        <input class="form-input" />
-                    </div>
-                </div>
-                <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
-                    <a class="btn btn-secondary btn-sm" href="/fines">Menu</a>
+                    <input class="form-input" @bind="_searchQuery" @bind:event="oninput" />
                 </div>
             </div>
+            <div class="form-actions">
+                <button class="btn btn-primary btn-sm" @onclick="SearchFines">Submit</button>
+                <a class="btn btn-secondary btn-sm" href="/fines">Menu</a>
+            </div>
+        </div>
 
             <div class="form-section">
                 <h2 class="form-section-title">Fines Found</h2>
@@ -47,12 +51,30 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>2024/01/22</td>
-                                    <td>Notice of Summons to be Issued</td>
-                                    <td>2024/01/25</td>
-                                    <td><a href="/fines/delete/detail">DELETE</a></td>
-                                </tr>
+                                @if (_loading)
+                                {
+                                    <tr>
+                                        <td colspan="4">Loading fines...</td>
+                                    </tr>
+                                }
+                                else if (_fines.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="4">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var fine in _fines)
+                                    {
+                                        <tr>
+                                            <td>@FormatDate(fine.OffenceDate)</td>
+                                            <td>@ValueOrDash(fine.DocumentType)</td>
+                                            <td>@FormatDate(fine.GmtDate)</td>
+                                            <td><a href="@($"/fines/delete/detail?fineId={fine.FineId}")">DELETE</a></td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -61,3 +83,69 @@
         </div>
     </div>
 </div>
+
+@code {
+    private string _searchQuery = "";
+    private bool _loading;
+    private List<FineRow> _fines = new();
+    private List<FineRow> _allFines = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFines();
+    }
+
+    private async Task LoadFines()
+    {
+        _loading = true;
+        try
+        {
+            var apiItems = await FineService.GetAllAsync<FineDto>();
+            _allFines = apiItems.Select(f => new FineRow(
+                FineId: f.Fine_code,
+                VehicleId: f.vmf_code,
+                OffenceDate: f.Offence_date,
+                DocumentType: f.Offence_name,
+                GmtDate: f.Receive_gg_date
+            )).ToList();
+            _fines = new List<FineRow>(_allFines);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SearchFines()
+    {
+        if (string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            _fines = new List<FineRow>(_allFines);
+            return;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+        if (matches.Count == 0)
+        {
+            _fines = new();
+            return;
+        }
+
+        var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
+        _fines = _allFines.Where(f => f.VehicleId.HasValue && vmfCodes.Contains(f.VehicleId.Value)).ToList();
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed record FineRow(
+        int FineId,
+        int? VehicleId,
+        DateTime? OffenceDate,
+        string? DocumentType,
+        DateTime? GmtDate
+    );
+}

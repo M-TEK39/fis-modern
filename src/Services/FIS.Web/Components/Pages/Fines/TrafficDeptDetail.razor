@@ -1,5 +1,8 @@
 @page "/fines/traffic-dept/detail"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TrafficDeptApiService TrafficDeptService
 
 <PageTitle>Traffic Dept Detail - Fleet Information System</PageTitle>
 
@@ -22,45 +25,76 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Traffic Dept Name</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_name" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Responsible Person</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_res_person" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Postal Address1</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_post_address1" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Postal Address2</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_post_address2" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Postal Code</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_post_code" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Tel</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_telephone" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Fax</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_fax" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Cell</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_telephone" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">eMail</label>
-                    <input class="form-input" />
+                    <input class="form-input" @bind="_trafficDept.Traf_email" />
                 </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="SaveTrafficDept">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/fines/traffic-dept">Menu</a>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "trafficDeptId")]
+    public int? TrafficDeptId { get; set; }
+
+    private TrafficDeptDto _trafficDept = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (TrafficDeptId.HasValue)
+        {
+            var existing = await TrafficDeptService.GetByIdAsync<TrafficDeptDto>(TrafficDeptId.Value);
+            if (existing is not null)
+            {
+                _trafficDept = existing;
+            }
+        }
+    }
+
+    private async Task SaveTrafficDept()
+    {
+        if (TrafficDeptId.HasValue)
+        {
+            await TrafficDeptService.UpdateAsync(TrafficDeptId.Value, _trafficDept);
+        }
+        else
+        {
+            await TrafficDeptService.CreateAsync(_trafficDept);
+        }
+    }
+}

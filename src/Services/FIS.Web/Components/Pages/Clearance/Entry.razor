@@ -1,8 +1,16 @@
 @page "/clearance/entry"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using Microsoft.AspNetCore.WebUtilities
+@using System.Linq
+@using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Components.Forms
 @inject NavigationManager Navigation
+@inject ClearanceApiService ClearanceService
+@inject MerchantApiService MerchantService
+@inject IJSRuntime JS
 
 <PageTitle>Clearance Entry - Fleet Information System</PageTitle>
 
@@ -28,8 +36,12 @@
         <ValidationSummary />
         <div class="form-grid">
             <div class="form-field">
+                <label class="form-label">Vehicle Code</label>
+                <InputNumber class="form-input" @bind-Value="_form.VmfCode" />
+            </div>
+            <div class="form-field">
                 <label class="form-label">Clearance Number</label>
-                <InputText class="form-input" @bind-Value="_form.ClearanceNumber" />
+                <InputNumber class="form-input" @bind-Value="_form.ClearanceNumber" />
             </div>
             <div class="form-field">
                 <label class="form-label">Clearance Date</label>
@@ -37,10 +49,11 @@
             </div>
             <div class="form-field">
                 <label class="form-label">Merchant</label>
-                <select class="form-select" @bind="_form.Merchant">
+                <select class="form-select" @bind="_form.MerchantCode">
+                    <option value="">Select...</option>
                     @foreach (var merchant in _merchants)
                     {
-                        <option value="@merchant">@merchant</option>
+                        <option value="@merchant.Merchant_code">@merchant.Merchant_Name</option>
                     }
                 </select>
             </div>
@@ -60,16 +73,22 @@
         <div class="form-actions">
             <button class="btn btn-primary">
                 <i class="bx bx-save"></i>
-                Save (mock)
+                Save
             </button>
             <button class="btn btn-secondary" type="button" @onclick="ResetForm">
                 Reset
             </button>
         </div>
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">
+                @_error
+            </div>
+        }
         @if (_saved)
         {
             <div class="alert alert-success">
-                Clearance saved (UI placeholder) for @(_form.ClearanceNumber).
+                Clearance saved for @(_form.ClearanceNumber).
             </div>
         }
     </EditForm>
@@ -78,18 +97,60 @@
 @code {
     private readonly ClearanceForm _form = new();
     private bool _saved;
+    private string? _error;
+    private List<MerchantDto> _merchants = new();
 
-    private readonly List<string> _merchants = new()
+    protected override async Task OnInitializedAsync()
     {
-        "Merchant A",
-        "Merchant B",
-        "Merchant C"
-    };
+        await LoadMerchants();
+        _form.VmfCode = GetQueryInt("vmf");
+    }
 
-    private Task HandleSubmit()
+    private async Task LoadMerchants()
     {
-        _saved = true;
-        return Task.CompletedTask;
+        try
+        {
+            _merchants = await MerchantService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to load merchants.";
+            await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally { }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _error = null;
+        _saved = false;
+        if (_form.VmfCode is null or <= 0)
+        {
+            _error = "Vehicle code is required.";
+            return;
+        }
+
+        var payload = new ClearanceCreateDto
+        {
+            vmf_code = _form.VmfCode.Value,
+            clearance_number = _form.ClearanceNumber,
+            Clearance_date = _form.ClearanceDate,
+            Merchant_code = _form.MerchantCode,
+            Clearance_amount = _form.Amount,
+            clearance_kilo = _form.Kilos.HasValue ? (int?)Convert.ToInt32(_form.Kilos.Value) : null,
+            clearance_comment = _form.Comment
+        };
+
+        try
+        {
+            var result = await ClearanceService.CreateAsync(payload);
+            _saved = result != null;
+        }
+        catch (Exception ex)
+        {
+            _error = "Failed to save clearance.";
+            await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
     }
 
     private void ResetForm()
@@ -98,20 +159,35 @@
         _saved = false;
     }
 
+    private int? GetQueryInt(string name)
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue(name, out var values) && int.TryParse(values.FirstOrDefault(), out var value))
+        {
+            return value;
+        }
+
+        return null;
+    }
+
     private sealed class ClearanceForm
     {
-        public string ClearanceNumber { get; set; } = string.Empty;
+        public int? VmfCode { get; set; }
+        public int? ClearanceNumber { get; set; }
         public DateTime ClearanceDate { get; set; } = DateTime.Today;
-        public string Merchant { get; set; } = "Merchant A";
+        public int? MerchantCode { get; set; }
         public decimal? Amount { get; set; }
         public decimal? Kilos { get; set; }
+        [MaxLength(80)]
         public string Comment { get; set; } = string.Empty;
 
         public void Reset()
         {
-            ClearanceNumber = string.Empty;
+            VmfCode = null;
+            ClearanceNumber = null;
             ClearanceDate = DateTime.Today;
-            Merchant = "Merchant A";
+            MerchantCode = null;
             Amount = null;
             Kilos = null;
             Comment = string.Empty;

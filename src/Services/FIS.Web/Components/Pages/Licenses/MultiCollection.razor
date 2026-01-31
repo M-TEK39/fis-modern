@@ -1,5 +1,8 @@
 @page "/licenses/multi-collection"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject LicenseMaintenanceApiService LicenseMaintenanceService
+@inject IJSRuntime JS
 
 <PageTitle>Collection for Two or More Licences</PageTitle>
 
@@ -24,11 +27,13 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" />
+                        <input type="password" class="form-input" @bind="_password" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SubmitPassword" disabled="@_passwordSubmitting">
+                        @(_passwordSubmitting ? "Submitting..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
@@ -38,23 +43,25 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Receiver Name</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_receiverName" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">ID Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_receiverId" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Tel Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_receiverTel" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Date Collected</label>
-                        <input class="form-input" />
+                        <input type="date" class="form-input" @bind="_dateCollected" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveReceiver" disabled="@_receiverSubmitting">
+                        @(_receiverSubmitting ? "Saving..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
@@ -64,23 +71,25 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="multiVehicleType" checked />
+                            <input type="radio" name="multiVehicleType" value="GG" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GG")" />
                             GG
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="multiVehicleType" />
+                            <input type="radio" name="multiVehicleType" value="GP" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GP")" />
                             GP
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_vehicleNumber" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="LookupVehicle" disabled="@_loading">
+                        @(_loading ? "Loading..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Main Menu</a>
                 </div>
             </div>
@@ -140,10 +149,111 @@
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveDetails" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Submit")
+                    </button>
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private string _password = string.Empty;
+    private bool _passwordSubmitting;
+    private bool _receiverSubmitting;
+    private string _receiverName = string.Empty;
+    private string _receiverId = string.Empty;
+    private string _receiverTel = string.Empty;
+    private DateTime? _dateCollected;
+    private string _numberType = "GG";
+    private string _vehicleNumber = string.Empty;
+    private bool _loading;
+    private bool _saving;
+
+    private async Task SubmitPassword()
+    {
+        _passwordSubmitting = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitPasswordAsync("api/license/multi-collection/password", _password);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error submitting password: {ex.Message}");
+        }
+        finally
+        {
+            _passwordSubmitting = false;
+        }
+    }
+
+    private async Task SaveReceiver()
+    {
+        _receiverSubmitting = true;
+        try
+        {
+            var payload = new
+            {
+                receiver_name = _receiverName,
+                receiver_id = _receiverId,
+                receiver_tel = _receiverTel,
+                date_collected = _dateCollected
+            };
+            await LicenseMaintenanceService.SubmitAsync<object>("api/license/multi-collection/receiver", payload);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving receiver: {ex.Message}");
+        }
+        finally
+        {
+            _receiverSubmitting = false;
+        }
+    }
+
+    private async Task LookupVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var payload = new
+            {
+                number_type = _numberType,
+                number = _vehicleNumber
+            };
+            await LicenseMaintenanceService.SubmitAsync<object>("api/license/multi-collection/lookup", payload);
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error loading licence details: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveDetails()
+    {
+        _saving = true;
+        try
+        {
+            await LicenseMaintenanceService.SubmitAsync<object>("api/license/multi-collection/save", new { });
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error saving licence details: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void OnNumberTypeChanged(ChangeEventArgs args)
+    {
+        _numberType = args.Value?.ToString() ?? "GG";
+    }
+}

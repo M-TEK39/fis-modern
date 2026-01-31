@@ -1,5 +1,9 @@
 @page "/accidents/hq/delete/detail"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AccidentApiService AccidentService
+@inject SiteApiService SiteService
 
 <PageTitle>Delete Accident Detail (HQ) - Fleet Information System</PageTitle>
 
@@ -25,7 +29,7 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Accident Date</label>
-                    <input class="form-input" maxlength="10" />
+                    <input class="form-input" maxlength="10" @bind="_accident.accident_date" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Accident Time</label>
@@ -33,11 +37,11 @@
                 </div>
                 <div class="form-field form-group-full">
                     <label class="form-label">Description</label>
-                    <input class="form-input" maxlength="60" />
+                    <input class="form-input" maxlength="60" @bind="_accident.accident_description" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Driver Name</label>
-                    <input class="form-input" maxlength="25" />
+                    <input class="form-input" maxlength="25" @bind="_accident.driver_name" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Emp Number</label>
@@ -45,8 +49,12 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Site</label>
-                    <select class="form-select">
+                    <select class="form-select" @bind="_accident.vehicle_id">
                         <option value="">Select site...</option>
+                        @foreach (var site in _sites)
+                        {
+                            <option value="@site.SiteCode">@site.Description</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
@@ -55,7 +63,7 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">HQ Ref</label>
-                    <input class="form-input" maxlength="20" />
+                    <input class="form-input" maxlength="20" @bind="_accident.accident_reference" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">GG Ref</label>
@@ -67,11 +75,11 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Report Date</label>
-                    <input class="form-input" maxlength="10" />
+                    <input class="form-input" maxlength="10" @bind="_accident.date_reported" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Case Number</label>
-                    <input class="form-input" maxlength="15" />
+                    <input class="form-input" maxlength="15" @bind="_accident.police_case_number" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Auth Report</label>
@@ -83,7 +91,7 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Liability</label>
-                    <input class="form-input" maxlength="20" />
+                    <input class="form-input" maxlength="20" @bind="_accident.insurance_claim_number" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Claim</label>
@@ -111,7 +119,7 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Cost Repair</label>
-                    <input class="form-input" maxlength="10" />
+                    <input class="form-input" maxlength="10" @bind="_accident.cost_of_repair" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Date Updated</label>
@@ -119,14 +127,43 @@
                 </div>
                 <div class="form-field form-group-full">
                     <label class="form-label">Notes</label>
-                    <input class="form-input" maxlength="60" />
+                    <input class="form-input" maxlength="60" @bind="_accident.notes" />
                 </div>
             </div>
 
             <div class="form-actions">
-                <button class="btn btn-danger">DELETE</button>
+                <button class="btn btn-danger" @onclick="DeleteAccident">DELETE</button>
                 <a class="btn btn-secondary" href="/accidents/hq/delete">Back</a>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "accidentId")]
+    public int? AccidentId { get; set; }
+
+    private AccidentDto _accident = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+        if (AccidentId.HasValue)
+        {
+            var existing = await AccidentService.GetAccidentAsync(AccidentId.Value);
+            if (existing is not null)
+            {
+                _accident = existing;
+            }
+        }
+    }
+
+    private async Task DeleteAccident()
+    {
+        if (AccidentId.HasValue)
+        {
+            await AccidentService.DeleteAccidentAsync(AccidentId.Value);
+        }
+    }
+}

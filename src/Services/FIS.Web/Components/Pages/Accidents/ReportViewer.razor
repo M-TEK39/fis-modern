@@ -1,5 +1,8 @@
 @page "/accidents/reports/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AccidentApiService AccidentService
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -42,7 +45,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
                     </div>
                 </div>
@@ -65,6 +68,19 @@
                                             <td>@GetSampleValue(field)</td>
                                         </tr>
                                     }
+                                    @if (_recentReports.Count > 0)
+                                    {
+                                        <tr>
+                                            <td colspan="2"><strong>Recent Reports</strong></td>
+                                        </tr>
+                                        @foreach (var report in _recentReports)
+                                        {
+                                            <tr>
+                                                <td>@report.Name</td>
+                                                <td>@FormatDate(report.GeneratedDate)</td>
+                                            </tr>
+                                        }
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -82,7 +98,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -104,6 +120,19 @@
                                             <td>@field</td>
                                             <td>@GetSampleValue(field)</td>
                                         </tr>
+                                    }
+                                    @if (_recentReports.Count > 0)
+                                    {
+                                        <tr>
+                                            <td colspan="2"><strong>Recent Reports</strong></td>
+                                        </tr>
+                                        @foreach (var report in _recentReports)
+                                        {
+                                            <tr>
+                                                <td>@report.Name</td>
+                                                <td>@FormatDate(report.GeneratedDate)</td>
+                                            </tr>
+                                        }
                                     }
                                 </tbody>
                             </table>
@@ -136,7 +165,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -177,6 +206,17 @@
                                         <td>Front bumper</td>
                                         <td>TP-9912</td>
                                     </tr>
+                                    @foreach (var report in _recentReports)
+                                    {
+                                        <tr>
+                                            <td>@report.ReportType</td>
+                                            <td>@report.Name</td>
+                                            <td></td>
+                                            <td>@FormatDate(report.GeneratedDate)</td>
+                                            <td>@report.Description</td>
+                                            <td colspan="14"></td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -208,7 +248,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -259,6 +299,16 @@
                                         <td>2024/03/15</td>
                                         <td>Under assessment</td>
                                     </tr>
+                                    @foreach (var report in _recentReports)
+                                    {
+                                        <tr>
+                                            <td>@report.ReportType</td>
+                                            <td>@report.Name</td>
+                                            <td></td>
+                                            <td>@FormatDate(report.GeneratedDate)</td>
+                                            <td colspan="22"></td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -296,7 +346,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -346,6 +396,16 @@
                                         <td>2024/04/02</td>
                                         <td>Pending police report</td>
                                     </tr>
+                                    @foreach (var report in _recentReports)
+                                    {
+                                        <tr>
+                                            <td>@report.ReportType</td>
+                                            <td>@report.Name</td>
+                                            <td></td>
+                                            <td>@FormatDate(report.GeneratedDate)</td>
+                                            <td colspan="14"></td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -388,7 +448,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -428,6 +488,17 @@
                                         <td>5000</td>
                                         <td>Settled by insurer</td>
                                     </tr>
+                                    @foreach (var report in _recentReports)
+                                    {
+                                        <tr>
+                                            <td>@report.ReportType</td>
+                                            <td>@report.Name</td>
+                                            <td></td>
+                                            <td></td>
+                                            <td>@FormatDate(report.GeneratedDate)</td>
+                                            <td colspan="15"></td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -487,7 +558,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -519,6 +590,15 @@
                                         <td>12000</td>
                                         <td>3500</td>
                                     </tr>
+                                    @foreach (var report in _recentReports)
+                                    {
+                                        <tr>
+                                            <td>@report.ReportType</td>
+                                            <td>@report.Name</td>
+                                            <td>@FormatDate(report.GeneratedDate)</td>
+                                            <td colspan="9"></td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -582,7 +662,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -621,6 +701,16 @@
                                         <td>2100</td>
                                         <td>Awaiting claim</td>
                                     </tr>
+                                    @foreach (var report in _recentReports)
+                                    {
+                                        <tr>
+                                            <td>@report.ReportType</td>
+                                            <td>@report.Name</td>
+                                            <td></td>
+                                            <td>@FormatDate(report.GeneratedDate)</td>
+                                            <td colspan="14"></td>
+                                        </tr>
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -659,7 +749,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -716,7 +806,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
@@ -780,7 +870,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
                     </div>
                 </div>
@@ -915,7 +1005,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
                     </div>
                 </div>
@@ -976,7 +1066,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
                     </div>
                 </div>
@@ -1019,6 +1109,15 @@
 </div>
 
 @code {
+    private List<ReportDto> _recentReports = new();
+
+    private async Task LoadReports()
+    {
+        _recentReports = await AccidentService.GetRecentReportsAsync();
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
     [Parameter]
     public string? Mode { get; set; }
 
