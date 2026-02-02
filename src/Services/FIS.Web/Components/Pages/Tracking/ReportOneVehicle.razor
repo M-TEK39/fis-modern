@@ -1,5 +1,10 @@
 @page "/tracking/reports/one-vehicle"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TrackingApiService TrackingService
+@inject VehicleLookupApiService VehicleLookupService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Tracking Report for ONE Vehicle - Fleet Information System</PageTitle>
 
@@ -14,9 +19,88 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-car"></i>
-        <h3>Tracking report pending</h3>
-        <p>This page will mirror the legacy one vehicle tracking report.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / Reg Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-car"></i>
+            <h3>No tracking records found</h3>
+            <p>Search by GG or registration number.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Tracker Number</th>
+                            <th>Install Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.track_num</td>
+                                <td>@FormatDate(item.install_date)</td>
+                                <td>@item.track_status</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string _searchTerm = string.Empty;
+    private List<TrackingDto> _results = new();
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<TrackingDto>();
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
+            var vmfCode = matches.FirstOrDefault()?.VmfCode;
+            if (vmfCode.HasValue)
+            {
+                var all = await TrackingService.GetAllAsync<TrackingDto>();
+                _results = all.Where(t => t.vmf_code == vmfCode.Value).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

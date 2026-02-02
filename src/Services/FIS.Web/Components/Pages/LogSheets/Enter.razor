@@ -1,5 +1,11 @@
 @page "/log-sheets/enter"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LogsheetApiService LogsheetService
+@inject VehicleLookupApiService VehicleLookupService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Enter Logsheet - Fleet Information System</PageTitle>
 
@@ -9,14 +15,131 @@
             <i class="bx bx-edit"></i>
             Enter a Logsheet
         </h1>
-        <p class="page-description">Legacy placeholder for Logs/Log_Entry_A.aspx.</p>
+        <p class="page-description">Legacy Logs/Log_Entry_A.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-note"></i>
-        <h3>Logsheet entry pending</h3>
-        <p>This page will mirror the legacy logsheet entry flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Batch Number</label>
+            <input class="form-input" @bind="_bundNum" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">GG or GP Number</label>
+            <input class="form-input" @bind="_vehicleSearch" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadVehicle">Next</button>
+        </div>
     </div>
+
+    @if (_showForm)
+    {
+        <div class="form-card">
+            <div class="form-row">
+                <label class="form-label">Requisition Number</label>
+                <input class="form-input" @bind="_logsheet.rek_num" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Logsheet From Date</label>
+                <input type="date" class="form-input" @bind="_logsheet.month" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Start Odometer</label>
+                <input type="number" class="form-input" @bind="_logsheet.start_odo" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">End Odometer</label>
+                <input type="number" class="form-input" @bind="_logsheet.end_odo" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Days Used</label>
+                <input type="number" class="form-input" @bind="_logsheet.days_used" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Site</label>
+                <select class="form-select" @bind="_logsheet.site_code">
+                    <option value="">Select site</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SubmitLogsheet">Submit</button>
+            </div>
+        </div>
+    }
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Processing...</p>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _vehicleSearch = string.Empty;
+    private string _bundNum = string.Empty;
+    private LogsheetDto _logsheet = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(_vehicleSearch);
+            var match = matches.FirstOrDefault();
+            if (match != null)
+            {
+                _logsheet.vmf_code = match.VmfCode;
+                if (int.TryParse(_bundNum, out var bundle))
+                {
+                    _logsheet.bund_num = bundle;
+                }
+                _showForm = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitLogsheet()
+    {
+        _loading = true;
+        try
+        {
+            await LogsheetService.CreateAsync(_logsheet);
+            _logsheet = new LogsheetDto();
+            _showForm = false;
+            _vehicleSearch = string.Empty;
+            _bundNum = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

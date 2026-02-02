@@ -1,5 +1,12 @@
 @page "/towing/request"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject TowingApiService TowingService
+@inject VehicleLookupApiService VehicleLookupService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Road Side Assistance Request - Fleet Information System</PageTitle>
 
@@ -9,14 +16,152 @@
             <i class="bx bx-wrench"></i>
             Road Side Assistance Request
         </h1>
-        <p class="page-description">Legacy placeholder for Towing/MNT_tow_getreg.aspx.</p>
+        <p class="page-description">Legacy Towing/MNT_tow_getreg.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-wrench"></i>
-        <h3>Road side request pending</h3>
-        <p>This page will mirror the legacy request capture/update flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / Reg Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadVehicle">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+
+    @if (_showForm)
+    {
+        <div class="form-card">
+            <div class="form-row">
+                <label class="form-label">Call Reference</label>
+                <input type="number" class="form-input" @bind="_form.Call_refer" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Request Date</label>
+                <input type="date" class="form-input" @bind="_form.Tow_request_date" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Request Time</label>
+                <input type="time" class="form-input" @bind="_requestTime" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Tow Location</label>
+                <input class="form-input" @bind="_form.Tow_location_start" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Vehicle Problem</label>
+                <input class="form-input" @bind="_form.Vehicle_problem" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Keys</label>
+                <input class="form-input" @bind="_form.Keys" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Site</label>
+                <select class="form-select" @bind="_form.Site_code">
+                    <option value="">Select site</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveRequest">Submit</button>
+                <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _searchTerm = string.Empty;
+    private TimeOnly? _requestTime;
+    private TowingDto _form = new();
+    private TowingDto? _editing;
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
+            var match = matches.FirstOrDefault();
+            if (match != null)
+            {
+                _form = new TowingDto
+                {
+                    vmf_code = match.VmfCode,
+                    Tow_request_date = DateTime.Today
+                };
+                _showForm = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveRequest()
+    {
+        _loading = true;
+        try
+        {
+            if (_requestTime.HasValue)
+            {
+                _form.Tow_request_time = DateTime.Today.Add(_requestTime.Value.ToTimeSpan());
+            }
+
+            if (_editing == null)
+            {
+                await TowingService.CreateAsync(_form);
+            }
+            else
+            {
+                await TowingService.UpdateAsync(_form.Towing_code, _form);
+            }
+
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _form = new TowingDto();
+        _editing = null;
+        _showForm = false;
+        _requestTime = null;
+        _searchTerm = string.Empty;
+    }
+}

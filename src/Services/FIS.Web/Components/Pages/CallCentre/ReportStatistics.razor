@@ -1,5 +1,9 @@
 @page "/call-centre/reports/statistics"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Call Centre Statistics - Fleet Information System</PageTitle>
 
@@ -14,9 +18,72 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-bar-chart-alt-2"></i>
-        <h3>Call centre statistics pending</h3>
-        <p>This page will mirror the legacy call centre statistics report.</p>
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadStats">Load Statistics</button>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_stats.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-bar-chart-alt-2"></i>
+            <h3>No statistics available</h3>
+            <p>Load statistics to view call counts.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Caller</th>
+                            <th>Count</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _stats)
+                        {
+                            <tr>
+                                <td>@item.Key</td>
+                                <td>@item.Value</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private Dictionary<string, int> _stats = new();
+
+    private async Task LoadStats()
+    {
+        _loading = true;
+        _stats = new Dictionary<string, int>();
+        try
+        {
+            var all = await CallCentreService.GetAllAsync<CallCentreDto>();
+            _stats = all.GroupBy(c => string.IsNullOrWhiteSpace(c.Caller_name) ? "(Unknown)" : c.Caller_name)
+                .ToDictionary(g => g.Key, g => g.Count());
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

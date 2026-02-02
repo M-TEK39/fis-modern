@@ -1,5 +1,9 @@
 @page "/monitor/reports/clo-inquiry"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject MonitorApiService MonitorService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Client Liaison Officer Inquiry Report - Fleet Information System</PageTitle>
 
@@ -14,9 +18,82 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-id-card"></i>
-        <h3>Inquiry report pending</h3>
-        <p>This page will mirror the legacy CLO inquiry report.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Inquiry Type</label>
+            <input class="form-input" @bind="_inquiryType" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-id-card"></i>
+            <h3>No inquiries found</h3>
+            <p>Filter by inquiry type if needed.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Inquiry Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.monitor_code</td>
+                                <td>@item.Inquiry_type</td>
+                                <td>@item.Inquiry_Desc</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string _inquiryType = string.Empty;
+    private List<MonitorDto> _results = new();
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<MonitorDto>();
+        try
+        {
+            var all = await MonitorService.GetAllAsync<MonitorDto>();
+            _results = string.IsNullOrWhiteSpace(_inquiryType)
+                ? all
+                : all.Where(m => string.Equals(m.Inquiry_type, _inquiryType, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,5 +1,9 @@
 @page "/towing/reports/request"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TowingApiService TowingService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Road Side Assistance Request Report - Fleet Information System</PageTitle>
 
@@ -14,9 +18,75 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Request report pending</h3>
-        <p>This page will mirror the legacy road side request report.</p>
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadReport">Load Report</button>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file"></i>
+            <h3>No request data</h3>
+            <p>Load report to view road side requests.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Vehicle</th>
+                            <th>Request Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.Call_refer</td>
+                                <td>@item.vmf_code</td>
+                                <td>@FormatDate(item.Tow_request_date)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private List<TowingDto> _results = new();
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<TowingDto>();
+        try
+        {
+            _results = await TowingService.GetAllAsync<TowingDto>();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

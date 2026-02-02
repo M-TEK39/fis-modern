@@ -1,5 +1,12 @@
 @page "/log-books/maintenance"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject LogbookApiService LogbookService
+@inject VehicleLookupApiService VehicleLookupService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Logbook Maintenance - Fleet Information System</PageTitle>
 
@@ -9,14 +16,251 @@
             <i class="bx bx-notepad"></i>
             Logbook Maintenance
         </h1>
-        <p class="page-description">Legacy placeholder for Logbook/MNT_logbkj_getreg.aspx.</p>
+        <p class="page-description">Legacy Logbook/MNT_logbkj_getreg.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-wrench"></i>
-        <h3>Logbook maintenance pending</h3>
-        <p>This page will mirror the legacy maintenance flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / GP Number</label>
+            <input class="form-input" @bind="_searchTerm" placeholder="Enter GG or GP number" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchLogbooks">Search</button>
+            <button class="btn btn-secondary" @onclick="PrepareAdd">Add</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_logbooks.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-note"></i>
+            <h3>No logbooks found</h3>
+            <p>Search by GG/GP number to view logbook handouts.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_logbooks.Count logbook(s)</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="SearchLogbooks">
+                        <i class="bx bx-refresh"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Begin Number</th>
+                            <th>End Number</th>
+                            <th>Handout Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var logbook in _logbooks)
+                        {
+                            <tr>
+                                <td>@_vehicleLabel</td>
+                                <td>@logbook.begin_num</td>
+                                <td>@logbook.end_num</td>
+                                <td>@FormatDate(logbook.handout_date)</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => EditLogbook(logbook)">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_showForm)
+    {
+        <Modal IsVisible="_showForm" Title="Logbook Maintenance" ShowFooter="false" OnCancel="HideForm">
+            <ChildContent>
+                <div class="form-card">
+                    <div class="form-row">
+                        <label class="form-label">Handout Date</label>
+                        <input type="date" class="form-input" @bind="_form.handout_date" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Begin Number</label>
+                        <input class="form-input" @bind="_form.begin_num" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">End Number</label>
+                        <input class="form-input" @bind="_form.end_num" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Dept Code (Site)</label>
+                        <select class="form-select" @bind="_form.site_code">
+                            <option value="">Select site</option>
+                            @foreach (var site in _sites)
+                            {
+                                <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Receiver Name</label>
+                        <input class="form-input" @bind="_form.lb_receiver_name" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Receiver Tel</label>
+                        <input class="form-input" @bind="_form.lb_tel_num" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Comment</label>
+                        <input class="form-input" @bind="_form.lb_comment" />
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="SaveLogbook">Submit</button>
+                        <button class="btn btn-secondary" @onclick="HideForm">Cancel</button>
+                    </div>
+                </div>
+            </ChildContent>
+        </Modal>
+    }
 </div>
+
+@code {
+    private bool _loading = true;
+    private bool _showForm;
+    private string _searchTerm = string.Empty;
+    private string _vehicleLabel = string.Empty;
+    private List<LogbookDto> _logbooks = new();
+    private List<SiteResponseDto> _sites = new();
+    private LogbookDto _form = new();
+    private LogbookDto? _editing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSites();
+        _loading = false;
+    }
+
+    private async Task LoadSites()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task SearchLogbooks()
+    {
+        _loading = true;
+        _logbooks = new List<LogbookDto>();
+        _vehicleLabel = string.Empty;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_searchTerm))
+            {
+                var vehicleMatches = await VehicleLookupService.SearchAsync(_searchTerm);
+                var match = vehicleMatches.FirstOrDefault();
+                if (match != null)
+                {
+                    _vehicleLabel = string.IsNullOrWhiteSpace(match.GGNumber)
+                        ? match.RegistrationNumber ?? string.Empty
+                        : match.GGNumber;
+                    if (match.VmfCode > 0)
+                    {
+                        var all = await LogbookService.GetAllAsync<LogbookDto>();
+                        _logbooks = all.Where(l => l.vmf_code == match.VmfCode).ToList();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void PrepareAdd()
+    {
+        _editing = null;
+        _form = new LogbookDto();
+        _showForm = true;
+    }
+
+    private void EditLogbook(LogbookDto logbook)
+    {
+        _editing = logbook;
+        _form = new LogbookDto
+        {
+            logbookcode = logbook.logbookcode,
+            vmf_code = logbook.vmf_code,
+            begin_num = logbook.begin_num,
+            end_num = logbook.end_num,
+            handout_date = logbook.handout_date,
+            site_code = logbook.site_code,
+            lb_receiver_name = logbook.lb_receiver_name,
+            lb_tel_num = logbook.lb_tel_num,
+            lb_comment = logbook.lb_comment
+        };
+        _showForm = true;
+    }
+
+    private async Task SaveLogbook()
+    {
+        try
+        {
+            if (_editing == null)
+            {
+                _form.vmf_code ??= await ResolveVmfCode();
+                await LogbookService.CreateAsync(_form);
+            }
+            else
+            {
+                await LogbookService.UpdateAsync(_form.logbookcode, _form);
+            }
+
+            _showForm = false;
+            await SearchLogbooks();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task<int?> ResolveVmfCode()
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return null;
+        }
+
+        var vehicleMatches = await VehicleLookupService.SearchAsync(_searchTerm);
+        return vehicleMatches.FirstOrDefault()?.VmfCode;
+    }
+
+    private async Task HideForm()
+    {
+        _showForm = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

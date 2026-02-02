@@ -1,5 +1,9 @@
 @page "/reports/logsheets"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject ReportCatalogApiService ReportCatalogService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Log Sheet Reports - Fleet Information System</PageTitle>
 
@@ -14,9 +18,67 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Log Sheet Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading reports...</p>
+        </div>
+    }
+    else if (_reports.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file"></i>
+            <h3>No reports available</h3>
+            <p>Report catalog unavailable or empty.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_reports.Count report(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Report</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var report in _reports)
+                        {
+                            <tr>
+                                <td>@report.Name</td>
+                                <td>@report.Description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading = true;
+    private List<ReportDto> _reports = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _reports = await ReportCatalogService.GetAvailableAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

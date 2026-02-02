@@ -1,5 +1,9 @@
 @page "/troubleshoot/odometer-corrections"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TroubleshootApiService TroubleshootService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>ODOMeter Corrections - Fleet Information System</PageTitle>
 
@@ -9,14 +13,117 @@
             <i class="bx bx-tachometer"></i>
             ODOMeter Corrections
         </h1>
-        <p class="page-description">Legacy placeholder for TS_Log/SearchTrip.aspx.</p>
+        <p class="page-description">Legacy flow for TS_Log/SearchTrip.aspx.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-tachometer"></i>
-        <h3>ODOMeter corrections pending</h3>
-        <p>This page will mirror the legacy odometer corrections flow.</p>
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Search criteria</label>
+                    <select class="form-select" @bind="_searchRequest.SearchMode">
+                        <option value="GG">Vehicle GG Number</option>
+                        <option value="REG">Vehicle Registration</option>
+                        <option value="TA">Trip Authority No.</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Value</label>
+                    <input class="form-input" @bind="_searchRequest.SearchValue" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SearchOdometer">Submit Details</button>
+            </div>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Searching odometer corrections...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-tachometer"></i>
+            <h3>No results yet</h3>
+            <p>Provide search criteria to locate odometer corrections.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_results.Count result(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Trip Authority</th>
+                            <th>Current Odometer</th>
+                            <th>Last Odometer</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _results)
+                        {
+                            <tr>
+                                <td>@(row.VehicleIdentifier ?? "-")</td>
+                                <td>@(row.TripAuthorityNumber ?? "-")</td>
+                                <td>@(row.CurrentOdometer?.ToString() ?? "-")</td>
+                                <td>@(row.LastOdometer?.ToString() ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error"></i>
+            <span>@_errorMessage</span>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string? _errorMessage;
+    private OdometerCorrectionSearchRequest _searchRequest = new();
+    private List<OdometerCorrectionResultDto> _results = new();
+
+    private async Task SearchOdometer()
+    {
+        if (string.IsNullOrWhiteSpace(_searchRequest.SearchValue))
+        {
+            _errorMessage = "Please enter a GG/Registration number or Trip Authority number.";
+            return;
+        }
+
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            _results = await TroubleshootService.SearchOdometerCorrectionsAsync(_searchRequest);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to search odometer corrections.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,5 +1,9 @@
 @page "/call-centre/reports/clo-report"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Client Liaison Officer Report - Fleet Information System</PageTitle>
 
@@ -14,9 +18,72 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-id-card"></i>
-        <h3>CLO report pending</h3>
-        <p>This page will mirror the legacy CLO report.</p>
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadReport">Load Report</button>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-id-card"></i>
+            <h3>No incidents found</h3>
+            <p>Load report to view CLO data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Caller</th>
+                            <th>Driver</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.Call_centre_code</td>
+                                <td>@item.Caller_name</td>
+                                <td>@item.Driver_name</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private List<CallCentreDto> _results = new();
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<CallCentreDto>();
+        try
+        {
+            _results = await CallCentreService.GetAllAsync<CallCentreDto>();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

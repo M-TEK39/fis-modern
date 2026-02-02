@@ -1,5 +1,12 @@
 @page "/monitor/capture"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject MonitorApiService MonitorService
+@inject VehicleLookupApiService VehicleLookupService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Capture a New Inquiry - Fleet Information System</PageTitle>
 
@@ -9,14 +16,144 @@
             <i class="bx bx-edit"></i>
             Capture a New Inquiry
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/MNT_monitor_getgg.aspx.</p>
+        <p class="page-description">Legacy Monitor/MNT_monitor_getgg.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-search-alt"></i>
-        <h3>Monitor inquiry capture pending</h3>
-        <p>This page will mirror the legacy inquiry capture flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Inquiry Type</label>
+            <select class="form-select" @bind="_inquiryType">
+                @foreach (var option in _inquiryTypes)
+                {
+                    <option value="@option">@option</option>
+                }
+            </select>
+        </div>
+        <div class="form-row">
+            <label class="form-label">GG / Reg Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadVehicle">Submit</button>
+            <a class="btn btn-secondary" href="/monitor">Menu</a>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+
+    @if (_showForm)
+    {
+        <div class="form-card">
+            <div class="form-row">
+                <label class="form-label">Capture Date</label>
+                <input type="date" class="form-input" @bind="_form.Capture_dat" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Inquiry Description</label>
+                <input class="form-input" @bind="_form.Inquiry_Desc" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Name</label>
+                <input class="form-input" @bind="_form.Driver_name" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Persal No</label>
+                <input class="form-input" @bind="_form.Driver_persalno" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Site</label>
+                <select class="form-select" @bind="_form.Driver_Site">
+                    <option value="">Select site</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SubmitInquiry">Submit</button>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _searchTerm = string.Empty;
+    private string _inquiryType = "Fuel_Consumption";
+    private readonly List<string> _inquiryTypes = new()
+    {
+        "Fuel_Consumption",
+        "Fuel_overfill",
+        "NoFuel_6months",
+        "Oil_Consumption",
+        "Tyre_Usage",
+        "Card_Dormant",
+        "NoMaintain_2000lt"
+    };
+    private MonitorDto _form = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
+            var match = matches.FirstOrDefault();
+            if (match != null)
+            {
+                _form = new MonitorDto
+                {
+                    vmf_code = match.VmfCode,
+                    Capture_dat = DateTime.Today,
+                    Inquiry_type = _inquiryType
+                };
+                _showForm = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitInquiry()
+    {
+        _loading = true;
+        try
+        {
+            _form.Inquiry_type = _inquiryType;
+            await MonitorService.CreateAsync(_form);
+            _form = new MonitorDto();
+            _searchTerm = string.Empty;
+            _showForm = false;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

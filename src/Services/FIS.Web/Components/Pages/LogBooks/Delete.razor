@@ -1,5 +1,10 @@
 @page "/log-books/delete"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LogbookApiService LogbookService
+@inject VehicleLookupApiService VehicleLookupService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Delete Logbook Handout - Fleet Information System</PageTitle>
 
@@ -9,14 +14,125 @@
             <i class="bx bx-trash"></i>
             Delete a Logbook Handout
         </h1>
-        <p class="page-description">Legacy placeholder for Logbook/MNT_logbkdelj_getreg.aspx.</p>
+        <p class="page-description">Legacy Logbook/MNT_logbkdelj_getreg.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-error-circle"></i>
-        <h3>Delete workflow pending</h3>
-        <p>This page will mirror the legacy logbook delete flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG Number</label>
+            <input class="form-input" @bind="_searchTerm" placeholder="Enter GG number" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchLogbooks">Search</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_logbooks.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-error-circle"></i>
+            <h3>No logbooks found</h3>
+            <p>Search to locate logbook handouts for deletion.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_logbooks.Count logbook(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>GG Number</th>
+                            <th>Handout Date</th>
+                            <th>Begin Number</th>
+                            <th>End Number</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var logbook in _logbooks)
+                        {
+                            <tr>
+                                <td>@_vehicleLabel</td>
+                                <td>@FormatDate(logbook.handout_date)</td>
+                                <td>@logbook.begin_num</td>
+                                <td>@logbook.end_num</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => DeleteLogbook(logbook)">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string _searchTerm = string.Empty;
+    private string _vehicleLabel = string.Empty;
+    private List<LogbookDto> _logbooks = new();
+
+    private async Task SearchLogbooks()
+    {
+        _loading = true;
+        _logbooks = new List<LogbookDto>();
+        _vehicleLabel = string.Empty;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_searchTerm))
+            {
+                var vehicleMatches = await VehicleLookupService.SearchAsync(_searchTerm);
+                var match = vehicleMatches.FirstOrDefault();
+                if (match != null && match.VmfCode > 0)
+                {
+                    _vehicleLabel = match.GGNumber ?? match.RegistrationNumber ?? string.Empty;
+                    var all = await LogbookService.GetAllAsync<LogbookDto>();
+                    _logbooks = all.Where(l => l.vmf_code == match.VmfCode).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DeleteLogbook(LogbookDto logbook)
+    {
+        try
+        {
+            await LogbookService.DeleteAsync(logbook.logbookcode);
+            _logbooks.Remove(logbook);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

@@ -1,5 +1,9 @@
 @page "/troubleshoot/log"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TroubleshootApiService TroubleshootService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Troubleshoot Log - Fleet Information System</PageTitle>
 
@@ -9,14 +13,168 @@
             <i class="bx bx-notepad"></i>
             Troubleshoot Log
         </h1>
-        <p class="page-description">Legacy placeholder for TS_Log/TS_Log.aspx.</p>
+        <p class="page-description">Legacy flow for TS_Log/TS_Log.aspx.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-notepad"></i>
-        <h3>Troubleshoot log pending</h3>
-        <p>This page will mirror the legacy troubleshoot log flow.</p>
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field form-group-full">
+                    <label class="form-label">Select: Department/Site</label>
+                    <select class="form-select" @bind="_selectedUserAccessCode">
+                        <option value="0">Select user/site</option>
+                        @foreach (var option in _siteUsers)
+                        {
+                            <option value="@option.UserAccessCode">
+                                @option.Name @if (!string.IsNullOrWhiteSpace(option.SiteDescription))
+                                {
+                                    <text> - @option.SiteDescription</text>
+                                }
+                            </option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="LoadLogs">Next&gt;</button>
+            </div>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading troubleshoot logs...</p>
+        </div>
+    }
+    else if (_logs.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-notepad"></i>
+            <h3>No troubleshoot logs found</h3>
+            <p>Select a department/site to load troubleshoot logs.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_logs.Count log(s)</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="UpdateLogs">Update Logs</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Logged date</th>
+                            <th>Logged by</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var log in _logs)
+                        {
+                            <tr>
+                                <td>@(log.VehicleIdentifier ?? "-")</td>
+                                <td>@(log.ProblemDescription ?? "-")</td>
+                                <td>@(log.Status ?? "-")</td>
+                                <td>@(log.LoggedDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td>@(log.LoggedBy ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error"></i>
+            <span>@_errorMessage</span>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string? _errorMessage;
+    private int _selectedUserAccessCode;
+    private List<TroubleshootSiteUserDto> _siteUsers = new();
+    private List<TroubleshootLogEntryDto> _logs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSiteUsers();
+    }
+
+    private async Task LoadSiteUsers()
+    {
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            _siteUsers = await TroubleshootService.GetDepartmentSitesAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load department/site list.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadLogs()
+    {
+        if (_selectedUserAccessCode <= 0)
+        {
+            _errorMessage = "Select a department/site before loading logs.";
+            return;
+        }
+
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            var request = new TroubleshootLogSearchRequest
+            {
+                UserAccessCode = _selectedUserAccessCode
+            };
+            _logs = await TroubleshootService.SearchLogsAsync(request);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load troubleshoot logs.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task UpdateLogs()
+    {
+        _errorMessage = null;
+        try
+        {
+            await TroubleshootService.UpdateLogsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to update troubleshoot logs.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+}

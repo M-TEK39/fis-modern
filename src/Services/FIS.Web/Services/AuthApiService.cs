@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using FIS.Web.Models;
 
 namespace FIS.Web.Services;
 
@@ -68,6 +69,110 @@ public class AuthApiService
         _authStateProvider.NotifyAuthenticationStateChanged();
 
         _logger.LogInformation("User logged out");
+    }
+
+    public async Task<ChangePasswordResponse> ChangePasswordAsync(ChangePasswordRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", request);
+        return await HandleChangePasswordResponse(response);
+    }
+
+    public async Task<ChangePasswordResponse> ChangePasswordQuestionAsync(ChangePasswordQuestionRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/change-password-question", request);
+        return await HandleChangePasswordResponse(response);
+    }
+
+    public async Task<UserAdminResponse> ResetLoginAsync(ResetLoginRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/reset-login", request);
+        return await HandleUserAdminResponse(response);
+    }
+
+    public async Task<UserAdminResponse> ForcePasswordAsync(ForcePasswordRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/force-password", request);
+        return await HandleUserAdminResponse(response);
+    }
+
+    public async Task<UserAdminResponse> ForgotPasswordStartAsync(ForgotPasswordStartRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/forgot-password/start", request);
+        return await HandleUserAdminResponse(response);
+    }
+
+    public async Task<UserAdminResponse> ForgotPasswordConfirmAsync(ForgotPasswordConfirmRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/forgot-password/confirm", request);
+        return await HandleUserAdminResponse(response);
+    }
+
+    public async Task<UserAdminResponse> ActivateUserAsync(ActivateUserRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/activate-user", request);
+        return await HandleUserAdminResponse(response);
+    }
+
+    public async Task<UserAdminResponse> DeactivateExpiredPasswordAsync(DeactivateExpiredPasswordRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/deactivate-expired", request);
+        return await HandleUserAdminResponse(response);
+    }
+
+    private async Task<ChangePasswordResponse> HandleChangePasswordResponse(HttpResponseMessage response)
+    {
+        var payload = await TryReadResponseAsync(response);
+        if (response.IsSuccessStatusCode)
+        {
+            return payload ?? new ChangePasswordResponse { Success = true, Message = "Password updated." };
+        }
+
+        var message = await ReadErrorMessage(response);
+        return new ChangePasswordResponse
+        {
+            Success = false,
+            Message = payload?.Message ?? message
+        };
+    }
+
+    private static async Task<ChangePasswordResponse?> TryReadResponseAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<ChangePasswordResponse>();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<UserAdminResponse> HandleUserAdminResponse(HttpResponseMessage response)
+    {
+        var payload = await TryReadUserAdminResponseAsync(response);
+        if (response.IsSuccessStatusCode)
+        {
+            return payload ?? new UserAdminResponse { Success = true, Message = "Operation completed." };
+        }
+
+        var message = await ReadErrorMessage(response);
+        return new UserAdminResponse
+        {
+            Success = false,
+            Message = payload?.Message ?? message
+        };
+    }
+
+    private static async Task<UserAdminResponse?> TryReadUserAdminResponseAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<UserAdminResponse>();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static async Task<string> ReadErrorMessage(HttpResponseMessage response)

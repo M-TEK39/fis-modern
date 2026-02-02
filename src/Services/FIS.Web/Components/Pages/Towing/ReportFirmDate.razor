@@ -1,5 +1,9 @@
 @page "/towing/reports/firm-date"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TowingApiService TowingService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Road Side Call's for a Firm - Fleet Information System</PageTitle>
 
@@ -14,9 +18,90 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-calendar"></i>
-        <h3>Firm/date report pending</h3>
-        <p>This page will mirror the legacy road side firm/date report.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">From Date</label>
+            <input type="date" class="form-input" @bind="_fromDate" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">To Date</label>
+            <input type="date" class="form-input" @bind="_toDate" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-calendar"></i>
+            <h3>No requests found</h3>
+            <p>Choose a date range.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Vehicle</th>
+                            <th>Request Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.Call_refer</td>
+                                <td>@item.vmf_code</td>
+                                <td>@FormatDate(item.Tow_request_date)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private List<TowingDto> _results = new();
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<TowingDto>();
+        try
+        {
+            var all = await TowingService.GetAllAsync<TowingDto>();
+            _results = all.Where(t => (!_fromDate.HasValue || (t.Tow_request_date.HasValue && t.Tow_request_date.Value.Date >= _fromDate.Value.Date)) &&
+                                      (!_toDate.HasValue || (t.Tow_request_date.HasValue && t.Tow_request_date.Value.Date <= _toDate.Value.Date)))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

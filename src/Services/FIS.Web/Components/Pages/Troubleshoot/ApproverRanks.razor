@@ -1,5 +1,9 @@
 @page "/troubleshoot/approver-ranks"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TroubleshootApiService TroubleshootService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Maintain Trip Approvers RANKS - Fleet Information System</PageTitle>
 
@@ -9,14 +13,121 @@
             <i class="bx bx-user-voice"></i>
             Maintain trip approvers RANKS
         </h1>
-        <p class="page-description">Legacy placeholder for GenericEdit.Handler (Ranks).</p>
+        <p class="page-description">Legacy flow for GenericEdit.Handler (Ranks).</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-user-voice"></i>
-        <h3>Approver ranks maintenance pending</h3>
-        <p>This page will mirror the legacy ranks maintenance handler.</p>
-    </div>
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading approver ranks...</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_ranks.Count rank(s)</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="AddRank">Add Rank</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Rank name</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var rank in _ranks)
+                        {
+                            <tr>
+                                <td>
+                                    <input class="form-input" @bind="rank.RankName" />
+                                </td>
+                                <td>
+                                    <input class="form-input" @bind="rank.Description" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveRanks">Save Ranks</button>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert alert-info">
+            <i class="bx bx-info-circle"></i>
+            <span>@_statusMessage</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error"></i>
+            <span>@_errorMessage</span>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string? _statusMessage;
+    private string? _errorMessage;
+    private List<ApproverRankDto> _ranks = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRanks();
+    }
+
+    private async Task LoadRanks()
+    {
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            _ranks = await TroubleshootService.GetApproverRanksAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load approver ranks.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void AddRank()
+    {
+        _ranks.Add(new ApproverRankDto());
+    }
+
+    private async Task SaveRanks()
+    {
+        _statusMessage = null;
+        _errorMessage = null;
+        try
+        {
+            _ranks = await TroubleshootService.SaveApproverRanksAsync(_ranks);
+            _statusMessage = "Approver ranks saved.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to save approver ranks.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+}

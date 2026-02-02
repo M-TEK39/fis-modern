@@ -1,5 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Authorization
+@using FIS.Web.Components.Pages.Users
+@inject NavigationManager Navigation
 @attribute [Authorize]
 
 <div class="legacy-shell">
@@ -21,7 +23,10 @@
     <div class="legacy-main">
         <AppHeader />
         <main class="page-surface">
-            @Body
+            @if (!_suppressBody)
+            {
+                @Body
+            }
         </main>
     </div>
 </div>
@@ -33,3 +38,40 @@
     </div>
     <a class="dismiss" role="button" aria-label="Dismiss error">🗙</a>
 </div>
+
+@code {
+    private bool _suppressBody;
+
+    protected override void OnInitialized()
+    {
+        UpdateBodyVisibility();
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        UpdateBodyVisibility();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void UpdateBodyVisibility()
+    {
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var path = "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
+
+        if (path == "/")
+        {
+            _suppressBody = false;
+            return;
+        }
+
+        _suppressBody = UserAdminRoutes.IsUserAdminPath(path)
+            || path == "/change-password"
+            || path == "/change-password-question";
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+}

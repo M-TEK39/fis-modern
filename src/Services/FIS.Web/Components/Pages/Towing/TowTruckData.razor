@@ -1,5 +1,10 @@
 @page "/towing/tow-truck-data"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject TowingApiService TowingService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Road Assistance Data - Fleet Information System</PageTitle>
 
@@ -14,9 +19,144 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-truck"></i>
-        <h3>Road assistance data pending</h3>
-        <p>This page will mirror the legacy tow truck data maintenance.</p>
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadRequests">Load Requests</button>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_requests.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-truck"></i>
+            <h3>No road assistance data</h3>
+            <p>Load requests to edit towing data.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Vehicle</th>
+                            <th>Location</th>
+                            <th>Problem</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var request in _requests)
+                        {
+                            <tr>
+                                <td>@request.Call_refer</td>
+                                <td>@request.vmf_code</td>
+                                <td>@request.Tow_location_start</td>
+                                <td>@request.Vehicle_problem</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => EditRequest(request)">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_showForm)
+    {
+        <Modal IsVisible="_showForm" Title="Update Road Assistance" ShowFooter="false" OnCancel="HideForm">
+            <ChildContent>
+                <div class="form-card">
+                    <div class="form-row">
+                        <label class="form-label">Tow Location</label>
+                        <input class="form-input" @bind="_editing!.Tow_location_start" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Vehicle Problem</label>
+                        <input class="form-input" @bind="_editing!.Vehicle_problem" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Keys</label>
+                        <input class="form-input" @bind="_editing!.Keys" />
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="SaveRequest">Submit</button>
+                    </div>
+                </div>
+            </ChildContent>
+        </Modal>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private List<TowingDto> _requests = new();
+    private TowingDto? _editing;
+
+    private async Task LoadRequests()
+    {
+        _loading = true;
+        _requests = new List<TowingDto>();
+        try
+        {
+            _requests = await TowingService.GetAllAsync<TowingDto>();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void EditRequest(TowingDto request)
+    {
+        _editing = request;
+        _showForm = true;
+    }
+
+    private async Task SaveRequest()
+    {
+        if (_editing == null)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            await TowingService.UpdateAsync(_editing.Towing_code, _editing);
+            _showForm = false;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HideForm()
+    {
+        _showForm = false;
+        await InvokeAsync(StateHasChanged);
+    }
+}

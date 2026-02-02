@@ -1,5 +1,9 @@
 @page "/notice-management"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject NoticeApiService NoticeService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Notice Management - Fleet Information System</PageTitle>
 
@@ -20,36 +24,115 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-bell"></i>
-        <h3>No notices to display</h3>
-        <p>Please click on the Create button to create one.</p>
-    </div>
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading notices...</p>
+        </div>
+    }
+    else if (_schedules.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-bell"></i>
+            <h3>No notices to display</h3>
+            <p>Please click on the Create button to create one.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Notice Schedule List</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Notice title</th>
+                            <th>Display start date</th>
+                            <th>Display end date</th>
+                            <th>Created by</th>
+                            <th>Created on</th>
+                            <th>Sort order</th>
+                            <th></th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var schedule in _schedules)
+                        {
+                            <tr>
+                                <td>@schedule.TitleField</td>
+                                <td>@(schedule.StartDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td>@(schedule.EndDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td>@(schedule.CreatedBy ?? "-")</td>
+                                <td>@(schedule.CreatedDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td>@(schedule.SortOrder?.ToString() ?? "-")</td>
+                                <td>
+                                    <a class="btn btn-secondary btn-sm" href="/notice-management/detail?noticeid=@schedule.NoticeId&scheduleid=@schedule.NoticeScheduleId&createdate=@(schedule.CreatedDate?.ToString("yyyy/MM/dd"))">Edit Notice</a>
+                                </td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteSchedule(schedule.NoticeScheduleId)">Delete</button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Notice Schedule List</span>
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error"></i>
+            <span>@_errorMessage</span>
         </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Notice title</th>
-                        <th>Display start date</th>
-                        <th>Display end date</th>
-                        <th>Created by</th>
-                        <th>Created on</th>
-                        <th>Sort order</th>
-                        <th></th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="8">There are currently no notices to display. Please click on the Create button to create one.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string? _errorMessage;
+    private List<NoticeScheduleDto> _schedules = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSchedules();
+    }
+
+    private async Task LoadSchedules()
+    {
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            _schedules = await NoticeService.GetSchedulesAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load notice schedules.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DeleteSchedule(int scheduleId)
+    {
+        _errorMessage = null;
+        try
+        {
+            await NoticeService.DeleteScheduleAsync(scheduleId);
+            await LoadSchedules();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to delete notice schedule.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+}

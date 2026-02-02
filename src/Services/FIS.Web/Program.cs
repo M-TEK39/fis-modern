@@ -173,6 +173,18 @@ builder.Services.AddHttpClient<NotificationApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
+builder.Services.AddHttpClient<TroubleshootApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
+builder.Services.AddHttpClient<NoticeApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
 builder.Services.AddHttpClient<ReportCatalogApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");

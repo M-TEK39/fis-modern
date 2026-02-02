@@ -1,5 +1,11 @@
 @page "/monitor/edit"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject MonitorApiService MonitorService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Edit / Update an Existing Inquiry - Fleet Information System</PageTitle>
 
@@ -9,14 +15,122 @@
             <i class="bx bx-edit-alt"></i>
             Edit / Update an Existing Inquiry
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/MNT_mon_upg_getnum.aspx.</p>
+        <p class="page-description">Legacy Monitor/MNT_mon_upg_getnum.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-refresh"></i>
-        <h3>Monitor inquiry update pending</h3>
-        <p>This page will mirror the legacy inquiry update flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Reference Number</label>
+            <input class="form-input" @bind="_referenceNumber" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadInquiry">Submit</button>
+            <a class="btn btn-secondary" href="/monitor">Menu</a>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+
+    @if (_showForm && _editing != null)
+    {
+        <div class="form-card">
+            <div class="form-row">
+                <label class="form-label">Capture Date</label>
+                <input type="date" class="form-input" @bind="_editing.Capture_dat" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Inquiry Type</label>
+                <input class="form-input" @bind="_editing.Inquiry_type" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Inquiry Description</label>
+                <input class="form-input" @bind="_editing.Inquiry_Desc" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Name</label>
+                <input class="form-input" @bind="_editing.Driver_name" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Persal No</label>
+                <input class="form-input" @bind="_editing.Driver_persalno" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Site</label>
+                <select class="form-select" @bind="_editing.Driver_Site">
+                    <option value="">Select site</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveInquiry">Submit</button>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _referenceNumber = string.Empty;
+    private MonitorDto? _editing;
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadInquiry()
+    {
+        _loading = true;
+        try
+        {
+            if (short.TryParse(_referenceNumber, out var code))
+            {
+                _editing = await MonitorService.GetByIdAsync<MonitorDto>(code);
+                _showForm = _editing != null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveInquiry()
+    {
+        if (_editing == null)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            await MonitorService.UpdateAsync(_editing.monitor_code, _editing);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

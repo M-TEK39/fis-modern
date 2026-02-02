@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using FIS.Web.Models;
 
 namespace FIS.Web.Services;
 
@@ -13,17 +14,17 @@ public class UserApiService
         _logger = logger;
     }
 
-    public async Task<List<ApiUserDto>> GetAllAsync()
+    public async Task<List<UserSummaryDto>> GetAllSummariesAsync()
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<ApiUserDto>>("api/User");
-            return result ?? new List<ApiUserDto>();
+            var result = await _httpClient.GetFromJsonAsync<List<UserSummaryDto>>("api/User");
+            return result ?? new List<UserSummaryDto>();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching users");
-            return new List<ApiUserDto>();
+            return new List<UserSummaryDto>();
         }
     }
 

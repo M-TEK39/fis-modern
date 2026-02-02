@@ -1,5 +1,10 @@
 @page "/monitor/reports/dept-site-period"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject MonitorApiService MonitorService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Inquiry Info for Dept / Site - Fleet Information System</PageTitle>
 
@@ -14,9 +19,108 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-buildings"></i>
-        <h3>Inquiry report pending</h3>
-        <p>This page will mirror the legacy dept/site period report.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Site</label>
+            <select class="form-select" @bind="_siteCode">
+                <option value="">Select site</option>
+                @foreach (var site in _sites)
+                {
+                    <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                }
+            </select>
+        </div>
+        <div class="form-row">
+            <label class="form-label">From Date</label>
+            <input type="date" class="form-input" @bind="_fromDate" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">To Date</label>
+            <input type="date" class="form-input" @bind="_toDate" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-buildings"></i>
+            <h3>No inquiries found</h3>
+            <p>Choose a site and date range.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Inquiry Type</th>
+                            <th>Capture Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.monitor_code</td>
+                                <td>@item.Inquiry_type</td>
+                                <td>@FormatDate(item.Capture_dat)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private short? _siteCode;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private List<SiteResponseDto> _sites = new();
+    private List<MonitorDto> _results = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<MonitorDto>();
+        try
+        {
+            var all = await MonitorService.GetAllAsync<MonitorDto>();
+            _results = all.Where(m => (!_siteCode.HasValue || m.Driver_Site == _siteCode) &&
+                                      (!_fromDate.HasValue || (m.Capture_dat.HasValue && m.Capture_dat.Value.Date >= _fromDate.Value.Date)) &&
+                                      (!_toDate.HasValue || (m.Capture_dat.HasValue && m.Capture_dat.Value.Date <= _toDate.Value.Date)))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

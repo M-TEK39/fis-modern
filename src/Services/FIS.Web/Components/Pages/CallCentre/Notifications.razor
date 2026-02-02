@@ -1,5 +1,8 @@
 @page "/call-centre/notifications"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Notification List for eMail Addresses - Fleet Information System</PageTitle>
 
@@ -9,14 +12,73 @@
             <i class="bx bx-envelope"></i>
             Notification List for eMail Addresses
         </h1>
-        <p class="page-description">Legacy placeholder for CallCentre/MNT_call_notify_pass.aspx.</p>
+        <p class="page-description">Legacy CallCentre/MNT_call_notify_pass.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-envelope"></i>
-        <h3>Notification list pending</h3>
-        <p>This page will mirror the legacy notification list flow.</p>
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadNotifications">Load Notifications</button>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_notifications.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-envelope"></i>
+            <h3>No notifications available</h3>
+            <p>Notification data endpoint pending.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _notifications)
+                        {
+                            <tr>
+                                <td>@item</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private List<string> _notifications = new();
+
+    private async Task LoadNotifications()
+    {
+        _loading = true;
+        _notifications = new List<string>();
+        try
+        {
+            _notifications = await CallCentreService.GetAllAsync<string>();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

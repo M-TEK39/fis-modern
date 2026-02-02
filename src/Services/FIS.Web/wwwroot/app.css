@@ -634,6 +634,12 @@ textarea.form-input:focus,
     border: 1px solid var(--fis-border);
 }
 
+.alert-success {
+    background: hsl(142, 76%, 36%, 0.12);
+    color: hsl(142, 76%, 24%);
+    border: 1px solid hsl(142, 76%, 36%, 0.3);
+}
+
 .alert-error i {
     font-size: 1.25rem;
 }
@@ -643,6 +649,12 @@ textarea.form-input:focus,
         background: hsl(0, 63%, 31%, 0.2);
         color: hsl(0, 84%, 70%);
         border-color: hsl(0, 63%, 31%, 0.5);
+    }
+
+    .alert-success {
+        background: hsl(142, 52%, 25%, 0.35);
+        color: hsl(142, 70%, 72%);
+        border-color: hsl(142, 52%, 25%, 0.6);
     }
 }
 
@@ -2496,6 +2508,222 @@ body.sidebar-collapsed .legacy-shell .sidebar-notification {
     border-radius: 0.8rem;
     background: var(--fis-surface);
     border: 1px solid var(--fis-border);
+}
+
+.legacy-panel {
+    max-width: 520px;
+    margin: 0 auto;
+    font-size: 0.95rem;
+    font-family: Verdana, Arial, sans-serif;
+    color: #b00000;
+}
+
+.legacy-panel-title {
+    margin: 0 0 0.75rem;
+    text-align: center;
+    font-size: 1.05rem;
+    color: #3d3d6b;
+    font-family: monospace;
+    letter-spacing: 0.02em;
+}
+
+.legacy-panel p {
+    margin: 0 0 0.85rem;
+    color: #3d3d6b;
+}
+
+.legacy-requirements {
+    margin: 0.75rem 0 1rem;
+}
+
+.legacy-requirements strong {
+    color: #3d3d6b;
+}
+
+.legacy-list {
+    margin: 0.5rem 0 0;
+    padding-left: 1.4rem;
+    color: #3d3d6b;
+}
+
+.legacy-note {
+    color: #3d3d6b;
+    margin-bottom: 0.75rem;
+}
+
+.legacy-form-table {
+    width: 100%;
+    background: #cfd6e1;
+    border-collapse: collapse;
+}
+
+.legacy-form-table td {
+    padding: 0.35rem 0.5rem;
+    vertical-align: middle;
+    color: #3d3d6b;
+}
+
+.legacy-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.legacy-table td {
+    padding: 0.35rem 0.5rem;
+    color: #3d3d6b;
+    vertical-align: middle;
+}
+
+.legacy-header-row {
+    background-color: #3d3d6b;
+    color: #cead4d;
+    font-family: sans-serif;
+    text-transform: capitalize;
+}
+
+.legacy-header-row td {
+    padding: 0.4rem 0.6rem;
+    color: #cead4d;
+    text-align: center;
+}
+
+.legacy-form-text {
+    text-align: center;
+    color: #3d3d6b;
+    font-size: 0.9rem;
+}
+
+.legacy-inline-note {
+    font-size: 0.8rem;
+    color: #3d3d6b;
+    font-style: italic;
+}
+
+.legacy-label {
+    display: inline-block;
+    min-width: 140px;
+    color: #3d3d6b;
+}
+
+.legacy-actions {
+    text-align: center;
+    padding-top: 0.75rem;
+}
+
+.legacy-button {
+    display: inline-block;
+    background-color: #3d3d6b;
+    color: #cac9d5;
+    font-size: 0.75rem;
+    font-family: Verdana, Arial, sans-serif;
+    border: none;
+    padding: 0.35rem 0.75rem;
+    margin: 0 0.25rem;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.legacy-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.legacy-checkbox-list {
+    columns: 2;
+    column-gap: 2rem;
+    color: #3d3d6b;
+    font-family: Verdana, Arial, sans-serif;
+    font-size: 0.8rem;
+}
+
+.legacy-checkbox-item {
+    display: inline-block;
+    width: 100%;
+    margin: 0.15rem 0;
+}
+
+.legacy-icon-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #3d3d6b;
+    padding: 0.1rem 0.2rem;
+}
+
+.legacy-icon-button i {
+    font-size: 1rem;
+}
+
+.legacy-letter-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    color: #3d3d6b;
+    font-family: Verdana, Arial, sans-serif;
+    font-size: 0.85rem;
+}
+
+.legacy-letter {
+    color: #3d3d6b;
+    text-decoration: none;
+    padding: 0.1rem 0.2rem;
+}
+
+.legacy-letter.active {
+    font-weight: bold;
+    text-decoration: underline;
+}
+
+.legacy-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: Verdana, Arial, sans-serif;
+    font-size: 0.8rem;
+}
+
+.legacy-data-table th {
+    background: #3d3d6b;
+    color: #cac9d5;
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+}
+
+.legacy-data-table td {
+    padding: 0.3rem 0.45rem;
+    border-bottom: 1px solid #cfd6e1;
+    color: #3d3d6b;
+}
+
+.legacy-menu {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.legacy-menu-header {
+    background-color: #3d3d6b;
+    color: #cead4d;
+    font-family: sans-serif;
+    text-transform: capitalize;
+    padding: 0.4rem 0.6rem;
+}
+
+.legacy-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 0.35rem 0.6rem;
+    background-color: #cfd6e1;
+    color: navy;
+    font-size: 0.75rem;
+    font-family: Verdana, Arial, sans-serif;
+    border: none;
+    cursor: default;
+}
+
+.legacy-menu-item:hover {
+    background-color: #3d3d6b;
+    color: #cfd6e1;
+    cursor: pointer;
 }
 
 .app-header {

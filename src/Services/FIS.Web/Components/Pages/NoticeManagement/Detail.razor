@@ -1,5 +1,10 @@
 @page "/notice-management/detail"
 @rendermode InteractiveServer
+@using System.Globalization
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject NoticeApiService NoticeService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Notice Detail Management - Fleet Information System</PageTitle>
 
@@ -9,14 +14,208 @@
             <i class="bx bx-edit-alt"></i>
             Notice Detail Management
         </h1>
-        <p class="page-description">Legacy placeholder for Admin/NoticeDetailManagement.aspx.</p>
+        <p class="page-description">Legacy flow for Admin/NoticeDetailManagement.aspx.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-edit-alt"></i>
-        <h3>Notice detail pending</h3>
-        <p>This page will mirror the legacy notice detail editor.</p>
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Starting display date</label>
+                    <input type="date" class="form-input" @bind="_scheduleStart" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Ending display date</label>
+                    <input type="date" class="form-input" @bind="_scheduleEnd" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Display order</label>
+                    <input type="number" class="form-input" @bind="_scheduleSortOrder" />
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h3 class="form-section-title">
+                    <i class="bx bx-message-square-detail"></i>
+                    Client Communication
+                </h3>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Date</label>
+                        <input type="date" class="form-input" @bind="_noticeDate" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">From</label>
+                        <input class="form-input" @bind="_noticeFrom" />
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Title</label>
+                        <input class="form-input" @bind="_noticeTitle" />
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Body</label>
+                        <textarea class="form-textarea" @bind="_noticeBody"></textarea>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Responsible person</label>
+                        <input class="form-input" @bind="_noticePerson" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Person's title</label>
+                        <input class="form-input" @bind="_noticePersonTitle" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Created date</label>
+                        <input type="date" class="form-input" value="@_createdDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)" disabled />
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveNotice">@_submitLabel</button>
+                <a class="btn btn-secondary" href="/notice-management">Back to main management screen</a>
+            </div>
+        </div>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert alert-info">
+            <i class="bx bx-info-circle"></i>
+            <span>@_statusMessage</span>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error"></i>
+            <span>@_errorMessage</span>
+        </div>
+    }
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "noticeid")]
+    public int NoticeId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "scheduleid")]
+    public int ScheduleId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "createdate")]
+    public string? CreatedDateValue { get; set; }
+
+    private string? _statusMessage;
+    private string? _errorMessage;
+    private string _submitLabel = "Create Notice";
+
+    private DateTime _createdDate = DateTime.Today;
+    private DateTime? _scheduleStart = DateTime.Today;
+    private DateTime? _scheduleEnd = DateTime.Today;
+    private int _scheduleSortOrder;
+
+    private DateTime? _noticeDate = DateTime.Today;
+    private string? _noticeFrom;
+    private string? _noticeTitle;
+    private string? _noticeBody;
+    private string? _noticePerson;
+    private string? _noticePersonTitle;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(CreatedDateValue) && DateTime.TryParse(CreatedDateValue, out var parsed))
+        {
+            _createdDate = parsed;
+        }
+
+        if (ScheduleId > 0 || NoticeId > 0)
+        {
+            await LoadNotice();
+        }
+    }
+
+    private async Task LoadNotice()
+    {
+        _errorMessage = null;
+        try
+        {
+            if (NoticeId > 0)
+            {
+                var notice = await NoticeService.GetNoticeAsync(NoticeId);
+                if (notice is not null)
+                {
+                    _noticeDate = notice.NoticeDate ?? _noticeDate;
+                    _noticeFrom = notice.NoticeFrom;
+                    _noticeTitle = notice.NoticeTitle;
+                    _noticeBody = notice.NoticeBody;
+                    _noticePerson = notice.NoticePerson;
+                    _noticePersonTitle = notice.NoticePersonTitle;
+                    _submitLabel = "Update Notice";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load notice details.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task SaveNotice()
+    {
+        _statusMessage = null;
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_noticeFrom) || string.IsNullOrWhiteSpace(_noticeTitle) || string.IsNullOrWhiteSpace(_noticePerson))
+        {
+            _errorMessage = "Please complete required fields before saving.";
+            return;
+        }
+
+        try
+        {
+            var noticeRequest = new NoticeSaveRequest
+            {
+                NoticeId = NoticeId,
+                NoticeDate = _noticeDate,
+                NoticeFrom = _noticeFrom,
+                NoticeTitle = _noticeTitle,
+                NoticeBody = _noticeBody,
+                NoticePerson = _noticePerson,
+                NoticePersonTitle = _noticePersonTitle
+            };
+
+            var savedNotice = await NoticeService.SaveNoticeAsync(noticeRequest);
+            if (savedNotice is not null)
+            {
+                NoticeId = savedNotice.NoticeId;
+            }
+
+            var scheduleRequest = new NoticeScheduleSaveRequest
+            {
+                NoticeScheduleId = ScheduleId,
+                NoticeId = NoticeId,
+                StartDate = _scheduleStart,
+                EndDate = _scheduleEnd,
+                SortOrder = _scheduleSortOrder,
+                CreatedBy = null
+            };
+
+            var savedSchedule = await NoticeService.SaveScheduleAsync(scheduleRequest);
+            if (savedSchedule is not null)
+            {
+                ScheduleId = savedSchedule.NoticeScheduleId;
+            }
+
+            _statusMessage = "Notice saved.";
+            _submitLabel = "Update Notice";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to save notice.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+}

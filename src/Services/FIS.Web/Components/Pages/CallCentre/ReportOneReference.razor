@@ -1,5 +1,9 @@
 @page "/call-centre/reports/one-reference"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Incident Report on ONE Reference Number - Fleet Information System</PageTitle>
 
@@ -14,9 +18,73 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Incident report pending</h3>
-        <p>This page will mirror the legacy one reference number report.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Reference Number</label>
+            <input class="form-input" @bind="_referenceNumber" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_result == null)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file"></i>
+            <h3>No incident found</h3>
+            <p>Enter a reference number to view incident details.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <tbody>
+                        <tr><th>Reference</th><td>@_result.Call_centre_code</td></tr>
+                        <tr><th>Call Date</th><td>@FormatDate(_result.Call_date)</td></tr>
+                        <tr><th>Caller</th><td>@_result.Caller_name</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string _referenceNumber = string.Empty;
+    private CallCentreDto? _result;
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _result = null;
+        try
+        {
+            if (short.TryParse(_referenceNumber, out var code))
+            {
+                _result = await CallCentreService.GetByIdAsync<CallCentreDto>(code);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

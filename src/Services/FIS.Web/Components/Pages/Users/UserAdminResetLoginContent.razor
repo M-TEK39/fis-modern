@@ -1,0 +1,100 @@
+@using FIS.Web.Components.Pages.Users
+@using FIS.Web.Services
+@using FIS.Web.Models
+@using System.Linq
+@inject AuthApiService AuthApiService
+@inject UserApiService UserApiService
+
+<div class="card">
+    <div class="card-header">
+        <div>
+            <h3>Select the User you want to Reset</h3>
+            <p class="text-muted">Reset the password counter for a user account.</p>
+        </div>
+        <a class="btn btn-secondary btn-sm"
+           href="@UserAdminNavigation.GetMenuLink(Navigation)"
+           @onclick="NavigateToMenu"
+           @onclick:preventDefault="true">Back</a>
+    </div>
+    <div class="card-body">
+        <div class="search-bar">
+            <div class="search-input-wrapper">
+                <i class="bx bx-search"></i>
+                <input class="search-input" type="text" placeholder="Start typing for a list of valid users" @bind="_username" />
+            </div>
+        </div>
+        <div style="margin-top: 0.75rem;">
+            <button class="btn btn-primary" type="button" @onclick="HandleResetLogin" disabled="@_submitting">
+                @(_submitting ? "Resetting..." : "Reset Login")
+            </button>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-error">
+                <i class="bx bx-error-circle"></i>
+                @_errorMessage
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(_successMessage))
+        {
+            <div class="alert alert-success">
+                @_successMessage
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+    private string _username = string.Empty;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _submitting;
+    private List<UserSummaryDto> _userSummaries = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _userSummaries = await UserApiService.GetAllSummariesAsync();
+    }
+
+    private void NavigateToMenu()
+    {
+        Navigation.NavigateTo(UserAdminNavigation.GetMenuLink(Navigation));
+    }
+
+    private async Task HandleResetLogin()
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        if (string.IsNullOrWhiteSpace(_username))
+        {
+            _errorMessage = "Username is required.";
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            var username = ResolveUsername();
+            var response = await AuthApiService.ResetLoginAsync(new ResetLoginRequest { Username = username });
+            _successMessage = response.Success ? (response.Message ?? "Login reset successfully.") : null;
+            _errorMessage = response.Success ? null : (response.Message ?? "Login reset failed.");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Login reset failed: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private string ResolveUsername()
+    {
+        var match = _userSummaries.FirstOrDefault(u =>
+            string.Equals(u.UserName, _username, StringComparison.OrdinalIgnoreCase));
+        return match?.UserName ?? _username;
+    }
+}

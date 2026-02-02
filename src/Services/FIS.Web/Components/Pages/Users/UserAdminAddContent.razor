@@ -1,0 +1,219 @@
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using FIS.Web.Components.Pages.Users
+@using FIS.Web.Services
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject UserApiService UserApiService
+
+<div style="display: flex; flex-direction: column; gap: 1.25rem;">
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3>Create New User Account</h3>
+                <p class="text-muted">Enter the credentials required to create a new user account.</p>
+            </div>
+            <a class="btn btn-secondary btn-sm"
+               href="@UserAdminNavigation.GetMenuLink(Navigation)"
+               @onclick="NavigateToMenu"
+               @onclick:preventDefault="true">Back to Menu</a>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">User Name</label>
+                    <input class="form-input" type="text" @bind="_userName" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">E-mail</label>
+                    <input class="form-input" type="email" @bind="_email" />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3>User Profile</h3>
+                <p class="text-muted">Capture profile details exactly as required in the legacy flow.</p>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">First Name</label>
+                    <input class="form-input" type="text" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Last Name</label>
+                    <input class="form-input" type="text" />
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label">Site</label>
+                    <select class="form-select">
+                        <option>Select a Site</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Position</label>
+                    <select class="form-select">
+                        <option>Select Position</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Persal</label>
+                    <input class="form-input" type="text" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Contract Number</label>
+                    <input class="form-input" type="text" />
+                    <span class="text-muted">(if No PersalNo is available)</span>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">ID</label>
+                    <input class="form-input" type="text" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Passport Number</label>
+                    <input class="form-input" type="text" />
+                    <span class="text-muted">(if No SA ID is available)</span>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Tel</label>
+                    <input class="form-input" type="text" @bind="_telephone" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Fax</label>
+                    <input class="form-input" type="text" />
+                    <span class="text-muted">(optional)</span>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Cell</label>
+                    <input class="form-input" type="text" />
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label">Client Approver Name</label>
+                    <select class="form-select">
+                        <option>Select an Approver (after valid Site selection)</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Added By</label>
+                    <input class="form-input" type="text" value="@_displayName" readonly />
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <div>
+                <h3>Access Level Data</h3>
+                <p class="text-muted">Select module access for this user.</p>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="form-grid">
+                @foreach (var role in UserAdminRoleData.Roles)
+                {
+                    <label class="form-label form-checkbox">
+                        <input type="checkbox" />
+                        <span>@role</span>
+                    </label>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="page-actions">
+        <button class="btn btn-primary" type="button" @onclick="HandleCreateUser" disabled="@_submitting">
+            @(_submitting ? "Creating..." : "Create User")
+        </button>
+        <button class="btn btn-secondary" type="button" @onclick="ClearValues">Clear Values</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error-circle"></i>
+            @_errorMessage
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_successMessage))
+    {
+        <div class="alert alert-success">
+            @_successMessage
+        </div>
+    }
+</div>
+
+@code {
+    private string _displayName = "Authenticated User";
+    private string _userName = string.Empty;
+    private string _email = string.Empty;
+    private string _telephone = string.Empty;
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _submitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _displayName = ResolveDisplayName(authState.User);
+    }
+
+    private static string ResolveDisplayName(ClaimsPrincipal user)
+    {
+        var name = user.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            return name;
+        }
+
+        var email = user.FindFirst(ClaimTypes.Email)?.Value
+            ?? user.FindFirst("preferred_username")?.Value
+            ?? user.Identity?.Name;
+
+        return string.IsNullOrWhiteSpace(email) ? "Authenticated User" : email;
+    }
+
+    private void NavigateToMenu()
+    {
+        Navigation.NavigateTo(UserAdminNavigation.GetMenuLink(Navigation));
+    }
+
+    private async Task HandleCreateUser()
+    {
+        _errorMessage = null;
+        _successMessage = null;
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _errorMessage = "Email is required.";
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            await UserApiService.CreateAsync(_email, _telephone);
+            _successMessage = "User created successfully.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"User creation failed: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void ClearValues()
+    {
+        _userName = string.Empty;
+        _email = string.Empty;
+        _telephone = string.Empty;
+        _errorMessage = null;
+        _successMessage = null;
+    }
+}

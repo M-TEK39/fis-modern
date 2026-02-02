@@ -1,5 +1,10 @@
 @page "/call-centre/incident/edit"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Edit / Update an Existing Incident - Fleet Information System</PageTitle>
 
@@ -9,14 +14,111 @@
             <i class="bx bx-edit-alt"></i>
             Edit / Update an Existing Incident
         </h1>
-        <p class="page-description">Legacy placeholder for CallCentre/MNT_call_upd_getcode.aspx.</p>
+        <p class="page-description">Legacy CallCentre/MNT_call_upd_getcode.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-edit-alt"></i>
-        <h3>Incident update pending</h3>
-        <p>This page will mirror the legacy incident update flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Reference Number</label>
+            <input class="form-input" @bind="_referenceNumber" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadIncident">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+
+    @if (_showForm && _editing != null)
+    {
+        <div class="form-card">
+            <div class="form-row">
+                <label class="form-label">Call Date</label>
+                <input type="date" class="form-input" @bind="_editing.Call_date" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Call Time</label>
+                <input type="time" class="form-input" @bind="_callTime" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Capture Name</label>
+                <input class="form-input" @bind="_editing.Capture_name" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Caller Name</label>
+                <input class="form-input" @bind="_editing.Caller_name" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveIncident">Submit</button>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _referenceNumber = string.Empty;
+    private TimeOnly? _callTime;
+    private CallCentreDto? _editing;
+
+    private async Task LoadIncident()
+    {
+        _loading = true;
+        try
+        {
+            if (short.TryParse(_referenceNumber, out var code))
+            {
+                _editing = await CallCentreService.GetByIdAsync<CallCentreDto>(code);
+                if (_editing?.Call_time.HasValue == true)
+                {
+                    _callTime = TimeOnly.FromDateTime(_editing.Call_time.Value);
+                }
+                _showForm = _editing != null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveIncident()
+    {
+        if (_editing == null)
+        {
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            if (_callTime.HasValue)
+            {
+                _editing.Call_time = DateTime.Today.Add(_callTime.Value.ToTimeSpan());
+            }
+
+            await CallCentreService.UpdateAsync(_editing.Call_centre_code, _editing);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

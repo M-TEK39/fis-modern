@@ -1,0 +1,37 @@
+@using FIS.Web.Components.Pages.Users
+
+@switch (RouteKey)
+{
+    case UserAdminRoutes.Add:
+        <UserAdminAddContent />
+        break;
+    case UserAdminRoutes.Edit:
+        <UserAdminEditContent />
+        break;
+    case UserAdminRoutes.ResetLogin:
+        <UserAdminResetLoginContent />
+        break;
+    case UserAdminRoutes.Deactivate:
+        <UserAdminDeactivateContent />
+        break;
+    case UserAdminRoutes.ViewUsers:
+        <UserAdminViewUsersContent />
+        break;
+    case UserAdminRoutes.ChangePasswordQuestion:
+        <UserAdminChangePasswordQuestionContent />
+        break;
+    case UserAdminRoutes.ForcePassword:
+        <UserAdminForcePasswordContent />
+        break;
+    case UserAdminRoutes.ForgotPassword:
+        <UserAdminForgotPasswordContent />
+        break;
+    default:
+        <UserAdminMenuContent />
+        break;
+}
+
+@code {
+    [Parameter]
+    public string RouteKey { get; set; } = UserAdminRoutes.Menu;
+}

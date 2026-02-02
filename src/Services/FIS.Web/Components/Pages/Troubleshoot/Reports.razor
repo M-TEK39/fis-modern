@@ -1,5 +1,9 @@
 @page "/troubleshoot/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TroubleshootApiService TroubleshootService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Troubleshoot General Reports - Fleet Information System</PageTitle>
 
@@ -9,14 +13,163 @@
             <i class="bx bx-file"></i>
             Troubleshoot General Reports
         </h1>
-        <p class="page-description">Legacy placeholder for TS_Log/RPT_type_select.aspx.</p>
+        <p class="page-description">Legacy flow for TS_Log/RPT_type_select.aspx.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Troubleshoot reports pending</h3>
-        <p>This page will mirror the legacy troubleshoot reports selection.</p>
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Problem description keyword</label>
+                    <input class="form-input" @bind="_filter.ProblemKeyword" placeholder="Keyword(s)" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">User</label>
+                    <select class="form-select" @bind="_filter.UserAccessCode">
+                        <option value="">ALL USERS</option>
+                        @foreach (var user in _users)
+                        {
+                            <option value="@user.UserAccessCode">
+                                @if (!string.IsNullOrWhiteSpace(user.LastName) || !string.IsNullOrWhiteSpace(user.FirstName))
+                                {
+                                    <text>@user.LastName @user.FirstName</text>
+                                }
+                                else
+                                {
+                                    <text>@user.Name</text>
+                                }
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">From</label>
+                    <input type="date" class="form-input" @bind="_filter.FromDate" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">To</label>
+                    <input type="date" class="form-input" @bind="_filter.ToDate" />
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label form-checkbox">
+                        <input type="checkbox" @bind="_filter.OpenInExcel" />
+                        Open result in Excel
+                    </label>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+            </div>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading troubleshoot report...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file"></i>
+            <h3>No report data</h3>
+            <p>Submit a report request to load results.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_results.Count result(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Vehicle</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Logged date</th>
+                            <th>Logged by</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _results)
+                        {
+                            <tr>
+                                <td>@(row.VehicleIdentifier ?? "-")</td>
+                                <td>@(row.ProblemDescription ?? "-")</td>
+                                <td>@(row.Status ?? "-")</td>
+                                <td>@(row.LoggedDate?.ToString("yyyy/MM/dd") ?? "-")</td>
+                                <td>@(row.LoggedBy ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error">
+            <i class="bx bx-error"></i>
+            <span>@_errorMessage</span>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string? _errorMessage;
+    private List<TroubleshootUserDto> _users = new();
+    private List<TroubleshootLogEntryDto> _results = new();
+    private TroubleshootReportFilter _filter = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            _users = await TroubleshootService.GetUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load troubleshoot users.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            _results = await TroubleshootService.GetGeneralReportsAsync(_filter);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to load troubleshoot report.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

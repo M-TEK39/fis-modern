@@ -1,5 +1,11 @@
 @page "/tracking/maintenance"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject TrackingApiService TrackingService
+@inject VehicleLookupApiService VehicleLookupService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Tracking Maintenance - Fleet Information System</PageTitle>
 
@@ -9,14 +15,219 @@
             <i class="bx bx-wrench"></i>
             Tracking Maintenance
         </h1>
-        <p class="page-description">Legacy placeholder for Tracking/MNT_track_getreg.aspx.</p>
+        <p class="page-description">Legacy Tracking/MNT_track_getreg.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-wrench"></i>
-        <h3>Tracking maintenance pending</h3>
-        <p>This page will mirror the legacy tracking maintenance flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / Reg Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchTracking">Search</button>
+            <button class="btn btn-secondary" @onclick="PrepareAdd">Add</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_tracking.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-wrench"></i>
+            <h3>No tracking records found</h3>
+            <p>Search by GG/Reg number to view tracking maintenance.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Tracker Number</th>
+                            <th>Install Date</th>
+                            <th>Track Type</th>
+                            <th>Remove Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _tracking)
+                        {
+                            <tr>
+                                <td>@item.track_num</td>
+                                <td>@FormatDate(item.install_date)</td>
+                                <td>@item.track_type</td>
+                                <td>@FormatDate(item.remove_date)</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => EditTracking(item)">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_showForm)
+    {
+        <Modal IsVisible="_showForm" Title="Tracking Maintenance" ShowFooter="false" OnCancel="HideForm">
+            <ChildContent>
+                <div class="form-card">
+                    <div class="form-row">
+                        <label class="form-label">Tracker Number</label>
+                        <input class="form-input" @bind="_form.track_num" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Install Date</label>
+                        <input type="date" class="form-input" @bind="_form.install_date" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Tracker Status</label>
+                        <input class="form-input" @bind="_form.track_status" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Tracker Type</label>
+                        <input class="form-input" @bind="_form.track_type" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Previous GG</label>
+                        <input class="form-input" @bind="_form.gg_previous" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Follow GG</label>
+                        <input class="form-input" @bind="_form.gg_follow" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Remove Date</label>
+                        <input type="date" class="form-input" @bind="_form.remove_date" />
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label">Notes</label>
+                        <input class="form-input" @bind="_form.track_note" />
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" @onclick="SaveTracking">Submit</button>
+                        <button class="btn btn-secondary" @onclick="HideForm">Cancel</button>
+                    </div>
+                </div>
+            </ChildContent>
+        </Modal>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _searchTerm = string.Empty;
+    private List<TrackingDto> _tracking = new();
+    private TrackingDto _form = new();
+    private TrackingDto? _editing;
+
+    private async Task SearchTracking()
+    {
+        _loading = true;
+        _tracking = new List<TrackingDto>();
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
+            var vmfCode = matches.FirstOrDefault()?.VmfCode;
+            if (vmfCode.HasValue)
+            {
+                var all = await TrackingService.GetAllAsync<TrackingDto>();
+                _tracking = all.Where(t => t.vmf_code == vmfCode.Value).ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void PrepareAdd()
+    {
+        _editing = null;
+        _form = new TrackingDto();
+        _showForm = true;
+    }
+
+    private void EditTracking(TrackingDto tracking)
+    {
+        _editing = tracking;
+        _form = new TrackingDto
+        {
+            track_code = tracking.track_code,
+            vmf_code = tracking.vmf_code,
+            track_num = tracking.track_num,
+            gg_previous = tracking.gg_previous,
+            gg_follow = tracking.gg_follow,
+            install_date = tracking.install_date,
+            remove_date = tracking.remove_date,
+            track_status = tracking.track_status,
+            track_type = tracking.track_type,
+            track_note = tracking.track_note
+        };
+        _showForm = true;
+    }
+
+    private async Task SaveTracking()
+    {
+        _loading = true;
+        try
+        {
+            if (_editing == null)
+            {
+                _form.vmf_code ??= await ResolveVmfCode();
+                await TrackingService.CreateAsync(_form);
+            }
+            else
+            {
+                await TrackingService.UpdateAsync(_form.track_code, _form);
+            }
+
+            _showForm = false;
+            await SearchTracking();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task<int?> ResolveVmfCode()
+    {
+        var matches = await VehicleLookupService.SearchAsync(_searchTerm);
+        return matches.FirstOrDefault()?.VmfCode;
+    }
+
+    private async Task HideForm()
+    {
+        _showForm = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

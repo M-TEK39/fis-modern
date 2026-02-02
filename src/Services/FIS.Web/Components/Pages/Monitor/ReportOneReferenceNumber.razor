@@ -1,5 +1,9 @@
 @page "/monitor/reports/one-reference-number"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject MonitorApiService MonitorService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Inquiry Report on ONE Reference Number - Fleet Information System</PageTitle>
 
@@ -14,9 +18,74 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Inquiry report pending</h3>
-        <p>This page will mirror the legacy one reference number report.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Reference Number</label>
+            <input class="form-input" @bind="_referenceNumber" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadInquiry">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_result == null)
+    {
+        <div class="empty-state">
+            <i class="bx bx-file"></i>
+            <h3>No inquiry found</h3>
+            <p>Enter a reference number to view details.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <tbody>
+                        <tr><th>Reference</th><td>@_result.monitor_code</td></tr>
+                        <tr><th>Inquiry Type</th><td>@_result.Inquiry_type</td></tr>
+                        <tr><th>Description</th><td>@_result.Inquiry_Desc</td></tr>
+                        <tr><th>Capture Date</th><td>@FormatDate(_result.Capture_dat)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private string _referenceNumber = string.Empty;
+    private MonitorDto? _result;
+
+    private async Task LoadInquiry()
+    {
+        _loading = true;
+        _result = null;
+        try
+        {
+            if (short.TryParse(_referenceNumber, out var code))
+            {
+                _result = await MonitorService.GetByIdAsync<MonitorDto>(code);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}

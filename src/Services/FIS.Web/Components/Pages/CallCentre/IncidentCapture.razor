@@ -1,5 +1,12 @@
 @page "/call-centre/incident/capture"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@using FIS.Web.Components.Shared
+@inject CallCentreApiService CallCentreService
+@inject VehicleLookupApiService VehicleLookupService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Capture a New Incident - Fleet Information System</PageTitle>
 
@@ -9,14 +16,155 @@
             <i class="bx bx-edit"></i>
             Capture a New Incident
         </h1>
-        <p class="page-description">Legacy placeholder for CallCentre/MNT_call_getgg.aspx.</p>
+        <p class="page-description">Legacy CallCentre/MNT_call_getgg.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-edit"></i>
-        <h3>Incident capture pending</h3>
-        <p>This page will mirror the legacy incident capture flow.</p>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / Reg Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadVehicle">Submit</button>
+        </div>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+
+    @if (_showForm)
+    {
+        <div class="form-card">
+            <div class="form-row">
+                <label class="form-label">Call Date</label>
+                <input type="date" class="form-input" @bind="_form.Call_date" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Call Time</label>
+                <input type="time" class="form-input" @bind="_callTime" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Capture Name</label>
+                <input class="form-input" @bind="_form.Capture_name" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Caller Name</label>
+                <input class="form-input" @bind="_form.Caller_name" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Name</label>
+                <input class="form-input" @bind="_form.Driver_name" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Persal No</label>
+                <input class="form-input" @bind="_form.Driver_persalno" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver License No</label>
+                <input class="form-input" @bind="_form.Driver_Licno" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Site</label>
+                <select class="form-select" @bind="_form.Driver_Site">
+                    <option value="">Select site</option>
+                    @foreach (var site in _sites)
+                    {
+                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    }
+                </select>
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Tel</label>
+                <input class="form-input" @bind="_form.Driver_tel" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver Cell</label>
+                <input class="form-input" @bind="_form.Driver_cell" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveIncident">Submit</button>
+                <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _showForm;
+    private string _searchTerm = string.Empty;
+    private TimeOnly? _callTime;
+    private CallCentreDto _form = new();
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadVehicle()
+    {
+        _loading = true;
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
+            var match = matches.FirstOrDefault();
+            if (match != null)
+            {
+                _form = new CallCentreDto
+                {
+                    vmf_code = match.VmfCode,
+                    GG_number = match.GGNumber,
+                    Call_date = DateTime.Today
+                };
+                _showForm = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveIncident()
+    {
+        _loading = true;
+        try
+        {
+            if (_callTime.HasValue)
+            {
+                _form.Call_time = DateTime.Today.Add(_callTime.Value.ToTimeSpan());
+            }
+
+            await CallCentreService.CreateAsync(_form);
+            ResetForm();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _form = new CallCentreDto();
+        _showForm = false;
+        _searchTerm = string.Empty;
+        _callTime = null;
+    }
+}

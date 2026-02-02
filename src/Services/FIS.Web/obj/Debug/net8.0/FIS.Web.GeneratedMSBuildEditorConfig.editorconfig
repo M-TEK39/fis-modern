@@ -194,8 +194,16 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DYWxsQ2VudHJlL1JlcG9ydFN0YXRpc3RpY3MucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ChangePassword/ChangePasswordContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DaGFuZ2VQYXNzd29yZC9DaGFuZ2VQYXNzd29yZENvbnRlbnQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ChangePassword/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DaGFuZ2VQYXNzd29yZC9JbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ChangePasswordQuestion/ChangePasswordQuestionContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DaGFuZ2VQYXNzd29yZFF1ZXN0aW9uL0NoYW5nZVBhc3N3b3JkUXVlc3Rpb25Db250ZW50LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ChangePasswordQuestion/Index.razor]
@@ -1120,6 +1128,86 @@ build_metadata.AdditionalFiles.CssScope =
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Troubleshoot/VehicleMasterEdit.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Ucm91Ymxlc2hvb3QvVmVoaWNsZU1hc3RlckVkaXQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/AddUser.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9BZGRVc2VyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/ChangePasswordQuestion.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9DaGFuZ2VQYXNzd29yZFF1ZXN0aW9uLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/DeactivateUser.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9EZWFjdGl2YXRlVXNlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/EditUser.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9FZGl0VXNlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/ForgotPassword.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Gb3Jnb3RQYXNzd29yZC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/ResetLogin.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9SZXNldExvZ2luLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/ResetPassword.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9SZXNldFBhc3N3b3JkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminAddContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5BZGRDb250ZW50LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminChangePasswordQuestionContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5DaGFuZ2VQYXNzd29yZFF1ZXN0aW9uQ29udGVudC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5Db250ZW50LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminDeactivateContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5EZWFjdGl2YXRlQ29udGVudC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminEditContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5FZGl0Q29udGVudC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminForcePasswordContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5Gb3JjZVBhc3N3b3JkQ29udGVudC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminForgotPasswordContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5Gb3Jnb3RQYXNzd29yZENvbnRlbnQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminMenuContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5NZW51Q29udGVudC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminModuleContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5Nb2R1bGVDb250ZW50LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminResetLoginContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5SZXNldExvZ2luQ29udGVudC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminRouteContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5Sb3V0ZUNvbnRlbnQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/UserAdminViewUsersContent.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9Vc2VyQWRtaW5WaWV3VXNlcnNDb250ZW50LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Users/ViewUsers.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Vc2Vycy9WaWV3VXNlcnMucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/VehicleOrders/Index.razor]

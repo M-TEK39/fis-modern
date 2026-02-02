@@ -1,6 +1,10 @@
 @rendermode InteractiveServer
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using FIS.Web.Components.Pages.ChangePassword
+@using FIS.Web.Components.Pages.ChangePasswordQuestion
+@using FIS.Web.Components.Pages.Users
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Services
 @inject AuthApiService AuthService
 @inject NavigationManager Navigation
@@ -216,34 +220,15 @@
                 }
                 else if (_activeSection == "user-admin")
                 {
-                    <div class="settings-section">
-                        <h3>User Administration</h3>
-                        <p>Manage roles, permissions, and access profiles.</p>
-                        <div class="settings-card">
-                            <p>Open the full User Admin screen for detailed management.</p>
-                            <a class="btn btn-secondary" href="/users">Open User Admin</a>
-                        </div>
-                    </div>
+                    <UserAdminRouteContent RouteKey="_userAdminRoute" />
                 }
                 else if (_activeSection == "passwords")
                 {
-                    <div class="settings-section">
-                        <h3>Change Password</h3>
-                        <p>Use the dedicated change password flow to update credentials.</p>
-                        <div class="settings-card">
-                            <a class="btn btn-secondary" href="/change-password">Open Change Password</a>
-                        </div>
-                    </div>
+                    <ChangePasswordContent />
                 }
                 else if (_activeSection == "passwords-question")
                 {
-                    <div class="settings-section">
-                        <h3>Password & Question</h3>
-                        <p>Update password recovery prompts and security questions.</p>
-                        <div class="settings-card">
-                            <a class="btn btn-secondary" href="/change-password-question">Open Password Questions</a>
-                        </div>
-                    </div>
+                    <ChangePasswordQuestionContent />
                 }
                 else if (_activeSection == "logs")
                 {
@@ -280,6 +265,7 @@
     private bool _showSettings;
     private bool _showUserMenu;
     private string _activeSection = "profile";
+    private string _userAdminRoute = UserAdminRoutes.Menu;
     private string _userEmail = "authenticated@local";
     private string _userRole = "Authenticated User";
     private string _avatarText = "AU";
@@ -309,7 +295,9 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadUserAsync();
+        SyncSettingsWithRoute();
         AuthStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+        Navigation.LocationChanged += OnLocationChanged;
     }
 
     private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
@@ -390,6 +378,11 @@
     private void SetActiveSection(string sectionId)
     {
         _activeSection = sectionId;
+
+        if (sectionId == "user-admin")
+        {
+            _userAdminRoute = UserAdminRoutes.Menu;
+        }
     }
 
     private void CloseNotifications()
@@ -414,6 +407,78 @@
         _showUserMenu = false;
     }
 
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        SyncSettingsWithRoute();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SyncSettingsWithRoute()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var path = "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
+
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("settings", out var settingsValue))
+        {
+            var settings = settingsValue.ToString();
+            if (!string.IsNullOrWhiteSpace(settings))
+            {
+                if (settings.StartsWith("users", StringComparison.OrdinalIgnoreCase))
+                {
+                    _activeSection = "user-admin";
+                    _userAdminRoute = UserAdminRoutes.FromPath("/" + settings.TrimStart('/'));
+                }
+                else if (settings.Equals("passwords", StringComparison.OrdinalIgnoreCase))
+                {
+                    _activeSection = "passwords";
+                }
+                else if (settings.Equals("passwords-question", StringComparison.OrdinalIgnoreCase))
+                {
+                    _activeSection = "passwords-question";
+                }
+
+                _showSettings = true;
+                _showNotifications = false;
+                _showUserMenu = false;
+                return;
+            }
+        }
+
+        if (path == "/")
+        {
+            return;
+        }
+
+        if (UserAdminRoutes.IsUserAdminPath(path))
+        {
+            _activeSection = "user-admin";
+            _userAdminRoute = UserAdminRoutes.FromPath(path);
+            _showSettings = true;
+            _showNotifications = false;
+            _showUserMenu = false;
+            return;
+        }
+
+        if (path == "/change-password")
+        {
+            _activeSection = "passwords";
+            _showSettings = true;
+            _showNotifications = false;
+            _showUserMenu = false;
+            return;
+        }
+
+        if (path == "/change-password-question")
+        {
+            _activeSection = "passwords-question";
+            _showSettings = true;
+            _showNotifications = false;
+            _showUserMenu = false;
+        }
+    }
+
     private async Task HandleLogout()
     {
         // Clear JWT token (if using legacy auth)
@@ -427,5 +492,6 @@
     public void Dispose()
     {
         AuthStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 }

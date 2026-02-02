@@ -1,5 +1,9 @@
 @page "/call-centre/reports/open-calls"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Open Calls (Calls NOT Closed) - Fleet Information System</PageTitle>
 
@@ -14,9 +18,75 @@
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-time-five"></i>
-        <h3>Open calls report pending</h3>
-        <p>This page will mirror the legacy open calls report.</p>
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadReport">Load Report</button>
     </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-time-five"></i>
+            <h3>No open calls found</h3>
+            <p>Load report to view open calls.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Reference</th>
+                            <th>Call Date</th>
+                            <th>Caller</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.Call_centre_code</td>
+                                <td>@FormatDate(item.Call_date)</td>
+                                <td>@item.Caller_name</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private List<CallCentreDto> _results = new();
+
+    private async Task LoadReport()
+    {
+        _loading = true;
+        _results = new List<CallCentreDto>();
+        try
+        {
+            _results = await CallCentreService.GetAllAsync<CallCentreDto>();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatDate(DateTime? date) =>
+        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+}
