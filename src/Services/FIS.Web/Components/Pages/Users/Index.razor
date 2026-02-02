@@ -1,5 +1,6 @@
 @page "/users"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
 @using FIS.Web.Components.Pages.Users
 
 <PageTitle>User Administration - Fleet Information System</PageTitle>
@@ -15,5 +16,29 @@
 </div>
 
 <div class="page-content">
-    <UserAdminMenuContent />
+    <UserAdminRouteContent RouteKey="_routeKey" />
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "settings")]
+    public string? Settings { get; set; }
+
+    private string _routeKey = UserAdminRoutes.Menu;
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(Settings))
+        {
+            _routeKey = UserAdminRoutes.Menu;
+            return;
+        }
+
+        if (Settings.StartsWith("users", StringComparison.OrdinalIgnoreCase))
+        {
+            _routeKey = UserAdminRoutes.FromPath("/" + Settings.TrimStart('/'));
+            return;
+        }
+
+        _routeKey = UserAdminRoutes.Menu;
+    }
+}

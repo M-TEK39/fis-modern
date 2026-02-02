@@ -12,16 +12,6 @@ public static class UserAdminNavigation
 
     public static string GetLink(NavigationManager navigation, string target)
     {
-        var currentPath = GetCurrentPath(navigation);
-        if (UserAdminRoutes.IsUserAdminPath(currentPath))
-        {
-            return target switch
-            {
-                UserAdminRoutes.Menu => "/users",
-                _ => $"/users/{target}"
-            };
-        }
-
         var settingsValue = target == UserAdminRoutes.Menu
             ? "users"
             : $"users/{target}";
@@ -33,11 +23,5 @@ public static class UserAdminNavigation
     {
         var link = GetLink(navigation, target);
         return QueryHelpers.AddQueryString(link, "Username", username);
-    }
-
-    private static string GetCurrentPath(NavigationManager navigation)
-    {
-        var relative = navigation.ToBaseRelativePath(navigation.Uri);
-        return "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
     }
 }

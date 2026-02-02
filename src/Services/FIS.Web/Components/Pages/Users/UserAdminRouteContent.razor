@@ -1,4 +1,19 @@
 @using FIS.Web.Components.Pages.Users
+@inject NavigationManager Navigation
+
+@if (RouteKey != UserAdminRoutes.Menu)
+{
+    <div class="breadcrumb app-breadcrumbs">
+        <a class="breadcrumb-link"
+           href="@UserAdminNavigation.GetMenuLink(Navigation)"
+           @onclick="NavigateToMenu"
+           @onclick:preventDefault="true">
+            User Admin Menu
+        </a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">@GetRouteTitle(RouteKey)</span>
+    </div>
+}
 
 @switch (RouteKey)
 {
@@ -34,4 +49,22 @@
 @code {
     [Parameter]
     public string RouteKey { get; set; } = UserAdminRoutes.Menu;
+
+    private void NavigateToMenu()
+    {
+        Navigation.NavigateTo(UserAdminNavigation.GetMenuLink(Navigation));
+    }
+
+    private static string GetRouteTitle(string routeKey) => routeKey switch
+    {
+        UserAdminRoutes.Add => "Add New User",
+        UserAdminRoutes.Edit => "Update or Modify User Details",
+        UserAdminRoutes.ResetLogin => "Reset User Password Counter",
+        UserAdminRoutes.Deactivate => "Delete (or De-Activate) User",
+        UserAdminRoutes.ViewUsers => "View User Details",
+        UserAdminRoutes.ChangePasswordQuestion => "Change Password and Password Question",
+        UserAdminRoutes.ForcePassword => "Force Password Change",
+        UserAdminRoutes.ForgotPassword => "Reset Password",
+        _ => "User Admin"
+    };
 }

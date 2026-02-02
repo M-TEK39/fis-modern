@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("FIS.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+98c19efcad4b9bf545b4c165e9e020009df76818")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e229a650e3771e6b79ba185da02e2d43cccf6c3b")]
 [assembly: System.Reflection.AssemblyProductAttribute("FIS.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FIS.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -220,7 +220,7 @@
                 }
                 else if (_activeSection == "user-admin")
                 {
-                    <UserAdminRouteContent RouteKey="_userAdminRoute" />
+                    <UserAdminRouteContent RouteKey="@GetUserAdminRouteKey()" />
                 }
                 else if (_activeSection == "passwords")
                 {
@@ -265,7 +265,6 @@
     private bool _showSettings;
     private bool _showUserMenu;
     private string _activeSection = "profile";
-    private string _userAdminRoute = UserAdminRoutes.Menu;
     private string _userEmail = "authenticated@local";
     private string _userRole = "Authenticated User";
     private string _avatarText = "AU";
@@ -281,15 +280,9 @@
     private readonly IReadOnlyList<SettingsSection> _settingsSections =
     [
         new("profile", "Profile", "bx bx-user"),
-        new("preferences", "Preferences", "bx bx-slider-alt"),
-        new("notifications", "Notifications", "bx bx-bell"),
-        new("security", "Security", "bx bx-lock-alt"),
-        new("appearance", "Appearance", "bx bx-palette"),
         new("user-admin", "User Admin", "bx bx-user-circle"),
         new("passwords", "Change Password", "bx bx-key"),
         new("passwords-question", "Password & Question", "bx bx-shield"),
-        new("logs", "System Logs", "bx bx-file"),
-        new("reports", "System Reports", "bx bx-bar-chart-alt-2")
     ];
 
     protected override async Task OnInitializedAsync()
@@ -378,11 +371,6 @@
     private void SetActiveSection(string sectionId)
     {
         _activeSection = sectionId;
-
-        if (sectionId == "user-admin")
-        {
-            _userAdminRoute = UserAdminRoutes.Menu;
-        }
     }
 
     private void CloseNotifications()
@@ -428,7 +416,6 @@
                 if (settings.StartsWith("users", StringComparison.OrdinalIgnoreCase))
                 {
                     _activeSection = "user-admin";
-                    _userAdminRoute = UserAdminRoutes.FromPath("/" + settings.TrimStart('/'));
                 }
                 else if (settings.Equals("passwords", StringComparison.OrdinalIgnoreCase))
                 {
@@ -454,7 +441,6 @@
         if (UserAdminRoutes.IsUserAdminPath(path))
         {
             _activeSection = "user-admin";
-            _userAdminRoute = UserAdminRoutes.FromPath(path);
             _showSettings = true;
             _showNotifications = false;
             _showUserMenu = false;
@@ -477,6 +463,28 @@
             _showNotifications = false;
             _showUserMenu = false;
         }
+    }
+
+    private string GetUserAdminRouteKey()
+    {
+        var uri = new Uri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("settings", out var settingsValue))
+        {
+            var settings = settingsValue.ToString();
+            if (!string.IsNullOrWhiteSpace(settings)
+                && settings.StartsWith("users", StringComparison.OrdinalIgnoreCase))
+            {
+                return UserAdminRoutes.FromPath("/" + settings.TrimStart('/'));
+            }
+        }
+
+        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var path = "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
+
+        return UserAdminRoutes.IsUserAdminPath(path)
+            ? UserAdminRoutes.FromPath(path)
+            : UserAdminRoutes.Menu;
     }
 
     private async Task HandleLogout()

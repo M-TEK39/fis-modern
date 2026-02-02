@@ -32,6 +32,7 @@ public static class UserAdminRoutes
             "/users/reset-login" => ResetLogin,
             "/users/deactivate" => Deactivate,
             "/users/view" => ViewUsers,
+            "/users/view-users" => ViewUsers,
             "/users/change-password-question" => ChangePasswordQuestion,
             "/users/reset-password" => ForcePassword,
             "/users/forgot-password" => ForgotPassword,
