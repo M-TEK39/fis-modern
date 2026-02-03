@@ -1,22 +1,12 @@
 @page "/reports/users"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>User Reports - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            User Reports
-        </h1>
-        <p class="page-description">Legacy placeholder for Users/Users.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>User Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="User Reports"
+    Description="Legacy placeholder for Users/Users.aspx."
+    LegacyPath="Users/Users.aspx"
+    Endpoint="api/user"
+    HttpMethod="GET"
+    ReportType="user-reports"
+    Icon="bx-file" />

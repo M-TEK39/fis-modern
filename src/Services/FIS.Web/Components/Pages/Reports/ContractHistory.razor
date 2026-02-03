@@ -1,22 +1,12 @@
 @page "/reports/contract-history"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Contract History - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Contract History
-        </h1>
-        <p class="page-description">Legacy placeholder for logs/RPT_Contracts_per_vehicle.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Contract History pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Contract History"
+    Description="Legacy placeholder for logs/RPT_Contracts_per_vehicle.aspx."
+    LegacyPath="logs/RPT_Contracts_per_vehicle.aspx"
+    Endpoint="api/Report/contract/summary"
+    HttpMethod="GET"
+    ReportType="contract-history"
+    Icon="bx-file" />

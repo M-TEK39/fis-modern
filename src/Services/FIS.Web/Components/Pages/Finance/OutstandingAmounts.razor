@@ -1,6 +1,9 @@
 @page "/finance/outstanding/{Action?}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -23,38 +26,67 @@
             <h2>@SectionTitle</h2>
         </div>
         <div class="form-card-body">
-            @if (Action == "department-site-vehicle")
-            {
-                <div class="form-grid">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Report Department</label>
+                    <select class="form-select" @bind="_selectedDepartment" @bind:after="OnDepartmentChangedAsync">
+                        <option value="">Select Department</option>
+                        @foreach (var department in _departments)
+                        {
+                            <option value="@department.Value">@department.Label</option>
+                        }
+                    </select>
+                </div>
+                @if (Action == "department-site-vehicle" || Action == "department-site")
+                {
                     <div class="form-field">
-                        <label class="form-label">Report Department</label>
-                        <select class="form-select">
-                            <option value="">Select Department</option>
+                        <label class="form-label">Site</label>
+                        <select class="form-select" @bind="_selectedSite">
+                            <option value="">Select Site</option>
+                            @foreach (var site in _sites)
+                            {
+                                <option value="@site.Value">@site.Label</option>
+                            }
                         </select>
                     </div>
-                    <div class="form-field">
-                        <label class="form-label">Report Financial Year</label>
-                        <select class="form-select">
-                            <option value="">Select Financial Year</option>
-                        </select>
-                    </div>
+                }
+                @if (Action == "department-site-vehicle" || Action == "month-end-vehicle")
+                {
                     <div class="form-field">
                         <label class="form-label">Vehicle Registration</label>
-                        <select class="form-select">
-                            <option value="">Select Vehicle</option>
-                        </select>
+                        <input class="form-input" @bind="_vehicleSearch" @oninput="OnVehicleSearchChanged" />
+                        @if (_vehicleMatches.Count > 0)
+                        {
+                            <select class="form-select" style="margin-top:0.5rem;" @bind="_selectedVehicle">
+                                <option value="">Select Vehicle</option>
+                                @foreach (var vehicle in _vehicleMatches)
+                                {
+                                    <option value="@vehicle.Value">@vehicle.Label</option>
+                                }
+                            </select>
+                        }
                     </div>
+                }
+                <div class="form-field">
+                    <label class="form-label">Financial Year</label>
+                    <select class="form-select" @bind="_selectedFinancialYear">
+                        <option value="">Select Financial Year</option>
+                        @foreach (var year in _financialYears)
+                        {
+                            <option value="@year.Value">@year.Label</option>
+                        }
+                    </select>
                 </div>
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">View Report</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
-                </div>
-            }
-            else
+            </div>
+            <div class="contract-action-group">
+                <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_submitting">View Report</button>
+                <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">View Report</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
                 </div>
             }
         </div>
@@ -63,6 +95,65 @@
 
 @code {
     [Parameter] public string? Action { get; set; }
+
+    private List<FinanceOptionDto> _departments = new();
+    private List<FinanceOptionDto> _sites = new();
+    private List<FinanceOptionDto> _financialYears = new();
+    private List<FinanceOptionDto> _vehicleMatches = new();
+
+    private string _selectedDepartment = string.Empty;
+    private string _selectedSite = string.Empty;
+    private string _selectedFinancialYear = string.Empty;
+    private string _vehicleSearch = string.Empty;
+    private string _selectedVehicle = string.Empty;
+
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = await FinanceService.GetDepartmentsAsync();
+        _sites = await FinanceService.GetSitesAsync();
+        _financialYears = await FinanceService.GetFinancialYearsAsync();
+    }
+
+    private async Task OnDepartmentChangedAsync()
+    {
+        _sites = await FinanceService.GetSitesAsync(_selectedDepartment);
+    }
+
+    private async Task OnVehicleSearchChanged(ChangeEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleSearch) || _vehicleSearch.Length < 2)
+        {
+            _vehicleMatches.Clear();
+            return;
+        }
+
+        _vehicleMatches = await FinanceService.SearchVehiclesAsync(_vehicleSearch);
+    }
+
+    private async Task RunReportAsync()
+    {
+        _submitting = true;
+        var result = await FinanceService.PostActionAsync("api/Report/universal", new
+        {
+            reportType = "financial",
+            parameters = new Dictionary<string, object?>
+            {
+                ["mode"] = Action,
+                ["departmentCode"] = _selectedDepartment,
+                ["siteCode"] = _selectedSite,
+                ["financialYear"] = _selectedFinancialYear
+            },
+            vmfCode = int.TryParse(_selectedVehicle, out var vmfCode) ? vmfCode : (int?)null
+        });
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
 
     private string PageTitleText => Action switch
     {

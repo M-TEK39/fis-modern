@@ -1,22 +1,12 @@
 @page "/reports/tariffs-fin-year"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Published Tariffs in a Financial Year - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Published Tariffs in a Financial Year
-        </h1>
-        <p class="page-description">Legacy placeholder for Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Published Tariffs in a Financial Year pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Published Tariffs in a Financial Year"
+    Description="Legacy placeholder for Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs."
+    LegacyPath="Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="tariffs-fin-year"
+    Icon="bx-file" />

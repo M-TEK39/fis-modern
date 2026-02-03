@@ -1,22 +1,12 @@
 @page "/reports/vehicle-additions"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>All Vehicle ADDITIONS in a date range - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            All Vehicle ADDITIONS in a date range
-        </h1>
-        <p class="page-description">Legacy placeholder for FISReports/SelectStartAndEndDate.aspx?Item=AllVehiclesPurchasedInADateRange.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>All Vehicle ADDITIONS in a date range pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="All Vehicle ADDITIONS in a date range"
+    Description="Legacy placeholder for FISReports/SelectStartAndEndDate.aspx?Item=AllVehiclesPurchasedInADateRange."
+    LegacyPath="FISReports/SelectStartAndEndDate.aspx?Item=AllVehiclesPurchasedInADateRange"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="vehicle-additions"
+    Icon="bx-file" />

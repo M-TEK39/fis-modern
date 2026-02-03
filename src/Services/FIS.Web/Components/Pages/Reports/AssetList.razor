@@ -1,22 +1,12 @@
 @page "/reports/asset-list"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Asset List: All Vehicles in FIS - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Asset List: All Vehicles in FIS
-        </h1>
-        <p class="page-description">Legacy placeholder for Finance/AssetVehicleReports.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Asset List: All Vehicles in FIS pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Asset List: All Vehicles in FIS"
+    Description="Legacy placeholder for Finance/AssetVehicleReports.aspx."
+    LegacyPath="Finance/AssetVehicleReports.aspx"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="asset-list"
+    Icon="bx-file" />

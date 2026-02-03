@@ -1,22 +1,12 @@
 @page "/reports/wesbank"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Wesbank First Auto Reports - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Wesbank First Auto Reports
-        </h1>
-        <p class="page-description">Legacy placeholder for Transaction/RPTTransaction.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Wesbank First Auto Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Wesbank First Auto Reports"
+    Description="Legacy placeholder for Transaction/RPTTransaction.aspx."
+    LegacyPath="Transaction/RPTTransaction.aspx"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="wesbank"
+    Icon="bx-file" />

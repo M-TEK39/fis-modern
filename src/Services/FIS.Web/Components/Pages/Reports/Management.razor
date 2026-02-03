@@ -1,22 +1,12 @@
 @page "/reports/management"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Management Reports - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Management Reports
-        </h1>
-        <p class="page-description">Legacy placeholder for Management_Reports/Management.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Management Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Management Reports"
+    Description="Legacy placeholder for Management_Reports/Management.aspx."
+    LegacyPath="Management_Reports/Management.aspx"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="management"
+    Icon="bx-file" />

@@ -1,22 +1,12 @@
 @page "/reports/manuals"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Manuals - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Manuals
-        </h1>
-        <p class="page-description">Legacy placeholder for manuals/RPTmanuals.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Manuals pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Manuals"
+    Description="Legacy placeholder for manuals/RPTmanuals.aspx."
+    LegacyPath="manuals/RPTmanuals.aspx"
+    Endpoint="api/manuals/reports"
+    HttpMethod="GET"
+    ReportType="manuals-reports"
+    Icon="bx-file" />

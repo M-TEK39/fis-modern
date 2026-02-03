@@ -1,22 +1,12 @@
 @page "/reports/vehicle-logs-report"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Vehicle report - Contracts, ELS & Manual Logs - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Vehicle report - Contracts, ELS & Manual Logs
-        </h1>
-        <p class="page-description">Legacy placeholder for logs/RPT_logsheet_per_vehicle.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Vehicle report - Contracts, ELS & Manual Logs pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Vehicle report - Contracts, ELS &amp;amp; Manual Logs"
+    Description="Legacy placeholder for logs/RPT_logsheet_per_vehicle.aspx."
+    LegacyPath="logs/RPT_logsheet_per_vehicle.aspx"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="vehicle-logs-report"
+    Icon="bx-file" />

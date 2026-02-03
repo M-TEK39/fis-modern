@@ -1,6 +1,9 @@
 @page "/finance/interface/{Action?}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -26,21 +29,61 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Batch Date</label>
-                    <select class="form-select">
+                    <select class="form-select" @bind="_selectedBatchDate">
                         <option value="">Select Batch Date</option>
+                        @foreach (var batchDate in _batchDates)
+                        {
+                            <option value="@batchDate.Value">@batchDate.Label</option>
+                        }
                     </select>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="SubmitAsync" disabled="@_submitting">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
     [Parameter] public string? Action { get; set; }
+
+    private List<FinanceOptionDto> _batchDates = new();
+    private string _selectedBatchDate = string.Empty;
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _batchDates = await FinanceService.GetBatchDatesAsync();
+    }
+
+    private async Task SubmitAsync()
+    {
+        _submitting = true;
+        _statusMessage = string.Empty;
+
+        var endpoint = Action == "pastel-csv-customer"
+            ? "api/finance/interface/pastel-csv-customer"
+            : "api/finance/interface/pastel-csv";
+
+        var result = await FinanceService.PostActionAsync(endpoint, new
+        {
+            batchDate = _selectedBatchDate
+        });
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
 
     private string PageTitleText => Action switch
     {

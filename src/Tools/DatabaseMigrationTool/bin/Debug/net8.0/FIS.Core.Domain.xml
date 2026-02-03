@@ -81,6 +81,17 @@
             Stores password hashes for legacy JWT authentication
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Auth.TSUser">
+            <summary>
+            TSUser Entity - EXACT legacy schema match
+            Maps to 'TS_User' table
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.VipSiteMap">
+            <summary>
+            VipSiteMap Entity - EXACT legacy schema match for vip_site_map table
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Contract">
             <summary>
             Contract Entity - EXACT legacy schema match for contract table
@@ -92,6 +103,12 @@
             <summary>
             Driver Entity - Legacy compatibility for site_drivers table
             Maps to the actual legacy site_drivers schema from Database.cs
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Drivers.TripDriver">
+            <summary>
+            TripDriver Entity - Legacy compatibility for trip_driver table
+            Maps to the actual legacy trip_driver schema from Database.cs
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.Financial.BatchTariffRequest">
@@ -324,11 +341,12 @@
             Maps to legacy dbo.invoice_item table.
             </summary>
         </member>
-        <member name="T:FIS.Core.Domain.Entities.Financial.LeaseTariff">
+        <member name="T:FIS.Core.Domain.Entities.Financial.JournalDetail">
             <summary>
-            Lease vehicle tariff rates.
-            Contains lease-specific monthly rates and excess kilometer charges.
-            Maps to legacy dbo.LeaseTariff table.
+            JournalDetail Entity - Financial journal entries for contract billing
+            EXACT legacy schema match from Database.cs
+            Maps to journal_detail table
+            Used for tracking financial transactions related to contracts
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.Financial.MaintenanceValue">
@@ -491,6 +509,11 @@
             Maps to legacy fin.Overhead table.
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Financial.Overhead_AverageTariffCalc">
+            <summary>
+            Overhead_AverageTariffCalc Entity - EXACT legacy schema match
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Financial.Tariff">
             <summary>
             Legacy tariff table (pre-2009 tariff system).
@@ -523,14 +546,6 @@
             <summary>
             FuelCard Entity - EXACT legacy schema match for Fuel_card table
             Uses exact field names from Database.cs - NO modernization
-            </summary>
-        </member>
-        <member name="T:FIS.Core.Domain.Entities.JournalDetail">
-            <summary>
-            JournalDetail Entity - Financial journal entries for contract billing
-            EXACT legacy schema match from Database.cs
-            Maps to journal_detail table
-            Used for tracking financial transactions related to contracts
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.License">
@@ -569,10 +584,22 @@
             Note: Contains legacy typo "Depatrment_code" - kept for compatibility
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Logistics.TempTrip">
+            <summary>
+            TempTrip Entity - EXACT legacy schema match
+            Maps to 'temptrips' table
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.MaintenanceRecord">
             <summary>
             MaintenanceRecord Entity - Legacy compatibility for maintenance_records table
             Maps to legacy snake_case structure with relationships to vehicles and service providers
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Maintenance.MaintenanceTrigger">
+            <summary>
+            MaintenanceTrigger Entity - EXACT legacy schema match
+            Maps to 'maintenance_trigger' table
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.Auction">
@@ -1295,10 +1322,22 @@
             Associated site
             </summary>
         </member>
-        <member name="T:FIS.Core.Domain.Entities.TripDriver">
+        <member name="T:FIS.Core.Domain.Entities.ReferenceData.FuelType">
             <summary>
-            TripDriver Entity - Legacy compatibility for trip_driver table
-            Maps to the actual legacy trip_driver schema from Database.cs
+            FuelType Entity - EXACT legacy schema match
+            Maps to 'fuel_type' table
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.RptTemp">
+            <summary>
+            RptTemp Entity - EXACT legacy schema match
+            Maps to 'rpt_temp' table
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.TempTum">
+            <summary>
+            TempTum Entity - EXACT legacy schema match
+            Maps to 'tempTA' table
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.UnitOfMeasure">
@@ -1340,6 +1379,12 @@
             User Entity - EXACT legacy schema match for TS_Users table
             Uses exact field names from Database.cs - NO modernization
             Maps to the actual legacy TS_Users table with only 3 fields
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Vehicles.TempFleetNote">
+            <summary>
+            TempFleetNote Entity - EXACT legacy schema match
+            Maps to 'temp_fleet_note' table
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.Make">
@@ -1509,6 +1554,12 @@
             <summary>
             Vehicle Entity - EXACT legacy schema match for vehicle_master table
             Uses exact field names from Database.cs - NO modernization
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.WorkshopEntities.WwMerchant">
+            <summary>
+            WwMerchant Entity - EXACT legacy schema match
+            Maps to 'wwmerchant' table
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Enums.TariffStatus">

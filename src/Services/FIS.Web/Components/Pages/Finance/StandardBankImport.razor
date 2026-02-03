@@ -1,5 +1,8 @@
 @page "/finance/standard-bank-import"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>Import Standard Bank Transactions</PageTitle>
 
@@ -28,13 +31,48 @@
             <div class="form-grid">
                 <div class="form-field form-group-full">
                     <label class="form-label">Select File</label>
-                    <input type="file" class="form-input" />
+                    <InputFile OnChange="OnFileSelected" />
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Upload File</button>
-                <button class="btn btn-secondary btn-sm">Close</button>
+                <button class="btn btn-primary btn-sm" @onclick="UploadAsync" disabled="@_submitting">Upload File</button>
+                <a class="btn btn-secondary btn-sm" href="/finance">Close</a>
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    private IBrowserFile? _selectedFile;
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    private void OnFileSelected(InputFileChangeEventArgs args)
+    {
+        _selectedFile = args.File;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile == null)
+        {
+            _statusError = true;
+            _statusMessage = "Please select a file before uploading.";
+            return;
+        }
+
+        _submitting = true;
+        var result = await FinanceService.UploadFileAsync("api/finance/standard-bank/import", _selectedFile);
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
+}

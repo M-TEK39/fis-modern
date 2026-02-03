@@ -1,5 +1,8 @@
 @page "/finance/profitability"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>Vehicles Profitability Report</PageTitle>
 
@@ -22,9 +25,59 @@
             <h2>VIP and Pool Vehicles Profitability Report</h2>
         </div>
         <div class="form-card-body">
-            <p>
-                Due to report size constraints, the VIP and Pool Vehicles Profitability Report will be generated on request to g-FleeT ICT.
-            </p>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Financial Year</label>
+                    <select class="form-select" @bind="_selectedYear">
+                        <option value="">Select Year</option>
+                        @foreach (var year in _financialYears)
+                        {
+                            <option value="@year.Value">@year.Label</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="contract-action-group">
+                <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_submitting">Generate Report</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    private List<FinanceOptionDto> _financialYears = new();
+    private string _selectedYear = string.Empty;
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _financialYears = await FinanceService.GetFinancialYearsAsync();
+    }
+
+    private async Task RunReportAsync()
+    {
+        _submitting = true;
+        var result = await FinanceService.PostActionAsync("api/Report/universal", new
+        {
+            reportType = "financial",
+            parameters = new Dictionary<string, object?>
+            {
+                ["mode"] = "profitability",
+                ["financialYear"] = _selectedYear
+            }
+        });
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
+}

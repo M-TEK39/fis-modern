@@ -1,22 +1,12 @@
 @page "/reports/tariffs-per-vehicle"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Tariffs per Vehicle (2008 and later) - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Tariffs per Vehicle (2008 and later)
-        </h1>
-        <p class="page-description">Legacy placeholder for FISReports/ShowReport.aspx?Item=TariffsPerVehicle.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Tariffs per Vehicle (2008 and later) pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Tariffs per Vehicle (2008 and later)"
+    Description="Legacy placeholder for FISReports/ShowReport.aspx?Item=TariffsPerVehicle."
+    LegacyPath="FISReports/ShowReport.aspx?Item=TariffsPerVehicle"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="tariffs-per-vehicle"
+    Icon="bx-file" />

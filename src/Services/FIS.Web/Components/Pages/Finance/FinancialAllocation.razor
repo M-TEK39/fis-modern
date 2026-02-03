@@ -1,6 +1,10 @@
 @page "/finance/financial-allocation/{Action?}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Forms
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -27,65 +31,46 @@
             @if (IsImport)
             {
                 <div class="form-grid">
-                    <div class="form-field form-group-full">
-                        <div class="contract-banner contract-banner-info contract-banner-inline">
-                            The requested reports for importer can be obtained by following the procedure
-                            [click here to view details].
-                        </div>
-                        <div class="contract-banner contract-banner-warning contract-banner-inline">
-                            NOTE: You can zip files and upload them together; if files are large, zip one by one.
-                        </div>
-                    </div>
                     <div class="form-field">
                         <label class="form-label">Department</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Start Date (Year / Month / Day)</label>
-                        <div class="contract-search-inputs">
-                            <select class="form-select">
-                                <option>Year</option>
-                            </select>
-                            <select class="form-select">
-                                <option>Month</option>
-                            </select>
-                            <input class="form-input" placeholder="Day" />
-                        </div>
+                        <label class="form-label">Start Date</label>
+                        <input type="date" class="form-input" @bind="_startDate" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">End Date (Year / Month / Day)</label>
-                        <div class="contract-search-inputs">
-                            <select class="form-select">
-                                <option>Year</option>
-                            </select>
-                            <select class="form-select">
-                                <option>Month</option>
-                            </select>
-                            <input class="form-input" placeholder="Day" />
-                        </div>
+                        <label class="form-label">End Date</label>
+                        <input type="date" class="form-input" @bind="_endDate" />
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Upload File</label>
-                        <input type="file" class="form-input" />
+                        <InputFile OnChange="OnImportFileSelected" />
                     </div>
                 </div>
-                <button class="btn btn-primary">Submit</button>
+                <button class="btn btn-primary" @onclick="ImportBasAsync" disabled="@_submitting">Submit</button>
             }
             else if (IsActivate)
             {
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Department</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                 </div>
-                <div class="contract-banner contract-banner-info contract-banner-inline">
-                    Select Objectives, Responsibilities, Projects, and Fund codes to show in the list.
-                </div>
+                <button class="btn btn-secondary btn-sm" @onclick="LoadSegmentsAsync" disabled="@_submitting">Load Segment Codes</button>
                 <div class="table-container" style="margin-top: 1rem;">
                     <div class="table-wrapper">
                         <table class="data-table">
@@ -93,67 +78,94 @@
                                 <tr>
                                     <th>Segment Code</th>
                                     <th>Description</th>
-                                    <th>Status</th>
-                                    <th>Activate</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="4">No BAS segment codes loaded.</td>
-                                </tr>
+                                @if (_segmentRows.Count == 0)
+                                {
+                                    <tr><td colspan="2">No BAS segment codes loaded.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _segmentRows)
+                                    {
+                                        <tr>
+                                            <td>@(row.Data.TryGetValue("segmentCode", out var code) ? code : "")</td>
+                                            <td>@(row.Data.TryGetValue("description", out var description) ? description : "")</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
                 </div>
-                <button class="btn btn-primary">Update List</button>
+                <button class="btn btn-primary" @onclick="ActivateSegmentsAsync" disabled="@_submitting">Update List</button>
             }
             else if (IsView)
             {
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Department</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Segment Type</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedSegmentType">
                             <option value="">Select Type</option>
+                            @foreach (var segmentType in _segmentTypes)
+                            {
+                                <option value="@segmentType.Value">@segmentType.Label</option>
+                            }
                         </select>
                     </div>
                 </div>
-                <button class="btn btn-primary">View</button>
+                <button class="btn btn-primary" @onclick="LoadSegmentsAsync" disabled="@_submitting">View</button>
             }
             else if (IsFixInvalid)
             {
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Department</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                 </div>
-                <div class="contract-banner contract-banner-info contract-banner-inline">
-                    Make corrections to journals with invalid BAS codes.
-                </div>
+                <button class="btn btn-secondary btn-sm" @onclick="LoadInvalidJournalsAsync" disabled="@_submitting">Load Invalid Journals</button>
                 <div class="table-container" style="margin-top: 1rem;">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Row</th>
                                     <th>Journal</th>
-                                    <th>Responsibility</th>
-                                    <th>Objective</th>
-                                    <th>Save</th>
+                                    <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="5">No journals found.</td>
-                                </tr>
+                                @if (_journalRows.Count == 0)
+                                {
+                                    <tr><td colspan="2">No journals found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _journalRows)
+                                    {
+                                        <tr>
+                                            <td>@(row.Data.TryGetValue("journalNumber", out var journal) ? journal : "")</td>
+                                            <td>@(row.Data.TryGetValue("status", out var status) ? status : "")</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -164,30 +176,40 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Department</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                 </div>
-                <div class="contract-banner contract-banner-info contract-banner-inline">
-                    Allocate FUND codes to un-invoiced vehicle journals.
-                </div>
+                <button class="btn btn-secondary btn-sm" @onclick="LoadFundAllocationJournalsAsync" disabled="@_submitting">Load Journals</button>
                 <div class="table-container" style="margin-top: 1rem;">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Row</th>
-                                    <th>Vehicle</th>
                                     <th>Journal</th>
-                                    <th>Fund</th>
-                                    <th>Save</th>
+                                    <th>Vehicle</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="5">No journals found.</td>
-                                </tr>
+                                @if (_journalRows.Count == 0)
+                                {
+                                    <tr><td colspan="2">No journals found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _journalRows)
+                                    {
+                                        <tr>
+                                            <td>@(row.Data.TryGetValue("journalNumber", out var journal) ? journal : "")</td>
+                                            <td>@(row.Data.TryGetValue("registrationNumber", out var reg) ? reg : "")</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -195,24 +217,15 @@
             }
             else
             {
-                <div class="table-container">
-                    <div class="table-wrapper">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Department</th>
-                                    <th>Segment</th>
-                                    <th>Status</th>
-                                    <th>Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="4">No data available.</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="contract-action-group">
+                    <button class="btn btn-primary btn-sm" @onclick="RunListingAsync" disabled="@_submitting">Load</button>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
                 </div>
             }
         </div>
@@ -222,11 +235,120 @@
 @code {
     [Parameter] public string? Action { get; set; }
 
+    private List<FinanceOptionDto> _departments = new();
+    private List<FinanceOptionDto> _segmentTypes = new();
+
+    private string _selectedDepartment = string.Empty;
+    private string _selectedSegmentType = string.Empty;
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private IBrowserFile? _importFile;
+
+    private List<FinanceGridRowDto> _segmentRows = new();
+    private List<FinanceGridRowDto> _journalRows = new();
+
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
     private bool IsImport => Action == "import-bas";
     private bool IsActivate => Action == "activate-bas";
     private bool IsView => Action == "view-bas";
     private bool IsFixInvalid => Action == "fix-invalid-journals";
     private bool IsAllocateFund => Action == "allocate-fund-codes";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = await FinanceService.GetDepartmentsAsync();
+        _segmentTypes = await FinanceService.GetSegmentTypesAsync();
+    }
+
+    private void OnImportFileSelected(InputFileChangeEventArgs args)
+    {
+        _importFile = args.File;
+    }
+
+    private async Task ImportBasAsync()
+    {
+        if (_importFile == null)
+        {
+            SetStatus(false, "Please select a file before submitting.", "");
+            return;
+        }
+
+        _submitting = true;
+        var result = await FinanceService.UploadFileAsync("api/finance/bas/import", _importFile, new Dictionary<string, string>
+        {
+            ["departmentCode"] = _selectedDepartment,
+            ["startDate"] = _startDate?.ToString("yyyy-MM-dd") ?? string.Empty,
+            ["endDate"] = _endDate?.ToString("yyyy-MM-dd") ?? string.Empty
+        });
+        SetStatus(result.Success, result.Message, result.Endpoint);
+        _submitting = false;
+    }
+
+    private async Task LoadSegmentsAsync()
+    {
+        _submitting = true;
+        var endpoint = $"api/finance/bas/segments?departmentCode={Uri.EscapeDataString(_selectedDepartment)}&segmentType={Uri.EscapeDataString(_selectedSegmentType)}";
+        var result = await FinanceService.GetActionAsync(endpoint);
+        SetStatus(result.Success, result.Message, result.Endpoint);
+        _submitting = false;
+    }
+
+    private async Task ActivateSegmentsAsync()
+    {
+        _submitting = true;
+        var result = await FinanceService.PostActionAsync("api/finance/bas/segments/activate", new
+        {
+            departmentCode = _selectedDepartment,
+            segmentType = _selectedSegmentType
+        });
+        SetStatus(result.Success, result.Message, result.Endpoint);
+        _submitting = false;
+    }
+
+    private async Task LoadInvalidJournalsAsync()
+    {
+        _submitting = true;
+        var endpoint = $"api/finance/bas/journals/invalid?departmentCode={Uri.EscapeDataString(_selectedDepartment)}";
+        var result = await FinanceService.GetActionAsync(endpoint);
+        SetStatus(result.Success, result.Message, result.Endpoint);
+        _submitting = false;
+    }
+
+    private async Task LoadFundAllocationJournalsAsync()
+    {
+        _submitting = true;
+        var endpoint = $"api/finance/bas/journals/uninvoiced?departmentCode={Uri.EscapeDataString(_selectedDepartment)}";
+        var result = await FinanceService.GetActionAsync(endpoint);
+        SetStatus(result.Success, result.Message, result.Endpoint);
+        _submitting = false;
+    }
+
+    private async Task RunListingAsync()
+    {
+        _submitting = true;
+        var endpoint = Action switch
+        {
+            "invalid-journals" => $"api/finance/bas/journals/invalid?departmentCode={Uri.EscapeDataString(_selectedDepartment)}",
+            "departments-no-bas" => "api/finance/bas/departments-without-bas",
+            "departments-missing-financial-system" => "api/finance/bas/departments-missing-financial-system",
+            _ => "api/finance/bas"
+        };
+
+        var result = await FinanceService.GetActionAsync(endpoint);
+        SetStatus(result.Success, result.Message, result.Endpoint);
+        _submitting = false;
+    }
+
+    private void SetStatus(bool success, string message, string endpoint)
+    {
+        _statusError = !success;
+        _statusMessage = string.IsNullOrWhiteSpace(endpoint)
+            ? message
+            : $"{message} Endpoint: {endpoint}";
+    }
 
     private string PageTitleText => Action switch
     {

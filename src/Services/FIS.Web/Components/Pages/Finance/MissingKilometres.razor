@@ -1,6 +1,9 @@
 @page "/finance/missing-kilometres/{Action?}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -23,112 +26,73 @@
             <h2>@SectionTitle</h2>
         </div>
         <div class="form-card-body">
-            @if (Action == "close-gaps")
-            {
-                <p>Automatically capture missing kilometres for the selected financial year.</p>
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Financial Year</label>
-                        <select class="form-select">
-                            <option value="">Select Year</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Run Process</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
-                </div>
-            }
-            else if (Action == "kilo-gaps-pdf" || Action == "kilo-gaps-xls")
-            {
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Financial Year</label>
-                        <select class="form-select">
-                            <option value="">Select Year</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
-                </div>
-            }
-            else if (Action == "fuel-consumption")
-            {
-                <div class="form-grid">
+            <div class="form-grid">
+                @if (Action == "fuel-consumption")
+                {
                     <div class="form-field">
                         <label class="form-label">Department (optional)</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Province (optional)</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedProvince">
                             <option value="">Select Province</option>
+                            @foreach (var province in _provinces)
+                            {
+                                <option value="@province.Value">@province.Label</option>
+                            }
                         </select>
                     </div>
+                }
+                @if (Action == "close-gaps" || Action == "kilo-gaps-pdf" || Action == "kilo-gaps-xls")
+                {
+                    <div class="form-field">
+                        <label class="form-label">Financial Year</label>
+                        <select class="form-select" @bind="_selectedFinancialYear">
+                            <option value="">Select Year</option>
+                            @foreach (var year in _financialYears)
+                            {
+                                <option value="@year.Value">@year.Label</option>
+                            }
+                        </select>
+                    </div>
+                }
+                else
+                {
                     <div class="form-field">
                         <label class="form-label">Start Date</label>
-                        <input class="form-input" placeholder="Start Date" />
+                        <input type="date" class="form-input" @bind="_startDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">End Date</label>
-                        <input class="form-input" placeholder="End Date" />
+                        <input type="date" class="form-input" @bind="_endDate" />
                     </div>
+                }
+                @if (Action == "fuel-consumption")
+                {
                     <div class="form-field form-group-full">
-                        <label class="form-label">
-                            <input type="checkbox" />
+                        <label class="form-label form-checkbox">
+                            <input type="checkbox" @bind="_excludeUnposted" />
                             Exclude Unposted
                         </label>
                     </div>
-                </div>
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
-                </div>
-            }
-            else if (Action == "no-kilos-consuming-fuel")
+                }
+            </div>
+            <div class="contract-action-group">
+                <button class="btn btn-primary btn-sm" @onclick="RunActionAsync" disabled="@_submitting">Submit</button>
+                <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Start Date</label>
-                        <select class="form-select">
-                            <option value="">Select Start Date</option>
-                        </select>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">End Date</label>
-                        <select class="form-select">
-                            <option value="">Select End Date</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
-                </div>
-            }
-            else
-            {
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Start Date</label>
-                        <select class="form-select">
-                            <option value="">Select Start Date</option>
-                        </select>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">End Date</label>
-                        <select class="form-select">
-                            <option value="">Select End Date</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
-                    <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
                 </div>
             }
         </div>
@@ -137,6 +101,63 @@
 
 @code {
     [Parameter] public string? Action { get; set; }
+
+    private List<FinanceOptionDto> _departments = new();
+    private List<FinanceOptionDto> _provinces = new();
+    private List<FinanceOptionDto> _financialYears = new();
+
+    private string _selectedDepartment = string.Empty;
+    private string _selectedProvince = string.Empty;
+    private string _selectedFinancialYear = string.Empty;
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private bool _excludeUnposted;
+
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = await FinanceService.GetDepartmentsAsync();
+        _provinces = await FinanceService.GetProvincesAsync();
+        _financialYears = await FinanceService.GetFinancialYearsAsync();
+    }
+
+    private async Task RunActionAsync()
+    {
+        _submitting = true;
+
+        FinanceApiResult result;
+        if (Action == "close-gaps")
+        {
+            result = await FinanceService.PostActionAsync("api/finance/missing-kilometres/close-gaps", new
+            {
+                financialYear = _selectedFinancialYear
+            });
+        }
+        else
+        {
+            result = await FinanceService.PostActionAsync("api/Report/universal", new
+            {
+                reportType = "financial",
+                parameters = new Dictionary<string, object?>
+                {
+                    ["mode"] = Action,
+                    ["departmentCode"] = _selectedDepartment,
+                    ["provinceCode"] = _selectedProvince,
+                    ["financialYear"] = _selectedFinancialYear,
+                    ["excludeUnposted"] = _excludeUnposted
+                },
+                startDate = _startDate,
+                endDate = _endDate
+            });
+        }
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
 
     private string PageTitleText => Action switch
     {

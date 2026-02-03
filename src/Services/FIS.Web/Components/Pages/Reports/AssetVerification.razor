@@ -1,22 +1,12 @@
 @page "/reports/asset-verification"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Asset Verification Report - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Asset Verification Report
-        </h1>
-        <p class="page-description">Legacy placeholder for Asset_Verification/RPT_Asset_Verification.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Asset Verification Report pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Asset Verification Report"
+    Description="Legacy placeholder for Asset_Verification/RPT_Asset_Verification.aspx."
+    LegacyPath="Asset_Verification/RPT_Asset_Verification.aspx"
+    Endpoint="api/assetverification"
+    HttpMethod="GET"
+    ReportType="asset-verification"
+    Icon="bx-file" />

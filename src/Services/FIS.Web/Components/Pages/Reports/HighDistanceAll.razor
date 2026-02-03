@@ -1,22 +1,12 @@
 @page "/reports/high-distance-all"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Vehicles with high distances (All Departments) - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Vehicles with high distances (All Departments)
-        </h1>
-        <p class="page-description">Legacy placeholder for FISReports/ShowReport.aspx?Item=KiloAudit (all departments).</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Vehicles with high distances (All Departments) pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Vehicles with high distances (All Departments)"
+    Description="Legacy placeholder for FISReports/ShowReport.aspx?Item=KiloAudit (all departments)."
+    LegacyPath="FISReports/ShowReport.aspx?Item=KiloAudit (all departments)"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="high-distance-all"
+    Icon="bx-file" />

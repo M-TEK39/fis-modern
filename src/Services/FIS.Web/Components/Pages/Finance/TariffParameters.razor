@@ -1,5 +1,8 @@
 @page "/finance/tariff-parameters"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>Tariff Parameter Management</PageTitle>
 
@@ -25,8 +28,12 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Tariff Parameter Year</label>
-                    <select class="form-select">
+                    <select class="form-select" @bind="_selectedYear" @bind:after="LoadYearAsync">
                         <option value="">Select Year</option>
+                        @foreach (var year in _years)
+                        {
+                            <option value="@year.Value">@year.Label</option>
+                        }
                     </select>
                 </div>
             </div>
@@ -34,8 +41,8 @@
                 Tariff Parameter Year Approval
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Approve Year</button>
-                <button class="btn btn-secondary btn-sm">Reject Year</button>
+                <button class="btn btn-primary btn-sm" @onclick="ApproveYearAsync" disabled="@_submitting">Approve Year</button>
+                <button class="btn btn-secondary btn-sm" @onclick="RejectYearAsync" disabled="@_submitting">Reject Year</button>
             </div>
             <h3 style="margin-top: 1.5rem;">Tariff Parameters &amp; Overhead Values</h3>
             <div class="table-container" style="margin-top: 0.75rem;">
@@ -51,7 +58,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="4">No tariff parameter values loaded.</td>
+                                <td colspan="4">Data is requested from `api/finance/tariff-parameters/@_selectedYear`.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -70,7 +77,7 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="4">No kilo tariff values loaded.</td>
+                                <td colspan="4">Data is requested from `api/finance/tariff-parameters/@_selectedYear`.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -90,12 +97,62 @@
                         </thead>
                         <tbody>
                             <tr>
-                                <td colspan="4">No maintenance values loaded.</td>
+                                <td colspan="4">Data is requested from `api/finance/tariff-parameters/@_selectedYear`.</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    private List<FinanceOptionDto> _years = new();
+    private string _selectedYear = string.Empty;
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _years = await FinanceService.GetTariffYearsAsync();
+    }
+
+    private async Task LoadYearAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_selectedYear))
+        {
+            return;
+        }
+
+        var result = await FinanceService.GetActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}");
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+    }
+
+    private async Task ApproveYearAsync()
+    {
+        _submitting = true;
+        var result = await FinanceService.PostActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}/approve", new { });
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
+
+    private async Task RejectYearAsync()
+    {
+        _submitting = true;
+        var result = await FinanceService.PostActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}/reject", new { });
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
+}

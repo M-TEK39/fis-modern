@@ -4,16 +4,113 @@
         <name>FIS.Data.SqlServer</name>
     </assembly>
     <members>
-        <member name="T:FIS.Data.SqlServer.FisDbContext">
-             <summary>
-             FIXED DbContext with PROPER constraints and business rule enforcement
-            
-             CRITICAL FIXES:
-             - Unique constraints preventing duplicate active contracts per vehicle
-             - Proper foreign key relationships with cascading rules
-             - Business rule validation at database level
-             - Fixed data integrity constraints that were disabled in legacy system
-             </summary>
+        <member name="T:FIS.Data.SqlServer.Migrations.InitialModernLegacySchema">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.InitialModernLegacySchema.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.InitialModernLegacySchema.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.InitialModernLegacySchema.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch17ConfigurationEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch17ConfigurationEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch17ConfigurationEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch17ConfigurationEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch18SegmentEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch18SegmentEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch18SegmentEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch18SegmentEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch19BackupEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch19BackupEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch19BackupEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch19BackupEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch20LogEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch20LogEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch20LogEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch20LogEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch21RefDataEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch21RefDataEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch21RefDataEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch21RefDataEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch22MiscEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch22MiscEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch22MiscEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch22MiscEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch23FinalEntities">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch23FinalEntities.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch23FinalEntities.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch23FinalEntities.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="T:FIS.Data.SqlServer.Migrations.Batch24MiscEntitiesV3">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch24MiscEntitiesV3.Up(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch24MiscEntitiesV3.Down(Microsoft.EntityFrameworkCore.Migrations.MigrationBuilder)">
+            <inheritdoc />
+        </member>
+        <member name="M:FIS.Data.SqlServer.Migrations.Batch24MiscEntitiesV3.BuildTargetModel(Microsoft.EntityFrameworkCore.ModelBuilder)">
+            <inheritdoc />
         </member>
     </members>
 </doc>

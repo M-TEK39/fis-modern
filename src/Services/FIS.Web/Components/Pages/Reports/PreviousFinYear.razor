@@ -1,22 +1,12 @@
 @page "/reports/previous-fin-year"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Previous Fin Year transactions in current year - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Previous Fin Year transactions in current year
-        </h1>
-        <p class="page-description">Legacy placeholder for Finance/PreviousFinYear.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Previous Fin Year transactions in current year pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Previous Fin Year transactions in current year"
+    Description="Legacy placeholder for Finance/PreviousFinYear.aspx."
+    LegacyPath="Finance/PreviousFinYear.aspx"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="previous-fin-year"
+    Icon="bx-file" />

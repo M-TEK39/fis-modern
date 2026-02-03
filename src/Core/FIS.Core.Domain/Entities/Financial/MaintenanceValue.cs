@@ -11,15 +11,12 @@ namespace FIS.Core.Domain.Entities.Financial;
 [Table("MaintenanceValue", Schema = "fin")]
 public class MaintenanceValue
 {
-    [Key]
     [Column("TariffParameterID")]
     public int TariffParameterID { get; set; }
 
-    [Key]
     [Column("class_code")]
     public short class_code { get; set; }
 
-    [Key]
     [Column("months_age")]
     public short months_age { get; set; }
 

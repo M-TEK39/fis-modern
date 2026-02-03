@@ -1,13 +1,10 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using FIS.Core.Domain.Entities.Auth;
+using FIS.Core.Domain.Entities.Vehicles;
 
 namespace FIS.Core.Domain.Entities.Financial;
 
-/// <summary>
-/// Lease vehicle tariff rates.
-/// Contains lease-specific monthly rates and excess kilometer charges.
-/// Maps to legacy dbo.LeaseTariff table.
-/// </summary>
 [Table("LeaseTariff")]
 public class LeaseTariff
 {
@@ -30,19 +27,12 @@ public class LeaseTariff
     [Column("active")]
     public bool active { get; set; }
 
-    [Column("excess_kilo_tariff")]
-    public decimal? excess_kilo_tariff { get; set; }
-
+    // Global audit fields
     [Column("date_created")]
-    public DateTime? date_created { get; set; }
+    public DateTime date_created { get; set; }
 
     [Column("date_updated")]
     public DateTime? date_updated { get; set; }
-
-    // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    
-
-    
 
     [Column("created_by_user_code")]
     public int? created_by_user_code { get; set; }
@@ -53,10 +43,13 @@ public class LeaseTariff
     [Column("is_deleted")]
     public bool is_deleted { get; set; } = false;
 
-    // Navigation properties for audit trail
+    // Navigation properties
     [ForeignKey("created_by_user_code")]
     public virtual User? CreatedByUser { get; set; }
 
     [ForeignKey("modified_by_user_code")]
     public virtual User? ModifiedByUser { get; set; }
+
+    [ForeignKey("vmf_code")]
+    public virtual Vehicle? Vehicle { get; set; }
 }

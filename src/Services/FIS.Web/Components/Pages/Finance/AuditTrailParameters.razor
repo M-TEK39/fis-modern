@@ -1,6 +1,9 @@
-@page "/finance/audit-trail/{Mode?}"
+@page "/finance/audit-trail/{Mode}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -28,8 +31,12 @@
                 {
                     <div class="form-field">
                         <label class="form-label">Department</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedDepartment" @bind:after="OnDepartmentChangedAsync">
                             <option value="">Select Department</option>
+                            @foreach (var department in _departments)
+                            {
+                                <option value="@department.Value">@department.Label</option>
+                            }
                         </select>
                     </div>
                 }
@@ -37,68 +44,56 @@
                 {
                     <div class="form-field">
                         <label class="form-label">Site</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedSite">
                             <option value="">Select Site</option>
+                            @foreach (var site in _sites)
+                            {
+                                <option value="@site.Value">@site.Label</option>
+                            }
                         </select>
                     </div>
                 }
                 @if (Mode == "vehicle")
                 {
-                    <div class="form-field form-group-full">
+                    <div class="form-field">
                         <label class="form-label">Vehicle Number</label>
-                        <div class="contract-search-radio">
-                            <label class="form-label form-checkbox">
-                                <input type="radio" name="vehicleNumType" checked />
-                                GG
-                            </label>
-                            <label class="form-label form-checkbox">
-                                <input type="radio" name="vehicleNumType" />
-                                GP
-                            </label>
-                            <input class="form-input" placeholder="Number" style="max-width: 140px;" />
-                        </div>
+                        <input class="form-input" @bind="_vehicleSearch" @oninput="OnVehicleSearchChanged" />
+                        @if (_vehicleMatches.Count > 0)
+                        {
+                            <select class="form-select" style="margin-top:0.5rem;" @bind="_selectedVehicle">
+                                <option value="">Select Vehicle</option>
+                                @foreach (var vehicle in _vehicleMatches)
+                                {
+                                    <option value="@vehicle.Value">@vehicle.Label</option>
+                                }
+                            </select>
+                        }
                     </div>
                 }
                 <div class="form-field">
                     <label class="form-label">Start Date</label>
-                    <input class="form-input" placeholder="Start Date" />
+                    <input type="date" class="form-input" @bind="_startDate" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">End Date</label>
-                    <input class="form-input" placeholder="End Date" />
+                    <input type="date" class="form-input" @bind="_endDate" />
                 </div>
             </div>
 
             <div class="form-section">
                 <h3 class="form-section-title">Audit Trail PDF Reports</h3>
-                <div class="menu-item">
-                    <span class="menu-item-link">Show ELS Audit Trail</span>
-                </div>
-                <div class="menu-item">
-                    <span class="menu-item-link">Show Manual Kilo's Audit Trail</span>
-                </div>
-                <div class="menu-item">
-                    <span class="menu-item-link">Show Vehicle Contracts Audit Trail</span>
-                </div>
-                <div class="menu-item">
-                    <span class="menu-item-link">Show VIP &amp; TAXI Audit Trail</span>
-                </div>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("els", "pdf")'>Show ELS Audit Trail</button>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("manual-kilos", "pdf")'>Show Manual Kilo's Audit Trail</button>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("contracts", "pdf")'>Show Vehicle Contracts Audit Trail</button>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("vip-taxi", "pdf")'>Show VIP &amp; TAXI Audit Trail</button>
             </div>
 
             <div class="form-section">
                 <h3 class="form-section-title">Audit Trail Excel Reports</h3>
-                <div class="menu-item">
-                    <span class="menu-item-link">Download Show ELS Audit Trail</span>
-                </div>
-                <div class="menu-item">
-                    <span class="menu-item-link">Download Manual Kilo's Audit Trail</span>
-                </div>
-                <div class="menu-item">
-                    <span class="menu-item-link">Download Vehicle Contracts Audit Trail</span>
-                </div>
-                <div class="menu-item">
-                    <span class="menu-item-link">Download VIP &amp; TAXI Audit Trail</span>
-                </div>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("els", "excel")'>Download Show ELS Audit Trail</button>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("manual-kilos", "excel")'>Download Manual Kilo's Audit Trail</button>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("contracts", "excel")'>Download Vehicle Contracts Audit Trail</button>
+                <button class="btn btn-secondary btn-sm" @onclick='() => RunAuditAsync("vip-taxi", "excel")'>Download VIP &amp; TAXI Audit Trail</button>
             </div>
 
             <div class="contract-action-group">
@@ -109,12 +104,77 @@
                 Notes: The detailed reports are big. You may have to wait a few minutes before the report is displayed.
                 Excel Note: Please save the file to disk before opening.
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
     [Parameter] public string? Mode { get; set; }
+
+    private List<FinanceOptionDto> _departments = new();
+    private List<FinanceOptionDto> _sites = new();
+    private List<FinanceOptionDto> _vehicleMatches = new();
+
+    private string _selectedDepartment = string.Empty;
+    private string _selectedSite = string.Empty;
+    private string _vehicleSearch = string.Empty;
+    private string _selectedVehicle = string.Empty;
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = await FinanceService.GetDepartmentsAsync();
+        _sites = await FinanceService.GetSitesAsync();
+    }
+
+    private async Task OnDepartmentChangedAsync()
+    {
+        _sites = await FinanceService.GetSitesAsync(_selectedDepartment);
+    }
+
+    private async Task OnVehicleSearchChanged(ChangeEventArgs _)
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleSearch) || _vehicleSearch.Length < 2)
+        {
+            _vehicleMatches.Clear();
+            return;
+        }
+
+        _vehicleMatches = await FinanceService.SearchVehiclesAsync(_vehicleSearch);
+    }
+
+    private async Task RunAuditAsync(string reportType, string outputFormat)
+    {
+        var result = await FinanceService.PostActionAsync("api/Report/universal", new
+        {
+            reportType = "financial",
+            parameters = new Dictionary<string, object?>
+            {
+                ["mode"] = Mode,
+                ["auditType"] = reportType,
+                ["outputFormat"] = outputFormat,
+                ["departmentCode"] = _selectedDepartment,
+                ["siteCode"] = _selectedSite
+            },
+            vmfCode = int.TryParse(_selectedVehicle, out var vmfCode) ? vmfCode : (int?)null,
+            startDate = _startDate,
+            endDate = _endDate
+        });
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+    }
 
     private string PageTitleText => Mode switch
     {

@@ -1,22 +1,12 @@
 @page "/reports/tariffs-class-2007"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Tariffs by Class groupings (2007 and earlier) - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Tariffs by Class groupings (2007 and earlier)
-        </h1>
-        <p class="page-description">Legacy placeholder for Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Tariffs by Class groupings (2007 and earlier) pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Tariffs by Class groupings (2007 and earlier)"
+    Description="Legacy placeholder for Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs."
+    LegacyPath="Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="tariffs-class2007"
+    Icon="bx-file" />

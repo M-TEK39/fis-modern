@@ -197,6 +197,12 @@ builder.Services.AddHttpClient<TariffApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
+builder.Services.AddHttpClient<FinanceApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
 builder.Services.AddHttpClient<TripApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");

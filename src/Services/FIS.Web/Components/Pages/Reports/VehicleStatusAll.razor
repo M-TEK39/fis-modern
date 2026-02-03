@@ -1,22 +1,12 @@
 @page "/reports/vehicle-status-all"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>All Vehicle Status - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            All Vehicle Status
-        </h1>
-        <p class="page-description">Legacy placeholder for Finance/GeneratedReports.aspx?key=9.2%20All%20Vehicle%20Statuses.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>All Vehicle Status pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="All Vehicle Status"
+    Description="Legacy placeholder for Finance/GeneratedReports.aspx?key=9.2%20All%20Vehicle%20Statuses."
+    LegacyPath="Finance/GeneratedReports.aspx?key=9.2%20All%20Vehicle%20Statuses"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="vehicle-status-all"
+    Icon="bx-file" />

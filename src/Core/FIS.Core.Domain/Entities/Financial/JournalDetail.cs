@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace FIS.Core.Domain.Entities;
+namespace FIS.Core.Domain.Entities.Financial;
 
 /// <summary>
 /// JournalDetail Entity - Financial journal entries for contract billing
@@ -32,7 +32,7 @@ public class JournalDetail
     public int vmf_code { get; set; }
 
     [Column("journal_detail_type_code")]
-    public short journal_detail_type_code { get; set; }
+    public byte journal_detail_type_code { get; set; }
 
     [Column("journal_detail_isdebit")]
     public bool journal_detail_isdebit { get; set; }

@@ -1,22 +1,12 @@
 @page "/reports/vehicle-info"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>General Vehicle Information Report - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            General Vehicle Information Report
-        </h1>
-        <p class="page-description">Legacy placeholder for Vehicles/RPT_Vehicle_details.aspx.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>General Vehicle Information Report pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="General Vehicle Information Report"
+    Description="Legacy placeholder for Vehicles/RPT_Vehicle_details.aspx."
+    LegacyPath="Vehicles/RPT_Vehicle_details.aspx"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="vehicle-info"
+    Icon="bx-file" />

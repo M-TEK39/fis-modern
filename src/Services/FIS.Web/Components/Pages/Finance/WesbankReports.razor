@@ -1,6 +1,9 @@
 @page "/finance/wesbank/{Action?}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -26,32 +29,76 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Start Date</label>
-                    <input type="date" class="form-input" />
+                    <input type="date" class="form-input" @bind="_startDate" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">End Date</label>
-                    <input type="date" class="form-input" />
+                    <input type="date" class="form-input" @bind="_endDate" />
                 </div>
                 @if (RequiresProvince)
                 {
                     <div class="form-field">
                         <label class="form-label">Province</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedProvince">
                             <option value="">Select Province</option>
+                            @foreach (var province in _provinces)
+                            {
+                                <option value="@province.Value">@province.Label</option>
+                            }
                         </select>
                     </div>
                 }
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_submitting">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/finance">Back</a>
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
     [Parameter] public string? Action { get; set; }
+
+    private List<FinanceOptionDto> _provinces = new();
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private string _selectedProvince = string.Empty;
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _provinces = await FinanceService.GetProvincesAsync();
+    }
+
+    private async Task RunReportAsync()
+    {
+        _submitting = true;
+        var result = await FinanceService.PostActionAsync("api/Report/universal", new
+        {
+            reportType = "financial",
+            parameters = new Dictionary<string, object?>
+            {
+                ["mode"] = Action,
+                ["provinceCode"] = _selectedProvince
+            },
+            startDate = _startDate,
+            endDate = _endDate
+        });
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _submitting = false;
+    }
 
     private string PageTitleText => Action switch
     {

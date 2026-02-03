@@ -1,5 +1,10 @@
 @page "/finance/batch-management"
+@page "/finance/batch-management/{Action?}"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>Batch Management</PageTitle>
 
@@ -22,6 +27,13 @@
             <h2>Batch Management</h2>
         </div>
         <div class="form-card-body">
+            @if (_batchStatus is not null)
+            {
+                <div class="contract-banner contract-banner-info contract-banner-inline">
+                    Batch status: @(_batchStatus.BatchIsRunning ? "Running" : "Not running")
+                </div>
+            }
+
             <div class="menu-tiles">
                 <div class="menu-tile">
                     <button class="menu-tile-header">
@@ -47,6 +59,50 @@
                     </div>
                 </div>
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    [Parameter] public string? Action { get; set; }
+
+    private FinanceBatchStatusDto? _batchStatus;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _batchStatus = await FinanceService.GetBatchStatusAsync();
+
+        if (string.IsNullOrWhiteSpace(Action))
+        {
+            return;
+        }
+
+        var endpoint = Action switch
+        {
+            "start" => "api/finance/batch/start",
+            "check-scoa" => "api/finance/batch/check-scoa",
+            "rollback" => "api/finance/batch/rollback",
+            "finish" => "api/finance/batch/finish",
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return;
+        }
+
+        var result = await FinanceService.PostActionAsync(endpoint, new { });
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _batchStatus = await FinanceService.GetBatchStatusAsync();
+    }
+}

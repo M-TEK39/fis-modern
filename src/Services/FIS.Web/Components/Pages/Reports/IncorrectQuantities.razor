@@ -1,22 +1,12 @@
 @page "/reports/incorrect-quantities"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Report to show incorrect calculated quantities - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Report to show incorrect calculated quantities
-        </h1>
-        <p class="page-description">Legacy placeholder for Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Report to show incorrect calculated quantities pending</h3>
-        <p>This page will mirror the legacy report.</p>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Report to show incorrect calculated quantities"
+    Description="Legacy placeholder for Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities."
+    LegacyPath="Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities"
+    Endpoint="api/Report/universal"
+    HttpMethod="POST"
+    ReportType="incorrect-quantities"
+    Icon="bx-file" />
