@@ -25,5 +25,6 @@
     <PkgMicrosoft_SourceLink_Common Condition=" '$(PkgMicrosoft_SourceLink_Common)' == '' ">/home/dev/work/fis-modern/packages/microsoft.sourcelink.common/1.1.1</PkgMicrosoft_SourceLink_Common>
     <PkgMicrosoft_Build_Tasks_Git Condition=" '$(PkgMicrosoft_Build_Tasks_Git)' == '' ">/home/dev/work/fis-modern/packages/microsoft.build.tasks.git/1.1.1</PkgMicrosoft_Build_Tasks_Git>
     <PkgMicrosoft_SourceLink_GitHub Condition=" '$(PkgMicrosoft_SourceLink_GitHub)' == '' ">/home/dev/work/fis-modern/packages/microsoft.sourcelink.github/1.1.1</PkgMicrosoft_SourceLink_GitHub>
+    <PkgHangfire_SqlServer Condition=" '$(PkgHangfire_SqlServer)' == '' ">/home/dev/work/fis-modern/packages/hangfire.sqlserver/1.8.23</PkgHangfire_SqlServer>
   </PropertyGroup>
 </Project>

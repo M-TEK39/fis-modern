@@ -15,6 +15,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Microsoft.IdentityModel.Tokens;
+using SendGrid;
+using Hangfire;
+using Hangfire.SqlServer;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,9 +54,26 @@ builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
 // Configure Entity Framework
+var connectionString = builder.Configuration.GetConnectionString("Default") ?? throw new InvalidOperationException("Connection string 'Default' not found");
 builder.Services.AddDbContext<FisDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default"))
+    options.UseSqlServer(connectionString)
 );
+
+// Configure Hangfire for background jobs (Phase 5 - Analytics)
+builder.Services.AddHangfire(configuration => configuration
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+    {
+        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+        QueuePollInterval = TimeSpan.Zero,
+        UseRecommendedIsolationLevel = true,
+        DisableGlobalLocks = true
+    }));
+
+builder.Services.AddHangfireServer();
 
 // Add API documentation
 builder.Services.AddEndpointsApiExplorer();
@@ -246,6 +266,53 @@ builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 // Phase 3 repositories (Administrative endpoints - Fuel Cards, Notice Management, Reference Data)
 builder.Services.AddScoped<IFuelCardRepository, FuelCardRepository>();
 
+// Workflow System repositories (Workflow Management & Execution)
+builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
+builder.Services.AddScoped<IStepRepository, StepRepository>();
+builder.Services.AddScoped<IStepTypeRepository, StepTypeRepository>();
+builder.Services.AddScoped<IStatusRepository, StatusRepository>();
+builder.Services.AddScoped<IWorkflowTemplateRepository, WorkflowTemplateRepository>();
+builder.Services.AddScoped<IWorkflowNotificationRepository, WorkflowNotificationRepository>();
+builder.Services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
+builder.Services.AddScoped<INotificationLogRepository, NotificationLogRepository>();
+
+// Workflow System services (Step Handlers & Execution - Phase 1)
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IWorkflowExecutionService, FIS.Core.Application.Services.Workflow.WorkflowExecutionService>();
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandlerFactory, FIS.Core.Application.Services.Workflow.StepHandlerFactory>();
+
+// Workflow Template service (Phase 2)
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IWorkflowTemplateService, FIS.Core.Application.Services.Workflow.WorkflowTemplateService>();
+
+// Condition Evaluator service (Phase 3)
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IConditionEvaluator, FIS.Core.Application.Services.Workflow.ConditionEvaluator>();
+
+// Notification services (Phase 4)
+builder.Services.AddScoped<SendGrid.ISendGridClient>(sp =>
+{
+    var apiKey = builder.Configuration["SendGrid:ApiKey"] ?? throw new InvalidOperationException("SendGrid API key not configured");
+    return new SendGrid.SendGridClient(apiKey);
+});
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IEmailService, FIS.Core.Application.Services.Workflow.SendGridEmailService>();
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.INotificationService, FIS.Core.Application.Services.Workflow.NotificationService>();
+
+// Analytics repositories (Phase 5)
+builder.Services.AddScoped<IStepExecutionHistoryRepository, StepExecutionHistoryRepository>();
+builder.Services.AddScoped<IWorkflowMetricRepository, WorkflowMetricRepository>();
+builder.Services.AddScoped<IWorkflowExecutionSummaryRepository, WorkflowExecutionSummaryRepository>();
+
+// Analytics service (Phase 5)
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IAnalyticsService, FIS.Core.Application.Services.Workflow.AnalyticsService>();
+
+// Register step handlers
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.EmailNotificationHandler>();
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.ApprovalHandler>();
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.DataValidationHandler>();
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.WebhookHandler>();
+builder.Services.AddScoped<FIS.Core.Application.Interfaces.Workflow.IStepHandler, FIS.Core.Application.Services.Workflow.Handlers.DelayHandler>();
+
+// Add HttpClient for WebhookHandler
+builder.Services.AddHttpClient();
+
 // Phase 1 & 2 missing API repositories (Merchant, ThirdParty)
 builder.Services.AddScoped<IMerchantRepository, MerchantRepository>();
 builder.Services.AddScoped<IThirdPartyProjectRepository, ThirdPartyProjectRepository>();
@@ -272,6 +339,9 @@ builder.Services.AddScoped<IJournalDetailRepository, JournalDetailRepository>();
 
 // Phase 3 complete: All missing API controllers implemented (Department, Driver, User, Trip)
 
+// Register background jobs (Phase 5)
+builder.Services.AddScoped<WorkflowMetricsJob>();
+
 // Add health checks
 builder.Services.AddHealthChecks().AddDbContextCheck<FisDbContext>();
 
@@ -285,6 +355,12 @@ if (app.Environment.IsDevelopment())
     {
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "FIS API v1");
         options.RoutePrefix = string.Empty; // Make Swagger UI the default page
+    });
+
+    // Hangfire Dashboard (Development only)
+    app.UseHangfireDashboard("/hangfire", new DashboardOptions
+    {
+        Authorization = new[] { new HangfireDashboardAuthorizationFilter() }
     });
 }
 
@@ -307,5 +383,14 @@ app.MapHealthChecks("/health");
 
 // Add controllers
 app.MapControllers();
+
+// Configure recurring Hangfire jobs (Phase 5 - Analytics)
+var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+
+// Daily workflow metrics generation (runs at 2 AM daily)
+recurringJobManager.AddOrUpdate<WorkflowMetricsJob>(
+    "generate-daily-workflow-metrics",
+    job => job.GenerateDailyMetricsAsync(),
+    "0 2 * * *"); // Cron: Daily at 2:00 AM
 
 app.Run();

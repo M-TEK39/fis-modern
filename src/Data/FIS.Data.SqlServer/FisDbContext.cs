@@ -219,10 +219,19 @@ public class FisDbContext : DbContext
     public DbSet<ErrorLog> ErrorLogs { get; set; } = null!;
     public DbSet<BookingAddress> BookingAddresses { get; set; } = null!;
     public DbSet<EventMap> EventMaps { get; set; } = null!;
+    
+    // Workflow System entities (Phase 1-5)
     public DbSet<FIS.Core.Domain.Entities.System.Status> Statuses { get; set; } = null!;
     public DbSet<Step> Steps { get; set; } = null!;
     public DbSet<StepType> StepTypes { get; set; } = null!;
     public DbSet<FIS.Core.Domain.Entities.System.Workflow> Workflows { get; set; } = null!;
+    public DbSet<WorkflowTemplate> WorkflowTemplates { get; set; } = null!;
+    public DbSet<WorkflowNotification> WorkflowNotifications { get; set; } = null!;
+    public DbSet<NotificationTemplate> NotificationTemplates { get; set; } = null!;
+    public DbSet<NotificationLog> NotificationLogs { get; set; } = null!;
+    public DbSet<StepExecutionHistory> StepExecutionHistories { get; set; } = null!;
+    public DbSet<WorkflowMetric> WorkflowMetrics { get; set; } = null!;
+    public DbSet<WorkflowExecutionSummary> WorkflowExecutionSummaries { get; set; } = null!;
 
     // Batch 1 Reference Data (Lookups)
     public DbSet<Province> Provinces { get; set; } = null!;

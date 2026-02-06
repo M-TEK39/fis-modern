@@ -1,6 +1,7 @@
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Drivers;
 using FIS.Core.Domain.Entities.Financial;
+using FIS.Core.Domain.Entities.System;
 using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Application.Interfaces;
@@ -251,4 +252,165 @@ public interface IJournalDetailRepository
     Task<JournalDetail> CreateAsync(JournalDetail journalDetail, int currentUserId);
     Task UpdateAsync(JournalDetail journalDetail, int currentUserId);
     Task DeleteAsync(int journalDetailId, int currentUserId);
+}
+/// <summary>
+/// Repository interface for workflow operations
+/// </summary>
+public interface IWorkflowRepository
+{
+    Task<FIS.Core.Domain.Entities.System.Workflow?> GetByIdAsync(int workflowId);
+    Task<FIS.Core.Domain.Entities.System.Workflow?> GetByNameAsync(string workflowName);
+    Task<IEnumerable<FIS.Core.Domain.Entities.System.Workflow>> GetAllAsync();
+    Task<IEnumerable<FIS.Core.Domain.Entities.System.Workflow>> GetActiveWorkflowsAsync();
+    Task<FIS.Core.Domain.Entities.System.Workflow> CreateAsync(FIS.Core.Domain.Entities.System.Workflow workflow, int currentUserId);
+    Task UpdateAsync(FIS.Core.Domain.Entities.System.Workflow workflow, int currentUserId);
+    Task DeleteAsync(int workflowId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for workflow step operations
+/// </summary>
+public interface IStepRepository
+{
+    Task<Step?> GetByIdAsync(int stepId);
+    Task<IEnumerable<Step>> GetAllAsync();
+    Task<IEnumerable<Step>> GetByWorkflowIdAsync(int workflowId);
+    Task<IEnumerable<Step>> GetByStepTypeIdAsync(int stepTypeId);
+    Task<IEnumerable<Step>> GetChildStepsAsync(int parentStepId);
+    Task<Step> CreateAsync(Step step, int currentUserId);
+    Task UpdateAsync(Step step, int currentUserId);
+    Task DeleteAsync(int stepId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for workflow step type operations
+/// </summary>
+public interface IStepTypeRepository
+{
+    Task<StepType?> GetByIdAsync(int stepTypeId);
+    Task<StepType?> GetByNameAsync(string stepTypeName);
+    Task<IEnumerable<StepType>> GetAllAsync();
+    Task<StepType> CreateAsync(StepType stepType, int currentUserId);
+    Task UpdateAsync(StepType stepType, int currentUserId);
+    Task DeleteAsync(int stepTypeId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for workflow status operations
+/// </summary>
+public interface IStatusRepository
+{
+    Task<FIS.Core.Domain.Entities.System.Status?> GetByIdAsync(int statusId);
+    Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetAllAsync();
+    Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetByStepIdAsync(int stepId);
+    Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetActiveStatusesAsync();
+    Task<IEnumerable<FIS.Core.Domain.Entities.System.Status>> GetByUserAsync(string userName);
+    Task<FIS.Core.Domain.Entities.System.Status> CreateAsync(FIS.Core.Domain.Entities.System.Status status, int currentUserId);
+    Task UpdateAsync(FIS.Core.Domain.Entities.System.Status status, int currentUserId);
+    Task DeleteAsync(int statusId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for workflow template operations
+/// </summary>
+public interface IWorkflowTemplateRepository
+{
+    Task<WorkflowTemplate?> GetByIdAsync(int templateId);
+    Task<IEnumerable<WorkflowTemplate>> GetAllAsync();
+    Task<IEnumerable<WorkflowTemplate>> GetActiveTemplatesAsync();
+    Task<IEnumerable<WorkflowTemplate>> GetByCategoryAsync(string category);
+    Task<WorkflowTemplate> CreateAsync(WorkflowTemplate template, int currentUserId);
+    Task UpdateAsync(WorkflowTemplate template, int currentUserId);
+    Task DeleteAsync(int templateId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for workflow notification operations
+/// </summary>
+public interface IWorkflowNotificationRepository
+{
+    Task<WorkflowNotification?> GetByIdAsync(int notificationId);
+    Task<IEnumerable<WorkflowNotification>> GetAllAsync();
+    Task<IEnumerable<WorkflowNotification>> GetByWorkflowIdAsync(int workflowId);
+    Task<IEnumerable<WorkflowNotification>> GetByStepIdAsync(int stepId);
+    Task<IEnumerable<WorkflowNotification>> GetByEventTypeAsync(string eventType);
+    Task<IEnumerable<WorkflowNotification>> GetActiveNotificationsAsync();
+    Task<WorkflowNotification> CreateAsync(WorkflowNotification notification, int currentUserId);
+    Task UpdateAsync(WorkflowNotification notification, int currentUserId);
+    Task DeleteAsync(int notificationId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for notification template operations
+/// </summary>
+public interface INotificationTemplateRepository
+{
+    Task<NotificationTemplate?> GetByIdAsync(int templateId);
+    Task<NotificationTemplate?> GetByNameAsync(string templateName);
+    Task<IEnumerable<NotificationTemplate>> GetAllAsync();
+    Task<IEnumerable<NotificationTemplate>> GetActiveTemplatesAsync();
+    Task<IEnumerable<NotificationTemplate>> GetByTypeAsync(string templateType);
+    Task<NotificationTemplate> CreateAsync(NotificationTemplate template, int currentUserId);
+    Task UpdateAsync(NotificationTemplate template, int currentUserId);
+    Task DeleteAsync(int templateId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for notification log operations
+/// </summary>
+public interface INotificationLogRepository
+{
+    Task<NotificationLog?> GetByIdAsync(int logId);
+    Task<IEnumerable<NotificationLog>> GetAllAsync();
+    Task<IEnumerable<NotificationLog>> GetByWorkflowIdAsync(int workflowId);
+    Task<IEnumerable<NotificationLog>> GetByStatusAsync(string status);
+    Task<IEnumerable<NotificationLog>> GetFailedNotificationsAsync();
+    Task<IEnumerable<NotificationLog>> GetPendingNotificationsAsync();
+    Task<NotificationLog> CreateAsync(NotificationLog log);
+    Task UpdateAsync(NotificationLog log);
+    Task DeleteAsync(int logId);
+}
+
+/// <summary>
+/// Repository interface for step execution history operations
+/// </summary>
+public interface IStepExecutionHistoryRepository
+{
+    Task<StepExecutionHistory?> GetByIdAsync(int executionHistoryId);
+    Task<IEnumerable<StepExecutionHistory>> GetAllAsync();
+    Task<IEnumerable<StepExecutionHistory>> GetByWorkflowIdAsync(int workflowId);
+    Task<IEnumerable<StepExecutionHistory>> GetByStepIdAsync(int stepId);
+    Task<IEnumerable<StepExecutionHistory>> GetByStatusAsync(string status);
+    Task<IEnumerable<StepExecutionHistory>> GetRecentExecutionsAsync(int count);
+    Task<StepExecutionHistory> CreateAsync(StepExecutionHistory history);
+    Task UpdateAsync(StepExecutionHistory history);
+}
+
+/// <summary>
+/// Repository interface for workflow metric operations
+/// </summary>
+public interface IWorkflowMetricRepository
+{
+    Task<WorkflowMetric?> GetByIdAsync(int metricId);
+    Task<IEnumerable<WorkflowMetric>> GetAllAsync();
+    Task<IEnumerable<WorkflowMetric>> GetByWorkflowIdAsync(int workflowId);
+    Task<IEnumerable<WorkflowMetric>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
+    Task<WorkflowMetric?> GetLatestMetricAsync(int workflowId);
+    Task<WorkflowMetric> CreateAsync(WorkflowMetric metric, int currentUserId);
+    Task UpdateAsync(WorkflowMetric metric, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for workflow execution summary operations
+/// </summary>
+public interface IWorkflowExecutionSummaryRepository
+{
+    Task<WorkflowExecutionSummary?> GetByIdAsync(int summaryId);
+    Task<IEnumerable<WorkflowExecutionSummary>> GetAllAsync();
+    Task<IEnumerable<WorkflowExecutionSummary>> GetByWorkflowIdAsync(int workflowId);
+    Task<IEnumerable<WorkflowExecutionSummary>> GetByStatusAsync(string status);
+    Task<IEnumerable<WorkflowExecutionSummary>> GetActiveExecutionsAsync();
+    Task<IEnumerable<WorkflowExecutionSummary>> GetRecentExecutionsAsync(int count);
+    Task<WorkflowExecutionSummary> CreateAsync(WorkflowExecutionSummary summary);
+    Task UpdateAsync(WorkflowExecutionSummary summary);
 }

@@ -27,6 +27,26 @@ public class Step
     [Column("ParentStepID")]
     public int? ParentStepID { get; set; }
 
+    [Column("StepParameters")]
+    public string? StepParameters { get; set; } // JSON string containing handler parameters
+
+    [Column("HandlerType")]
+    [StringLength(100)]
+    public string? HandlerType { get; set; } // Type of step handler to execute
+
+    // Conditional branching properties
+    [Column("IsConditional")]
+    public bool IsConditional { get; set; } = false;
+
+    [Column("ConditionExpression")]
+    public string? ConditionExpression { get; set; } // JSON logic expression
+
+    [Column("TrueStepID")]
+    public int? TrueStepID { get; set; } // FK to next step if condition true
+
+    [Column("FalseStepID")]
+    public int? FalseStepID { get; set; } // FK to next step if condition false
+
     // Global audit fields
     [Column("date_created")]
     public DateTime date_created { get; set; }
