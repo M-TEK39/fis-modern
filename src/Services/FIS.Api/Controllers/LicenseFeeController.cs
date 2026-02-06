@@ -1,3 +1,5 @@
+using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities.ReferenceData;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,84 +11,148 @@ namespace FIS.Api.Controllers;
 public class LicenseFeeController : BaseApiController
 {
     private readonly ILogger<LicenseFeeController> _logger;
+    private readonly ILicenseFeeRepository _repository;
 
-    public LicenseFeeController(ILogger<LicenseFeeController> logger)
+    public LicenseFeeController(
+        ILogger<LicenseFeeController> logger,
+        ILicenseFeeRepository repository)
     {
         _logger = logger;
+        _repository = repository;
     }
 
     /// <summary>
     /// Get all licence fees
     /// </summary>
     [HttpGet]
-    public ActionResult<IEnumerable<LicenseFeeDto>> GetAll()
+    public async Task<ActionResult<IEnumerable<LicenseFeeDto>>> GetAll()
     {
-        // TODO: Implement repository call to get all licence fees
-        _logger.LogInformation("Getting all licence fees");
-        return Ok(new List<LicenseFeeDto>());
+        try
+        {
+            _logger.LogInformation("Getting all licence fees");
+            var fees = await _repository.GetAllAsync();
+            var dtos = fees.Select(MapToDto);
+            return Ok(dtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting all licence fees");
+            return StatusCode(500, "Error retrieving licence fees");
+        }
     }
 
     /// <summary>
-    /// Get licence fee by ID
+    /// Get licence fee by code
     /// </summary>
-    [HttpGet("{id}")]
-    public ActionResult<LicenseFeeDto> GetById(int id)
+    [HttpGet("{code}")]
+    public async Task<ActionResult<LicenseFeeDto>> GetByCode(short code)
     {
-        // TODO: Implement repository call to get licence fee by ID
-        _logger.LogInformation("Getting licence fee {Id}", id);
-        return NotFound();
+        try
+        {
+            _logger.LogInformation("Getting licence fee {Code}", code);
+            var fee = await _repository.GetByIdAsync(code);
+
+            if (fee == null)
+                return NotFound(new { message = $"Licence fee with code {code} not found" });
+
+            return Ok(MapToDto(fee));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting licence fee {Code}", code);
+            return StatusCode(500, "Error retrieving licence fee");
+        }
     }
 
     /// <summary>
     /// Create new licence fee
     /// </summary>
     [HttpPost]
-    public ActionResult<LicenseFeeDto> Create([FromBody] CreateLicenseFeeDto request)
+    public async Task<ActionResult<LicenseFeeDto>> Create([FromBody] CreateLicenseFeeDto request)
     {
-        // TODO: Implement repository call to create licence fee
-        _logger.LogInformation("Creating licence fee for vehicle type: {VehicleTypeCode}", request.VehicleTypeCode);
-        var created = new LicenseFeeDto
+        try
         {
-            LicenseFeeId = 0,
-            VehicleTypeCode = request.VehicleTypeCode,
-            ProvinceCode = request.ProvinceCode,
-            FeeAmount = request.FeeAmount,
-            EffectiveDate = request.EffectiveDate
-        };
-        return Ok(created);
+            _logger.LogInformation("Creating licence fee: {Description}", request.Description);
+
+            var fee = new LicenseFee
+            {
+                licence_fee_code = request.LicenceFeeCode,
+                licence_description = request.Description,
+                licence_fee = request.Fee
+            };
+
+            var created = await _repository.CreateAsync(fee, GetCurrentUserId());
+            return Ok(MapToDto(created));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating licence fee");
+            return StatusCode(500, "Error creating licence fee");
+        }
     }
 
     /// <summary>
     /// Update existing licence fee
     /// </summary>
-    [HttpPut("{id}")]
-    public ActionResult<LicenseFeeDto> Update(int id, [FromBody] UpdateLicenseFeeDto request)
+    [HttpPut("{code}")]
+    public async Task<ActionResult<LicenseFeeDto>> Update(short code, [FromBody] UpdateLicenseFeeDto request)
     {
-        // TODO: Implement repository call to update licence fee
-        _logger.LogInformation("Updating licence fee {Id}", id);
-        if (id != request.LicenseFeeId)
-            return BadRequest("ID mismatch");
-
-        var updated = new LicenseFeeDto
+        try
         {
-            LicenseFeeId = id,
-            VehicleTypeCode = request.VehicleTypeCode,
-            ProvinceCode = request.ProvinceCode,
-            FeeAmount = request.FeeAmount,
-            EffectiveDate = request.EffectiveDate
-        };
-        return Ok(updated);
+            _logger.LogInformation("Updating licence fee {Code}", code);
+
+            if (code != request.LicenceFeeCode)
+                return BadRequest("Code mismatch");
+
+            var existing = await _repository.GetByIdAsync(code);
+            if (existing == null)
+                return NotFound(new { message = $"Licence fee with code {code} not found" });
+
+            existing.licence_description = request.Description;
+            existing.licence_fee = request.Fee;
+
+            await _repository.UpdateAsync(existing, GetCurrentUserId());
+            return Ok(MapToDto(existing));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating licence fee {Code}", code);
+            return StatusCode(500, "Error updating licence fee");
+        }
     }
 
     /// <summary>
     /// Delete licence fee
     /// </summary>
-    [HttpDelete("{id}")]
-    public ActionResult Delete(int id)
+    [HttpDelete("{code}")]
+    public async Task<ActionResult> Delete(short code)
     {
-        // TODO: Implement repository call to delete licence fee
-        _logger.LogInformation("Deleting licence fee {Id}", id);
-        return Ok(new { message = "Licence fee deleted successfully", id });
+        try
+        {
+            _logger.LogInformation("Deleting licence fee {Code}", code);
+
+            var existing = await _repository.GetByIdAsync(code);
+            if (existing == null)
+                return NotFound(new { message = $"Licence fee with code {code} not found" });
+
+            await _repository.DeleteAsync(code, GetCurrentUserId());
+            return Ok(new { message = "Licence fee deleted successfully", code });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting licence fee {Code}", code);
+            return StatusCode(500, "Error deleting licence fee");
+        }
+    }
+
+    private static LicenseFeeDto MapToDto(LicenseFee fee)
+    {
+        return new LicenseFeeDto
+        {
+            LicenceFeeCode = fee.licence_fee_code,
+            Description = fee.licence_description,
+            Fee = fee.licence_fee
+        };
     }
 }
 
@@ -94,28 +160,23 @@ public class LicenseFeeController : BaseApiController
 
 public class LicenseFeeDto
 {
-    public int LicenseFeeId { get; set; }
-    public string? VehicleTypeCode { get; set; }
-    public string? ProvinceCode { get; set; }
-    public decimal FeeAmount { get; set; }
-    public DateTime? EffectiveDate { get; set; }
+    public short LicenceFeeCode { get; set; }
+    public string? Description { get; set; }
+    public decimal? Fee { get; set; }
 }
 
 public class CreateLicenseFeeDto
 {
-    public string? VehicleTypeCode { get; set; }
-    public string? ProvinceCode { get; set; }
-    public decimal FeeAmount { get; set; }
-    public DateTime? EffectiveDate { get; set; }
+    public short LicenceFeeCode { get; set; }
+    public string? Description { get; set; }
+    public decimal? Fee { get; set; }
 }
 
 public class UpdateLicenseFeeDto
 {
-    public int LicenseFeeId { get; set; }
-    public string? VehicleTypeCode { get; set; }
-    public string? ProvinceCode { get; set; }
-    public decimal FeeAmount { get; set; }
-    public DateTime? EffectiveDate { get; set; }
+    public short LicenceFeeCode { get; set; }
+    public string? Description { get; set; }
+    public decimal? Fee { get; set; }
 }
 
 #endregion

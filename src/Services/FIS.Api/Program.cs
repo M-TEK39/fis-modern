@@ -228,6 +228,12 @@ builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
 builder.Services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();
 builder.Services.AddScoped<IContractStatusRepository, ContractStatusRepository>();
 
+// Reference Data repositories (Priority 1 - Quick wins for Codex)
+builder.Services.AddScoped<IDriverLicenceRepository, DriverLicenceRepository>();
+builder.Services.AddScoped<ILicenseFeeRepository, LicenseFeeRepository>();
+builder.Services.AddScoped<IExtraCodeRepository, ExtraCodeRepository>();
+builder.Services.AddScoped<ILossTypeRepository, LossTypeRepository>();
+
 // Phase 4: Additional entity repositories
 builder.Services.AddScoped<ITripDriverRepository, TripDriverRepository>();
 builder.Services.AddScoped<IPrivateHireRepository, PrivateHireRepository>();

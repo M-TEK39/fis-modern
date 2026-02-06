@@ -2,6 +2,7 @@ using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Drivers;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Core.Domain.Entities.System;
+using FIS.Core.Domain.Entities.ReferenceData;
 using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Application.Interfaces;
@@ -413,4 +414,61 @@ public interface IWorkflowExecutionSummaryRepository
     Task<IEnumerable<WorkflowExecutionSummary>> GetRecentExecutionsAsync(int count);
     Task<WorkflowExecutionSummary> CreateAsync(WorkflowExecutionSummary summary);
     Task UpdateAsync(WorkflowExecutionSummary summary);
+}
+
+/// <summary>
+/// Repository interface for driver licence operations
+/// </summary>
+public interface IDriverLicenceRepository
+{
+    Task<DriverLicence?> GetByIdAsync(short licenceCode);
+    Task<DriverLicence?> GetByDescriptionAsync(string description);
+    Task<IEnumerable<DriverLicence>> GetAllAsync();
+    Task<IEnumerable<DriverLicence>> SearchAsync(string searchTerm);
+    Task<DriverLicence> CreateAsync(DriverLicence driverLicence, int currentUserId);
+    Task UpdateAsync(DriverLicence driverLicence, int currentUserId);
+    Task DeleteAsync(short licenceCode, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for licence fee operations
+/// </summary>
+public interface ILicenseFeeRepository
+{
+    Task<LicenseFee?> GetByIdAsync(short licenceFeeCode);
+    Task<LicenseFee?> GetByDescriptionAsync(string description);
+    Task<IEnumerable<LicenseFee>> GetAllAsync();
+    Task<IEnumerable<LicenseFee>> SearchAsync(string searchTerm);
+    Task<LicenseFee> CreateAsync(LicenseFee licenseFee, int currentUserId);
+    Task UpdateAsync(LicenseFee licenseFee, int currentUserId);
+    Task DeleteAsync(short licenceFeeCode, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for extra code operations
+/// </summary>
+public interface IExtraCodeRepository
+{
+    Task<ExtraCode?> GetByIdAsync(short extraCode);
+    Task<ExtraCode?> GetByDescriptionAsync(string description);
+    Task<IEnumerable<ExtraCode>> GetAllAsync();
+    Task<IEnumerable<ExtraCode>> SearchAsync(string searchTerm);
+    Task<IEnumerable<ExtraCode>> GetByCategoryAsync(int categoryTypeCode);
+    Task<ExtraCode> CreateAsync(ExtraCode extraCode, int currentUserId);
+    Task UpdateAsync(ExtraCode extraCode, int currentUserId);
+    Task DeleteAsync(short extraCode, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for loss type operations
+/// </summary>
+public interface ILossTypeRepository
+{
+    Task<LossType?> GetByIdAsync(short lossTypeCode);
+    Task<LossType?> GetByDescriptionAsync(string description);
+    Task<IEnumerable<LossType>> GetAllAsync();
+    Task<IEnumerable<LossType>> SearchAsync(string searchTerm);
+    Task<LossType> CreateAsync(LossType lossType, int currentUserId);
+    Task UpdateAsync(LossType lossType, int currentUserId);
+    Task DeleteAsync(short lossTypeCode, int currentUserId);
 }

@@ -119,16 +119,41 @@ public class CallCentreController : BaseApiController
     /// Get call centre notifications
     /// </summary>
     [HttpGet("notifications")]
-    public ActionResult<CallCentreNotificationsDto> GetNotifications()
+    public async Task<ActionResult<CallCentreNotificationsDto>> GetNotifications()
     {
-        // TODO: Implement notification retrieval from database
-        _logger.LogInformation("Getting call centre notifications");
-        var notifications = new CallCentreNotificationsDto
+        try
         {
-            Notifications = new List<NotificationDto>(),
-            UnreadCount = 0
-        };
-        return Ok(notifications);
+            _logger.LogInformation("Getting call centre notifications");
+
+            // Get recent calls (last 30 days) as notifications
+            var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+            var recentCalls = await _repository.GetByDateRangeAsync(thirtyDaysAgo, DateTime.UtcNow);
+
+            var notificationsList = recentCalls
+                .Where(c => !c.is_deleted)
+                .OrderByDescending(c => c.Call_date ?? c.date_created)
+                .Take(50) // Limit to 50 most recent
+                .Select(c => new NotificationDto
+                {
+                    NotificationId = c.Call_centre_code,
+                    Message = $"Call from {c.Caller_name ?? "Unknown"} for vehicle {c.GG_number ?? "N/A"}",
+                    CreatedDate = c.Call_date ?? c.date_created,
+                    IsRead = false // Could be enhanced with a separate read tracking mechanism
+                })
+                .ToList();
+
+            var notifications = new CallCentreNotificationsDto
+            {
+                Notifications = notificationsList,
+                UnreadCount = notificationsList.Count
+            };
+            return Ok(notifications);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting call centre notifications");
+            return StatusCode(500, "Error retrieving notifications");
+        }
     }
 
     #endregion
@@ -159,80 +184,213 @@ public class CallCentreController : BaseApiController
     /// Generate call centre report by department and site for a period
     /// </summary>
     [HttpPost("reports/dept-site-period")]
-    public ActionResult<CallCentreReportDto> GetReportDeptSitePeriod([FromBody] CallCentreDeptSitePeriodRequestDto request)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportDeptSitePeriod([FromBody] CallCentreDeptSitePeriodRequestDto request)
     {
-        // TODO: Implement report generation
-        _logger.LogInformation("Generating dept/site period report");
-        var report = new CallCentreReportDto
+        try
         {
-            ReportType = "DeptSitePeriod",
-            Data = new List<object>()
-        };
-        return Ok(report);
+            _logger.LogInformation("Generating dept/site period report: Dept={DepartmentCode}, Site={SiteCode}, Start={StartDate}, End={EndDate}",
+                request.DepartmentCode, request.SiteCode, request.StartDate, request.EndDate);
+
+            var calls = await _repository.GetByDateRangeAsync(request.StartDate, request.EndDate);
+
+            var filteredCalls = calls
+                .Where(c => !c.is_deleted)
+                .Where(c => request.SiteCode == null || c.Driver_Site == request.SiteCode)
+                .OrderByDescending(c => c.Call_date ?? c.date_created)
+                .ToList();
+
+            var report = new CallCentreReportDto
+            {
+                ReportType = "DeptSitePeriod",
+                Data = filteredCalls.Cast<object>().ToList(),
+                RecordCount = filteredCalls.Count,
+                GeneratedDate = DateTime.UtcNow,
+                StartDate = request.StartDate,
+                EndDate = request.EndDate
+            };
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating dept/site period report");
+            return StatusCode(500, "Error generating report");
+        }
     }
 
     /// <summary>
     /// Generate call centre statistics report
     /// </summary>
     [HttpGet("reports/statistics")]
-    public ActionResult<CallCentreReportDto> GetReportStatistics([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportStatistics([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
     {
-        // TODO: Implement statistics report generation
-        _logger.LogInformation("Generating statistics report");
-        var report = new CallCentreReportDto
+        try
         {
-            ReportType = "Statistics",
-            Data = new List<object>()
-        };
-        return Ok(report);
+            _logger.LogInformation("Generating statistics report: Start={StartDate}, End={EndDate}", startDate, endDate);
+
+            var start = startDate ?? DateTime.UtcNow.AddMonths(-1);
+            var end = endDate ?? DateTime.UtcNow;
+
+            var calls = await _repository.GetByDateRangeAsync(start, end);
+
+            var callsList = calls.Where(c => !c.is_deleted).ToList();
+
+            // Calculate statistics
+            var statistics = new
+            {
+                TotalCalls = callsList.Count,
+                CallsBySite = callsList.GroupBy(c => c.Driver_Site ?? 0)
+                    .Select(g => new { SiteCode = g.Key, Count = g.Count() })
+                    .OrderByDescending(x => x.Count)
+                    .ToList(),
+                CallsByDate = callsList.GroupBy(c => (c.Call_date ?? c.date_created).Date)
+                    .Select(g => new { Date = g.Key, Count = g.Count() })
+                    .OrderBy(x => x.Date)
+                    .ToList(),
+                UniqueVehicles = callsList.Where(c => c.vmf_code.HasValue).Select(c => c.vmf_code).Distinct().Count(),
+                UniqueCallers = callsList.Where(c => !string.IsNullOrEmpty(c.Caller_name)).Select(c => c.Caller_name).Distinct().Count()
+            };
+
+            var report = new CallCentreReportDto
+            {
+                ReportType = "Statistics",
+                Data = new List<object> { statistics },
+                RecordCount = 1,
+                GeneratedDate = DateTime.UtcNow,
+                StartDate = start,
+                EndDate = end
+            };
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating statistics report");
+            return StatusCode(500, "Error generating report");
+        }
     }
 
     /// <summary>
     /// Generate CLO inquiry report
     /// </summary>
     [HttpGet("reports/clo")]
-    public ActionResult<CallCentreReportDto> GetReportClo([FromQuery] string? cloNumber)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportClo([FromQuery] string? cloNumber)
     {
-        // TODO: Implement CLO inquiry report generation
-        _logger.LogInformation("Generating CLO inquiry report");
-        var report = new CallCentreReportDto
+        try
         {
-            ReportType = "CLO",
-            Data = new List<object>()
-        };
-        return Ok(report);
+            _logger.LogInformation("Generating CLO inquiry report: CLO={CloNumber}", cloNumber);
+
+            if (string.IsNullOrWhiteSpace(cloNumber))
+                return BadRequest(new { message = "CLO number is required" });
+
+            var allCalls = await _repository.GetAllAsync();
+
+            var filteredCalls = allCalls
+                .Where(c => !c.is_deleted)
+                .Where(c => c.GG_number != null && c.GG_number.Contains(cloNumber, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(c => c.Call_date ?? c.date_created)
+                .ToList();
+
+            var report = new CallCentreReportDto
+            {
+                ReportType = "CLO",
+                Data = filteredCalls.Cast<object>().ToList(),
+                RecordCount = filteredCalls.Count,
+                GeneratedDate = DateTime.UtcNow
+            };
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating CLO inquiry report: {CloNumber}", cloNumber);
+            return StatusCode(500, "Error generating report");
+        }
     }
 
     /// <summary>
     /// Generate data access report
     /// </summary>
     [HttpGet("reports/data-access")]
-    public ActionResult<CallCentreReportDto> GetReportDataAccess([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+    public async Task<ActionResult<CallCentreReportDto>> GetReportDataAccess([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
     {
-        // TODO: Implement data access report generation
-        _logger.LogInformation("Generating data access report");
-        var report = new CallCentreReportDto
+        try
         {
-            ReportType = "DataAccess",
-            Data = new List<object>()
-        };
-        return Ok(report);
+            _logger.LogInformation("Generating data access report: Start={StartDate}, End={EndDate}", startDate, endDate);
+
+            var start = startDate ?? DateTime.UtcNow.AddMonths(-1);
+            var end = endDate ?? DateTime.UtcNow;
+
+            var calls = await _repository.GetByDateRangeAsync(start, end);
+
+            var filteredCalls = calls
+                .Where(c => !c.is_deleted)
+                .OrderByDescending(c => c.Call_date ?? c.date_created)
+                .ToList();
+
+            // Group by user/capture name for data access tracking
+            var dataAccessSummary = filteredCalls
+                .GroupBy(c => c.Capture_name ?? "Unknown")
+                .Select(g => new
+                {
+                    UserName = g.Key,
+                    AccessCount = g.Count(),
+                    FirstAccess = g.Min(c => c.date_created),
+                    LastAccess = g.Max(c => c.date_updated ?? c.date_created)
+                })
+                .OrderByDescending(x => x.AccessCount)
+                .ToList();
+
+            var report = new CallCentreReportDto
+            {
+                ReportType = "DataAccess",
+                Data = dataAccessSummary.Cast<object>().ToList(),
+                RecordCount = dataAccessSummary.Count,
+                GeneratedDate = DateTime.UtcNow,
+                StartDate = start,
+                EndDate = end
+            };
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating data access report");
+            return StatusCode(500, "Error generating report");
+        }
     }
 
     /// <summary>
     /// Generate open calls report
     /// </summary>
     [HttpGet("reports/open-calls")]
-    public ActionResult<CallCentreReportDto> GetReportOpenCalls()
+    public async Task<ActionResult<CallCentreReportDto>> GetReportOpenCalls()
     {
-        // TODO: Implement open calls report generation
-        _logger.LogInformation("Generating open calls report");
-        var report = new CallCentreReportDto
+        try
         {
-            ReportType = "OpenCalls",
-            Data = new List<object>()
-        };
-        return Ok(report);
+            _logger.LogInformation("Generating open calls report");
+
+            // Get calls from the last 90 days (assume open calls are recent calls)
+            var ninetyDaysAgo = DateTime.UtcNow.AddDays(-90);
+            var recentCalls = await _repository.GetByDateRangeAsync(ninetyDaysAgo, DateTime.UtcNow);
+
+            var openCalls = recentCalls
+                .Where(c => !c.is_deleted)
+                .OrderByDescending(c => c.Call_date ?? c.date_created)
+                .ToList();
+
+            var report = new CallCentreReportDto
+            {
+                ReportType = "OpenCalls",
+                Data = openCalls.Cast<object>().ToList(),
+                RecordCount = openCalls.Count,
+                GeneratedDate = DateTime.UtcNow,
+                StartDate = ninetyDaysAgo,
+                EndDate = DateTime.UtcNow
+            };
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating open calls report");
+            return StatusCode(500, "Error generating report");
+        }
     }
 
     #endregion
@@ -277,6 +435,10 @@ public class CallCentreReportDto
 {
     public string ReportType { get; set; } = "";
     public List<object> Data { get; set; } = new();
+    public int RecordCount { get; set; }
+    public DateTime GeneratedDate { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
 }
 
 #endregion

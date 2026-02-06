@@ -43,16 +43,42 @@ public class BookingController : BaseApiController
     /// Get booking notifications
     /// </summary>
     [HttpGet("notifications")]
-    public ActionResult<BookingNotificationsDto> GetNotifications()
+    public async Task<ActionResult<BookingNotificationsDto>> GetNotifications()
     {
-        // TODO: Implement booking notifications retrieval
-        _logger.LogInformation("Getting booking notifications");
-        var notifications = new BookingNotificationsDto
+        try
         {
-            Notifications = new List<BookingNotificationDto>(),
-            PendingCount = 0
-        };
-        return Ok(notifications);
+            _logger.LogInformation("Getting booking notifications");
+
+            // Get bookings from today onwards (upcoming bookings)
+            var today = DateTime.UtcNow.Date;
+            var thirtyDaysLater = today.AddDays(30);
+            var upcomingBookings = await _repository.GetByDateRangeAsync(today, thirtyDaysLater);
+
+            var pendingBookings = upcomingBookings
+                .Where(b => !b.is_deleted)
+                .OrderBy(b => b.start_date)
+                .Take(50) // Limit to 50 most recent
+                .Select(b => new BookingNotificationDto
+                {
+                    NotificationId = b.booking_id,
+                    Message = $"Booking for vehicle at {b.location_code} from {b.start_date:yyyy-MM-dd} to {b.end_date:yyyy-MM-dd}",
+                    CreatedDate = b.start_date,
+                    Status = "Pending"
+                })
+                .ToList();
+
+            var notifications = new BookingNotificationsDto
+            {
+                Notifications = pendingBookings,
+                PendingCount = pendingBookings.Count
+            };
+            return Ok(notifications);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting booking notifications");
+            return StatusCode(500, "Error retrieving booking notifications");
+        }
     }
 
     /// <summary>
