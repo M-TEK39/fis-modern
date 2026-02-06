@@ -1328,16 +1328,51 @@
             Maps to 'fuel_type' table
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.System.NotificationLog">
+            <summary>
+            Log of sent notifications with delivery status
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.NotificationTemplate">
+            <summary>
+            Reusable notification template with variables
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.System.RptTemp">
             <summary>
             RptTemp Entity - EXACT legacy schema match
             Maps to 'rpt_temp' table
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.System.StepExecutionHistory">
+            <summary>
+            Tracks detailed execution history for workflow steps
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.System.TempTum">
             <summary>
             TempTum Entity - EXACT legacy schema match
             Maps to 'tempTA' table
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.WorkflowExecutionSummary">
+            <summary>
+            Summary view of workflow execution for reporting
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.WorkflowMetric">
+            <summary>
+            Aggregated metrics for workflow performance analysis
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.WorkflowNotification">
+            <summary>
+            Represents a notification rule for workflow events
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.WorkflowTemplate">
+            <summary>
+            Workflow template for creating reusable workflow definitions
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.UnitOfMeasure">

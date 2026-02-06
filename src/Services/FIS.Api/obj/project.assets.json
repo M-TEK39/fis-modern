@@ -5033,6 +5033,7 @@
       "Microsoft.Extensions.Options.ConfigurationExtensions >= 8.0.0",
       "Microsoft.Identity.Web >= 4.3.0",
       "Microsoft.SourceLink.GitHub >= 1.1.1",
+      "NCalc >= 1.3.8",
       "SendGrid >= *",
       "Swashbuckle.AspNetCore >= 6.6.2"
     ]
@@ -5136,6 +5137,10 @@
             "suppressParent": "All",
             "target": "Package",
             "version": "[1.1.1, )"
+          },
+          "NCalc": {
+            "target": "Package",
+            "version": "[1.3.8, )"
           },
           "SendGrid": {
             "target": "Package",
