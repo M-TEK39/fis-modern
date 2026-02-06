@@ -1,5 +1,6 @@
 @page "/private-hire/reports/vehicles-per-department-inservice"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Private Hire Vehicles Per Department (In Service) - Fleet Information System</PageTitle>
 
@@ -32,6 +33,12 @@
                 <button class="btn btn-primary btn-sm">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
+            <LegacyEndpointActionPanel
+                LegacyPath="Private_Hire/RPT_phv_vehicle_per_dept_inserv1.aspx"
+                Endpoint="api/privatehire/reports/vehicles-per-department/inservice"
+                HttpMethod="GET"
+                ButtonText="Run Vehicles in Service API"
+                ReportType="private-hire-report-per-department-inservice" />
             <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: [Legacy timestamp]</div>
 
             <div class="form-section" style="margin-top: 2rem;">

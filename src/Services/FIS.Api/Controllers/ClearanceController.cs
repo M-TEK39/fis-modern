@@ -40,6 +40,21 @@ public class ClearanceController : BaseApiController
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
+    [HttpGet("lookup/{fleetOrReg}")]
+    public async Task<ActionResult<ClearanceLookupResult>> LookupVehicle(string fleetOrReg)
+    {
+        try
+        {
+            var result = await _repository.LookupVehicleAsync(fleetOrReg);
+            return result == null ? NotFound() : Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error looking up vehicle");
+            return StatusCode(500);
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<Clearance>> Create([FromBody] Clearance item)
     {

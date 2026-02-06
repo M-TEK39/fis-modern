@@ -1,5 +1,6 @@
 @page "/auction/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Auction Reports - Fleet Information System</PageTitle>
 
@@ -63,4 +64,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Auction/RPTAuction.aspx"
+        Endpoint="api/auction/reports/menu"
+        HttpMethod="GET"
+        ButtonText="Test Auction Reports Menu Endpoint"
+        ReportType="auction-reports-menu" />
 </div>

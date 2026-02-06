@@ -1,5 +1,6 @@
 @page "/vehicles/edit"
 @rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject NavigationManager Navigation
@@ -19,18 +20,18 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-header">
-            <h2>GG or GP number</h2>
-            <p>Enter a valid GG or GP number (7–8 characters) to open the vehicle record.</p>
+            <h2>GG/GP or Registration Number</h2>
+            <p>Enter a GG/GP or registration number to open the vehicle record.</p>
         </div>
         <div class="form-card-body">
-            <EditForm OnValidSubmit="HandleSubmit">
+            <EditForm Model="_form" OnValidSubmit="HandleSubmit">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="validation-summary" />
 
                 <div class="form-grid">
                     <div class="form-field">
-                        <label class="form-label">GG or GP number <span class="required">*</span></label>
-                        <InputText class="form-input" @bind-Value="_searchNumber" maxlength="8" />
+                        <label class="form-label">GG/GP or Registration Number <span class="required">*</span></label>
+                        <InputText class="form-input" @bind-Value="_form.SearchNumber" maxlength="20" />
                     </div>
                 </div>
 
@@ -64,18 +65,18 @@
 </div>
 
 @code {
-    private string _searchNumber = string.Empty;
+    private SearchForm _form = new();
     private bool _loading;
     private string _errorMessage = string.Empty;
 
     private async Task HandleSubmit()
     {
         _errorMessage = string.Empty;
-        var query = (_searchNumber ?? string.Empty).Trim().ToUpperInvariant();
+        var query = (_form.SearchNumber ?? string.Empty).Trim().ToUpperInvariant();
 
-        if (query.Length < 7 || query.Length > 8)
+        if (query.Length < 3)
         {
-            _errorMessage = "Please enter a valid GG/GP number (7–8 characters).";
+            _errorMessage = "Please enter at least 3 characters.";
             return;
         }
 
@@ -109,5 +110,11 @@
     private void NavigateToMenu()
     {
         Navigation.NavigateTo("/vehicles");
+    }
+
+    private sealed class SearchForm
+    {
+        [Required]
+        public string SearchNumber { get; set; } = string.Empty;
     }
 }

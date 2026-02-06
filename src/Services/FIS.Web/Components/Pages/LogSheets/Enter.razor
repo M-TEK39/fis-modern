@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject LogsheetApiService LogsheetService
 @inject VehicleLookupApiService VehicleLookupService
 @inject SiteApiService SiteService
@@ -81,6 +82,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/Log_Entry_A.aspx"
+        Endpoint="api/logsheet/entry"
+        HttpMethod="POST"
+        ButtonText="Test Logsheet Entry Endpoint"
+        ReportType="logsheet-enter" />
 
 @code {
     private bool _loading;

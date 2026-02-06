@@ -1,5 +1,6 @@
 @page "/trips/remove-without-routes"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Remove Trips Without Routes - Fleet Information System</PageTitle>
 
@@ -42,6 +43,12 @@
                 <button class="btn btn-danger">DELETE all Trips without routes</button>
                 <a class="btn btn-secondary" href="/trips">Back</a>
             </div>
+            <LegacyEndpointActionPanel
+                LegacyPath="Trips/RemoveTripWithoutRoutes.aspx"
+                Endpoint="api/trip/remove-without-routes"
+                HttpMethod="DELETE"
+                ButtonText="Run Remove Trips API"
+                ReportType="trips-remove-without-routes" />
         </div>
     </div>
 </div>

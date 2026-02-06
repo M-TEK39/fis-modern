@@ -1,7 +1,7 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
-using MaintenanceTriggerEntity = FIS.Data.Entities.MaintenanceTrigger;
+using MaintenanceTriggerEntity = FIS.Core.Domain.Entities.Maintenance.MaintenanceTrigger;
 
 namespace FIS.Core.Infrastructure.Repositories
 {
@@ -39,7 +39,7 @@ namespace FIS.Core.Infrastructure.Repositories
         {
             return await _context.MaintenanceTriggers
                 .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(mt => mt.description.ToLower() == description.ToLower());
+                .FirstOrDefaultAsync(mt => mt.description != null && mt.description.ToLower() == description.ToLower());
         }
 
         /// <summary>
@@ -74,7 +74,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<IEnumerable<MaintenanceTriggerEntity>> SearchMaintenanceTriggersAsync(string searchTerm)
         {
             return await _context.MaintenanceTriggers
-                .Where(mt => mt.description.ToLower().Contains(searchTerm.ToLower()))
+                .Where(mt => mt.description != null && mt.description.ToLower().Contains(searchTerm.ToLower()))
                 .OrderBy(mt => mt.description)
                 .ToListAsync();
         }

@@ -1,5 +1,6 @@
 @page "/fuel-cards"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Fuelcard Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -102,6 +103,13 @@
             }
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/MNTFuelcard.aspx"
+        Endpoint="api/fuelcard/menu"
+        HttpMethod="GET"
+        ButtonText="Test Fuelcard Menu Endpoint"
+        ReportType="fuelcard-menu" />
 </div>
 
 @code {

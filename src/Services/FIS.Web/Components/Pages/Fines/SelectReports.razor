@@ -1,5 +1,6 @@
 @page "/fines/reports/select"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Fines Report Selection - Fleet Information System</PageTitle>
 
@@ -34,6 +35,12 @@
                 <a class="btn btn-primary btn-sm" href="/fines/reports/@_selected">Click to continue</a>
                 <a class="btn btn-secondary btn-sm" href="/fines/reports">Menu</a>
             </div>
+            <LegacyEndpointActionPanel
+                LegacyPath="Fines/Selectfines.htm"
+                Endpoint="api/report/fines/select"
+                HttpMethod="GET"
+                ButtonText="Run Fine Report Selection API"
+                ReportType="fines-reports-select" />
         </div>
     </div>
 </div>

@@ -1,5 +1,6 @@
 @page "/fuel-cards/private-hire/delete"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Delete a Fuelcard (Private Hire)</PageTitle>
 
@@ -63,4 +64,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/MNT_fdelh_getreg.aspx"
+        Endpoint="api/fuelcard/privatehire/delete/search"
+        HttpMethod="POST"
+        ButtonText="Test Private Hire Delete Lookup Endpoint"
+        ReportType="fuelcard-privatehire-delete" />
 </div>

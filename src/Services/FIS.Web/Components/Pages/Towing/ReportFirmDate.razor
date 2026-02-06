@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject TowingApiService TowingService
 @inject IJSRuntime JSRuntime
 
@@ -74,6 +75,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Towing/RPT_road_firmdate_main.aspx"
+        Endpoint="api/towing/reports/firm-date"
+        HttpMethod="POST"
+        ButtonText="Test Towing Firm Date Report Endpoint"
+        ReportType="towing-report-firm-date" />
 
 @code {
     private bool _loading;

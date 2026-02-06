@@ -1,6 +1,7 @@
 @page "/call-centre/notifications"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
 @inject IJSRuntime JSRuntime
 
@@ -58,6 +59,20 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/MNT_call_notify_pass.aspx"
+        Endpoint="api/callcentre/notifications"
+        HttpMethod="GET"
+        ButtonText="Test Notification List Endpoint"
+        ReportType="call-centre-notifications" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/MNT_call_notify_pass.aspx"
+        Endpoint="api/notification/config/status"
+        HttpMethod="GET"
+        ButtonText="Test Notification Config Endpoint"
+        ReportType="notification-config-status" />
 </div>
 
 @code {

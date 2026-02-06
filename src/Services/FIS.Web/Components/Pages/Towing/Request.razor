@@ -84,6 +84,14 @@
     }
 </div>
 
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Towing/MNT_tow_getreg.aspx"
+        Endpoint="api/towing/request"
+        HttpMethod="POST"
+        ButtonText="Test Towing Request Endpoint"
+        ReportType="towing-request" />
+
 @code {
     private bool _loading;
     private bool _showForm;

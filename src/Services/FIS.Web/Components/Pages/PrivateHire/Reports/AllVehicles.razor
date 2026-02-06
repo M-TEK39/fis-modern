@@ -1,5 +1,6 @@
 @page "/private-hire/reports/all-vehicles"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>All Private Hire Vehicles - Fleet Information System</PageTitle>
 
@@ -49,6 +50,12 @@
             <div class="form-hint" style="margin-top: 1rem; color: var(--fis-danger);">
                 Total Number of Vehicles: 0
             </div>
+            <LegacyEndpointActionPanel
+                LegacyPath="Private_Hire/RPT_all_private_hire_vehicles.aspx"
+                Endpoint="api/privatehire"
+                HttpMethod="GET"
+                ButtonText="Run All Vehicles API"
+                ReportType="private-hire-report-all-vehicles" />
         </div>
     </div>
 </div>

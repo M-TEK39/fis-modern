@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "B51kvupYorX6oQDSMl03HV3XZ37B142OJsucXT6Z83TvfZ4LUFCDamNe3wQT0ZeA1wFNAqAvanRx3jZ2ax4KTg==",
+  "dgSpecHash": "R9dTSoI4P1ILo5sN62axhYoN5RbLRMPa3bAlulz+5pRnthVqwE/KntC/at0KUMIRt3FYtb8TxxYzPE1KGtAPzw==",
   "success": true,
   "projectFilePath": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
   "expectedPackageFiles": [

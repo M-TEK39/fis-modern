@@ -1,5 +1,7 @@
 using FIS.Core.Domain.Entities;
-using TypeEntity = FIS.Data.Entities.Type;
+using FIS.Core.Domain.Entities.Drivers;
+using FIS.Core.Domain.Entities.Financial;
+using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Application.Interfaces;
 

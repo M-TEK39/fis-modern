@@ -1,69 +1,13 @@
 @page "/job-cards/print"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Print Jobcards - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-printer"></i>
-            Print Jobcards
-        </h1>
-        <p class="page-description">Enter a GG Number to view jobcards ready for printing.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
-        <div class="menu-tile">
-            <div class="menu-tile-header">
-                <span>Jobcard Menu</span>
-            </div>
-            <div class="menu-tile-body">
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/capturer-default">Main Menu</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/list">Edit Jobcard</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="form-grid" style="align-items: end;">
-            <div class="form-field">
-                <label class="form-label">Enter GG Number</label>
-                <input class="form-input" placeholder="GG Number" />
-            </div>
-            <div class="form-field">
-                <button class="btn btn-primary" type="button">Search</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Jobcards Ready for Printing</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Jobcard Number</th>
-                        <th>Jobcard Description</th>
-                        <th>GG Number</th>
-                        <th>Registration Number</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="6">Awaiting jobcard print API.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Print Jobcards"
+    Description="Enter a GG Number to view jobcards ready for printing."
+    LegacyPath="Enter a GG Number to view jobcards ready for printing."
+    Endpoint="api/jobcards/print?ggNumber="
+    HttpMethod="GET"
+    ReportType="jobcards-print"
+    BackLink="/job-cards/capturer-default"
+    Icon="bx-wrench" />

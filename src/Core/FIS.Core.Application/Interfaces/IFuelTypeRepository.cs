@@ -1,4 +1,4 @@
-using FuelTypeEntity = FIS.Data.Entities.FuelType;
+using FuelTypeEntity = FIS.Core.Domain.Entities.ReferenceData.FuelType;
 
 namespace FIS.Core.Application.Interfaces
 {

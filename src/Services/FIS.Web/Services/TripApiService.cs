@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using FIS.Web.Models;
-using System.Text.Json;
 
 namespace FIS.Web.Services;
 
@@ -19,8 +18,11 @@ public class TripApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<TripDto>>("api/Trip");
-            return result ?? new List<TripDto>();
+            var startDate = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-90).ToString("o"));
+            var endDate = Uri.EscapeDataString(DateTime.UtcNow.ToString("o"));
+            var result = await _httpClient.GetFromJsonAsync<List<TripReportSummaryResponse>>(
+                $"api/Report/trip/summary?startDate={startDate}&endDate={endDate}");
+            return result?.Select(MapSummary).ToList() ?? new List<TripDto>();
         }
         catch (Exception ex)
         {
@@ -90,7 +92,30 @@ public class TripApiService
     {
         try
         {
-            return await _httpClient.GetFromJsonAsync<TripDto>($"api/Trip/{id}");
+            var reportTrip = await _httpClient.GetFromJsonAsync<TripReportSummaryResponse>($"api/Report/trip/detail/{id}");
+            if (reportTrip != null)
+            {
+                return MapSummary(reportTrip);
+            }
+
+            var apiTrip = await _httpClient.GetFromJsonAsync<TripControllerResponse>($"api/Trip/{id}");
+            if (apiTrip == null)
+            {
+                return null;
+            }
+
+            return new TripDto
+            {
+                TripId = apiTrip.TripAuthorityCode,
+                ContractCode = apiTrip.ContractCode,
+                VmfCode = 0,
+                DriverId = null,
+                TripDate = apiTrip.IssueDate,
+                Status = apiTrip.ExpiryDate.HasValue && apiTrip.ExpiryDate.Value < DateTime.UtcNow
+                    ? "Expired"
+                    : "Open",
+                Notes = apiTrip.TripReason
+            };
         }
         catch (Exception ex)
         {
@@ -98,14 +123,45 @@ public class TripApiService
             return null;
         }
     }
+
+    private static TripDto MapSummary(TripReportSummaryResponse source)
+        => new()
+        {
+            TripId = source.TripId,
+            ContractCode = 0,
+            VmfCode = source.VmfCode ?? 0,
+            DriverId = null,
+            TripDate = source.TripDate ?? DateTime.MinValue,
+            Status = source.Status,
+            Notes = source.Notes
+        };
 }
 
-public record TripDto(
-    int TripId,
-    int ContractCode,
-    int VmfCode,
-    int? DriverId,
-    DateTime TripDate,
-    string? Status,
-    string? Notes
-);
+public class TripDto
+{
+    public int TripId { get; set; }
+    public int ContractCode { get; set; }
+    public int VmfCode { get; set; }
+    public int? DriverId { get; set; }
+    public DateTime TripDate { get; set; }
+    public string? Status { get; set; }
+    public string? Notes { get; set; }
+}
+
+internal sealed class TripReportSummaryResponse
+{
+    public int TripId { get; set; }
+    public int? VmfCode { get; set; }
+    public DateTime? TripDate { get; set; }
+    public string? Status { get; set; }
+    public string? Notes { get; set; }
+}
+
+internal sealed class TripControllerResponse
+{
+    public int TripAuthorityCode { get; set; }
+    public int ContractCode { get; set; }
+    public DateTime IssueDate { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public string? TripReason { get; set; }
+}

@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject VehicleLookupApiService VehicleLookupService
 @inject IJSRuntime JSRuntime
@@ -71,6 +72,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Monitor/RPT_Mon_one_gg_main.aspx"
+        Endpoint="api/monitor/reports/one-vehicle"
+        HttpMethod="POST"
+        ButtonText="Test Monitor One Vehicle Report Endpoint"
+        ReportType="monitor-report-one-vehicle" />
 
 @code {
     private bool _loading;

@@ -1,7 +1,7 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
-using FuelTypeEntity = FIS.Data.Entities.FuelType;
+using FuelTypeEntity = FIS.Core.Domain.Entities.ReferenceData.FuelType;
 
 namespace FIS.Core.Infrastructure.Repositories
 {
@@ -39,7 +39,7 @@ namespace FIS.Core.Infrastructure.Repositories
         {
             return await _context.FuelTypes
                 .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(ft => ft.fuel_description.ToLower() == fuelDescription.ToLower());
+                .FirstOrDefaultAsync(ft => ft.fuel_description != null && ft.fuel_description.ToLower() == fuelDescription.ToLower());
         }
 
         /// <summary>
@@ -62,7 +62,7 @@ namespace FIS.Core.Infrastructure.Repositories
         public async Task<IEnumerable<FuelTypeEntity>> SearchFuelTypesAsync(string searchTerm)
         {
             return await _context.FuelTypes
-                .Where(ft => ft.fuel_description.ToLower().Contains(searchTerm.ToLower()))
+                .Where(ft => ft.fuel_description != null && ft.fuel_description.ToLower().Contains(searchTerm.ToLower()))
                 .OrderBy(ft => ft.fuel_description)
                 .ToListAsync();
         }

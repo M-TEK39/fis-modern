@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject IJSRuntime JSRuntime
 
@@ -70,6 +71,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Monitor/RPT_Mon_clo_main.aspx"
+        Endpoint="api/monitor/reports/clo-inquiry"
+        HttpMethod="POST"
+        ButtonText="Test Monitor CLO Inquiry Endpoint"
+        ReportType="monitor-report-clo" />
 
 @code {
     private bool _loading;

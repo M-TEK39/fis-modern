@@ -1,5 +1,6 @@
 @page "/fines/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Fines Reports - Fleet Information System</PageTitle>
 
@@ -42,4 +43,10 @@
             </div>
         </div>
     </div>
+    <LegacyEndpointActionPanel
+        LegacyPath="Fines/RPTFines.aspx"
+        Endpoint="api/report/fines/menu"
+        HttpMethod="GET"
+        ButtonText="Run Fines Reports API"
+        ReportType="fines-reports-menu" />
 </div>

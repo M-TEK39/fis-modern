@@ -1,5 +1,6 @@
 @page "/private-hire/reports/contractors"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Private Hire Contractors - Fleet Information System</PageTitle>
 
@@ -37,6 +38,12 @@
                 <button class="btn btn-primary btn-sm">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
+            <LegacyEndpointActionPanel
+                LegacyPath="Private_Hire/RPT_private_hire_contractors_1.aspx"
+                Endpoint="api/privatehire/contractors"
+                HttpMethod="GET"
+                ButtonText="Run Contractors API"
+                ReportType="private-hire-report-contractors" />
             <div class="table-container" style="margin-top: 1.5rem;">
                 <div class="table-wrapper">
                     <table class="data-table">

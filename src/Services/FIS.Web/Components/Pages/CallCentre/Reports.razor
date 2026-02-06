@@ -1,5 +1,6 @@
 @page "/call-centre/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Call Centre Reports Menu - Fleet Information System</PageTitle>
 
@@ -75,4 +76,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/RPTCallCentre.aspx"
+        Endpoint="api/callcentre/reports/menu"
+        HttpMethod="GET"
+        ButtonText="Test Call Centre Reports Menu Endpoint"
+        ReportType="call-centre-reports-menu" />
 </div>

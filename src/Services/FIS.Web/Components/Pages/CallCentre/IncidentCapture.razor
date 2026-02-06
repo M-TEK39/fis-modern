@@ -94,6 +94,20 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/MNT_call_getgg.aspx"
+        Endpoint="api/VehicleLookup?keyword=GG123"
+        HttpMethod="GET"
+        ButtonText="Test Vehicle Lookup Endpoint"
+        ReportType="call-centre-capture-lookup" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/MNT_call_update.aspx"
+        Endpoint="api/callcentre"
+        HttpMethod="POST"
+        ButtonText="Test Capture Incident Endpoint"
+        ReportType="call-centre-capture-save" />
 </div>
 
 @code {

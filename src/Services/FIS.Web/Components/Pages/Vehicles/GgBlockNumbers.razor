@@ -1,35 +1,13 @@
 @page "/vehicles/gg-block-numbers"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Add GG Block Number(s)</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-grid"></i>
-            Add GG Block Number(s)
-        </h1>
-        <p class="page-description">Legacy GG block numbering screen (UI-only until API endpoints are available).</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="form-card">
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Start GG Number</label>
-                    <input class="form-input" type="text" placeholder="Start GG number" />
-                </div>
-                <div class="form-field">
-                    <label class="form-label">End GG Number</label>
-                    <input class="form-input" type="text" placeholder="End GG number" />
-                </div>
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-secondary">Submit</button>
-                <button class="btn btn-secondary">&lt; Cancel</button>
-            </div>
-        </div>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Add GG Block Number(s)"
+    Description="Legacy GG block numbering screen (UI-only until API endpoints are available)."
+    LegacyPath="Legacy GG block numbering screen (UI-only until API endpoints are available)."
+    Endpoint="api/vehicle-inception/gg-blocks"
+    HttpMethod="POST"
+    ReportType="vehicle-inception-gg-blocks"
+    BackLink="/vehicles"
+    Icon="bx-wrench" />

@@ -1,39 +1,13 @@
 @page "/vehicles/renumbered-report"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Report All Renumbered Vehicles</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            Report All Renumbered Vehicles
-        </h1>
-        <p class="page-description">Legacy report placeholder (UI-only until API endpoints are available).</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Renumbered Vehicles</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Old GG Number</th>
-                        <th>New GG Number</th>
-                        <th>Date Updated</th>
-                        <th>Notes</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="4">No renumbered vehicles found</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Report All Renumbered Vehicles"
+    Description="Legacy report placeholder (UI-only until API endpoints are available)."
+    LegacyPath="Legacy report placeholder (UI-only until API endpoints are available)."
+    Endpoint="api/vehicles/reports/renumbered"
+    HttpMethod="GET"
+    ReportType="vehicles-renumbered-report"
+    BackLink="/vehicles"
+    Icon="bx-wrench" />

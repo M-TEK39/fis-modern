@@ -76,6 +76,10 @@
         {
             result = await FinanceService.GetActionAsync(Endpoint);
         }
+        else if (string.Equals(HttpMethod, "DELETE", StringComparison.OrdinalIgnoreCase))
+        {
+            result = await FinanceService.DeleteActionAsync(Endpoint);
+        }
         else if (string.Equals(HttpMethod, "PUT", StringComparison.OrdinalIgnoreCase))
         {
             result = await FinanceService.PutActionAsync(Endpoint, BuildPayload());

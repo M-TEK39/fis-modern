@@ -1,5 +1,6 @@
 @page "/losses/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 @inject NavigationManager Navigation
 
 <PageTitle>Losses Reports Menu</PageTitle>
@@ -68,4 +69,10 @@
             </div>
         </div>
     </div>
+    <LegacyEndpointActionPanel
+        LegacyPath="Losses/RPT_All_losses_menu.aspx"
+        Endpoint="api/report/losses/menu"
+        HttpMethod="GET"
+        ButtonText="Run Losses Reports API"
+        ReportType="losses-reports-menu" />
 </div>

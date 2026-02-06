@@ -17,11 +17,11 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/private-hire/vehicles");
+            var response = await _httpClient.GetAsync("api/privatehire");
             response.EnsureSuccessStatusCode();
-            
-            var vehicles = await response.Content.ReadFromJsonAsync<List<PrivateHireVehicleDto>>();
-            return vehicles ?? new List<PrivateHireVehicleDto>();
+
+            var payload = await response.Content.ReadFromJsonAsync<List<PrivateHireVehicleResponseDto>>();
+            return payload?.Select(MapVehicle).ToList() ?? new List<PrivateHireVehicleDto>();
         }
         catch (HttpRequestException)
         {
@@ -37,10 +37,11 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/private-hire/vehicles/{vehicleId}");
+            var response = await _httpClient.GetAsync($"api/privatehire/{vehicleId}");
             response.EnsureSuccessStatusCode();
-            
-            return await response.Content.ReadFromJsonAsync<PrivateHireVehicleDto>();
+
+            var payload = await response.Content.ReadFromJsonAsync<PrivateHireVehicleResponseDto>();
+            return payload == null ? null : MapVehicle(payload);
         }
         catch (HttpRequestException)
         {
@@ -56,11 +57,13 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/private-hire/vehicles", vehicle);
+            var response = await _httpClient.PostAsJsonAsync("api/privatehire", ToApiVehicle(vehicle));
             response.EnsureSuccessStatusCode();
-            
-            var createdVehicle = await response.Content.ReadFromJsonAsync<PrivateHireVehicleDto>();
-            return createdVehicle ?? throw new InvalidOperationException("Failed to create vehicle");
+
+            var createdVehicle = await response.Content.ReadFromJsonAsync<PrivateHireVehicleResponseDto>();
+            return createdVehicle == null
+                ? throw new InvalidOperationException("Failed to create vehicle")
+                : MapVehicle(createdVehicle);
         }
         catch (HttpRequestException)
         {
@@ -72,11 +75,13 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/private-hire/vehicles/{vehicleId}", vehicle);
+            var response = await _httpClient.PutAsJsonAsync($"api/privatehire/{vehicleId}", ToApiVehicle(vehicle));
             response.EnsureSuccessStatusCode();
-            
-            var updatedVehicle = await response.Content.ReadFromJsonAsync<PrivateHireVehicleDto>();
-            return updatedVehicle ?? throw new InvalidOperationException("Failed to update vehicle");
+
+            var updatedVehicle = await response.Content.ReadFromJsonAsync<PrivateHireVehicleResponseDto>();
+            return updatedVehicle == null
+                ? throw new InvalidOperationException("Failed to update vehicle")
+                : MapVehicle(updatedVehicle);
         }
         catch (HttpRequestException)
         {
@@ -88,7 +93,7 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/private-hire/vehicles/{vehicleId}");
+            var response = await _httpClient.DeleteAsync($"api/privatehire/{vehicleId}");
             response.EnsureSuccessStatusCode();
         }
         catch (HttpRequestException)
@@ -102,9 +107,9 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/private-hire/contractors");
+            var response = await _httpClient.GetAsync("api/privatehire/contractors");
             response.EnsureSuccessStatusCode();
-            
+
             var contractors = await response.Content.ReadFromJsonAsync<List<PrivateHireContractorDto>>();
             return contractors ?? new List<PrivateHireContractorDto>();
         }
@@ -122,9 +127,9 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync($"api/private-hire/contractors/{contractorId}");
+            var response = await _httpClient.GetAsync($"api/privatehire/contractors/{contractorId}");
             response.EnsureSuccessStatusCode();
-            
+
             return await response.Content.ReadFromJsonAsync<PrivateHireContractorDto>();
         }
         catch (HttpRequestException)
@@ -141,9 +146,9 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/private-hire/contractors", contractor);
+            var response = await _httpClient.PostAsJsonAsync("api/privatehire/contractors", contractor);
             response.EnsureSuccessStatusCode();
-            
+
             var createdContractor = await response.Content.ReadFromJsonAsync<PrivateHireContractorDto>();
             return createdContractor ?? throw new InvalidOperationException("Failed to create contractor");
         }
@@ -157,9 +162,9 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/private-hire/contractors/{contractorId}", contractor);
+            var response = await _httpClient.PutAsJsonAsync($"api/privatehire/contractors/{contractorId}", contractor);
             response.EnsureSuccessStatusCode();
-            
+
             var updatedContractor = await response.Content.ReadFromJsonAsync<PrivateHireContractorDto>();
             return updatedContractor ?? throw new InvalidOperationException("Failed to update contractor");
         }
@@ -173,7 +178,7 @@ public class PrivateHireApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/private-hire/contractors/{contractorId}");
+            var response = await _httpClient.DeleteAsync($"api/privatehire/contractors/{contractorId}");
             response.EnsureSuccessStatusCode();
         }
         catch (HttpRequestException)
@@ -181,6 +186,55 @@ public class PrivateHireApiService
             throw new InvalidOperationException("Unable to connect to the API service");
         }
     }
+
+    private static PrivateHireVehicleDto MapVehicle(PrivateHireVehicleResponseDto source)
+        => new()
+        {
+            vehicle_id = source.PHV_code ?? source.vehicle_id ?? 0,
+            registration_number = source.registration_number ?? string.Empty,
+            make_model = source.model_description ?? source.make_model ?? string.Empty,
+            contractor_id = source.contractor_id ?? 0,
+            contractor_name = source.contractor_name ?? string.Empty,
+            department_code = source.department_code ?? 0,
+            department_name = source.department_name ?? string.Empty,
+            hire_start_date = source.date_hired ?? source.hire_start_date,
+            hire_end_date = source.date_retired ?? source.hire_end_date,
+            monthly_rate = source.monthly_rate,
+            hire_status = source.hire_status ?? "Active",
+            notes = source.notes ?? string.Empty
+        };
+
+    private static object ToApiVehicle(PrivateHireVehicleDto source)
+        => new
+        {
+            PHV_code = source.vehicle_id,
+            registration_number = source.registration_number,
+            contractor_id = source.contractor_id == 0 ? (int?)null : source.contractor_id,
+            department_code = source.department_code == 0 ? (int?)null : source.department_code,
+            date_hired = source.hire_start_date,
+            date_retired = source.hire_end_date,
+            notes = source.notes
+        };
+}
+
+internal sealed class PrivateHireVehicleResponseDto
+{
+    public int? PHV_code { get; set; }
+    public int? vehicle_id { get; set; }
+    public string? registration_number { get; set; }
+    public string? model_description { get; set; }
+    public string? make_model { get; set; }
+    public int? contractor_id { get; set; }
+    public string? contractor_name { get; set; }
+    public int? department_code { get; set; }
+    public string? department_name { get; set; }
+    public DateTime? date_hired { get; set; }
+    public DateTime? date_retired { get; set; }
+    public DateTime? hire_start_date { get; set; }
+    public DateTime? hire_end_date { get; set; }
+    public decimal? monthly_rate { get; set; }
+    public string? hire_status { get; set; }
+    public string? notes { get; set; }
 }
 
 // DTOs for Private Hire operations

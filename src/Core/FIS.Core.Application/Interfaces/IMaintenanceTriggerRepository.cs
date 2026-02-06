@@ -1,4 +1,4 @@
-using MaintenanceTriggerEntity = FIS.Data.Entities.MaintenanceTrigger;
+using MaintenanceTriggerEntity = FIS.Core.Domain.Entities.Maintenance.MaintenanceTrigger;
 
 namespace FIS.Core.Application.Interfaces
 {

@@ -1,5 +1,6 @@
 @page "/fuel-cards/private-hire/collection-multiple"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Collection for TWO or MORE Fuelcards (Private Hire)</PageTitle>
 
@@ -63,4 +64,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/MNT_fuel2h_getreg.aspx"
+        Endpoint="api/fuelcard/privatehire/collection/multiple/search"
+        HttpMethod="POST"
+        ButtonText="Test Private Hire Multi-Collection Endpoint"
+        ReportType="fuelcard-privatehire-collection" />
 </div>

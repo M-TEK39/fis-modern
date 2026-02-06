@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
 @inject SiteApiService SiteService
 @inject IJSRuntime JSRuntime
@@ -84,6 +85,13 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/RPT_call_dept_period_main.aspx"
+        Endpoint="api/callcentre/reports/dept-site-period"
+        HttpMethod="POST"
+        ButtonText="Test Dept/Site/Period Report Endpoint"
+        ReportType="call-centre-report-dept-site-period" />
 </div>
 
 @code {

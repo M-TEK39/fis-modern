@@ -33,4 +33,56 @@ public class TrackingController : BaseApiController
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id) { try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+
+    #region Specialized Operations
+
+    [HttpGet("menu")]
+    public ActionResult<TrackingMenuDto> GetMenu() => Ok(new TrackingMenuDto { Options = new List<string> { "Maintenance", "Reports", "Help" } });
+
+    [HttpGet("vehicle-search")]
+    public ActionResult<TrackingVehicleLookupDto> SearchVehicle([FromQuery] string identifier) => Ok(new TrackingVehicleLookupDto { Found = false, Message = $"Search for: {identifier}" });
+
+    #endregion
+
+    #region Reports
+
+    [HttpGet("reports/menu")]
+    public ActionResult<TrackingReportMenuDto> GetReportsMenu() => Ok(new TrackingReportMenuDto { Reports = new List<string> { "One Vehicle", "One Device", "All Vehicles", "All Devices", "Install Period", "Site Period", "Dept Period" } });
+
+    [HttpPost("reports/one-vehicle")]
+    public ActionResult<TrackingReportDto> GetReportOneVehicle([FromBody] TrackingOneVehicleRequestDto request) => Ok(new TrackingReportDto { ReportType = "OneVehicle", Data = new List<object>() });
+
+    [HttpPost("reports/one-device")]
+    public ActionResult<TrackingReportDto> GetReportOneDevice([FromBody] TrackingOneDeviceRequestDto request) => Ok(new TrackingReportDto { ReportType = "OneDevice", Data = new List<object>() });
+
+    [HttpPost("reports/all-vehicles")]
+    public ActionResult<TrackingReportDto> GetReportAllVehicles([FromBody] TrackingAllVehiclesRequestDto request) => Ok(new TrackingReportDto { ReportType = "AllVehicles", Data = new List<object>() });
+
+    [HttpPost("reports/all-devices")]
+    public ActionResult<TrackingReportDto> GetReportAllDevices([FromBody] TrackingAllDevicesRequestDto request) => Ok(new TrackingReportDto { ReportType = "AllDevices", Data = new List<object>() });
+
+    [HttpPost("reports/install-period")]
+    public ActionResult<TrackingReportDto> GetReportInstallPeriod([FromBody] TrackingInstallPeriodRequestDto request) => Ok(new TrackingReportDto { ReportType = "InstallPeriod", Data = new List<object>() });
+
+    [HttpPost("reports/site-period")]
+    public ActionResult<TrackingReportDto> GetReportSitePeriod([FromBody] TrackingSitePeriodRequestDto request) => Ok(new TrackingReportDto { ReportType = "SitePeriod", Data = new List<object>() });
+
+    [HttpPost("reports/dept-period")]
+    public ActionResult<TrackingReportDto> GetReportDeptPeriod([FromBody] TrackingDeptPeriodRequestDto request) => Ok(new TrackingReportDto { ReportType = "DeptPeriod", Data = new List<object>() });
+
+    #endregion
 }
+
+#region Tracking DTOs
+public class TrackingMenuDto { public List<string> Options { get; set; } = new(); }
+public class TrackingVehicleLookupDto { public bool Found { get; set; } public string Message { get; set; } = ""; public int? VmfCode { get; set; } }
+public class TrackingReportMenuDto { public List<string> Reports { get; set; } = new(); }
+public class TrackingOneVehicleRequestDto { public int VmfCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class TrackingOneDeviceRequestDto { public string DeviceId { get; set; } = ""; }
+public class TrackingAllVehiclesRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class TrackingAllDevicesRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class TrackingInstallPeriodRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class TrackingSitePeriodRequestDto { public int SiteCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class TrackingDeptPeriodRequestDto { public int DepartmentCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class TrackingReportDto { public string ReportType { get; set; } = ""; public List<object> Data { get; set; } = new(); }
+#endregion

@@ -1,5 +1,6 @@
 @page "/taxis/maintenance/info"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Taxi Information Maintenance - Fleet Information System</PageTitle>
 
@@ -20,6 +21,12 @@
     <div class="form-card">
         <div class="form-card-body">
             <p class="form-hint">Taxi information maintenance to be aligned with legacy workflow.</p>
+            <LegacyEndpointActionPanel
+                LegacyPath="Private_Hire/MNT_menu.aspx"
+                Endpoint="api/privatehire"
+                HttpMethod="GET"
+                ButtonText="Run Taxi Maintenance API"
+                ReportType="taxis-maintenance" />
         </div>
     </div>
 </div>

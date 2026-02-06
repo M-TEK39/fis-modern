@@ -1,5 +1,6 @@
 @page "/clearance"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Clearance - Fleet Information System</PageTitle>
 
@@ -43,6 +44,12 @@
             }
         </div>
     </div>
+    <LegacyEndpointActionPanel
+        LegacyPath="Clearance/Clearance_Menu.aspx"
+        Endpoint="api/clearance"
+        HttpMethod="GET"
+        ButtonText="Run Clearance Menu API"
+        ReportType="clearance-menu" />
 </div>
 
 @code {

@@ -2,7 +2,7 @@ using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using FuelTypeEntity = FIS.Data.Entities.FuelType;
+using FuelTypeEntity = FIS.Core.Domain.Entities.ReferenceData.FuelType;
 
 namespace FIS.Api.Controllers
 {
@@ -37,7 +37,7 @@ namespace FIS.Api.Controllers
                 var fuelTypeDtos = fuelTypes.Select(ft => new FuelTypeResponseDto
                 {
                     fuel_type_code = ft.fuel_type_code,
-                    fuel_description = ft.fuel_description
+                    fuel_description = ft.fuel_description ?? string.Empty
                 });
                 return Ok(fuelTypeDtos);
             }
@@ -68,7 +68,7 @@ namespace FIS.Api.Controllers
                 var fuelTypeDto = new FuelTypeResponseDto
                 {
                     fuel_type_code = fuelType.fuel_type_code,
-                    fuel_description = fuelType.fuel_description
+                    fuel_description = fuelType.fuel_description ?? string.Empty
                 };
                 
                 return Ok(fuelTypeDto);

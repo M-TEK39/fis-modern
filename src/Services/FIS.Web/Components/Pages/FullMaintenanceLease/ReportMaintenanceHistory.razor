@@ -1,97 +1,13 @@
 @page "/full-maintenance-lease/reports/maintenance-history"
 @rendermode InteractiveServer
-@inject NavigationManager Navigation
+@using FIS.Web.Components.Shared
 
-<PageTitle>FML Vehicle Maintenance History</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-file"></i>
-            FML Vehicle Maintenance History
-        </h1>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="form-actions" style="margin-bottom: 1rem;">
-        <button class="btn btn-primary" @onclick="Download">Download to Excel</button>
-        <button class="btn btn-secondary" @onclick="GoBack">&lt;&lt; Back</button>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">All FML / Lease Vehicle Maintenance History</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>Year Manufactured</th>
-                        <th>Model Description</th>
-                        <th>Current Status</th>
-                        <th>Current Status Date</th>
-                        <th>Hired From</th>
-                        <th>Maintenance Expense Type</th>
-                        <th>Total Cost Over Date Range</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_rows.Count == 0)
-                    {
-                        <tr>
-                            <td colspan="8">No records found.</td>
-                        </tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in _rows)
-                        {
-                            <tr>
-                                <td>@row.GgNumber</td>
-                                <td>@row.YearManufactured</td>
-                                <td>@row.ModelDescription</td>
-                                <td>@row.CurrentStatus</td>
-                                <td>@row.CurrentStatusDate</td>
-                                <td>@row.HiredFrom</td>
-                                <td>@row.MaintenanceExpenseType</td>
-                                <td>@row.TotalCost</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="form-actions" style="margin-top: 1rem;">
-        <button class="btn btn-secondary" @onclick="Refresh">Refresh Screen</button>
-        <button class="btn btn-secondary" @onclick="ViewAll">View All</button>
-    </div>
-</div>
-
-@code {
-    private readonly List<MaintenanceHistoryRow> _rows = new();
-
-    private void Download() { }
-    private void Refresh() { }
-    private void ViewAll() { }
-
-    private void GoBack()
-    {
-        Navigation.NavigateTo("/full-maintenance-lease/reports");
-    }
-
-    private sealed class MaintenanceHistoryRow
-    {
-        public string GgNumber { get; set; } = "";
-        public string YearManufactured { get; set; } = "";
-        public string ModelDescription { get; set; } = "";
-        public string CurrentStatus { get; set; } = "";
-        public string CurrentStatusDate { get; set; } = "";
-        public string HiredFrom { get; set; } = "";
-        public string MaintenanceExpenseType { get; set; } = "";
-        public string TotalCost { get; set; } = "";
-    }
-}
+<LegacyReportEndpointPage
+    Title="FML Vehicle Maintenance History"
+    Description="Legacy fleet operations endpoint wiring page."
+    LegacyPath="Legacy fleet operations endpoint wiring page."
+    Endpoint="api/leasecontractterms/reports/maintenance-history"
+    HttpMethod="POST"
+    ReportType="fml-report-maintenance-history"
+    BackLink="/full-maintenance-lease/reports"
+    Icon="bx-wrench" />

@@ -1,5 +1,6 @@
 @page "/licenses"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Licences - Fleet Information System</PageTitle>
 
@@ -50,4 +51,10 @@
             </div>
         </div>
     </div>
+    <LegacyEndpointActionPanel
+        LegacyPath="License/MNTLicence.aspx"
+        Endpoint="api/license"
+        HttpMethod="GET"
+        ButtonText="Run Licence Menu API"
+        ReportType="licenses-menu" />
 </div>

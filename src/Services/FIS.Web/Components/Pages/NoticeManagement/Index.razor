@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject NoticeApiService NoticeService
 @inject IJSRuntime JSRuntime
 
@@ -91,6 +92,21 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Admin/NoticeManagement.aspx"
+        Endpoint="api/notice-management/menu"
+        HttpMethod="GET"
+        ButtonText="Test Notice Management Menu Endpoint"
+        ReportType="notice-management-menu" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Admin/NoticeManagement.aspx"
+        Endpoint="api/notice-schedules"
+        HttpMethod="GET"
+        ButtonText="Test Notice Schedules Endpoint"
+        ReportType="notice-schedules" />
 
 @code {
     private bool _loading;

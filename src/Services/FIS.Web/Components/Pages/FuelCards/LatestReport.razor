@@ -1,5 +1,6 @@
 @page "/fuel-cards/report/latest"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Latest Fuelcard Report for a GG Vehicle</PageTitle>
 
@@ -48,4 +49,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/RPT_all_vehicle_main.aspx"
+        Endpoint="api/fuelcard/reports/latest"
+        HttpMethod="POST"
+        ButtonText="Test Latest Fuelcard Report Endpoint"
+        ReportType="fuelcard-report-latest" />
 </div>

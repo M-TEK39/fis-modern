@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject ContractApiService ContractService
 
 <PageTitle>Vehicle Contract Relief Vehicle Search</PageTitle>
 
@@ -20,6 +21,12 @@
 </div>
 
 <div class="page-content">
+    @if (!string.IsNullOrWhiteSpace(_apiStatusMessage))
+    {
+        <div class="alert @(_apiStatusError ? "alert-error" : "alert-success")" style="margin-bottom: 1rem;">
+            @_apiStatusMessage
+        </div>
+    }
     <div class="form-card">
         <div class="form-card-header">
             <h2>Relief Vehicle Search</h2>
@@ -113,6 +120,8 @@
     private string _registrationNumber = "";
     private bool _loading;
     private List<VehicleDto> _results = new();
+    private bool _apiStatusError;
+    private string _apiStatusMessage = string.Empty;
 
     private async Task SearchVehicles()
     {
@@ -125,6 +134,11 @@
                 _results = new();
                 return;
             }
+
+            var endpoint = $"api/contracts/relief/search?query={Uri.EscapeDataString(query.Trim())}";
+            var apiResult = await ContractService.GetActionAsync(endpoint);
+            _apiStatusError = !apiResult.Success;
+            _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
 
             _results = await VehicleService.SearchVehiclesAsync(query.Trim());
         }

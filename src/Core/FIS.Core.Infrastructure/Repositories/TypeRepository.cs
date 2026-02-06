@@ -1,7 +1,7 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
-using TypeEntity = FIS.Data.Entities.Type;
+using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Infrastructure.Repositories
 {
@@ -25,7 +25,7 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Type entity if found, null otherwise</returns>
         public async Task<TypeEntity?> GetByIdAsync(short typeCode)
         {
-            return await _context.Types
+            return await _context.VehicleTypes
                 .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(t => t.type_code == typeCode);
         }
@@ -37,7 +37,7 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Type entity if found, null otherwise</returns>
         public async Task<TypeEntity?> GetByNameAsync(string typeName)
         {
-            return await _context.Types
+            return await _context.VehicleTypes
                 .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(t => t.type_description.ToLower() == typeName.ToLower());
         }
@@ -48,7 +48,7 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of all type entities</returns>
         public async Task<IEnumerable<TypeEntity>> GetAllTypesAsync()
         {
-            return await _context.Types
+            return await _context.VehicleTypes
                 .Where(x => !x.is_deleted)
                 .OrderBy(t => t.type_description)
                 .ToListAsync();
@@ -61,7 +61,7 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of matching type entities</returns>
         public async Task<IEnumerable<TypeEntity>> SearchTypesAsync(string searchTerm)
         {
-            return await _context.Types
+            return await _context.VehicleTypes
                 .Where(t => t.type_description.ToLower().Contains(searchTerm.ToLower()))
                 .OrderBy(t => t.type_description)
                 .ToListAsync();
@@ -78,7 +78,7 @@ namespace FIS.Core.Infrastructure.Repositories
             type.date_created = DateTime.UtcNow;
             type.is_deleted = false;
             
-            _context.Types.Add(type);
+            _context.VehicleTypes.Add(type);
             await _context.SaveChangesAsync();
             return type;
         }
@@ -93,7 +93,7 @@ namespace FIS.Core.Infrastructure.Repositories
             if (type == null)
                 throw new ArgumentNullException(nameof(type));
 
-            var existing = await _context.Types.FindAsync(type.type_code);
+            var existing = await _context.VehicleTypes.FindAsync(type.type_code);
             if (existing == null)
                 throw new InvalidOperationException($"Type with type_code {type.type_code} not found");
 
@@ -108,7 +108,7 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <param name="typeCode">The type code to delete</param>
         public async Task DeleteAsync(short typeCode, int currentUserId)
         {
-            var type = await _context.Types.FindAsync(typeCode);
+            var type = await _context.VehicleTypes.FindAsync(typeCode);
             if (type != null)
             {
                 // Soft delete instead of hard delete

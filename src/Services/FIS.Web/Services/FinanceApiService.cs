@@ -169,6 +169,9 @@ public class FinanceApiService
     public Task<FinanceApiResult> PutActionAsync(string endpoint, object payload)
         => SendAsync(HttpMethod.Put, endpoint, payload);
 
+    public Task<FinanceApiResult> DeleteActionAsync(string endpoint)
+        => SendAsync(HttpMethod.Delete, endpoint, null);
+
     public async Task<FinanceApiResult> UploadFileAsync(
         string endpoint,
         IBrowserFile file,

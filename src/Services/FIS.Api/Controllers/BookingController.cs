@@ -36,4 +36,81 @@ public class BookingController : BaseApiController
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id) { try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+
+    #region Specialized Operations
+
+    /// <summary>
+    /// Get booking notifications
+    /// </summary>
+    [HttpGet("notifications")]
+    public ActionResult<BookingNotificationsDto> GetNotifications()
+    {
+        // TODO: Implement booking notifications retrieval
+        _logger.LogInformation("Getting booking notifications");
+        var notifications = new BookingNotificationsDto
+        {
+            Notifications = new List<BookingNotificationDto>(),
+            PendingCount = 0
+        };
+        return Ok(notifications);
+    }
+
+    /// <summary>
+    /// Get booking help information
+    /// </summary>
+    [HttpGet("help")]
+    public ActionResult<BookingHelpDto> GetHelp()
+    {
+        var help = new BookingHelpDto
+        {
+            Title = "Vehicle Booking Help",
+            Description = "Manage vehicle reservations and bookings for departments",
+            Sections = new List<HelpSectionDto>
+            {
+                new HelpSectionDto
+                {
+                    Title = "Creating Bookings",
+                    Content = "Submit new vehicle booking requests with date range and department details"
+                },
+                new HelpSectionDto
+                {
+                    Title = "Booking Status",
+                    Content = "Track booking approval status and vehicle allocation"
+                },
+                new HelpSectionDto
+                {
+                    Title = "Notifications",
+                    Content = "Receive alerts for booking confirmations and changes"
+                }
+            }
+        };
+        return Ok(help);
+    }
+
+    #endregion
 }
+
+#region Booking DTOs
+
+public class BookingNotificationsDto
+{
+    public List<BookingNotificationDto> Notifications { get; set; } = new();
+    public int PendingCount { get; set; }
+}
+
+public class BookingNotificationDto
+{
+    public int NotificationId { get; set; }
+    public string Message { get; set; } = "";
+    public DateTime CreatedDate { get; set; }
+    public string Status { get; set; } = "";
+}
+
+public class BookingHelpDto
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<HelpSectionDto> Sections { get; set; } = new();
+}
+
+#endregion

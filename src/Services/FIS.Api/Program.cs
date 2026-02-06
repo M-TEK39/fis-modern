@@ -243,6 +243,14 @@ builder.Services.AddScoped<ILeaseContractTermsRepository, LeaseContractTermsRepo
 builder.Services.AddScoped<IBookingRepository, BookingRepository>();
 builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 
+// Phase 3 repositories (Administrative endpoints - Fuel Cards, Notice Management, Reference Data)
+builder.Services.AddScoped<IFuelCardRepository, FuelCardRepository>();
+
+// Phase 1 & 2 missing API repositories (Merchant, ThirdParty)
+builder.Services.AddScoped<IMerchantRepository, MerchantRepository>();
+builder.Services.AddScoped<IThirdPartyProjectRepository, ThirdPartyProjectRepository>();
+builder.Services.AddScoped<IThirdPartyAllocationRepository, ThirdPartyAllocationRepository>();
+
 // Authentication repositories (Dual auth - Entra ID + Legacy JWT)
 builder.Services.AddScoped<IEntraIdUserMappingRepository, EntraIdUserMappingRepository>();
 builder.Services.AddScoped<ILegacyCredentialRepository, LegacyCredentialRepository>();

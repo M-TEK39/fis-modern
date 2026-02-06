@@ -34,7 +34,9 @@ public class ReportCatalogApiService
     {
         try
         {
-            var response = await _httpClient.GetAsync("api/Report/trip/summary");
+            var startDate = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-90).ToString("o"));
+            var endDate = Uri.EscapeDataString(DateTime.UtcNow.ToString("o"));
+            var response = await _httpClient.GetAsync($"api/Report/trip/summary?startDate={startDate}&endDate={endDate}");
             response.EnsureSuccessStatusCode();
 
             var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)

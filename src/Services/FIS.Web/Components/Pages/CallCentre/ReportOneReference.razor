@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
 @inject IJSRuntime JSRuntime
 
@@ -57,6 +58,13 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/RPT_Call_one_num_main.aspx"
+        Endpoint="api/callcentre/1"
+        HttpMethod="GET"
+        ButtonText="Test One Reference Report Endpoint"
+        ReportType="call-centre-report-one-reference" />
 </div>
 
 @code {

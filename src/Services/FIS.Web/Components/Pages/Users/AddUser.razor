@@ -1,6 +1,7 @@
 @page "/users/add"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Pages.Users
+@using FIS.Web.Components.Shared
 
 <PageTitle>Add New User - Fleet Information System</PageTitle>
 
@@ -16,4 +17,12 @@
 
 <div class="page-content">
     <UserAdminAddContent />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="UserAdmin/AddNewUserProfile.aspx"
+        Endpoint="api/user"
+        HttpMethod="POST"
+        ButtonText="Test Add User Endpoint"
+        ReportType="useradmin-add-user" />
+
 </div>

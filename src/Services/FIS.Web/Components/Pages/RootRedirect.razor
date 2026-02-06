@@ -10,6 +10,13 @@
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         var isAuthenticated = authState.User?.Identity?.IsAuthenticated ?? false;
 
-        Navigation.NavigateTo(isAuthenticated ? "/home" : "/login");
+        try
+        {
+            Navigation.NavigateTo(isAuthenticated ? "/home" : "/login", replace: true);
+        }
+        catch (TaskCanceledException)
+        {
+            // Ignore transient cancellation when the circuit is closing during redirect.
+        }
     }
 }

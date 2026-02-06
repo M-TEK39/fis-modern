@@ -130,6 +130,14 @@
     <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>
 
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Shared/sites.aspx"
+        Endpoint="api/location"
+        HttpMethod="GET"
+        ButtonText="Test Location Endpoint"
+        ReportType="location-reference" />
+
 @code {
     private List<LocationViewDto> _locations = new();
     private LocationViewDto _currentLocation = new();

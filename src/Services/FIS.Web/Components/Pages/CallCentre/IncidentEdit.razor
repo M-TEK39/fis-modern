@@ -61,6 +61,20 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/MNT_call_upd_getcode.aspx"
+        Endpoint="api/callcentre/1"
+        HttpMethod="GET"
+        ButtonText="Test Incident Lookup Endpoint"
+        ReportType="call-centre-edit-lookup" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/MNT_call_upd_update.aspx"
+        Endpoint="api/callcentre/1"
+        HttpMethod="PUT"
+        ButtonText="Test Incident Update Endpoint"
+        ReportType="call-centre-edit-update" />
 </div>
 
 @code {

@@ -141,6 +141,14 @@
     }
 </div>
 
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logbook/MNT_logbkj_getreg.aspx"
+        Endpoint="api/logbook/vehicle-search?identifier=GG123"
+        HttpMethod="GET"
+        ButtonText="Test Logbook Vehicle Search Endpoint"
+        ReportType="logbook-maintenance-search" />
+
 @code {
     private bool _loading = true;
     private bool _showForm;

@@ -129,6 +129,14 @@
     <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>
 
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Validation/MNT_Site.aspx"
+        Endpoint="api/site"
+        HttpMethod="GET"
+        ButtonText="Test Site Endpoint"
+        ReportType="site-reference" />
+
 @code {
     private List<SiteViewModel> _sites = new();
     private SiteViewModel _currentSite = new();

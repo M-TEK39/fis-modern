@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject LogbookApiService LogbookService
 @inject VehicleLookupApiService VehicleLookupService
 @inject IJSRuntime JSRuntime
@@ -84,6 +85,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logbook/MNT_logbkdelj_getreg.aspx"
+        Endpoint="api/logbook/handout/1"
+        HttpMethod="DELETE"
+        ButtonText="Test Logbook Delete Endpoint"
+        ReportType="logbook-delete" />
 
 @code {
     private bool _loading;

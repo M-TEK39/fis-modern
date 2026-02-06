@@ -36,6 +36,12 @@
         <i class="bx bx-info-circle"></i>
         <span>@_infoMessage</span>
     </div>
+    @if (!string.IsNullOrWhiteSpace(_apiStatusMessage))
+    {
+        <div class="alert @(_apiStatusError ? "alert-error" : "alert-success")" style="margin-bottom: 1rem;">
+            @_apiStatusMessage
+        </div>
+    }
 
     <div class="contract-section">
         <table class="contract-legacy-table">
@@ -225,6 +231,8 @@
     private List<ContractDto> _historyContracts = new();
     private Dictionary<short, string> _siteNames = new();
     private List<DriverDto> _drivers = new();
+    private bool _apiStatusError;
+    private string _apiStatusMessage = string.Empty;
 
     private void GoTop() => Navigation.NavigateTo("/contracts/backdating-history#PageTop");
     private void GoBottom() => Navigation.NavigateTo("/contracts/backdating-history#PageBottom");
@@ -282,6 +290,10 @@
         {
             return;
         }
+
+        var apiResult = await ContractService.GetActionAsync($"api/contracts/backdating/history/{_selectedVehicle.vmf_code}");
+        _apiStatusError = !apiResult.Success;
+        _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
 
         var contracts = await ContractService.GetContractsAsync();
         _historyContracts = contracts

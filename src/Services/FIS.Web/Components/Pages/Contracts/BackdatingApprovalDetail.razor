@@ -47,25 +47,31 @@
                     <th class="contract-cell-label">Available Actions:</th>
                     <td colspan="3">
                         <div class="contract-action-group">
-                            <button class="btn btn-primary btn-sm" type="button">Approve BackDated Contract</button>
-                            <button class="btn btn-primary btn-sm" type="button">Decline BackDated Contract</button>
+                            <button class="btn btn-primary btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("approve-backdated")' disabled="@_actionRunning">Approve BackDated Contract</button>
+                            <button class="btn btn-primary btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("decline-backdated")' disabled="@_actionRunning">Decline BackDated Contract</button>
                             <span class="contract-muted">No Actions to perform.</span>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-warning btn-sm" type="button">Validate Form Data</button>
-                            <button class="btn btn-secondary btn-sm" type="button">Submit Form</button>
-                            <button class="btn btn-secondary btn-sm" type="button">Cancel Loaded Contract</button>
+                            <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("validate")' disabled="@_actionRunning">Validate Form Data</button>
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("submit")' disabled="@_actionRunning">Submit Form</button>
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-warning btn-sm" type="button">Validate Form Data</button>
-                            <button class="btn btn-secondary btn-sm" type="button">Approve</button>
-                            <button class="btn btn-success btn-sm" type="button">Approve and Activate</button>
-                            <button class="btn btn-warning btn-sm" type="button">Decline For Correction</button>
-                            <button class="btn btn-danger btn-sm" type="button">Decline</button>
+                            <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("validate")' disabled="@_actionRunning">Validate Form Data</button>
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("approve")' disabled="@_actionRunning">Approve</button>
+                            <button class="btn btn-success btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("approve-activate")' disabled="@_actionRunning">Approve and Activate</button>
+                            <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("decline-correction")' disabled="@_actionRunning">Decline For Correction</button>
+                            <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("decline")' disabled="@_actionRunning">Decline</button>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-danger btn-sm" type="button">Pending Contract Exists : Click to Review</button>
+                            <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunBackdatingActionAsync("review-pending")' disabled="@_actionRunning">Pending Contract Exists : Click to Review</button>
                         </div>
+                        @if (!string.IsNullOrWhiteSpace(_actionStatusMessage))
+                        {
+                            <div class="alert @(_actionStatusError ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">
+                                @_actionStatusMessage
+                            </div>
+                        }
                     </td>
                 </tr>
             </tbody>
@@ -643,6 +649,9 @@
     private string? _siteName;
     private DepartmentDto? _department;
     private string? _driverName;
+    private bool _actionRunning;
+    private bool _actionStatusError;
+    private string _actionStatusMessage = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -721,6 +730,58 @@
             "action" => Action ?? "-",
             _ => "-"
         };
+    }
+
+    private async Task RunBackdatingActionAsync(string action)
+    {
+        _actionRunning = true;
+        _actionStatusMessage = string.Empty;
+
+        var contractId = ResolveContractId();
+        var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code ?? 0;
+
+        var endpoint = action switch
+        {
+            "approve-backdated" => $"api/contracts/backdating/{contractId}/approve",
+            "decline-backdated" => $"api/contracts/backdating/{contractId}/decline",
+            "validate" => $"api/contracts/backdating/{contractId}/validate",
+            "submit" => $"api/contracts/backdating/{contractId}/submit",
+            "cancel" => $"api/contracts/{contractId}/cancel",
+            "approve" => $"api/contracts/{contractId}/approve",
+            "approve-activate" => $"api/contracts/{contractId}/approve-activate",
+            "decline-correction" => $"api/contracts/{contractId}/decline-correction",
+            "decline" => $"api/contracts/{contractId}/decline",
+            _ => $"api/contracts/backdating/{contractId}/pending"
+        };
+
+        FinanceApiResult result;
+        if (action == "review-pending")
+        {
+            result = await ContractService.GetActionAsync(endpoint);
+        }
+        else
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                ContractCode = contractId,
+                VmfCode = vmfCode,
+                Notes = "UI wiring request"
+            });
+        }
+
+        _actionStatusError = !result.Success;
+        _actionStatusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _actionRunning = false;
+    }
+
+    private int ResolveContractId()
+    {
+        if (_contract?.contract_id > 0)
+        {
+            return _contract.contract_id;
+        }
+
+        return int.TryParse(ContractId, out var id) && id > 0 ? id : 0;
     }
 
     private static string? ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;

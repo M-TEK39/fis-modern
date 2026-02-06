@@ -1,5 +1,6 @@
 @page "/fines/reports/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -435,6 +436,15 @@
     </div>
 </div>
 
+<div class="page-content">
+    <LegacyEndpointActionPanel
+        LegacyPath="@GetLegacyPath()"
+        Endpoint="@GetEndpoint()"
+        HttpMethod="GET"
+        ButtonText="Run Fines Report API"
+        ReportType="fines-report-viewer" />
+</div>
+
 @code {
     [Parameter]
     public string? Mode { get; set; }
@@ -540,5 +550,35 @@
             "Name of Responsable Person at Dept" => "S. Molefe",
             "ID of Responsable Person at Dept" => "8001015009087",
             _ => "-"
+        };
+
+    private string GetLegacyPath()
+        => Mode switch
+        {
+            "one-vehicle" => "Fines/RPT_one_num_main_Fines.htm",
+            "dept-period" => "Fines/RPT_dept_period_main_Fines.aspx",
+            "appear-date" => "Fines/RPT_app_date_main_Fines.htm",
+            "letter" => "Fines/RPT_letter_main_Fines.aspx",
+            "traffic-dept" => "Fines/RPT_traffic_all_report.aspx",
+            "metro" => "Fines/RPT_FINESPERMETRO1.aspx",
+            "metro-period" => "Fines/RPT_FINESPERMETRO1B.aspx",
+            "vehicle" => "Fines/RPT_finepervehicle_report.aspx",
+            "all" => "Fines/RPT_FinesAll.aspx",
+            _ => "Fines/RPTFines.aspx"
+        };
+
+    private string GetEndpoint()
+        => Mode switch
+        {
+            "one-vehicle" => "api/report/fines/one-vehicle",
+            "dept-period" => "api/report/fines/dept-period",
+            "appear-date" => "api/report/fines/appear-date",
+            "letter" => "api/report/fines/letter",
+            "traffic-dept" => "api/report/fines/traffic-dept",
+            "metro" => "api/report/fines/metro",
+            "metro-period" => "api/report/fines/metro-period",
+            "vehicle" => "api/report/fines/per-vehicle",
+            "all" => "api/report/fines/all",
+            _ => "api/report/fines"
         };
 }

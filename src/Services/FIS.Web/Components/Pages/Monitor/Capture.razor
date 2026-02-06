@@ -85,6 +85,14 @@
     }
 </div>
 
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Monitor/MNT_monitor_getgg.aspx"
+        Endpoint="api/monitor/capture"
+        HttpMethod="POST"
+        ButtonText="Test Monitor Capture Endpoint"
+        ReportType="monitor-capture" />
+
 @code {
     private bool _loading;
     private bool _showForm;

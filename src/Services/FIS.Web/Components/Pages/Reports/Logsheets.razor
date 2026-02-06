@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject ReportCatalogApiService ReportCatalogService
 @inject IJSRuntime JSRuntime
 
@@ -61,6 +62,49 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/Log_Report.aspx"
+        Endpoint="api/logsheet/reports/menu"
+        HttpMethod="GET"
+        ButtonText="Test Logsheet Reports Menu Endpoint"
+        ReportType="logsheet-reports-menu" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_Logs_per_vehicle.aspx"
+        Endpoint="api/logsheet/reports/one-vehicle"
+        HttpMethod="POST"
+        ButtonText="Test Logsheet One Vehicle Report Endpoint"
+        ReportType="logsheet-report-one-vehicle" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_logsheet_per_rek.aspx"
+        Endpoint="api/logsheet/reports/one-requisition"
+        HttpMethod="POST"
+        ButtonText="Test Logsheet One Requisition Report Endpoint"
+        ReportType="logsheet-report-one-requisition" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_Logs_per_Dept_1.aspx"
+        Endpoint="api/logsheet/reports/department-period"
+        HttpMethod="POST"
+        ButtonText="Test Logsheet Department Period Report Endpoint"
+        ReportType="logsheet-report-department-period" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_Logs_captured_1.aspx"
+        Endpoint="api/logsheet/reports/captured"
+        HttpMethod="POST"
+        ButtonText="Test Logsheet Captured Report Endpoint"
+        ReportType="logsheet-report-captured" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_Log_per_year.aspx"
+        Endpoint="api/logsheet/reports/total-km-per-class-code"
+        HttpMethod="POST"
+        ButtonText="Test Logsheet Total KM Report Endpoint"
+        ReportType="logsheet-report-total-km" />
 
 @code {
     private bool _loading = true;

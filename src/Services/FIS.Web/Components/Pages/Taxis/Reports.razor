@@ -1,5 +1,6 @@
 @page "/taxis/reports/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.WebUtilities
 @inject NavigationManager Navigation
 
@@ -16,6 +17,15 @@
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/taxis">Back to Taxi Menu</a>
     </div>
+</div>
+
+<div class="page-content">
+    <LegacyEndpointActionPanel
+        LegacyPath="@GetLegacyPath()"
+        Endpoint="@GetEndpoint()"
+        HttpMethod="GET"
+        ButtonText="Run Taxi Report API"
+        ReportType="taxis-reports" />
 </div>
 
 <div class="page-content">
@@ -467,4 +477,30 @@
 
         return "Report";
     }
+
+    private string GetLegacyPath()
+        => Mode switch
+        {
+            "one-taxi-number" => "Taxis/RPT_one_num_taxi_main.aspx",
+            "logs-per-user" => "Taxis/RPT_TaxiCountLogsPerUser.aspx",
+            "old-requisitions" => "Taxis/RPT_Requests1.aspx",
+            "taxis-per-company" => "Taxis/RPT_taxis_per_company1.aspx",
+            "taxis-per-department" => "Taxis/RPT_list_of_taxis_per_department.aspx",
+            "taxis-inservice-per-department" => "Taxis/RPT_list_of_taxis_inservice_per_department.aspx",
+            "logs-requisitions-status" => "TS_Log/Rpr_TaxiLog_Menu.aspx",
+            _ => "Taxis/Taxi_menu.aspx"
+        };
+
+    private string GetEndpoint()
+        => Mode switch
+        {
+            "one-taxi-number" => "api/report/taxi/one-number",
+            "logs-per-user" => "api/report/taxi/logs-per-user",
+            "old-requisitions" => "api/report/taxi/old-requisitions",
+            "taxis-per-company" => "api/report/taxi/per-company",
+            "taxis-per-department" => "api/report/taxi/per-department",
+            "taxis-inservice-per-department" => "api/report/taxi/per-department-inservice",
+            "logs-requisitions-status" => "api/report/taxi/logs-requisitions-status",
+            _ => "api/report/taxi"
+        };
 }

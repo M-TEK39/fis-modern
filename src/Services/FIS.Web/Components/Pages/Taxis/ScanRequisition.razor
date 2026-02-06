@@ -1,5 +1,6 @@
 @page "/taxis/scan-requisition"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Scan Taxi Requisition - Fleet Information System</PageTitle>
 
@@ -20,6 +21,12 @@
     <div class="form-card">
         <div class="form-card-body">
             <p class="form-hint">Scan requisition workflow to be aligned with legacy screen.</p>
+            <LegacyEndpointActionPanel
+                LegacyPath="Taxi_Scan_Docs/RekCert_Menu.aspx"
+                Endpoint="api/taxi/scan-requisition"
+                HttpMethod="POST"
+                ButtonText="Run Scan Requisition API"
+                ReportType="taxis-scan-requisition" />
         </div>
     </div>
 </div>

@@ -1,3 +1,4 @@
+@using FIS.Web.Components.Shared
 @page "/log-sheets/reports/captured"
 @rendermode InteractiveServer
 
@@ -19,4 +20,12 @@
         <h3>Report pending</h3>
         <p>This page will mirror the legacy logsheets captured report.</p>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_Logs_captured_1.aspx"
+        Endpoint="api/logsheet/reports/captured"
+        HttpMethod="POST"
+        ButtonText="Test Logs Captured Report Endpoint"
+        ReportType="logsheet-report-captured" />
+
 </div>

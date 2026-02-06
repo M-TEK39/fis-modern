@@ -1,3 +1,4 @@
+@using FIS.Web.Components.Shared
 @page "/log-sheets/reports/total-km"
 @rendermode InteractiveServer
 
@@ -19,4 +20,12 @@
         <h3>Report pending</h3>
         <p>This page will mirror the legacy total kilometer report.</p>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/RPT_Log_per_year.aspx"
+        Endpoint="api/logsheet/reports/total-km-per-class-code"
+        HttpMethod="POST"
+        ButtonText="Test Total KM per Class Code Endpoint"
+        ReportType="logsheet-report-total-km" />
+
 </div>

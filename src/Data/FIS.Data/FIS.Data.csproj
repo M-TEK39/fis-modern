@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../Core/FIS.Core.Domain/FIS.Core.Domain.csproj" />
+    <ProjectReference Include="../../Core/FIS.Core.Domain/FIS.Core.Domain.csproj" />
   </ItemGroup>
 
 </Project>

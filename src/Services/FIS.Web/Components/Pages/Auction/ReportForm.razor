@@ -1,6 +1,9 @@
 @page "/auction/reports/{Mode}"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText - Fleet Information System</PageTitle>
 
@@ -42,7 +45,7 @@
                     </div>
                 </div>
                 <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_running">Submit</button>
                     <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
                 </div>
             }
@@ -72,7 +75,7 @@
                     </div>
                 </div>
                 <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_running">Submit</button>
                     <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
                 </div>
             }
@@ -85,7 +88,7 @@
                     </div>
                 </div>
                 <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_running">Submit</button>
                     <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
                 </div>
             }
@@ -115,7 +118,7 @@
                     </div>
                 </div>
                 <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Submit</button>
+                    <button class="btn btn-primary btn-sm" @onclick="RunReportAsync" disabled="@_running">Submit</button>
                     <a class="btn btn-secondary btn-sm" href="/auction/reports">Menu</a>
                 </div>
             }
@@ -123,12 +126,48 @@
             {
                 <p>Invalid report mode.</p>
             }
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top: 1rem;">
+                    @_statusMessage
+                </div>
+            }
         </div>
     </div>
 </div>
 
 @code {
     [Parameter] public string Mode { get; set; } = string.Empty;
+    private bool _running;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    private async Task RunReportAsync()
+    {
+        _running = true;
+        _statusMessage = string.Empty;
+
+        var endpoint = Mode switch
+        {
+            "one-vehicle" => "api/auction/reports/one-vehicle",
+            "all-vehicles" => "api/auction/reports/all-vehicles",
+            "sale-to-name" => "api/auction/reports/sale-to-name",
+            "auction-gg" => "api/auction/reports/auction-gg",
+            "auction-lot" => "api/auction/reports/auction-lot",
+            _ => "api/auction/reports"
+        };
+
+        var result = await FinanceService.PostActionAsync(endpoint, new
+        {
+            mode = Mode,
+            legacyPath = LegacyPathText
+        });
+
+        _statusError = !result.Success;
+        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _running = false;
+    }
 
     private string PageTitleText => Mode switch
     {
@@ -138,5 +177,15 @@
         "auction-gg" => "Auction Report - Sort by GG Number",
         "auction-lot" => "Auction Report - Sort by LOT Number",
         _ => "Auction Report"
+    };
+
+    private string LegacyPathText => Mode switch
+    {
+        "one-vehicle" => "Auction/RPT_one_num_main_auction.htm",
+        "all-vehicles" => "Auction/RPT_all_main_auction.aspx",
+        "sale-to-name" => "Auction/RPT_one_name_main_auction.aspx",
+        "auction-gg" => "Auction/RPT_one_auct1_main_auction.aspx",
+        "auction-lot" => "Auction/RPT_one_auct2_main_auction.aspx",
+        _ => "Auction/RPTAuction.aspx"
     };
 }

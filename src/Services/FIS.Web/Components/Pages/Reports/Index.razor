@@ -1,5 +1,6 @@
 @page "/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Reports Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -159,4 +160,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="FISReports/Reports.aspx"
+        Endpoint="api/report/menu"
+        HttpMethod="GET"
+        ButtonText="Test Reports Menu Endpoint"
+        ReportType="reports-menu" />
 </div>

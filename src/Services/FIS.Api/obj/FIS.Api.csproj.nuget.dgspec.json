@@ -360,7 +360,11 @@
         "frameworks": {
           "net8.0": {
             "targetAlias": "net8.0",
-            "projectReferences": {}
+            "projectReferences": {
+              "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
+                "projectPath": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj"
+              }
+            }
           }
         },
         "warningProperties": {

@@ -1,6 +1,7 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Services.Billing;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Financial;
 using Microsoft.Extensions.Logging;
 
 namespace FIS.Core.Application.Services;

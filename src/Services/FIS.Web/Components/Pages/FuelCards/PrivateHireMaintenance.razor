@@ -1,5 +1,6 @@
 @page "/fuel-cards/private-hire/vehicle"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Private Hire Vehicle Fuelcards for a Vehicle</PageTitle>
 
@@ -63,4 +64,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/MNT_fuelh_getreg.aspx"
+        Endpoint="api/fuelcard/privatehire/maintenance/vehicle/search"
+        HttpMethod="POST"
+        ButtonText="Test Private Hire Maintenance Endpoint"
+        ReportType="fuelcard-privatehire-maintenance" />
 </div>

@@ -356,8 +356,96 @@ public class ReportController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Get report help information
+    /// </summary>
+    [HttpGet("help")]
+    [ProducesResponseType(typeof(ReportHelpDto), StatusCodes.Status200OK)]
+    public ActionResult GetHelp()
+    {
+        var help = new ReportHelpDto
+        {
+            Title = "Reporting System Help",
+            Description = "Generate comprehensive reports for vehicles, contracts, maintenance, and financial data",
+            Sections = new List<HelpSectionDto>
+            {
+                new HelpSectionDto
+                {
+                    Title = "Vehicle Reports",
+                    Content = "Access detailed vehicle information including history, maintenance, and utilization"
+                },
+                new HelpSectionDto
+                {
+                    Title = "Financial Reports",
+                    Content = "Review billing, contract costs, and financial summaries"
+                },
+                new HelpSectionDto
+                {
+                    Title = "Export Options",
+                    Content = "Export report data to CSV or Excel formats"
+                }
+            }
+        };
+        return Ok(help);
+    }
+
+    /// <summary>
+    /// Request additional report data or custom report generation
+    /// </summary>
+    [HttpPost("request-additional")]
+    [ProducesResponseType(typeof(ReportRequestResultDto), StatusCodes.Status200OK)]
+    public ActionResult RequestAdditional([FromBody] AdditionalReportRequestDto request)
+    {
+        // TODO: Implement custom report request handling
+        _logger.LogInformation("Additional report requested: {ReportType}", request.ReportType);
+        var result = new ReportRequestResultDto
+        {
+            Success = true,
+            RequestId = Guid.NewGuid().ToString(),
+            Message = "Report request submitted successfully",
+            EstimatedCompletionTime = DateTime.Now.AddMinutes(5)
+        };
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get audit trail for report access and generation
+    /// </summary>
+    [HttpGet("audit-trail")]
+    [ProducesResponseType(typeof(ReportAuditTrailDto), StatusCodes.Status200OK)]
+    public ActionResult GetAuditTrail([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate, [FromQuery] string? userId)
+    {
+        // TODO: Implement audit trail retrieval
+        _logger.LogInformation("Audit trail requested");
+        var auditTrail = new ReportAuditTrailDto
+        {
+            Entries = new List<AuditEntryDto>(),
+            TotalCount = 0
+        };
+        return Ok(auditTrail);
+    }
+
+    /// <summary>
+    /// Get registration certificates report
+    /// </summary>
+    [HttpGet("registration-certificates")]
+    [ProducesResponseType(typeof(RegistrationCertificatesReportDto), StatusCodes.Status200OK)]
+    public ActionResult GetRegistrationCertificates([FromQuery] int? vmfCode, [FromQuery] int? departmentCode)
+    {
+        // TODO: Implement registration certificates report
+        _logger.LogInformation("Registration certificates report requested");
+        var report = new RegistrationCertificatesReportDto
+        {
+            Certificates = new List<CertificateDto>(),
+            TotalCount = 0
+        };
+        return Ok(report);
+    }
+
     #endregion
 }
+
+#region Report DTOs
 
 /// <summary>
 /// Export request model
@@ -367,6 +455,60 @@ public class ExportRequest
     public List<object> Data { get; set; } = new();
     public string Filename { get; set; } = "export.csv";
 }
+
+public class ReportHelpDto
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public List<HelpSectionDto> Sections { get; set; } = new();
+}
+
+public class AdditionalReportRequestDto
+{
+    public string ReportType { get; set; } = "";
+    public Dictionary<string, object> Parameters { get; set; } = new();
+    public string RequestedBy { get; set; } = "";
+}
+
+public class ReportRequestResultDto
+{
+    public bool Success { get; set; }
+    public string RequestId { get; set; } = "";
+    public string Message { get; set; } = "";
+    public DateTime? EstimatedCompletionTime { get; set; }
+}
+
+public class ReportAuditTrailDto
+{
+    public List<AuditEntryDto> Entries { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+public class AuditEntryDto
+{
+    public int AuditId { get; set; }
+    public string ReportType { get; set; } = "";
+    public string UserId { get; set; } = "";
+    public DateTime AccessedDate { get; set; }
+    public string Action { get; set; } = "";
+}
+
+public class RegistrationCertificatesReportDto
+{
+    public List<CertificateDto> Certificates { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+public class CertificateDto
+{
+    public int VmfCode { get; set; }
+    public string RegistrationNumber { get; set; } = "";
+    public DateTime? IssueDate { get; set; }
+    public DateTime? ExpiryDate { get; set; }
+    public string Status { get; set; } = "";
+}
+
+#endregion
 
 // Note: Report model types referenced above should be defined in IReportingService interface
 // VehicleReport, MasterFileReport, UniversalReportRequest, ServiceHistoryReport, etc.

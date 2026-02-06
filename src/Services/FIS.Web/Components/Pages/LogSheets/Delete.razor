@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject LogsheetApiService LogsheetService
 @inject VehicleLookupApiService VehicleLookupService
 @inject IJSRuntime JSRuntime
@@ -86,6 +87,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logs/Log_Delete.aspx"
+        Endpoint="api/logsheet/entry/1"
+        HttpMethod="DELETE"
+        ButtonText="Test Logsheet Delete Endpoint"
+        ReportType="logsheet-delete" />
 
 @code {
     private bool _loading;

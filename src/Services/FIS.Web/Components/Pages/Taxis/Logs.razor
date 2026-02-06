@@ -1,5 +1,6 @@
 @page "/taxis/logs/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -20,6 +21,12 @@
     <div class="form-card">
         <div class="form-card-body">
             <p class="form-hint">This screen will be aligned to the legacy taxi logsheet workflow.</p>
+            <LegacyEndpointActionPanel
+                LegacyPath="@GetLegacyPath()"
+                Endpoint="@GetEndpoint()"
+                HttpMethod="@GetHttpMethod()"
+                ButtonText="Run Taxi Logs API"
+                ReportType="taxis-logs" />
         </div>
     </div>
 </div>
@@ -41,4 +48,33 @@
             _ => "Taxi Logs"
         };
     }
+
+    private string GetLegacyPath()
+        => Mode switch
+        {
+            "enter" => "Taxis/Taxi_log_1.aspx",
+            "edit" => "Taxis/Taxi_log_Edit_1.aspx",
+            "reprint" => "Taxis/Reprint_Taxi_Log_1.aspx",
+            "white-log" => "Taxis/white_log.aspx",
+            _ => "Taxis/Taxi_menu.aspx"
+        };
+
+    private string GetEndpoint()
+        => Mode switch
+        {
+            "enter" => "api/taxilogs",
+            "edit" => "api/taxilogs/1",
+            "reprint" => "api/taxilogs/print/1",
+            "white-log" => "api/taxilogs/white-log",
+            _ => "api/taxilogs"
+        };
+
+    private string GetHttpMethod()
+        => Mode switch
+        {
+            "enter" => "POST",
+            "edit" => "PUT",
+            "white-log" => "POST",
+            _ => "GET"
+        };
 }

@@ -87,6 +87,12 @@
         <i class="bx bx-info-circle"></i>
         <span>@_infoMessage</span>
     </div>
+    @if (!string.IsNullOrWhiteSpace(_apiStatusMessage))
+    {
+        <div class="alert @(_apiStatusError ? "alert-error" : "alert-success")" style="margin-bottom: 1rem;">
+            @_apiStatusMessage
+        </div>
+    }
 
     <div class="contract-section">
         <table class="contract-legacy-table">
@@ -279,6 +285,8 @@
 
     private bool _loadingContracts = true;
     private List<ContractDto> _pendingContracts = new();
+    private bool _apiStatusError;
+    private string _apiStatusMessage = string.Empty;
 
     private bool _filterPermanent = true;
     private bool _filterDaily = true;
@@ -296,6 +304,10 @@
         _loadingContracts = true;
         try
         {
+            var apiResult = await ContractService.GetActionAsync("api/contracts/pending");
+            _apiStatusError = !apiResult.Success;
+            _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
+
             _pendingContracts = await ContractService.GetContractsAsync();
             await HydratePendingContractsAsync();
         }

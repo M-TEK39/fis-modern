@@ -1,62 +1,13 @@
 @page "/vehicles/status"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Vehicle List by Status - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-filter-alt"></i>
-            Vehicle List by Status Selection
-        </h1>
-        <p class="page-description">Select a vehicle status and date range to view legacy reports.</p>
-    </div>
-    <div class="page-actions">
-        <a class="btn btn-secondary btn-sm" href="/finance/regional/assets">Back</a>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="form-card">
-        <div class="form-card-header">
-            <h2>Vehicle List by Status Selection</h2>
-        </div>
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Status</label>
-                    <select class="form-select">
-                        <option value="">View All</option>
-                    </select>
-                </div>
-                <div class="form-field">
-                    <label class="form-label">Start Date</label>
-                    <input class="form-input" placeholder="Start Date" />
-                </div>
-                <div class="form-field">
-                    <label class="form-label">End Date</label>
-                    <input class="form-input" placeholder="End Date" />
-                </div>
-            </div>
-
-            <div class="form-section">
-                <h3 class="form-section-title">Vehicle List Status PDF Reports</h3>
-                <div class="menu-item">
-                    <span class="menu-item-link">Show list of vehicles by selected status</span>
-                </div>
-            </div>
-
-            <div class="form-section">
-                <h3 class="form-section-title">Vehicle List Status Excel Reports</h3>
-                <div class="menu-item">
-                    <span class="menu-item-link">Download Show list of vehicles by selected status</span>
-                </div>
-            </div>
-
-            <div class="contract-banner contract-banner-info contract-banner-inline">
-                Notes: The detailed reports are big. You may have to wait a few minutes before the report is displayed.
-                Excel Note: Please save the file to disk before opening.
-            </div>
-        </div>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Vehicle List by Status Selection"
+    Description="Select a vehicle status and date range to view legacy reports."
+    LegacyPath="Select a vehicle status and date range to view legacy reports."
+    Endpoint="api/report/vehicle-status-range"
+    HttpMethod="POST"
+    ReportType="vehicle-status-range-report"
+    BackLink="/vehicles"
+    Icon="bx-wrench" />

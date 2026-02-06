@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject TowingApiService TowingService
 @inject IJSRuntime JSRuntime
 
@@ -64,6 +65,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Towing/RPT_road_printrequest_main.aspx"
+        Endpoint="api/towing/reports/request"
+        HttpMethod="POST"
+        ButtonText="Test Towing Request Report Endpoint"
+        ReportType="towing-report-request" />
 
 @code {
     private bool _loading;

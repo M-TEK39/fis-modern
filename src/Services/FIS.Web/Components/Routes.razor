@@ -9,10 +9,10 @@
             <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
                 <NotAuthorized>
                     @{
-                        // Redirect to login if not authenticated
+                        // GuardNavigation handles redirects; avoid navigation side effects during render.
                         if (context.User?.Identity?.IsAuthenticated != true)
                         {
-                            Navigation.NavigateTo("/login", forceLoad: true);
+                            <p role="status">Redirecting to login...</p>
                         }
                         else
                         {
@@ -64,6 +64,13 @@
             return;
         }
 
-        Navigation.NavigateTo("/login", forceLoad: true);
+        try
+        {
+            Navigation.NavigateTo("/login", replace: true);
+        }
+        catch (TaskCanceledException)
+        {
+            // Circuit/browser navigation can be canceled during disconnect; no action needed.
+        }
     }
 }

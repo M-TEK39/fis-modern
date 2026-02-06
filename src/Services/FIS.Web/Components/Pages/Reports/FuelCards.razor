@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject FleetManagementApiService FleetService
 @inject IJSRuntime JS
 
@@ -122,6 +123,27 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/RPTFuelcard.aspx"
+        Endpoint="api/fuelcard/reports/menu"
+        HttpMethod="GET"
+        ButtonText="Test Fuelcard Reports Menu Endpoint"
+        ReportType="fuelcard-reports-menu" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/RPT_one_vehicle_main_FuelCard.htm"
+        Endpoint="api/fuelcard/reports/one-vehicle"
+        HttpMethod="POST"
+        ButtonText="Test One Vehicle Fuelcard Report Endpoint"
+        ReportType="fuelcard-report-one-vehicle" />
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/RPT_all_vehicles_main_FuelCard.htm"
+        Endpoint="api/fuelcard/reports/all-vehicles"
+        HttpMethod="POST"
+        ButtonText="Test All Vehicles Fuelcard Report Endpoint"
+        ReportType="fuelcard-report-all-vehicles" />
 </div>
 
 @code {

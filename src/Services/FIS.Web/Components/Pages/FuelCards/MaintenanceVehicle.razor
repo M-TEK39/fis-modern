@@ -1,5 +1,6 @@
 @page "/fuel-cards/vehicle"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Fuelcard Maintenance for a Vehicle</PageTitle>
 
@@ -63,4 +64,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/MNT_fuelj_getreg.aspx"
+        Endpoint="api/fuelcard/maintenance/vehicle/search"
+        HttpMethod="POST"
+        ButtonText="Test Vehicle Fuelcard Maintenance Endpoint"
+        ReportType="fuelcard-maintenance-vehicle" />
 </div>

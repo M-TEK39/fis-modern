@@ -1,5 +1,6 @@
 @page "/fuel-cards/private-hire/report-all"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Report for ALL Private Hire Vehicle Fuelcards</PageTitle>
 
@@ -42,4 +43,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/RPT_all_priv_vehicles_report_FuelCard.aspx"
+        Endpoint="api/fuelcard/privatehire/reports/all"
+        HttpMethod="POST"
+        ButtonText="Test Private Hire Fuelcard Report Endpoint"
+        ReportType="fuelcard-privatehire-report-all" />
 </div>

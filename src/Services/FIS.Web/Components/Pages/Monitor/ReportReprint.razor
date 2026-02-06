@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject IJSRuntime JSRuntime
 
@@ -58,6 +59,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Monitor/RPT_Mon_request_main.aspx"
+        Endpoint="api/monitor/reports/reprint/1"
+        HttpMethod="GET"
+        ButtonText="Test Monitor Reprint Endpoint"
+        ReportType="monitor-report-reprint" />
 
 @code {
     private bool _loading;

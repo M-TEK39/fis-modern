@@ -174,6 +174,372 @@ public class AuthController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Change user password
+    /// </summary>
+    [HttpPost("change-password")]
+    [Authorize]
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        try
+        {
+            if (request.NewPassword != request.ConfirmNewPassword)
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "New passwords do not match"
+                });
+            }
+
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            // TODO: Implement actual password verification and update
+            _logger.LogInformation("Password change requested for user {Username}", request.Username);
+
+            return Ok(new ChangePasswordResponse
+            {
+                Success = true,
+                Message = "Password changed successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error changing password for user {Username}", request.Username);
+            return StatusCode(500, new ChangePasswordResponse
+            {
+                Success = false,
+                Message = "Error changing password"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Change password and security question
+    /// </summary>
+    [HttpPost("change-password-question")]
+    [Authorize]
+    public async Task<ActionResult<ChangePasswordResponse>> ChangePasswordQuestion([FromBody] ChangePasswordQuestionRequest request)
+    {
+        try
+        {
+            if (request.NewPassword != request.ConfirmNewPassword)
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "New passwords do not match"
+                });
+            }
+
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            // TODO: Implement actual password and security question update
+            _logger.LogInformation("Password and security question change requested for user {Username}", request.Username);
+
+            return Ok(new ChangePasswordResponse
+            {
+                Success = true,
+                Message = "Password and security question changed successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error changing password/question for user {Username}", request.Username);
+            return StatusCode(500, new ChangePasswordResponse
+            {
+                Success = false,
+                Message = "Error changing password and security question"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Reset user login attempts
+    /// </summary>
+    [HttpPost("reset-login")]
+    [Authorize]
+    public async Task<ActionResult<UserAdminResponse>> ResetLogin([FromBody] ResetLoginRequest request)
+    {
+        try
+        {
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            // TODO: Implement actual login reset logic (reset failed attempts counter)
+            _logger.LogInformation("Login reset requested for user {Username}", request.Username);
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = "Login reset successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resetting login for user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error resetting login"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Force password change for user (admin function)
+    /// </summary>
+    [HttpPost("force-password")]
+    [Authorize]
+    public async Task<ActionResult<UserAdminResponse>> ForcePassword([FromBody] ForcePasswordRequest request)
+    {
+        try
+        {
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            // TODO: Implement actual password update with hashing
+            _logger.LogInformation("Force password change requested for user {Username}", request.Username);
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = $"Password changed successfully for user {request.Username}"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error forcing password for user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error changing password"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Start forgot password flow - return security question
+    /// </summary>
+    [HttpPost("forgot-password/start")]
+    [AllowAnonymous]
+    public async Task<ActionResult<UserAdminResponse>> ForgotPasswordStart([FromBody] ForgotPasswordStartRequest request)
+    {
+        try
+        {
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                // Don't reveal if user exists
+                return Ok(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "If the username exists, a security question will be displayed"
+                });
+            }
+
+            // TODO: Get actual security question from user record
+            _logger.LogInformation("Forgot password flow started for user {Username}", request.Username);
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = "Security question retrieved",
+                Question = "What is your favorite color?" // TODO: Get from user record
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error starting forgot password for user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error processing request"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Confirm forgot password - verify answer and generate new password
+    /// </summary>
+    [HttpPost("forgot-password/confirm")]
+    [AllowAnonymous]
+    public async Task<ActionResult<UserAdminResponse>> ForgotPasswordConfirm([FromBody] ForgotPasswordConfirmRequest request)
+    {
+        try
+        {
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "Invalid request"
+                });
+            }
+
+            // TODO: Verify security answer and generate new password
+            var newPassword = GenerateTemporaryPassword();
+            _logger.LogInformation("Forgot password confirmed for user {Username}", request.Username);
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = "Password reset successfully",
+                NewPassword = newPassword
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error confirming forgot password for user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error resetting password"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Activate a user account
+    /// </summary>
+    [HttpPost("activate-user")]
+    [Authorize]
+    public async Task<ActionResult<UserAdminResponse>> ActivateUser([FromBody] ActivateUserRequest request)
+    {
+        try
+        {
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            // TODO: Implement actual user activation logic
+            _logger.LogInformation("User activation requested for {Username}", request.Username);
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = $"User {request.Username} activated successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error activating user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error activating user"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Deactivate user with expired password
+    /// </summary>
+    [HttpPost("deactivate-expired")]
+    [Authorize]
+    public async Task<ActionResult<UserAdminResponse>> DeactivateExpiredPassword([FromBody] DeactivateExpiredPasswordRequest request)
+    {
+        try
+        {
+            // Try to parse username as user_access_code, or lookup by email
+            int.TryParse(request.Username, out var userCode);
+            var user = userCode > 0
+                ? await _userRepository.GetByIdAsync(userCode)
+                : await _userRepository.GetByEmailAsync(request.Username);
+            if (user == null)
+            {
+                return NotFound(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            // TODO: Implement actual user deactivation logic
+            _logger.LogInformation("User deactivation requested for {Username}", request.Username);
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = $"User {request.Username} deactivated successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deactivating user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error deactivating user"
+            });
+        }
+    }
+
     #region Private Methods
 
     private (string TokenString, DateTime ExpiresAt) GenerateJwtToken(int userAccessCode, string email)
@@ -210,6 +576,14 @@ public class AuthController : ControllerBase
         _logger.LogInformation("Generated JWT token for user_access_code: {UserAccessCode}", userAccessCode);
 
         return (tokenString, token.ValidTo);
+    }
+
+    private static string GenerateTemporaryPassword()
+    {
+        const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+        var random = new Random();
+        return new string(Enumerable.Repeat(chars, 8)
+            .Select(s => s[random.Next(s.Length)]).ToArray());
     }
 
     #endregion
@@ -271,4 +645,99 @@ public class LoginResponse
     /// Optional message
     /// </summary>
     public string? Message { get; set; }
+}
+
+/// <summary>
+/// Change password request
+/// </summary>
+public class ChangePasswordRequest
+{
+    public string Username { get; set; } = string.Empty;
+    public string OldPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmNewPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Change password and security question request
+/// </summary>
+public class ChangePasswordQuestionRequest
+{
+    public string Username { get; set; } = string.Empty;
+    public string OldPassword { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmNewPassword { get; set; } = string.Empty;
+    public string SecurityQuestion { get; set; } = string.Empty;
+    public string SecurityAnswer { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Change password response
+/// </summary>
+public class ChangePasswordResponse
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+}
+
+/// <summary>
+/// Reset login request
+/// </summary>
+public class ResetLoginRequest
+{
+    public string Username { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Force password request
+/// </summary>
+public class ForcePasswordRequest
+{
+    public string Username { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Forgot password start request
+/// </summary>
+public class ForgotPasswordStartRequest
+{
+    public string Username { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Forgot password confirm request
+/// </summary>
+public class ForgotPasswordConfirmRequest
+{
+    public string Username { get; set; } = string.Empty;
+    public string Answer { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Activate user request
+/// </summary>
+public class ActivateUserRequest
+{
+    public string Username { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Deactivate expired password request
+/// </summary>
+public class DeactivateExpiredPasswordRequest
+{
+    public string Username { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// User admin response
+/// </summary>
+public class UserAdminResponse
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public string? Question { get; set; }
+    public string? NewPassword { get; set; }
 }

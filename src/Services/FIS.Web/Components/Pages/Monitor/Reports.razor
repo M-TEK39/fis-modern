@@ -1,3 +1,4 @@
+@using FIS.Web.Components.Shared
 @page "/monitor/reports"
 @rendermode InteractiveServer
 
@@ -59,4 +60,12 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Monitor/RPTMonitor.aspx"
+        Endpoint="api/monitor/reports/menu"
+        HttpMethod="GET"
+        ButtonText="Test Monitor Reports Menu Endpoint"
+        ReportType="monitor-reports-menu" />
+
 </div>

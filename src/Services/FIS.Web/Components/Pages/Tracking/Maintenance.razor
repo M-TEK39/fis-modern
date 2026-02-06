@@ -130,6 +130,14 @@
     }
 </div>
 
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Tracking/MNT_track_getreg.aspx"
+        Endpoint="api/tracking/vehicle-search?identifier=GG123"
+        HttpMethod="GET"
+        ButtonText="Test Tracking Maintenance Search Endpoint"
+        ReportType="tracking-maintenance-search" />
+
 @code {
     private bool _loading;
     private bool _showForm;

@@ -1,5 +1,6 @@
 @page "/call-centre/bookings/help"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Booking Information / Help - Fleet Information System</PageTitle>
 
@@ -19,4 +20,11 @@
         <h3>Booking help pending</h3>
         <p>This page will mirror the legacy booking help document.</p>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/Bookings/Docs/Booking.htm"
+        Endpoint="api/booking/help"
+        HttpMethod="GET"
+        ButtonText="Test Booking Help Endpoint"
+        ReportType="booking-help" />
 </div>

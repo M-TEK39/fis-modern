@@ -1,5 +1,6 @@
 @page "/call-centre/help"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Call Centre Maintenance Help - Fleet Information System</PageTitle>
 
@@ -19,4 +20,11 @@
         <h3>Call centre help pending</h3>
         <p>This page will mirror the legacy call centre help document.</p>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/Doc/Doc_CallCentre.htm"
+        Endpoint="api/callcentre/help"
+        HttpMethod="GET"
+        ButtonText="Test Call Centre Help Endpoint"
+        ReportType="call-centre-help" />
 </div>

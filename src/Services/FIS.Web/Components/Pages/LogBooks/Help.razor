@@ -1,3 +1,4 @@
+@using FIS.Web.Components.Shared
 @page "/log-books/help"
 @rendermode InteractiveServer
 
@@ -19,4 +20,12 @@
         <h3>Help content pending</h3>
         <p>This page will mirror Logbook/Doc/Doc_logbooks.htm.</p>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logbook/Doc/Doc_Logbooks.htm"
+        Endpoint="api/logbook/help"
+        HttpMethod="GET"
+        ButtonText="Test Logbook Help Endpoint"
+        ReportType="logbook-help" />
+
 </div>

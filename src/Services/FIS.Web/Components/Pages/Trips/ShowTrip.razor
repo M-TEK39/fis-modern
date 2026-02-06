@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components
 @inject TripApiService TripService
 @inject TripDriverApiService TripDriverService
@@ -239,6 +240,12 @@
                 <button class="btn btn-secondary">Print Trip Authority</button>
                 <button class="btn btn-secondary">Print Invoice</button>
             </div>
+            <LegacyEndpointActionPanel
+                LegacyPath="Trips/ShowTrip.aspx"
+                Endpoint="@($"api/trip/{_trip?.TripId ?? 1}")"
+                HttpMethod="PUT"
+                ButtonText="Run Update Trip API"
+                ReportType="trips-show" />
         </div>
     </div>
 </div>

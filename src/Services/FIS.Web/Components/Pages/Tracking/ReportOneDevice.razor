@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject TrackingApiService TrackingService
 @inject IJSRuntime JSRuntime
 
@@ -70,6 +71,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Tracking/RPT_one_trnum_main_track.aspx"
+        Endpoint="api/tracking/reports/one-device"
+        HttpMethod="POST"
+        ButtonText="Test Tracking One Device Report Endpoint"
+        ReportType="tracking-report-one-device" />
 
 @code {
     private bool _loading;

@@ -1,4 +1,6 @@
 using FIS.Web.Models;
+using System.Text;
+using System.Text.Json;
 
 namespace FIS.Web.Services;
 
@@ -145,6 +147,53 @@ public class ContractApiService
         catch (Exception)
         {
             return new List<ContractSummaryDto>();
+        }
+    }
+
+    public Task<FinanceApiResult> GetActionAsync(string endpoint)
+        => SendAsync(HttpMethod.Get, endpoint, null);
+
+    public Task<FinanceApiResult> PostActionAsync(string endpoint, object payload)
+        => SendAsync(HttpMethod.Post, endpoint, payload);
+
+    public Task<FinanceApiResult> PutActionAsync(string endpoint, object payload)
+        => SendAsync(HttpMethod.Put, endpoint, payload);
+
+    private async Task<FinanceApiResult> SendAsync(HttpMethod method, string endpoint, object? payload)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(method, endpoint);
+            if (payload != null && method != HttpMethod.Get)
+            {
+                request.Content = new StringContent(
+                    JsonSerializer.Serialize(payload),
+                    Encoding.UTF8,
+                    "application/json");
+            }
+
+            using var response = await _httpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            return new FinanceApiResult
+            {
+                Success = response.IsSuccessStatusCode,
+                StatusCode = (int)response.StatusCode,
+                Endpoint = endpoint,
+                Message = response.IsSuccessStatusCode
+                    ? "Request completed successfully."
+                    : $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
+                ResponseBody = body
+            };
+        }
+        catch (Exception ex)
+        {
+            return new FinanceApiResult
+            {
+                Success = false,
+                Endpoint = endpoint,
+                Message = ex.Message
+            };
         }
     }
 

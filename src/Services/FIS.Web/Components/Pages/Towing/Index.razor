@@ -1,3 +1,4 @@
+@using FIS.Web.Components.Shared
 @page "/towing"
 @rendermode InteractiveServer
 
@@ -51,4 +52,12 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Towing/MNTTowing.aspx"
+        Endpoint="api/towing/menu"
+        HttpMethod="GET"
+        ButtonText="Test Towing Menu Endpoint"
+        ReportType="towing-menu" />
+
 </div>

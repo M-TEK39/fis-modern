@@ -1,4 +1,5 @@
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Financial;
 
 namespace FIS.Core.Application.Interfaces;
 

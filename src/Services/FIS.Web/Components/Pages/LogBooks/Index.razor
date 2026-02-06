@@ -1,3 +1,4 @@
+@using FIS.Web.Components.Shared
 @page "/log-books"
 @rendermode InteractiveServer
 
@@ -47,4 +48,12 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logbook/MNTLogbk.aspx"
+        Endpoint="api/logbook/menu"
+        HttpMethod="GET"
+        ButtonText="Test Logbook Menu Endpoint"
+        ReportType="logbook-menu" />
+
 </div>

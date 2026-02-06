@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject LogbookApiService LogbookService
 @inject SiteApiService SiteService
 @inject IJSRuntime JSRuntime
@@ -59,6 +60,14 @@
         </div>
     }
 </div>
+
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Logbook/MNT_logb2j_getpersdetail.aspx"
+        Endpoint="api/logbook/collection"
+        HttpMethod="POST"
+        ButtonText="Test Logbook Collection Endpoint"
+        ReportType="logbook-collection" />
 
 @code {
     private bool _loading;

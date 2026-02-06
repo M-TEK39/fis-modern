@@ -25,6 +25,18 @@ public class AccidentController : BaseApiController
     [HttpGet("daterange")]
     public async Task<ActionResult<IEnumerable<Accident>>> GetByDateRange([FromQuery] DateTime startDate, [FromQuery] DateTime endDate) { try { return Ok(await _repository.GetByDateRangeAsync(startDate, endDate)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
+    [HttpGet("claims-summary")]
+    public async Task<ActionResult<AccidentClaimsSummary>> GetClaimsSummary() { try { return Ok(await _repository.GetClaimsSummaryAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+
+    [HttpGet("reports")]
+    public async Task<ActionResult<IEnumerable<AccidentReport>>> GetRecentReports() { try { return Ok(await _repository.GetRecentReportsAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+
+    [HttpGet("outstanding-claims")]
+    public async Task<ActionResult<IEnumerable<AccidentOutstandingClaim>>> GetOutstandingClaims() { try { return Ok(await _repository.GetOutstandingClaimsAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+
+    [HttpGet("statistics")]
+    public async Task<ActionResult<AccidentStatistics>> GetStatistics([FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null) { try { return Ok(await _repository.GetStatisticsAsync(fromDate, toDate)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+
     [HttpPost]
     public async Task<ActionResult<Accident>> Create([FromBody] Accident item) { try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.accident_code }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 

@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
 @inject IJSRuntime JSRuntime
 
@@ -63,6 +64,13 @@
             </div>
         </div>
     }
+
+    <LegacyEndpointActionPanel
+        LegacyPath="CallCentre/RPT_call_closed_period_main.aspx"
+        Endpoint="api/callcentre/reports/open-calls"
+        HttpMethod="GET"
+        ButtonText="Test Open Calls Report Endpoint"
+        ReportType="call-centre-report-open-calls" />
 </div>
 
 @code {

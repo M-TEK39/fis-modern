@@ -1,5 +1,6 @@
 @page "/fuel-cards/collection-multiple"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Collection for TWO or MORE Fuelcards</PageTitle>
 
@@ -63,4 +64,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="fuelcard/MNT_fuel2j_getreg.aspx"
+        Endpoint="api/fuelcard/collection/multiple/search"
+        HttpMethod="POST"
+        ButtonText="Test Multi-Collection Endpoint"
+        ReportType="fuelcard-collection-multiple" />
 </div>

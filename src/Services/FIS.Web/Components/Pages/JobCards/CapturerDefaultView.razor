@@ -1,107 +1,13 @@
 @page "/job-cards/capturer-default"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
-<PageTitle>Job Cards Main Menu - Fleet Information System</PageTitle>
-
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="bx bx-clipboard"></i>
-            Job Cards Main Menu
-        </h1>
-        <p class="page-description">Capture, edit, print, cancel, and close jobcards from the legacy capturer view.</p>
-    </div>
-</div>
-
-<div class="page-content">
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
-        <div class="menu-tile">
-            <div class="menu-tile-header">
-                <span>Jobcard Actions</span>
-            </div>
-            <div class="menu-tile-body">
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/select-vehicle">Create new Jobcard</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/list">Edit Jobcard</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/print">Print Jobcards</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/cancel">Cancel Job Card</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/close">Close Job Cards</a>
-                </div>
-            </div>
-        </div>
-        <div class="menu-tile">
-            <div class="menu-tile-header">
-                <span>Jobcard Menu</span>
-            </div>
-            <div class="menu-tile-body">
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards">Back to Jobcard Menu</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/authorizer-vehicles">View Authoriser Vehicles</a>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/job-cards/authorizer-dashboard">AuthorizerDash</a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="table-container" style="margin-bottom: 1.5rem;">
-        <div class="table-header">
-            <span class="table-title">Un-assigned Jobcards that Require Immediate Attention</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>Jobcard Number</th>
-                        <th>Date Created</th>
-                        <th>Jobcard Description</th>
-                        <th>Assigned To</th>
-                        <th>Assigned Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="6">No priority jobcards.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Assigned Jobcards that Require Immediate Attention (Print these Jobcards)</span>
-        </div>
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>Jobcard Number</th>
-                        <th>Date Created</th>
-                        <th>Jobcard Description</th>
-                        <th>Assigned To</th>
-                        <th>Assigned Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="6">No priority jobcards.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
+<LegacyReportEndpointPage
+    Title="Job Cards Main Menu"
+    Description="Capture, edit, print, cancel, and close jobcards from the legacy capturer view."
+    LegacyPath="Capture, edit, print, cancel, and close jobcards from the legacy capturer view."
+    Endpoint="api/jobcards/priority/unassigned"
+    HttpMethod="GET"
+    ReportType="jobcards-priority-unassigned"
+    BackLink="/job-cards"
+    Icon="bx-wrench" />

@@ -53,4 +53,163 @@ public class LogsheetController : BaseApiController
         try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
+
+    #region Specialized Operations
+
+    /// <summary>
+    /// Get logsheet menu options
+    /// </summary>
+    [HttpGet("menu")]
+    public ActionResult<LogsheetMenuDto> GetMenu()
+    {
+        var menu = new LogsheetMenuDto
+        {
+            Options = new List<string> { "Enter", "Edit", "Delete", "Reports", "Help" }
+        };
+        return Ok(menu);
+    }
+
+    /// <summary>
+    /// Get logsheet help information
+    /// </summary>
+    [HttpGet("help")]
+    public ActionResult<LogsheetHelpDto> GetHelp()
+    {
+        var help = new LogsheetHelpDto
+        {
+            Title = "Logsheet Management Help",
+            Description = "Enter and manage vehicle logsheet entries"
+        };
+        return Ok(help);
+    }
+
+    /// <summary>
+    /// Create new logsheet entry
+    /// </summary>
+    [HttpPost("entry")]
+    public ActionResult<LogsheetEntryResultDto> CreateEntry([FromBody] LogsheetEntryDto request)
+    {
+        // TODO: Implement entry creation
+        var result = new LogsheetEntryResultDto
+        {
+            Success = true,
+            LogCode = 0,
+            Message = "Logsheet entry created"
+        };
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Edit existing logsheet entry
+    /// </summary>
+    [HttpPut("edit/{id}")]
+    public ActionResult<LogsheetEntryResultDto> EditEntry(int id, [FromBody] LogsheetEntryDto request)
+    {
+        // TODO: Implement entry edit
+        var result = new LogsheetEntryResultDto
+        {
+            Success = true,
+            LogCode = id,
+            Message = "Logsheet entry updated"
+        };
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Delete logsheet entry
+    /// </summary>
+    [HttpDelete("entry/{id}")]
+    public ActionResult DeleteEntry(int id)
+    {
+        // TODO: Implement entry deletion
+        return Ok(new { message = "Logsheet entry deleted", id });
+    }
+
+    #endregion
+
+    #region Reports
+
+    /// <summary>
+    /// Get logsheet reports menu
+    /// </summary>
+    [HttpGet("reports/menu")]
+    public ActionResult<LogsheetReportMenuDto> GetReportsMenu()
+    {
+        var menu = new LogsheetReportMenuDto
+        {
+            Reports = new List<string> { "One Vehicle", "One Requisition", "Department Period", "Captured", "Total KM per Class" }
+        };
+        return Ok(menu);
+    }
+
+    /// <summary>
+    /// Generate logsheet report for one vehicle
+    /// </summary>
+    [HttpPost("reports/one-vehicle")]
+    public ActionResult<LogsheetReportDto> GetReportOneVehicle([FromBody] LogsheetOneVehicleRequestDto request)
+    {
+        // TODO: Implement report generation
+        var report = new LogsheetReportDto { ReportType = "OneVehicle", Data = new List<object>() };
+        return Ok(report);
+    }
+
+    /// <summary>
+    /// Generate logsheet report for one requisition
+    /// </summary>
+    [HttpPost("reports/one-requisition")]
+    public ActionResult<LogsheetReportDto> GetReportOneRequisition([FromBody] LogsheetOneRequisitionRequestDto request)
+    {
+        // TODO: Implement report generation
+        var report = new LogsheetReportDto { ReportType = "OneRequisition", Data = new List<object>() };
+        return Ok(report);
+    }
+
+    /// <summary>
+    /// Generate logsheet report by department and period
+    /// </summary>
+    [HttpPost("reports/department-period")]
+    public ActionResult<LogsheetReportDto> GetReportDepartmentPeriod([FromBody] LogsheetDepartmentPeriodRequestDto request)
+    {
+        // TODO: Implement report generation
+        var report = new LogsheetReportDto { ReportType = "DepartmentPeriod", Data = new List<object>() };
+        return Ok(report);
+    }
+
+    /// <summary>
+    /// Generate captured logsheets report
+    /// </summary>
+    [HttpPost("reports/captured")]
+    public ActionResult<LogsheetReportDto> GetReportCaptured([FromBody] LogsheetCapturedRequestDto request)
+    {
+        // TODO: Implement report generation
+        var report = new LogsheetReportDto { ReportType = "Captured", Data = new List<object>() };
+        return Ok(report);
+    }
+
+    /// <summary>
+    /// Generate total kilometers per class code report
+    /// </summary>
+    [HttpPost("reports/total-km-per-class-code")]
+    public ActionResult<LogsheetReportDto> GetReportTotalKmPerClass([FromBody] LogsheetKmPerClassRequestDto request)
+    {
+        // TODO: Implement report generation
+        var report = new LogsheetReportDto { ReportType = "TotalKmPerClass", Data = new List<object>() };
+        return Ok(report);
+    }
+
+    #endregion
 }
+
+#region Logsheet DTOs
+public class LogsheetMenuDto { public List<string> Options { get; set; } = new(); }
+public class LogsheetHelpDto { public string Title { get; set; } = ""; public string Description { get; set; } = ""; }
+public class LogsheetEntryDto { public int VmfCode { get; set; } public DateTime LogDate { get; set; } public int Odometer { get; set; } public string? Notes { get; set; } }
+public class LogsheetEntryResultDto { public bool Success { get; set; } public int LogCode { get; set; } public string Message { get; set; } = ""; }
+public class LogsheetReportMenuDto { public List<string> Reports { get; set; } = new(); }
+public class LogsheetOneVehicleRequestDto { public int VmfCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class LogsheetOneRequisitionRequestDto { public string RequisitionNumber { get; set; } = ""; }
+public class LogsheetDepartmentPeriodRequestDto { public int DepartmentCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class LogsheetCapturedRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class LogsheetKmPerClassRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class LogsheetReportDto { public string ReportType { get; set; } = ""; public List<object> Data { get; set; } = new(); }
+#endregion

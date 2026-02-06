@@ -36,6 +36,22 @@ public class ClearanceRepository : IClearanceRepository
             .ToListAsync();
     }
 
+    public async Task<ClearanceLookupResult?> LookupVehicleAsync(string fleetOrReg)
+    {
+        if (string.IsNullOrWhiteSpace(fleetOrReg))
+            return null;
+
+        return await _context.Set<Vehicle>()
+            .Where(v => v.fleet_number == fleetOrReg || v.registration_number == fleetOrReg)
+            .Select(v => new ClearanceLookupResult
+            {
+                vmf_code = v.vmf_code,
+                fleet_number = v.fleet_number,
+                registration_number = v.registration_number
+            })
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<Clearance> CreateAsync(Clearance clearance, int currentUserId)
     {
         await _context.Set<Clearance>().AddAsync(clearance);

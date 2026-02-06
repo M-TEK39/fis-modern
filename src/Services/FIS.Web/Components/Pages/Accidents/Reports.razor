@@ -1,5 +1,6 @@
 @page "/accidents/reports"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Accident Reports - Fleet Information System</PageTitle>
 
@@ -63,4 +64,10 @@
             </div>
         </div>
     </div>
+    <LegacyEndpointActionPanel
+        LegacyPath="Accident/RPTAccident.aspx"
+        Endpoint="api/report/accidents/menu"
+        HttpMethod="GET"
+        ButtonText="Run Accident Reports API"
+        ReportType="accidents-reports-menu" />
 </div>

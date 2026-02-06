@@ -1,5 +1,6 @@
 @page "/auction"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Shared
 
 <PageTitle>Auction - Fleet Information System</PageTitle>
 
@@ -54,4 +55,11 @@
             </div>
         </div>
     </div>
+
+    <LegacyEndpointActionPanel
+        LegacyPath="Auction/MNTAuction.aspx"
+        Endpoint="api/auction/menu"
+        HttpMethod="GET"
+        ButtonText="Test Auction Menu Endpoint"
+        ReportType="auction-menu" />
 </div>
