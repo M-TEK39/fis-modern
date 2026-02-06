@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Operations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 namespace FIS.Api.Controllers;
@@ -21,9 +22,6 @@ public class SupplierController : BaseApiController
 
     [HttpGet("active")]
     public async Task<ActionResult<IEnumerable<Supplier>>> GetActive() { try { return Ok(await _repository.GetActiveAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
-
-    [HttpGet("type/{type}")]
-    public async Task<ActionResult<IEnumerable<Supplier>>> GetByType(string type) { try { return Ok(await _repository.GetByTypeAsync(type)); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPost]
     public async Task<ActionResult<Supplier>> Create([FromBody] Supplier item) { try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.supplier_id }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }

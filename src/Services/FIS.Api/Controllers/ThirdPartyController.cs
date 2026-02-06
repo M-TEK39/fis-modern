@@ -20,6 +20,7 @@ public class ThirdPartyController : BaseApiController
     private readonly ISiteRepository _siteRepository;
     private readonly IVehicleRepository _vehicleRepository;
     private readonly IClassRepository _classRepository;
+    private readonly IClassRequirementRepository _classRequirementRepository;
     private readonly ILogger<ThirdPartyController> _logger;
 
     public ThirdPartyController(
@@ -30,6 +31,7 @@ public class ThirdPartyController : BaseApiController
         ISiteRepository siteRepository,
         IVehicleRepository vehicleRepository,
         IClassRepository classRepository,
+        IClassRequirementRepository classRequirementRepository,
         ILogger<ThirdPartyController> logger)
     {
         _supplierRepository = supplierRepository;
@@ -39,6 +41,7 @@ public class ThirdPartyController : BaseApiController
         _siteRepository = siteRepository;
         _vehicleRepository = vehicleRepository;
         _classRepository = classRepository;
+        _classRequirementRepository = classRequirementRepository;
         _logger = logger;
     }
 
@@ -195,17 +198,29 @@ public class ThirdPartyController : BaseApiController
     }
 
     [HttpGet("projects/{projectId}/requirements")]
-    public Task<ActionResult<IEnumerable<ClassRequirement>>> GetProjectRequirements(int projectId)
+    public async Task<ActionResult<IEnumerable<ClassRequirement>>> GetProjectRequirements(int projectId)
     {
         try
         {
-            // TODO: Implement class requirements logic when business rules are defined
-            return Task.FromResult<ActionResult<IEnumerable<ClassRequirement>>>(Ok(new List<ClassRequirement>()));
+            _logger.LogInformation("Getting class requirements for project {ProjectId}", projectId);
+
+            // Get class requirements for the specified project
+            var requirements = await _classRequirementRepository.GetByProjectIdAsync(projectId);
+
+            // Map to DTO format expected by the frontend
+            var requirementDtos = requirements.Select(r => new ClassRequirement
+            {
+                class_id = r.class_id,
+                class_name = r.Class?.description,
+                required_count = r.required_count
+            });
+
+            return Ok(requirementDtos);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving requirements for project {ProjectId}", projectId);
-            return Task.FromResult<ActionResult<IEnumerable<ClassRequirement>>>(StatusCode(500));
+            return StatusCode(500, "Error retrieving project requirements");
         }
     }
 
@@ -300,22 +315,38 @@ public class ThirdPartyController : BaseApiController
     {
         try
         {
-            // TODO: Add relationship between suppliers and vehicles if needed
-            var vehicles = await _vehicleRepository.GetAllAsync();
-            var vehicleDtos = vehicles.Select(v => new VehicleDto
+            _logger.LogInformation("Getting vehicles for supplier {SupplierId}", supplierId);
+
+            // Verify supplier exists
+            var supplier = await _supplierRepository.GetByIdAsync(supplierId);
+            if (supplier == null)
             {
-                vehicle_id = v.vmf_code,
-                registration_number = v.registration_number,
-                model_description = "Unknown",
-                model_year = null,
-                chassis_number = v.chassis_number
-            });
+                return NotFound(new { message = $"Supplier with ID {supplierId} not found" });
+            }
+
+            // Get all vehicles and filter by supplier_id
+            var vehicles = await _vehicleRepository.GetAllAsync();
+            var vehicleDtos = vehicles
+                .Where(v => !v.is_deleted && v.supplier_id == supplierId)
+                .Select(v => new VehicleDto
+                {
+                    vehicle_id = v.vmf_code,
+                    registration_number = v.registration_number,
+                    model_description = v.Model?.model_description ?? "Unknown",
+                    model_year = v.year_manufactured?.ToString(),
+                    chassis_number = v.chassis_number
+                })
+                .ToList();
+
+            _logger.LogInformation("Returning {Count} vehicles for supplier {SupplierId}",
+                vehicleDtos.Count, supplierId);
+
             return Ok(vehicleDtos);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving vehicles for supplier {SupplierId}", supplierId);
-            return StatusCode(500);
+            return StatusCode(500, "Error retrieving vehicles");
         }
     }
 

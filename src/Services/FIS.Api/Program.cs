@@ -234,6 +234,14 @@ builder.Services.AddScoped<ILicenseFeeRepository, LicenseFeeRepository>();
 builder.Services.AddScoped<IExtraCodeRepository, ExtraCodeRepository>();
 builder.Services.AddScoped<ILossTypeRepository, LossTypeRepository>();
 
+// Notice Management System repositories (Priority 3)
+builder.Services.AddScoped<INoticeRepository, NoticeRepository>();
+builder.Services.AddScoped<INoticeScheduleRepository, NoticeScheduleRepository>();
+
+// Third Party / Supplier Management repositories (Priority 5)
+builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
+builder.Services.AddScoped<IClassRequirementRepository, ClassRequirementRepository>();
+
 // Phase 4: Additional entity repositories
 builder.Services.AddScoped<ITripDriverRepository, TripDriverRepository>();
 builder.Services.AddScoped<IPrivateHireRepository, PrivateHireRepository>();

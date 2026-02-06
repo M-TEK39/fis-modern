@@ -185,7 +185,6 @@ public class FisDbContext : DbContext
     public DbSet<AssetVerification> AssetVerifications { get; set; } = null!;
     public DbSet<LeaseContractTerms> LeaseContractTerms { get; set; } = null!;
     public DbSet<Booking> Bookings { get; set; } = null!;
-    public DbSet<Supplier> Suppliers { get; set; } = null!;
     public DbSet<Collection> Collections { get; set; } = null!;
 
     // Workshop & Parts
@@ -232,6 +231,14 @@ public class FisDbContext : DbContext
     public DbSet<StepExecutionHistory> StepExecutionHistories { get; set; } = null!;
     public DbSet<WorkflowMetric> WorkflowMetrics { get; set; } = null!;
     public DbSet<WorkflowExecutionSummary> WorkflowExecutionSummaries { get; set; } = null!;
+
+    // Notice Management System entities
+    public DbSet<Notice> Notices { get; set; } = null!;
+    public DbSet<NoticeSchedule> NoticeSchedules { get; set; } = null!;
+
+    // Third Party / Supplier Management entities
+    public DbSet<Supplier> Suppliers { get; set; } = null!;
+    public DbSet<ClassRequirement> ClassRequirements { get; set; } = null!;
 
     // Batch 1 Reference Data (Lookups)
     public DbSet<Province> Provinces { get; set; } = null!;

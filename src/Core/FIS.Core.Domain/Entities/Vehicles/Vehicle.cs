@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using FIS.Core.Domain.Entities.Operations;
 
 namespace FIS.Core.Domain.Entities;
 
@@ -320,6 +321,9 @@ public class Vehicle
     [Column("temp_vmf_code")]
     public int? temp_vmf_code { get; set; }
 
+    [Column("supplier_id")]
+    public short? supplier_id { get; set; }
+
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
     [Column("date_created")]
     public DateTime date_created { get; set; }
@@ -342,4 +346,11 @@ public class Vehicle
 
     [ForeignKey("modified_by_user_code")]
     public virtual User? ModifiedByUser { get; set; }
+
+    // Business entity navigation properties
+    [ForeignKey("model_code")]
+    public virtual Model? Model { get; set; }
+
+    [ForeignKey("supplier_id")]
+    public virtual Supplier? Supplier { get; set; }
 }

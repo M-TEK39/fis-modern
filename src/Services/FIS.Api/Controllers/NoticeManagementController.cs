@@ -1,3 +1,5 @@
+using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities.System;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,10 +10,17 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class NoticeManagementController : BaseApiController
 {
+    private readonly INoticeRepository _noticeRepository;
+    private readonly INoticeScheduleRepository _noticeScheduleRepository;
     private readonly ILogger<NoticeManagementController> _logger;
 
-    public NoticeManagementController(ILogger<NoticeManagementController> logger)
+    public NoticeManagementController(
+        INoticeRepository noticeRepository,
+        INoticeScheduleRepository noticeScheduleRepository,
+        ILogger<NoticeManagementController> logger)
     {
+        _noticeRepository = noticeRepository;
+        _noticeScheduleRepository = noticeScheduleRepository;
         _logger = logger;
     }
 
@@ -44,67 +53,142 @@ public class NoticeManagementController : BaseApiController
     /// Get all notice schedules
     /// </summary>
     [HttpGet("notice-schedules")]
-    public ActionResult<IEnumerable<NoticeScheduleDto>> GetAllNoticeSchedules()
+    public async Task<ActionResult<IEnumerable<NoticeScheduleDto>>> GetAllNoticeSchedules()
     {
-        // TODO: Implement get all notice schedules from database
-        _logger.LogInformation("Getting all notice schedules");
-        return Ok(new List<NoticeScheduleDto>());
+        try
+        {
+            _logger.LogInformation("Getting all notice schedules");
+            var schedules = await _noticeScheduleRepository.GetAllAsync();
+
+            var scheduleDtos = schedules.Select(s => new NoticeScheduleDto
+            {
+                NoticeScheduleId = s.notice_schedule_id,
+                NoticeId = s.notice_id,
+                TitleField = s.title_field ?? "",
+                StartDate = s.start_date,
+                EndDate = s.end_date,
+                SortOrder = s.sort_order,
+                CreatedBy = s.CreatedByUser?.email,
+                CreatedDate = s.date_created
+            });
+
+            return Ok(scheduleDtos);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting all notice schedules");
+            return StatusCode(500, "Error retrieving notice schedules");
+        }
     }
 
     /// <summary>
     /// Create new notice schedule
     /// </summary>
     [HttpPost("notice-schedules")]
-    public ActionResult<NoticeScheduleDto> CreateNoticeSchedule([FromBody] CreateNoticeScheduleDto request)
+    public async Task<ActionResult<NoticeScheduleDto>> CreateNoticeSchedule([FromBody] CreateNoticeScheduleDto request)
     {
-        // TODO: Implement notice schedule creation
-        _logger.LogInformation("Creating notice schedule for NoticeId: {NoticeId}", request.NoticeId);
-        var created = new NoticeScheduleDto
+        try
         {
-            NoticeScheduleId = 0,
-            NoticeId = request.NoticeId,
-            TitleField = request.TitleField,
-            StartDate = request.StartDate,
-            EndDate = request.EndDate,
-            CreatedBy = GetCurrentUsername(),
-            CreatedDate = DateTime.Now,
-            SortOrder = request.SortOrder
-        };
-        return Ok(created);
+            _logger.LogInformation("Creating notice schedule for NoticeId: {NoticeId}", request.NoticeId);
+
+            var noticeSchedule = new NoticeSchedule
+            {
+                notice_id = request.NoticeId,
+                title_field = request.TitleField,
+                start_date = request.StartDate,
+                end_date = request.EndDate,
+                sort_order = request.SortOrder
+            };
+
+            var created = await _noticeScheduleRepository.CreateAsync(noticeSchedule, GetCurrentUserId());
+
+            var createdDto = new NoticeScheduleDto
+            {
+                NoticeScheduleId = created.notice_schedule_id,
+                NoticeId = created.notice_id,
+                TitleField = created.title_field ?? "",
+                StartDate = created.start_date,
+                EndDate = created.end_date,
+                CreatedBy = GetCurrentUsername(),
+                CreatedDate = created.date_created,
+                SortOrder = created.sort_order
+            };
+
+            return Ok(createdDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating notice schedule for NoticeId: {NoticeId}", request.NoticeId);
+            return StatusCode(500, "Error creating notice schedule");
+        }
     }
 
     /// <summary>
     /// Update existing notice schedule
     /// </summary>
     [HttpPut("notice-schedules/{id}")]
-    public ActionResult<NoticeScheduleDto> UpdateNoticeSchedule(int id, [FromBody] UpdateNoticeScheduleDto request)
+    public async Task<ActionResult<NoticeScheduleDto>> UpdateNoticeSchedule(int id, [FromBody] UpdateNoticeScheduleDto request)
     {
-        // TODO: Implement notice schedule update
-        _logger.LogInformation("Updating notice schedule {Id}", id);
-        if (id != request.NoticeScheduleId)
-            return BadRequest("ID mismatch");
-
-        var updated = new NoticeScheduleDto
+        try
         {
-            NoticeScheduleId = id,
-            NoticeId = request.NoticeId,
-            TitleField = request.TitleField,
-            StartDate = request.StartDate,
-            EndDate = request.EndDate,
-            SortOrder = request.SortOrder
-        };
-        return Ok(updated);
+            _logger.LogInformation("Updating notice schedule {Id}", id);
+            if (id != request.NoticeScheduleId)
+                return BadRequest("ID mismatch");
+
+            var existing = await _noticeScheduleRepository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound(new { message = $"Notice schedule with ID {id} not found" });
+
+            existing.notice_id = request.NoticeId;
+            existing.title_field = request.TitleField;
+            existing.start_date = request.StartDate;
+            existing.end_date = request.EndDate;
+            existing.sort_order = request.SortOrder;
+
+            var updated = await _noticeScheduleRepository.UpdateAsync(existing, GetCurrentUserId());
+
+            var updatedDto = new NoticeScheduleDto
+            {
+                NoticeScheduleId = updated.notice_schedule_id,
+                NoticeId = updated.notice_id,
+                TitleField = updated.title_field ?? "",
+                StartDate = updated.start_date,
+                EndDate = updated.end_date,
+                SortOrder = updated.sort_order
+            };
+
+            return Ok(updatedDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating notice schedule {Id}", id);
+            return StatusCode(500, "Error updating notice schedule");
+        }
     }
 
     /// <summary>
     /// Delete notice schedule
     /// </summary>
     [HttpDelete("notice-schedules/{id}")]
-    public ActionResult DeleteNoticeSchedule(int id)
+    public async Task<ActionResult> DeleteNoticeSchedule(int id)
     {
-        // TODO: Implement notice schedule deletion
-        _logger.LogInformation("Deleting notice schedule {Id}", id);
-        return Ok(new { message = "Notice schedule deleted successfully", id });
+        try
+        {
+            _logger.LogInformation("Deleting notice schedule {Id}", id);
+
+            var existing = await _noticeScheduleRepository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound(new { message = $"Notice schedule with ID {id} not found" });
+
+            await _noticeScheduleRepository.DeleteAsync(id, GetCurrentUserId());
+
+            return Ok(new { message = "Notice schedule deleted successfully", id });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting notice schedule {Id}", id);
+            return StatusCode(500, "Error deleting notice schedule");
+        }
     }
 
     #endregion
@@ -115,66 +199,141 @@ public class NoticeManagementController : BaseApiController
     /// Get notice by ID
     /// </summary>
     [HttpGet("notices/{id}")]
-    public ActionResult<NoticeDto> GetNoticeById(int id)
+    public async Task<ActionResult<NoticeDto>> GetNoticeById(int id)
     {
-        // TODO: Implement get notice by ID
-        _logger.LogInformation("Getting notice {Id}", id);
-        return NotFound();
+        try
+        {
+            _logger.LogInformation("Getting notice {Id}", id);
+
+            var notice = await _noticeRepository.GetByIdAsync(id);
+            if (notice == null)
+                return NotFound(new { message = $"Notice with ID {id} not found" });
+
+            var noticeDto = new NoticeDto
+            {
+                NoticeId = notice.notice_id,
+                NoticeDate = notice.notice_date,
+                NoticeFrom = notice.notice_from,
+                NoticeTitle = notice.notice_title,
+                NoticeBody = notice.notice_body,
+                NoticePerson = notice.notice_person,
+                NoticePersonTitle = notice.notice_person_title
+            };
+
+            return Ok(noticeDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting notice {Id}", id);
+            return StatusCode(500, "Error retrieving notice");
+        }
     }
 
     /// <summary>
     /// Create new notice
     /// </summary>
     [HttpPost("notices")]
-    public ActionResult<NoticeDto> CreateNotice([FromBody] CreateNoticeDto request)
+    public async Task<ActionResult<NoticeDto>> CreateNotice([FromBody] CreateNoticeDto request)
     {
-        // TODO: Implement notice creation
-        _logger.LogInformation("Creating notice: {Title}", request.NoticeTitle);
-        var created = new NoticeDto
+        try
         {
-            NoticeId = 0,
-            NoticeDate = DateTime.Now,
-            NoticeFrom = request.NoticeFrom,
-            NoticeTitle = request.NoticeTitle,
-            NoticeBody = request.NoticeBody,
-            NoticePerson = request.NoticePerson,
-            NoticePersonTitle = request.NoticePersonTitle
-        };
-        return Ok(created);
+            _logger.LogInformation("Creating notice: {Title}", request.NoticeTitle);
+
+            var notice = new Notice
+            {
+                notice_date = DateTime.UtcNow,
+                notice_from = request.NoticeFrom,
+                notice_title = request.NoticeTitle,
+                notice_body = request.NoticeBody,
+                notice_person = request.NoticePerson,
+                notice_person_title = request.NoticePersonTitle
+            };
+
+            var created = await _noticeRepository.CreateAsync(notice, GetCurrentUserId());
+
+            var createdDto = new NoticeDto
+            {
+                NoticeId = created.notice_id,
+                NoticeDate = created.notice_date,
+                NoticeFrom = created.notice_from,
+                NoticeTitle = created.notice_title,
+                NoticeBody = created.notice_body,
+                NoticePerson = created.notice_person,
+                NoticePersonTitle = created.notice_person_title
+            };
+
+            return Ok(createdDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating notice: {Title}", request.NoticeTitle);
+            return StatusCode(500, "Error creating notice");
+        }
     }
 
     /// <summary>
     /// Update existing notice
     /// </summary>
     [HttpPut("notices/{id}")]
-    public ActionResult<NoticeDto> UpdateNotice(int id, [FromBody] UpdateNoticeDto request)
+    public async Task<ActionResult<NoticeDto>> UpdateNotice(int id, [FromBody] UpdateNoticeDto request)
     {
-        // TODO: Implement notice update
-        _logger.LogInformation("Updating notice {Id}", id);
-        if (id != request.NoticeId)
-            return BadRequest("ID mismatch");
-
-        var updated = new NoticeDto
+        try
         {
-            NoticeId = id,
-            NoticeDate = request.NoticeDate,
-            NoticeFrom = request.NoticeFrom,
-            NoticeTitle = request.NoticeTitle,
-            NoticeBody = request.NoticeBody,
-            NoticePerson = request.NoticePerson,
-            NoticePersonTitle = request.NoticePersonTitle
-        };
-        return Ok(updated);
+            _logger.LogInformation("Updating notice {Id}", id);
+            if (id != request.NoticeId)
+                return BadRequest("ID mismatch");
+
+            var existing = await _noticeRepository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound(new { message = $"Notice with ID {id} not found" });
+
+            existing.notice_date = request.NoticeDate;
+            existing.notice_from = request.NoticeFrom;
+            existing.notice_title = request.NoticeTitle;
+            existing.notice_body = request.NoticeBody;
+            existing.notice_person = request.NoticePerson;
+            existing.notice_person_title = request.NoticePersonTitle;
+
+            var updated = await _noticeRepository.UpdateAsync(existing, GetCurrentUserId());
+
+            var updatedDto = new NoticeDto
+            {
+                NoticeId = updated.notice_id,
+                NoticeDate = updated.notice_date,
+                NoticeFrom = updated.notice_from,
+                NoticeTitle = updated.notice_title,
+                NoticeBody = updated.notice_body,
+                NoticePerson = updated.notice_person,
+                NoticePersonTitle = updated.notice_person_title
+            };
+
+            return Ok(updatedDto);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating notice {Id}", id);
+            return StatusCode(500, "Error updating notice");
+        }
     }
 
     #endregion
 
     /// <summary>
-    /// Helper to get current username (placeholder until user context is available)
+    /// Helper to get current username from authentication context
     /// </summary>
     private string GetCurrentUsername()
     {
-        // TODO: Get from User.Identity.Name or claims
+        // Get username from JWT claims or User.Identity
+        var username = User?.Identity?.Name;
+        if (!string.IsNullOrEmpty(username))
+            return username;
+
+        // Fallback to user access code from claims
+        var userAccessCodeClaim = User?.FindFirst("user_access_code")?.Value;
+        if (!string.IsNullOrEmpty(userAccessCodeClaim))
+            return $"User-{userAccessCodeClaim}";
+
+        // Final fallback
         return "system";
     }
 }

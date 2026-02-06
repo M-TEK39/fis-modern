@@ -774,6 +774,105 @@
             Associated vehicle
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Operations.ClassRequirement">
+            <summary>
+            ClassRequirement Entity - Vehicle class requirements for third party projects
+            Maps to legacy 'ClassRequirements' table with exact field names for compatibility
+            Links projects to required vehicle classes with quantity requirements
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.class_requirement_id">
+            <summary>
+            Primary key - Class Requirement ID
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.project_id">
+            <summary>
+            Foreign key to ThirdPartyProject (or Project) table
+            Nullable until ThirdPartyProject entity is created
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.class_id">
+            <summary>
+            Foreign key to Class table (vehicle class)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.required_count">
+            <summary>
+            Number of vehicles required for this class
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.start_date">
+            <summary>
+            Start date for the requirement
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.end_date">
+            <summary>
+            End date for the requirement
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.notes">
+            <summary>
+            Additional requirement notes
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.ClassRequirement.Class">
+            <summary>
+            Associated vehicle class
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Operations.Supplier">
+            <summary>
+            Supplier Entity - Third party suppliers and vendors
+            Maps to legacy 'Suppliers' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.supplier_id">
+            <summary>
+            Primary key - Supplier ID
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.supplier_name">
+            <summary>
+            Supplier name
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.contact_person">
+            <summary>
+            Supplier contact person
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.phone_number">
+            <summary>
+            Supplier phone number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.email">
+            <summary>
+            Supplier email address
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.address">
+            <summary>
+            Supplier physical address
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.tax_number">
+            <summary>
+            Supplier tax number or registration number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.is_active">
+            <summary>
+            Whether supplier is active
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.Supplier.notes">
+            <summary>
+            Additional notes or comments
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Clearance">
             <summary>
             Clearance Entity - Vehicle clearance management
@@ -1326,6 +1425,93 @@
             <summary>
             FuelType Entity - EXACT legacy schema match
             Maps to 'fuel_type' table
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.Notice">
+            <summary>
+            Notice Entity - System notice/announcement management
+            Maps to legacy 'Notices' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_id">
+            <summary>
+            Primary key - Notice ID
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_date">
+            <summary>
+            Date of the notice
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_from">
+            <summary>
+            Department or person the notice is from
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_title">
+            <summary>
+            Notice title/subject
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_body">
+            <summary>
+            Notice body/content
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_person">
+            <summary>
+            Person responsible for the notice
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.notice_person_title">
+            <summary>
+            Title of the person responsible
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.Notice.NoticeSchedules">
+            <summary>
+            Notice schedules associated with this notice
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.System.NoticeSchedule">
+            <summary>
+            NoticeSchedule Entity - Scheduling and display management for notices
+            Maps to legacy 'NoticeSchedule' table with exact field names for compatibility
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.notice_schedule_id">
+            <summary>
+            Primary key - Notice Schedule ID
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.notice_id">
+            <summary>
+            Foreign key to Notice table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.title_field">
+            <summary>
+            Title field for display
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.start_date">
+            <summary>
+            Start date for notice display
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.end_date">
+            <summary>
+            End date for notice display
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.sort_order">
+            <summary>
+            Sort order for display
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.System.NoticeSchedule.Notice">
+            <summary>
+            Associated notice
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.System.NotificationLog">

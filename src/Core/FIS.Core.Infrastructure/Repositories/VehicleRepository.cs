@@ -83,7 +83,9 @@ public class VehicleRepository : IVehicleRepository
     /// </summary>
     public async Task<IEnumerable<Vehicle>> GetAllAsync()
     {
-        return await _context.Vehicles.ToListAsync();
+        return await _context.Vehicles
+            .Include(v => v.Model)
+            .ToListAsync();
     }
 
     /// <summary>
