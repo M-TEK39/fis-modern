@@ -210,8 +210,10 @@ builder.Services.AddScoped<IUserClaimsService, UserClaimsService>();
 
 // Register repositories
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
+builder.Services.AddScoped<IVehicleAuthorizationRepository, VehicleAuthorizationRepository>();
 builder.Services.AddScoped<IContractRepository, ContractRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<ISiteRepository, SiteRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();

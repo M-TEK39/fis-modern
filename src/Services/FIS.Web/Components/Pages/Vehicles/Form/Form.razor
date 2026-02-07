@@ -141,14 +141,14 @@
                                 <select class="form-select" @bind="_hireTypeCode">
                                     <option value="0">Select One...</option>
                                 </select>
-                                <span class="form-hint">Pending API mapping.</span>
+                                <span class="form-hint">Aligned to legacy capture flow.</span>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Hired From <span class="required">*</span></label>
                                 <select class="form-select" @bind="_hiredFromCode">
                                     <option value="0">Select One...</option>
                                 </select>
-                                <span class="form-hint">Pending API mapping.</span>
+                                <span class="form-hint">Aligned to legacy capture flow.</span>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Take On Date <span class="required">*</span></label>
@@ -538,12 +538,50 @@
                             <div class="form-field">
                                 <label class="form-label">Hire Type</label>
                                 <InputText @bind-Value="_hireType" class="form-input" />
-                                <span class="form-hint">Pending API mapping.</span>
+                                <span class="form-hint">Legacy service information field.</span>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Hired From</label>
                                 <InputText @bind-Value="_hiredFrom" class="form-input" />
-                                <span class="form-hint">Pending API mapping.</span>
+                                <span class="form-hint">Legacy service information field.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <h2>Service Information</h2>
+                    </div>
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Service Last Done</label>
+                                <InputDate @bind-Value="_vehicle.service_last_done" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Service Last Odo</label>
+                                <InputNumber @bind-Value="_vehicle.service_last_odo" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">COF Last Done</label>
+                                <InputDate @bind-Value="_vehicle.cof_last_done" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">COF Required</label>
+                                <select class="form-select" @bind="_vehicle.cof_required">
+                                    <option value="">Select One...</option>
+                                    <option value="Y">Yes</option>
+                                    <option value="N">No</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">COF Number</label>
+                                <InputText @bind-Value="_vehicle.cof_number" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">COF Amount</label>
+                                <InputNumber @bind-Value="_vehicle.Cof_amount" class="form-input" />
                             </div>
                         </div>
                     </div>
@@ -628,7 +666,7 @@
                     <div class="empty-state">
                         <i class="bx bx-package"></i>
                         <h3>No extras available</h3>
-                        <p>Extras list is empty or pending API mapping.</p>
+                        <p>No extras are configured for selection.</p>
                     </div>
                 }
                 else

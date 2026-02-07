@@ -1,6 +1,9 @@
-@using FIS.Web.Components.Shared
 @page "/log-sheets/reports/captured"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LogsheetApiService LogsheetService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Logsheets Captured Report - Fleet Information System</PageTitle>
 
@@ -10,22 +13,270 @@
             <i class="bx bx-line-chart"></i>
             Report: Logsheets Captured
         </h1>
-        <p class="page-description">Legacy placeholder for Logs/RPT_Logs_captured_1.aspx.</p>
+        <p class="page-description">Legacy-aligned report criteria for captured logs.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-chart"></i>
-        <h3>Report pending</h3>
-        <p>This page will mirror the legacy logsheets captured report.</p>
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Report by Date-Time (all users)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <label class="form-label">Date</label>
+                            <input class="form-input" style="max-width: 10rem;" placeholder="yyyy/MM/dd" @bind="_dateTimeDateText" />
+                            <label class="form-label">from</label>
+                            <input class="form-input" style="max-width: 10rem;" placeholder="00:00:00 AM" @bind="_fromTimeText" />
+                            <label class="form-label">to</label>
+                            <input class="form-input" style="max-width: 10rem;" placeholder="11:59:59 PM" @bind="_endTimeText" />
+                            <button class="btn btn-primary btn-sm" type="button" @onclick="RunDateTimeReport" disabled="@_loading">Submit</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
-    <LegacyEndpointActionPanel
-        LegacyPath="Logs/RPT_Logs_captured_1.aspx"
-        Endpoint="api/logsheet/reports/captured"
-        HttpMethod="POST"
-        ButtonText="Test Logs Captured Report Endpoint"
-        ReportType="logsheet-report-captured" />
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Report by user</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <label class="form-label">User Name</label>
+                            <input class="form-input" style="max-width: 12rem;" @bind="_userNameText" />
+                            <label class="form-label">last</label>
+                            <select class="form-select" style="max-width: 8rem;" @bind="_userInterval">
+                                <option value="week">Week</option>
+                                <option value="month">Month</option>
+                            </select>
+                            <button class="btn btn-primary btn-sm" type="button" @onclick="RunUserReport" disabled="@_loading">Submit</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
 
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th>Report by Date (all users)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <label class="form-label">Begin Date</label>
+                            <input class="form-input" style="max-width: 10rem;" placeholder="yyyy/MM/dd" @bind="_fromDateText" />
+                            <label class="form-label">End Date</label>
+                            <input class="form-input" style="max-width: 10rem;" placeholder="yyyy/MM/dd" @bind="_toDateText" />
+                            <button class="btn btn-primary btn-sm" type="button" @onclick="RunDateReport" disabled="@_loading">Submit</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-error" : "alert-success")">@_message</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading logsheets...</p>
+        </div>
+    }
+    else if (_reportLoaded && _results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-info-circle"></i>
+            <h3>No records found</h3>
+            <p>The selected report criteria did not return results.</p>
+        </div>
+    }
+    else if (_results.Count > 0)
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_results.Count logsheet(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Log Code</th>
+                            <th>GG Number</th>
+                            <th>Month</th>
+                            <th>Start ODO</th>
+                            <th>End ODO</th>
+                            <th>Site</th>
+                            <th>User/Ref</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _results)
+                        {
+                            <tr>
+                                <td>@item.log_code</td>
+                                <td>@item.vmf_code</td>
+                                <td>@item.month.ToString("yyyy/MM/dd")</td>
+                                <td>@item.start_odo</td>
+                                <td>@item.end_odo</td>
+                                <td>@item.site_code</td>
+                                <td>@(string.IsNullOrWhiteSpace(item.rek_num) ? "-" : item.rek_num)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private bool _loading;
+    private bool _reportLoaded;
+    private bool _messageIsError;
+    private string _message = string.Empty;
+
+    private string _dateTimeDateText = string.Empty;
+    private string _fromTimeText = "00:00:00 AM";
+    private string _endTimeText = "11:59:59 PM";
+
+    private string _userNameText = string.Empty;
+    private string _userInterval = "week";
+
+    private string _fromDateText = string.Empty;
+    private string _toDateText = string.Empty;
+
+    private List<LogsheetDto> _results = new();
+
+    private async Task RunDateTimeReport()
+    {
+        if (!TryParseDate(_dateTimeDateText, out var day))
+        {
+            SetValidationError("Date is required in yyyy/MM/dd format.");
+            return;
+        }
+
+        await LoadAndFilterAsync(all =>
+        {
+            var begin = CombineDateAndTime(day, _fromTimeText, DateTime.MinValue.TimeOfDay);
+            var end = CombineDateAndTime(day, _endTimeText, new TimeSpan(23, 59, 59));
+            return all.Where(l => l.month >= begin.Date && l.month <= end.Date).ToList();
+        }, "Date-Time report generated.");
+    }
+
+    private async Task RunUserReport()
+    {
+        if (string.IsNullOrWhiteSpace(_userNameText))
+        {
+            SetValidationError("User Name is required.");
+            return;
+        }
+
+        await LoadAndFilterAsync(all =>
+        {
+            var windowStart = _userInterval == "month" ? DateTime.Today.AddMonths(-1) : DateTime.Today.AddDays(-7);
+            return all
+                .Where(l => l.month.Date >= windowStart.Date
+                    && !string.IsNullOrWhiteSpace(l.rek_num)
+                    && l.rek_num.Contains(_userNameText, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }, "User report generated.");
+    }
+
+    private async Task RunDateReport()
+    {
+        if (!TryParseDate(_fromDateText, out var beginDate))
+        {
+            SetValidationError("Begin Date is required in yyyy/MM/dd format.");
+            return;
+        }
+
+        if (!TryParseDate(_toDateText, out var endDate))
+        {
+            SetValidationError("End Date is required in yyyy/MM/dd format.");
+            return;
+        }
+
+        await LoadAndFilterAsync(all =>
+            all.Where(l => l.month.Date >= beginDate.Date && l.month.Date <= endDate.Date).ToList(),
+            "Date report generated.");
+    }
+
+    private async Task LoadAndFilterAsync(Func<List<LogsheetDto>, List<LogsheetDto>> filter, string successMessage)
+    {
+        _loading = true;
+        _reportLoaded = false;
+        _message = string.Empty;
+        _messageIsError = false;
+        _results = new();
+
+        try
+        {
+            var all = await LogsheetService.GetAllAsync<LogsheetDto>();
+            _results = filter(all).OrderByDescending(l => l.month).ThenByDescending(l => l.log_code).ToList();
+            _message = successMessage;
+            _reportLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to load logsheets.";
+            _messageIsError = true;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SetValidationError(string message)
+    {
+        _message = message;
+        _messageIsError = true;
+        _reportLoaded = false;
+        _results = new();
+    }
+
+    private static bool TryParseDate(string? value, out DateTime parsedDate)
+    {
+        parsedDate = default;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var normalized = value.Trim().Replace("-", "/");
+        return DateTime.TryParse(normalized, out parsedDate);
+    }
+
+    private static DateTime CombineDateAndTime(DateTime date, string? timeValue, TimeSpan fallback)
+    {
+        if (!string.IsNullOrWhiteSpace(timeValue) && DateTime.TryParse(timeValue, out var parsedTime))
+        {
+            return date.Date.Add(parsedTime.TimeOfDay);
+        }
+
+        return date.Date.Add(fallback);
+    }
+}

@@ -280,6 +280,10 @@ hr {
     white-space: nowrap;
 }
 
+.contract-selected-row td {
+    background: var(--fis-accent-soft);
+}
+
 .contract-action-header {
     text-align: right;
 }

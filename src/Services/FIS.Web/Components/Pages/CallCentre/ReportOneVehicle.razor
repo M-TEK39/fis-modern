@@ -2,9 +2,9 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
 @inject VehicleLookupApiService VehicleLookupService
+@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Incident Report on ONE Vehicle - Fleet Information System</PageTitle>
@@ -15,20 +15,37 @@
             <i class="bx bx-car"></i>
             Incident Report on ONE Vehicle
         </h1>
-        <p class="page-description">Legacy placeholder for CallCentre/RPT_Call_one_gg_main.aspx.</p>
+        <p class="page-description">Vehicle incident lookup by GP or GG number.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu">Report Menu</button>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">GG / Reg Number</label>
-            <input class="form-input" @bind="_searchTerm" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
-        </div>
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <tbody>
+                <tr>
+                    <th>Vehicle Number</th>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GP")" @onchange='() => _searchMode = "GP"' /> GP</label>
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GG")" @onchange='() => _searchMode = "GG"' /> GG</label>
+                            <input class="form-input" style="max-width: 12rem;" @bind="_searchTerm" />
+                            <button class="btn btn-primary btn-sm" @onclick="LoadReport" disabled="@_loading">Submit</button>
+                            <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu" disabled="@_loading">Menu</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-error" : "alert-success")">@_message</div>
+    }
 
     @if (_loading)
     {
@@ -42,7 +59,7 @@
         <div class="empty-state">
             <i class="bx bx-car"></i>
             <h3>No incidents found</h3>
-            <p>Search by vehicle number.</p>
+            <p>Enter a valid vehicle number and submit.</p>
         </div>
     }
     else
@@ -52,7 +69,9 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Reference</th>
+                            <th>Vehicle Number</th>
+                            <th>Reference Number (GMT)</th>
+                            <th>Incident</th>
                             <th>Call Date</th>
                             <th>Caller</th>
                         </tr>
@@ -61,9 +80,11 @@
                         @foreach (var item in _results)
                         {
                             <tr>
+                                <td>@(_searchMode == "GG" ? ValueOrDash(item.GG_number) : ValueOrDash(_searchTerm))</td>
                                 <td>@item.Call_centre_code</td>
+                                <td>@ValueOrDash(item.Incident_type)</td>
                                 <td>@FormatDate(item.Call_date)</td>
-                                <td>@item.Caller_name</td>
+                                <td>@ValueOrDash(item.Caller_name)</td>
                             </tr>
                         }
                     </tbody>
@@ -71,36 +92,54 @@
             </div>
         </div>
     }
-
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/RPT_call_one_gg_main.aspx"
-        Endpoint="api/callcentre/vehicle/1"
-        HttpMethod="GET"
-        ButtonText="Test One Vehicle Report Endpoint"
-        ReportType="call-centre-report-one-vehicle" />
 </div>
 
 @code {
     private bool _loading;
+    private bool _messageIsError;
+    private string _message = string.Empty;
     private string _searchTerm = string.Empty;
+    private string _searchMode = "GP";
     private List<CallCentreDto> _results = new();
+
+    private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
 
     private async Task LoadReport()
     {
+        _message = string.Empty;
+        _results = new();
+
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            _message = "Enter a vehicle number.";
+            _messageIsError = true;
+            return;
+        }
+
         _loading = true;
-        _results = new List<CallCentreDto>();
         try
         {
-            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
-            var vmfCode = matches.FirstOrDefault()?.VmfCode;
-            if (vmfCode.HasValue)
+            var matches = await VehicleLookupService.SearchAsync(_searchTerm.Trim());
+            var selected = matches.FirstOrDefault();
+            if (selected?.VmfCode == null)
             {
-                var all = await CallCentreService.GetAllAsync<CallCentreDto>();
-                _results = all.Where(c => c.vmf_code == vmfCode.Value).ToList();
+                _message = "No vehicle matched the search value.";
+                _messageIsError = true;
+                return;
             }
+
+            var all = await CallCentreService.GetAllAsync<CallCentreDto>();
+            _results = all.Where(c => c.vmf_code == selected.VmfCode).OrderByDescending(c => c.Call_date).ToList();
+
+            _message = _results.Count == 0
+                ? "No incidents found for the selected vehicle."
+                : $"Loaded {_results.Count} incident(s) for vehicle {_searchTerm.Trim().ToUpperInvariant()}.";
+            _messageIsError = _results.Count == 0;
         }
         catch (Exception ex)
         {
+            _message = "Failed to load vehicle incidents.";
+            _messageIsError = true;
             await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
         finally
@@ -109,6 +148,6 @@
         }
     }
 
-    private static string FormatDate(DateTime? date) =>
-        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+    private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

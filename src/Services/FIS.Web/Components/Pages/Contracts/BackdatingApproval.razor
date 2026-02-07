@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using System.Text.Json
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
 @inject SiteApiService SiteService
@@ -218,17 +219,46 @@
         _loadingContracts = true;
         try
         {
-            var apiResult = await ContractService.GetActionAsync("api/contracts/backdating/pending");
+            var apiResult = await ContractService.GetActionAsync("api/contracts/active");
             _apiStatusError = !apiResult.Success;
             _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
 
-            _pendingContracts = await ContractService.GetContractsAsync();
+            var contracts = await ContractService.GetContractsAsync();
+            _pendingContracts = await FilterPendingContractsAsync(contracts);
             await HydratePendingContractsAsync();
         }
         finally
         {
             _loadingContracts = false;
         }
+    }
+
+    private async Task<List<ContractDto>> FilterPendingContractsAsync(List<ContractDto> contracts)
+    {
+        var pending = new List<ContractDto>();
+        foreach (var contract in contracts)
+        {
+            var pendingResponse = await ContractService.GetActionAsync($"api/contracts/{contract.contract_id}/pending");
+            if (!pendingResponse.Success || string.IsNullOrWhiteSpace(pendingResponse.ResponseBody))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(pendingResponse.ResponseBody);
+                if (doc.RootElement.TryGetProperty("isPending", out var isPending) && isPending.GetBoolean())
+                {
+                    pending.Add(contract);
+                }
+            }
+            catch
+            {
+                // Ignore malformed pending responses and continue.
+            }
+        }
+
+        return pending;
     }
 
     private void GoTop() => Navigation.NavigateTo("/contracts/backdating-approval#PageTop");

@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using System.Text.Json
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
 @inject SiteApiService SiteService
@@ -194,7 +195,7 @@
                                 <p>Loading pending contracts...</p>
                             </div>
                         }
-                        else if (_pendingContracts.Count == 0)
+                        else if (FilteredPendingContracts.Count == 0)
                         {
                             <div class="empty-state">
                                 <i class="bx bx-file"></i>
@@ -204,7 +205,7 @@
                         }
                         else
                         {
-                            @foreach (var contract in _pendingContracts)
+                            @foreach (var contract in FilteredPendingContracts)
                             {
                                 <table class="contract-subtable">
                                     <tbody>
@@ -304,11 +305,12 @@
         _loadingContracts = true;
         try
         {
-            var apiResult = await ContractService.GetActionAsync("api/contracts/pending");
+            var apiResult = await ContractService.GetActionAsync("api/contracts/active");
             _apiStatusError = !apiResult.Success;
             _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
 
-            _pendingContracts = await ContractService.GetContractsAsync();
+            var contracts = await ContractService.GetContractsAsync();
+            _pendingContracts = await FilterPendingContractsAsync(contracts);
             await HydratePendingContractsAsync();
         }
         finally
@@ -434,11 +436,78 @@
     private static string GetSite(ContractDto contract)
         => ValueOrDash(contract.site_code?.ToString());
 
+    private List<ContractDto> FilteredPendingContracts
+        => _pendingContracts.Where(MatchesContractTypeFilter).ToList();
+
     private void TogglePermanent(ChangeEventArgs _) => _filterPermanent = !_filterPermanent;
     private void ToggleDaily(ChangeEventArgs _) => _filterDaily = !_filterDaily;
     private void ToggleHourly(ChangeEventArgs _) => _filterHourly = !_filterHourly;
     private void ToggleRelieve(ChangeEventArgs _) => _filterRelieve = !_filterRelieve;
     private void ToggleLease(ChangeEventArgs _) => _filterLease = !_filterLease;
+
+    private bool MatchesContractTypeFilter(ContractDto contract)
+    {
+        var contractType = (GetContractType(contract) ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(contractType))
+        {
+            return true;
+        }
+
+        if ((contractType.Contains("permanent") || contractType.Contains("perm")) && !_filterPermanent)
+        {
+            return false;
+        }
+
+        if (contractType.Contains("daily") && !_filterDaily)
+        {
+            return false;
+        }
+
+        if (contractType.Contains("hourly") && !_filterHourly)
+        {
+            return false;
+        }
+
+        if ((contractType.Contains("relieve") || contractType.Contains("relief")) && !_filterRelieve)
+        {
+            return false;
+        }
+
+        if (contractType.Contains("lease") && !_filterLease)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task<List<ContractDto>> FilterPendingContractsAsync(List<ContractDto> contracts)
+    {
+        var pending = new List<ContractDto>();
+        foreach (var contract in contracts)
+        {
+            var pendingResponse = await ContractService.GetActionAsync($"api/contracts/{contract.contract_id}/pending");
+            if (!pendingResponse.Success || string.IsNullOrWhiteSpace(pendingResponse.ResponseBody))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(pendingResponse.ResponseBody);
+                if (doc.RootElement.TryGetProperty("isPending", out var isPending) && isPending.GetBoolean())
+                {
+                    pending.Add(contract);
+                }
+            }
+            catch
+            {
+                // Ignore malformed pending responses and continue.
+            }
+        }
+
+        return pending;
+    }
 
     private async Task HydratePendingContractsAsync()
     {

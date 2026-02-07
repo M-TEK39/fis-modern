@@ -171,6 +171,83 @@ public class Program
         await dbContext.SaveChangesAsync();
 
         Console.WriteLine("  ✓ Credentials and mappings seeded.");
+
+        // Seed User Profiles (user_access_old1 table) with FirstName/LastName for login
+        Console.WriteLine("  🧑 Seeding user profiles (FirstName, LastName, etc.)...");
+
+        var userProfiles = new[]
+        {
+            new UserAccessOld
+            {
+                user_access_code = 1,
+                FirstName = "Murcus",
+                LastName = "Developer",
+                E_Mail = "murcus@corptech.co.za",
+                telephone = "+27 11 123 4567",
+                password = "Password123!", // TODO: Hash in production
+                user_status = "Active",
+                user_active = true,
+                Site_code = 1,
+                Position_Code = 1,
+                AccessLevel = 1,
+                date_created = DateTime.UtcNow,
+                is_deleted = false
+            },
+            new UserAccessOld
+            {
+                user_access_code = 2,
+                FirstName = "Admin",
+                LastName = "User",
+                E_Mail = "xxodbeats@gmail.com",
+                telephone = "+27 82 555 1234",
+                password = "Password123!",
+                user_status = "Active",
+                user_active = true,
+                Site_code = 1,
+                Position_Code = 1,
+                AccessLevel = 1,
+                date_created = DateTime.UtcNow,
+                is_deleted = false
+            },
+            new UserAccessOld
+            {
+                user_access_code = 3,
+                FirstName = "IT",
+                LastName = "Support",
+                E_Mail = "It@kulungwana.co.za",
+                telephone = "+27 11 987 6543",
+                password = "Password123!",
+                user_status = "Active",
+                user_active = true,
+                Site_code = 1,
+                Position_Code = 2,
+                AccessLevel = 2,
+                date_created = DateTime.UtcNow,
+                is_deleted = false
+            },
+            new UserAccessOld
+            {
+                user_access_code = 4,
+                FirstName = "Backup",
+                LastName = "Admin",
+                E_Mail = "info.backup@kulungwana.co.za",
+                telephone = "+27 11 987 6544",
+                password = "Password123!",
+                user_status = "Active",
+                user_active = true,
+                Site_code = 1,
+                Position_Code = 1,
+                AccessLevel = 1,
+                date_created = DateTime.UtcNow,
+                is_deleted = false
+            }
+        };
+
+        dbContext.UserAccessOlds.AddRange(userProfiles);
+        await dbContext.SaveChangesAsync();
+
+        Console.WriteLine($"  ✓ Added {userProfiles.Length} user profiles with FirstName/LastName");
+        Console.WriteLine("  📝 Test login: FirstName='Murcus', Password='Password123!'");
     }
 
     private static async Task SeedReferenceData(FisDbContext dbContext)

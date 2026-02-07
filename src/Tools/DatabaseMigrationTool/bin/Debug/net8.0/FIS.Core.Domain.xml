@@ -1602,6 +1602,118 @@
             Maps to the actual legacy TS_Users table with only 3 fields
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster">
+            <summary>
+            Pre-Vehicle Master Entity - Tracks vehicle inception authorization workflow
+            Maps to legacy 'pre_vehicle_master' table
+            Manages approve/reject flow for new vehicle captures before they become active
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.temp_vmf_code">
+            <summary>
+            Primary key - Temporary VMF code for pre-capture
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.chassis_number">
+            <summary>
+            Vehicle chassis number (VIN) - unique identifier for pre-capture
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.engine_number">
+            <summary>
+            Engine number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.model_code">
+            <summary>
+            Model code - FK to model table
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.registration_number">
+            <summary>
+            Registration number
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.colour">
+            <summary>
+            Color of the vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.purchase_amount">
+            <summary>
+            Purchase amount
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.purchase_date">
+            <summary>
+            Purchase date
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.purchase_from">
+            <summary>
+            Purchased from (vendor/supplier)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.take_on_date">
+            <summary>
+            Take on date - when vehicle enters fleet
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.take_on_odo">
+            <summary>
+            Take on odometer reading
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.replaced_gg_number">
+            <summary>
+            Fleet number being replaced (if applicable)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.Fleet_Notes">
+            <summary>
+            Fleet management comments/notes
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.damage_status">
+            <summary>
+            Damage status flag (Y/N)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.damages_comment">
+            <summary>
+            Damage description/comments
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.Authority_Status">
+            <summary>
+            Authorization status: "Awaiting Authorization", "Authorized", "Rejected"
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.authorized_by_user_code">
+            <summary>
+            User code who authorized/rejected the vehicle
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.authorization_date">
+            <summary>
+            Date/time when authorization decision was made
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.rejection_reason">
+            <summary>
+            Rejection reason (if rejected)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.authorization_comment">
+            <summary>
+            Authorization comments
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.PreVehicleMaster.vmf_code">
+            <summary>
+            Vehicle VMF code (if already authorized and moved to vehicle_master)
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Vehicles.TempFleetNote">
             <summary>
             TempFleetNote Entity - EXACT legacy schema match

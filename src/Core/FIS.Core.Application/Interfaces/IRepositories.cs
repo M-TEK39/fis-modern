@@ -1,8 +1,10 @@
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Auth;
 using FIS.Core.Domain.Entities.Drivers;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Core.Domain.Entities.System;
 using FIS.Core.Domain.Entities.ReferenceData;
+using FIS.Core.Domain.Entities.Vehicles;
 using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Application.Interfaces;
@@ -22,6 +24,26 @@ public interface IVehicleRepository
     Task<Vehicle> CreateAsync(Vehicle vehicle, int currentUserId);
     Task UpdateAsync(Vehicle vehicle, int currentUserId);
     Task DeleteAsync(int vmfCode, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for vehicle authorization (pre-capture) operations
+/// </summary>
+public interface IVehicleAuthorizationRepository
+{
+    Task<PreVehicleMaster?> GetByIdAsync(int tempVmfCode);
+    Task<PreVehicleMaster?> GetByChassisNumberAsync(string chassisNumber);
+    Task<IEnumerable<PreVehicleMaster>> GetPendingAuthorizationsAsync();
+    Task<IEnumerable<PreVehicleMaster>> GetAuthorizedVehiclesAsync();
+    Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync();
+    Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status);
+    Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(DateTime? startDate = null, DateTime? endDate = null);
+    Task<PreVehicleMaster> CreateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
+    Task UpdateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
+    Task ApproveAsync(int tempVmfCode, int authorizedByUserId, string? comment = null);
+    Task RejectAsync(int tempVmfCode, int rejectedByUserId, string rejectionReason, string? comment = null);
+    Task AddCommentAsync(int tempVmfCode, string comment, int modifiedByUserId);
+    Task DeleteAsync(int tempVmfCode, int currentUserId);
 }
 
 /// <summary>
@@ -53,6 +75,23 @@ public interface IUserRepository
     Task<User> CreateAsync(User user, int currentUserId);
     Task UpdateAsync(User user, int currentUserId);
     Task DeleteAsync(int userAccessCode, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for user profile operations (user_access_old1 table)
+/// </summary>
+public interface IUserProfileRepository
+{
+    Task<UserAccessOld?> GetByIdAsync(short userAccessCode);
+    Task<UserAccessOld?> GetByFirstNameAsync(string firstName);
+    Task<UserAccessOld?> GetByEmailAsync(string email);
+    Task<IEnumerable<UserAccessOld>> GetAllActiveAsync();
+    Task<IEnumerable<UserAccessOld>> GetBySiteAsync(short siteCode);
+    Task<IEnumerable<UserAccessOld>> SearchAsync(string searchTerm);
+    Task<UserAccessOld> CreateAsync(UserAccessOld userProfile, int currentUserId);
+    Task UpdateAsync(UserAccessOld userProfile, int currentUserId);
+    Task DeleteAsync(short userAccessCode, int currentUserId);
+    Task<bool> ValidateCredentialsAsync(string firstName, string password);
 }
 
 /// <summary>

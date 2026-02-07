@@ -55,7 +55,7 @@
                         </div>
                         <div class="contract-action-group">
                             <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("validate")' disabled="@_actionRunning">Validate Form Data</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("submit")' disabled="@_actionRunning">Submit Form</button>
+                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("submit")' disabled="@_actionRunning">Submit For approval</button>
                             <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
                         </div>
                         <div class="contract-action-group">
@@ -101,7 +101,8 @@
             <tbody>
                 <tr>
                     <td>
-                        <textarea class="form-input contract-notes" rows="4" placeholder="Approval notes..."></textarea>
+                        <textarea class="form-input contract-notes" rows="4" placeholder="Approval notes..." @bind="_approvalNotes"></textarea>
+                        <input class="form-input" style="margin-top:0.5rem;" placeholder="Decline reason (required for decline actions)" @bind="_declineReason" />
                     </td>
                 </tr>
             </tbody>
@@ -150,9 +151,9 @@
                                 </tr>
                                 <tr>
                                         <th>Hire Type</th>
-                                        <td>@ValueOrDash(_contract?.contractor_name)</td>
+                                        <td>@ValueOrDash(_vehicle?.type_name ?? GetContractTypeLabel(_contract?.contractor_name))</td>
                                         <th>Hired From</th>
-                                        <td>@ValueOrDash(_contract?.contractor_name)</td>
+                                        <td>@ValueOrDash(_vehicle?.purchased_from)</td>
                                 </tr>
                                 <tr>
                                         <th>Status</th>
@@ -339,17 +340,13 @@
                                     <th rowspan="3">Contract Client</th>
                                     <th>Department</th>
                                     <td colspan="3">
-                                        <select class="form-select">
-                                            <option value="">Select Department</option>
-                                        </select>
+                                        <input class="form-input" readonly value="@ValueOrDash(_department?.department_description)" />
                                     </td>
                                 </tr>
                                 <tr>
                                     <th>Site</th>
                                     <td colspan="3">
-                                        <select class="form-select">
-                                            <option value="">Select Site</option>
-                                        </select>
+                                        <input class="form-input" readonly value="@ValueOrDash(_site?.Description)" />
                                     </td>
                                 </tr>
                                 <tr>
@@ -358,21 +355,17 @@
                                 <tr>
                                     <th>Authoriser Name</th>
                                     <td colspan="2">
-                                        <select class="form-select">
-                                            <option value="">Select Authoriser</option>
-                                        </select>
+                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.contractor_name)" />
                                     </td>
                                     <th>Authorization</th>
                                     <td>
-                                        <input class="form-input" />
+                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.status)" />
                                     </td>
                                 </tr>
                                 <tr>
                                     <th>Driver Name</th>
                                     <td colspan="2">
-                                        <select class="form-select">
-                                            <option value="">Select Driver</option>
-                                        </select>
+                                        <input class="form-input" readonly value="-" />
                                     </td>
                                     <td colspan="2">
                                         <input type="checkbox" /> Valid Driver's License <span class="contract-muted">(expiry)</span>
@@ -414,7 +407,7 @@
                                 <tr>
                                     <th>Notes</th>
                                     <td colspan="4">
-                                        <textarea class="form-input contract-notes" rows="3"></textarea>
+                                        <textarea class="form-input contract-notes" rows="3" @bind="_approvalNotes"></textarea>
                                     </td>
                                 </tr>
                             </tbody>
@@ -495,23 +488,21 @@
                                 <tr>
                                     <th>Contract Type</th>
                                     <td>
-                                        <select class="form-select">
-                                            <option value="">Select Type</option>
-                                        </select>
+                                        <input class="form-input" readonly value="@GetContractTypeLabel(_contract?.contractor_name)" />
                                     </td>
                                     <td colspan="2">
                                         <input type="checkbox" /> Opt-In for Relief Vehicle
                                     </td>
                                     <th>Contract Status</th>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(_contract?.status)</td>
                                     <th>Last Billed Date</th>
-                                    <td>-</td>
+                                    <td>@FormatDate(_contract?.end_date)</td>
                                 </tr>
                                 <tr>
                                     <th>Start Date</th>
-                                    <td><input type="date" class="form-input" /></td>
+                                    <td><input type="date" class="form-input" value="@FormatDateForInput(_contract?.start_date)" readonly /></td>
                                     <th>End Date</th>
-                                    <td><input type="date" class="form-input" disabled /></td>
+                                    <td><input type="date" class="form-input" value="@FormatDateForInput(_contract?.end_date)" readonly /></td>
                                     <th>Contract Period</th>
                                     <td>
                                         <select class="form-select contract-inline-select">
@@ -527,7 +518,7 @@
                                         <span class="contract-muted">Lease Months</span>
                                     </td>
                                     <th>Return Date</th>
-                                    <td><input type="date" class="form-input" /></td>
+                                    <td><input type="date" class="form-input" value="@FormatDateForInput(_contract?.end_date)" readonly /></td>
                                 </tr>
                                 <tr>
                                     <th>Back Dating Required</th>
@@ -539,18 +530,18 @@
                                 </tr>
                                 <tr>
                                     <th>Start Odometer</th>
-                                    <td><input type="number" class="form-input" /></td>
+                                    <td><input type="number" class="form-input" value="@(_vehicle?.current_odo?.ToString() ?? "")" readonly /></td>
                                     <th>End Odometer</th>
-                                    <td><input type="number" class="form-input" disabled /></td>
+                                    <td><input type="number" class="form-input" value="@(_vehicle?.current_odo?.ToString() ?? "")" readonly /></td>
                                     <th>Contract Kilometers</th>
-                                    <td><input type="number" class="form-input" /></td>
+                                    <td><input type="number" class="form-input" readonly /></td>
                                     <th>End Kilometers</th>
-                                    <td><input type="number" class="form-input" disabled /></td>
+                                    <td><input type="number" class="form-input" value="@(_vehicle?.current_odo?.ToString() ?? "")" readonly /></td>
                                 </tr>
                                 <tr>
                                     <th>Notes</th>
                                     <td colspan="7">
-                                        <textarea class="form-input contract-notes" rows="3"></textarea>
+                                        <textarea class="form-input contract-notes" rows="3" @bind="_approvalNotes"></textarea>
                                     </td>
                                 </tr>
                             </tbody>
@@ -614,6 +605,8 @@
     private bool _actionRunning;
     private bool _actionStatusError;
     private string _actionStatusMessage = string.Empty;
+    private string _approvalNotes = string.Empty;
+    private string _declineReason = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -648,6 +641,8 @@
                     _department = await DepartmentService.GetDepartmentAsync(_site.DepartmentCode.Value);
                 }
             }
+
+            _approvalNotes = _contract?.contract_notes ?? string.Empty;
         }
         catch
         {
@@ -685,6 +680,21 @@
 
         var contractId = ResolveContractId();
         var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code ?? 0;
+        if (contractId <= 0 && action != "open" && action != "validate")
+        {
+            _actionStatusError = true;
+            _actionStatusMessage = "Contract ID is required for this action.";
+            _actionRunning = false;
+            return;
+        }
+
+        if ((action == "decline" || action == "decline-correction") && string.IsNullOrWhiteSpace(_declineReason))
+        {
+            _actionStatusError = true;
+            _actionStatusMessage = "Decline reason is required.";
+            _actionRunning = false;
+            return;
+        }
 
         var endpoint = action switch
         {
@@ -710,15 +720,73 @@
             {
                 VmfCode = vmfCode,
                 SiteCode = _contract?.site_code ?? (short)0,
-                StartOdometer = 0,
-                Notes = "UI wiring request"
+                StartOdometer = _vehicle?.current_odo,
+                Notes = _approvalNotes
             });
         }
         else if (action == "extend")
         {
             result = await ContractService.PutActionAsync(endpoint, new
             {
-                NewTargetReturnDate = DateTime.UtcNow.Date.AddDays(7)
+                NewTargetReturnDate = DateTime.UtcNow.Date.AddDays(30)
+            });
+        }
+        else if (action == "close")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                EndDate = DateTime.UtcNow.Date,
+                EndOdometer = Math.Max(_vehicle?.current_odo ?? 0, 0),
+                Notes = _approvalNotes
+            });
+        }
+        else if (action == "reassign")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                NewVmfCode = vmfCode > 0 ? (int?)vmfCode : null,
+                NewSiteCode = _contract?.site_code,
+                Reason = string.IsNullOrWhiteSpace(_approvalNotes) ? "Reassignment requested from contract detail." : _approvalNotes
+            });
+        }
+        else if (action == "relief")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                ReliefVmfCode = vmfCode,
+                StartOdometer = _vehicle?.current_odo,
+                TargetReturnDate = DateTime.UtcNow.Date.AddDays(7),
+                Reason = string.IsNullOrWhiteSpace(_approvalNotes) ? "Relief contract requested from contract detail." : _approvalNotes
+            });
+        }
+        else if (action == "validate")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                VmfCode = vmfCode,
+                SiteCode = _contract?.site_code ?? (short)0,
+                StartOdometer = _vehicle?.current_odo
+            });
+        }
+        else if (action == "cancel")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                CancellationReason = _declineReason
+            });
+        }
+        else if (action == "approve" || action == "approve-activate")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                ApprovalNotes = _approvalNotes
+            });
+        }
+        else if (action == "decline" || action == "decline-correction")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                DeclineReason = _declineReason
             });
         }
         else if (action == "review-pending")
@@ -727,12 +795,7 @@
         }
         else
         {
-            result = await ContractService.PostActionAsync(endpoint, new
-            {
-                ContractCode = contractId,
-                VmfCode = vmfCode,
-                Notes = "UI wiring request"
-            });
+            result = await ContractService.PostActionAsync(endpoint, new { });
         }
 
         _actionStatusError = !result.Success;
@@ -751,4 +814,22 @@
     }
 
     private static string? ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? date) => date?.ToString("yyyy/MM/dd") ?? "-";
+
+    private static string FormatDateForInput(DateTime? date) => date?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private static string GetContractTypeLabel(string? contractTypeCode)
+    {
+        var code = (contractTypeCode ?? string.Empty).Trim().ToUpperInvariant();
+        return code switch
+        {
+            "A" => "Daily",
+            "B" => "Hourly",
+            "C" => "Permanent",
+            "D" => "Relieve",
+            "E" => "Lease",
+            _ => string.IsNullOrWhiteSpace(code) ? "-" : code
+        };
+    }
 }

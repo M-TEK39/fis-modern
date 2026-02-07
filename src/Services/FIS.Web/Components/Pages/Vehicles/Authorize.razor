@@ -1,13 +1,502 @@
 @page "/vehicles/authorize"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
 @using FIS.Web.Components.Shared
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Authorize Captured Vehicle Master Information"
-    Description="Legacy authorization workflow (UI-only until endpoints are available)."
-    LegacyPath="Legacy authorization workflow (UI-only until endpoints are available)."
-    Endpoint="api/vehicle-inception/awaiting-authorization"
-    HttpMethod="GET"
-    ReportType="vehicle-inception-awaiting"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Authorize Captured Vehicle Master Information</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-check-shield"></i>
+            Authorize Captured Vehicle Information
+        </h1>
+        <p class="page-description">Legacy authorization queues for rejected, awaiting, and authorized vehicles.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick="ToggleShowAllAuthorized">
+            @(_showAllAuthorized ? "Show Grouped" : "View All")
+        </button>
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back to Vehicle Master</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusError ? "alert-error" : "alert-success")">@_statusMessage</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading authorization queues...</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container" style="margin-bottom:1rem;">
+            <div class="table-header">
+                <span class="table-title">REJECTED VEHICLE LIST (@_rejectedVehicles.Count)</span>
+            </div>
+            @if (_rejectedVehicles.Count == 0)
+            {
+                <div class="empty-state"><p>No Rejected Vehicles</p></div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Chassis NO</th>
+                                <th>Model</th>
+                                <th>Year Model</th>
+                                <th>Engine NO</th>
+                                <th>Hire Type</th>
+                                <th>Hired From</th>
+                                <th>Notes</th>
+                                <th>Authority Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var vehicle in _rejectedVehicles)
+                            {
+                                <tr>
+                                    <td>@ValueOrDash(vehicle.ChassisNumber)</td>
+                                    <td>@ValueOrDash(vehicle.ModelDescription)</td>
+                                    <td>@GetYear(vehicle.PurchaseDate)</td>
+                                    <td>@ValueOrDash(vehicle.EngineNumber)</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>@ValueOrDash(vehicle.FleetNotes)</td>
+                                    <td>@ValueOrDash(vehicle.AuthorityStatus)</td>
+                                    <td>
+                                        <button class="btn btn-secondary btn-sm" @onclick="() => OpenReviewModal(vehicle)">Review</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="table-container" style="margin-bottom:1rem;">
+            <div class="table-header">
+                <span class="table-title">AWAITING AUTHORIZATION VEHICLE LIST (@_awaitingVehicles.Count)</span>
+            </div>
+            @if (_awaitingVehicles.Count == 0)
+            {
+                <div class="empty-state"><p>No Vehicles awaiting Authorization</p></div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Chassis NO</th>
+                                <th>Model</th>
+                                <th>Year Model</th>
+                                <th>Engine Number</th>
+                                <th>Location</th>
+                                <th>Hire Type</th>
+                                <th>Hired From</th>
+                                <th>Purchase Amount</th>
+                                <th>Purchase From</th>
+                                <th>Site Name</th>
+                                <th>Authority Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var vehicle in _awaitingVehicles)
+                            {
+                                <tr>
+                                    <td>@ValueOrDash(vehicle.ChassisNumber)</td>
+                                    <td>@ValueOrDash(vehicle.ModelDescription)</td>
+                                    <td>@GetYear(vehicle.PurchaseDate)</td>
+                                    <td>@ValueOrDash(vehicle.EngineNumber)</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>@FormatAmount(vehicle.PurchaseAmount)</td>
+                                    <td>@ValueOrDash(vehicle.PurchaseFrom)</td>
+                                    <td>-</td>
+                                    <td>@ValueOrDash(vehicle.AuthorityStatus)</td>
+                                    <td>
+                                        <button class="btn btn-primary btn-sm" @onclick="() => OpenReviewModal(vehicle)">Review</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">AUTHORIZED VEHICLES READY FOR PRINTING AND INCEPTION INTO THE DATABASE (@_authorizedVehicles.Count)</span>
+            </div>
+            @if (_authorizedVehicles.Count == 0)
+            {
+                <div class="empty-state"><p>No Authorized Vehicles</p></div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Chassis NO</th>
+                                <th>GG Number</th>
+                                <th>Model</th>
+                                <th>Year Model</th>
+                                <th>Engine NO</th>
+                                <th>Hire Type</th>
+                                <th>Hired From</th>
+                                <th>Notes</th>
+                                <th>Authority Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var vehicle in VisibleAuthorizedVehicles())
+                            {
+                                <tr>
+                                    <td>@ValueOrDash(vehicle.ChassisNumber)</td>
+                                    <td>@(vehicle.VmfCode?.ToString() ?? "-")</td>
+                                    <td>@ValueOrDash(vehicle.ModelDescription)</td>
+                                    <td>@GetYear(vehicle.PurchaseDate)</td>
+                                    <td>@ValueOrDash(vehicle.EngineNumber)</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                    <td>@ValueOrDash(vehicle.FleetNotes)</td>
+                                    <td>@ValueOrDash(vehicle.AuthorityStatus)</td>
+                                    <td>
+                                        <button class="btn btn-secondary btn-sm" @onclick="() => OpenReviewModal(vehicle)">View</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_showReviewModal && _selectedVehicle != null)
+{
+    <Modal IsVisible="_showReviewModal"
+           Title="Authorize Captured Vehicle Master Information"
+           Size="Modal.ModalSize.Large"
+           ShowFooter="false"
+           ShowCloseButton="true"
+           OnCancel="CloseReviewModal">
+        <ChildContent>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Current GG Number</label>
+                    <input class="form-input" value="@(_selectedVehicle.VmfCode?.ToString() ?? "-")" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Status</label>
+                    <input class="form-input" value="@ValueOrDash(_selectedVehicle.AuthorityStatus)" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Make & Model</label>
+                    <input class="form-input" value="@ValueOrDash(_selectedVehicle.ModelDescription)" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Year Manufactured</label>
+                    <input class="form-input" value="@GetYear(_selectedVehicle.PurchaseDate)" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">VIN/Chassis Number</label>
+                    <input class="form-input" value="@ValueOrDash(_selectedVehicle.ChassisNumber)" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Engine Number</label>
+                    <input class="form-input" value="@ValueOrDash(_selectedVehicle.EngineNumber)" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Purchase Date</label>
+                    <input class="form-input" value="@FormatDate(_selectedVehicle.PurchaseDate)" readonly />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Purchase Amount</label>
+                    <input class="form-input" value="@FormatAmount(_selectedVehicle.PurchaseAmount)" readonly />
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label">Fleet Notes</label>
+                    <textarea class="form-input" rows="2" readonly>@_selectedVehicle.FleetNotes</textarea>
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label">Authorizer's Comment</label>
+                    <textarea class="form-input" rows="3" @bind="_authorizerComment"></textarea>
+                </div>
+                <div class="form-field form-group-full">
+                    <label class="form-label">Rejection Reason (required when rejecting)</label>
+                    <input class="form-input" @bind="_rejectionReason" />
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_selectedVehicle.RejectionReason))
+                {
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Latest Rejection Reason</label>
+                        <textarea class="form-input" rows="2" readonly>@_selectedVehicle.RejectionReason</textarea>
+                    </div>
+                }
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" @onclick="CloseReviewModal" disabled="@_actionRunning">Close</button>
+                <button type="button" class="btn btn-secondary" @onclick="AddCommentAsync" disabled="@_actionRunning">
+                    @if (_actionRunning)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>Add Comment</span>
+                    }
+                </button>
+                <button type="button" class="btn btn-primary" @onclick="ApproveAsync" disabled="@(_actionRunning || !CanApproveOrReject())">
+                    Approve
+                </button>
+                <button type="button" class="btn btn-danger" @onclick="RejectAsync" disabled="@(_actionRunning || !CanApproveOrReject())">
+                    Reject
+                </button>
+            </div>
+        </ChildContent>
+    </Modal>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _actionRunning;
+    private bool _showAllAuthorized;
+    private bool _showReviewModal;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+    private string _authorizerComment = string.Empty;
+    private string _rejectionReason = string.Empty;
+    private VehicleAuthorizationDto? _selectedVehicle;
+    private List<VehicleAuthorizationDto> _rejectedVehicles = new();
+    private List<VehicleAuthorizationDto> _awaitingVehicles = new();
+    private List<VehicleAuthorizationDto> _authorizedVehicles = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuthorizationQueues();
+    }
+
+    private async Task LoadAuthorizationQueues()
+    {
+        _loading = true;
+        try
+        {
+            var pendingTask = VehicleService.GetPendingAuthorizationsAsync();
+            var rejectedTask = VehicleService.GetRejectedAuthorizationsAsync();
+            var authorizedTask = VehicleService.GetAuthorizedAuthorizationsAsync();
+
+            await Task.WhenAll(pendingTask, rejectedTask, authorizedTask);
+
+            _awaitingVehicles = pendingTask.Result.OrderBy(v => v.ChassisNumber).ToList();
+            _rejectedVehicles = rejectedTask.Result.OrderByDescending(v => v.AuthorizationDate).ToList();
+            _authorizedVehicles = authorizedTask.Result.OrderByDescending(v => v.AuthorizationDate).ToList();
+        }
+        catch (Exception ex)
+        {
+            _statusError = true;
+            _statusMessage = "Failed to load authorization queues.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private IEnumerable<VehicleAuthorizationDto> VisibleAuthorizedVehicles()
+    {
+        if (_showAllAuthorized)
+        {
+            return _authorizedVehicles;
+        }
+
+        return _authorizedVehicles.Take(25);
+    }
+
+    private void ToggleShowAllAuthorized()
+    {
+        _showAllAuthorized = !_showAllAuthorized;
+    }
+
+    private void OpenReviewModal(VehicleAuthorizationDto vehicle)
+    {
+        _selectedVehicle = vehicle;
+        _authorizerComment = string.Empty;
+        _rejectionReason = string.Empty;
+        _showReviewModal = true;
+    }
+
+    private async Task CloseReviewModal()
+    {
+        _selectedVehicle = null;
+        _authorizerComment = string.Empty;
+        _rejectionReason = string.Empty;
+        _showReviewModal = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool CanApproveOrReject()
+    {
+        return string.Equals(_selectedVehicle?.AuthorityStatus, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task AddCommentAsync()
+    {
+        if (_selectedVehicle == null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_authorizerComment))
+        {
+            _statusError = true;
+            _statusMessage = "Comment cannot be empty.";
+            return;
+        }
+
+        _actionRunning = true;
+        try
+        {
+            var ok = await VehicleService.AddVehicleAuthorizationCommentAsync(_selectedVehicle.TempVmfCode, _authorizerComment.Trim());
+            if (!ok)
+            {
+                _statusError = true;
+                _statusMessage = "Failed to add comment.";
+                return;
+            }
+
+            _statusError = false;
+            _statusMessage = $"Comment saved for chassis {_selectedVehicle.ChassisNumber}.";
+            await LoadAuthorizationQueues();
+            await CloseReviewModal();
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (_selectedVehicle == null || !CanApproveOrReject())
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_authorizerComment))
+        {
+            _statusError = true;
+            _statusMessage = "Please supply a comment when accepting vehicle details.";
+            return;
+        }
+
+        _actionRunning = true;
+        try
+        {
+            var ok = await VehicleService.ApproveVehicleAuthorizationAsync(_selectedVehicle.TempVmfCode, _authorizerComment.Trim());
+            if (!ok)
+            {
+                _statusError = true;
+                _statusMessage = "Failed to approve vehicle authorization.";
+                return;
+            }
+
+            _statusError = false;
+            _statusMessage = $"Vehicle {_selectedVehicle.ChassisNumber} approved successfully.";
+            await LoadAuthorizationQueues();
+            await CloseReviewModal();
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        if (_selectedVehicle == null || !CanApproveOrReject())
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_authorizerComment))
+        {
+            _statusError = true;
+            _statusMessage = "Please supply a comment when rejecting vehicle details.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_rejectionReason))
+        {
+            _statusError = true;
+            _statusMessage = "Rejection reason is required.";
+            return;
+        }
+
+        _actionRunning = true;
+        try
+        {
+            var ok = await VehicleService.RejectVehicleAuthorizationAsync(
+                _selectedVehicle.TempVmfCode,
+                _rejectionReason.Trim(),
+                _authorizerComment.Trim());
+            if (!ok)
+            {
+                _statusError = true;
+                _statusMessage = "Failed to reject vehicle authorization.";
+                return;
+            }
+
+            _statusError = false;
+            _statusMessage = $"Vehicle {_selectedVehicle.ChassisNumber} rejected successfully.";
+            await LoadAuthorizationQueues();
+            await CloseReviewModal();
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private static string FormatDate(DateTime? value)
+    {
+        return value.HasValue ? value.Value.ToString("yyyy/MM/dd") : "-";
+    }
+
+    private static string FormatAmount(decimal? value)
+    {
+        return value.HasValue ? value.Value.ToString("N2") : "-";
+    }
+
+    private static string GetYear(DateTime? value)
+    {
+        return value.HasValue ? value.Value.Year.ToString() : "-";
+    }
+}

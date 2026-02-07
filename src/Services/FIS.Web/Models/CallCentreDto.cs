@@ -6,6 +6,7 @@ public class CallCentreDto
     public int? vmf_code { get; set; }
     public DateTime? Call_time { get; set; }
     public DateTime? Call_date { get; set; }
+    public string? Incident_type { get; set; }
     public string? Capture_name { get; set; }
     public short? User_access_code { get; set; }
     public string? Caller_name { get; set; }
@@ -17,4 +18,6 @@ public class CallCentreDto
     public short? Driver_Site { get; set; }
     public string? Driver_tel { get; set; }
     public string? Driver_cell { get; set; }
+    public DateTime date_created { get; set; }
+    public DateTime? date_updated { get; set; }
 }

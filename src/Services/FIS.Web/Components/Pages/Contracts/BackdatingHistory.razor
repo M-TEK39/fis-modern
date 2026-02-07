@@ -8,6 +8,7 @@
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicle Contract History Backdating</PageTitle>
 <a id="PageTop"></a>
@@ -146,12 +147,12 @@
                         {
                             @foreach (var contract in _historyContracts)
                             {
-                                <tr>
+                                <tr class="@GetHistoryRowClass(contract)">
                                     <td>@contract.contract_id</td>
                                     <td>@FormatDate(contract.start_date)</td>
                                     <td>@FormatDate(contract.end_date)</td>
-                                    <td>-</td>
-                                    <td>-</td>
+                                    <td>@GetOdometerDisplay(_editStartOdometer, contract)</td>
+                                    <td>@GetOdometerDisplay(_editEndOdometer, contract)</td>
                                     <td>@ValueOrDash(contract.status)</td>
                                     <td>@ValueOrDash(contract.Department?.department_number)</td>
                                     <td>@ValueOrDash(contract.Department?.department_description)</td>
@@ -161,7 +162,7 @@
                                     <td>-</td>
                                     <td>-</td>
                                     <td>
-                                        <button class="btn btn-secondary btn-sm" type="button">View</button>
+                                        <button class="btn btn-secondary btn-sm" type="button" @onclick="() => SelectContractForEdit(contract)">View</button>
                                     </td>
                                 </tr>
                             }
@@ -177,38 +178,38 @@
             <tbody>
                 <tr>
                     <td>Contract Code:</td>
-                    <td><input class="form-input" /></td>
+                    <td><input class="form-input" value="@(_selectedHistoryContract?.contract_id.ToString() ?? string.Empty)" readonly /></td>
                 </tr>
                 <tr>
                     <td>Department:</td>
-                    <td><input class="form-input" /></td>
+                    <td><input class="form-input" value="@(_selectedHistoryContract?.Department?.department_description ?? string.Empty)" readonly /></td>
                 </tr>
                 <tr>
                     <td>Site:</td>
-                    <td><input class="form-input" /></td>
+                    <td><input class="form-input" value="@(_selectedHistoryContract == null ? string.Empty : GetSiteName(_selectedHistoryContract))" readonly /></td>
                 </tr>
                 <tr>
                     <td>Start Date:</td>
-                    <td><input type="date" class="form-input" /></td>
+                    <td><input class="form-input" placeholder="yyyy/MM/dd" @bind="_editStartDate" disabled="@(_selectedHistoryContract == null)" /></td>
                 </tr>
                 <tr>
                     <td>End Date:</td>
-                    <td><input type="date" class="form-input" /></td>
+                    <td><input class="form-input" placeholder="yyyy/MM/dd" @bind="_editEndDate" disabled="@(_selectedHistoryContract == null)" /></td>
                 </tr>
                 <tr>
                     <td>Start Odometer:</td>
-                    <td><input type="number" class="form-input" /></td>
+                    <td><input type="number" class="form-input" @bind="_editStartOdometer" disabled="@(_selectedHistoryContract == null)" /></td>
                 </tr>
                 <tr>
                     <td>End Odometer:</td>
                     <td>
-                        <input type="number" class="form-input" />
-                        <span class="contract-muted" style="margin-left: 0.5rem;">Selected Index</span>
+                        <input type="number" class="form-input" @bind="_editEndOdometer" disabled="@(_selectedHistoryContract == null)" />
+                        <span class="contract-muted" style="margin-left: 0.5rem;">@(_selectedHistoryContract == null ? "Select a contract row to edit" : $"Selected Contract: {_selectedHistoryContract.contract_id}")</span>
                     </td>
                 </tr>
                 <tr>
                     <td colspan="2">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="SubmitSelectedContractUpdate" disabled="@(_selectedHistoryContract == null || _submitting)">Submit</button>
                     </td>
                 </tr>
             </tbody>
@@ -229,6 +230,12 @@
     private string? _searchError;
     private VehicleDto? _selectedVehicle;
     private List<ContractDto> _historyContracts = new();
+    private ContractDto? _selectedHistoryContract;
+    private string _editStartDate = string.Empty;
+    private string _editEndDate = string.Empty;
+    private int? _editStartOdometer;
+    private int? _editEndOdometer;
+    private bool _submitting;
     private Dictionary<short, string> _siteNames = new();
     private List<DriverDto> _drivers = new();
     private bool _apiStatusError;
@@ -249,6 +256,7 @@
         _selectedVehicle = null;
         _feedbackMessage = "";
         _historyContracts = new();
+        _selectedHistoryContract = null;
 
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
@@ -282,6 +290,7 @@
         _selectedVehicle = null;
         _feedbackMessage = "";
         _historyContracts = new();
+        _selectedHistoryContract = null;
     }
 
     private async Task LoadContractHistory()
@@ -302,6 +311,16 @@
             .ToList();
 
         await HydrateHistoryContractsAsync();
+
+        if (_historyContracts.Count > 0)
+        {
+            SelectContractForEdit(_historyContracts[0]);
+        }
+        else
+        {
+            _feedbackMessage = "No Contract History Found";
+            _selectedHistoryContract = null;
+        }
     }
 
     private async Task HydrateHistoryContractsAsync()
@@ -367,6 +386,100 @@
     private static string FormatDate(DateTime? date)
     {
         return date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
+    }
+
+    private static string FormatDateForInput(DateTime? date)
+    {
+        return date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+    }
+
+    private void SelectContractForEdit(ContractDto contract)
+    {
+        _selectedHistoryContract = contract;
+        _editStartDate = FormatDateForInput(contract.start_date);
+        _editEndDate = FormatDateForInput(contract.end_date);
+        _editStartOdometer = null;
+        _editEndOdometer = null;
+        _feedbackMessage = $"Loaded contract {contract.contract_id} for update.";
+    }
+
+    private async Task SubmitSelectedContractUpdate()
+    {
+        if (_selectedHistoryContract == null)
+        {
+            _feedbackMessage = "Select a contract first.";
+            return;
+        }
+
+        if (!TryParseInputDate(_editStartDate, out var startDate))
+        {
+            _feedbackMessage = "Start date is required.";
+            return;
+        }
+
+        DateTime? endDate = null;
+        if (!string.IsNullOrWhiteSpace(_editEndDate))
+        {
+            if (!TryParseInputDate(_editEndDate, out var parsedEndDate))
+            {
+                _feedbackMessage = "End date is invalid.";
+                return;
+            }
+
+            endDate = parsedEndDate;
+        }
+
+        _submitting = true;
+        try
+        {
+            var payload = new ContractUpdateDto
+            {
+                contract_number = _selectedHistoryContract.contract_number,
+                vehicle_registration = _selectedHistoryContract.vehicle_registration,
+                department_code = _selectedHistoryContract.department_code,
+                contractor_name = _selectedHistoryContract.contractor_name,
+                start_date = startDate,
+                end_date = endDate,
+                monthly_cost = _selectedHistoryContract.monthly_cost,
+                status = _selectedHistoryContract.status,
+                contract_notes = _selectedHistoryContract.contract_notes
+            };
+
+            var updated = await ContractService.UpdateContractAsync(_selectedHistoryContract.contract_id, payload);
+            _selectedHistoryContract.start_date = updated.start_date;
+            _selectedHistoryContract.end_date = updated.end_date;
+            _selectedHistoryContract.contract_notes = updated.contract_notes;
+            _feedbackMessage = $"Contract {_selectedHistoryContract.contract_id} updated successfully.";
+        }
+        catch (Exception ex)
+        {
+            _feedbackMessage = $"Failed to update contract {_selectedHistoryContract.contract_id}.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private static bool TryParseInputDate(string value, out DateTime parsedDate)
+    {
+        return DateTime.TryParse(value, out parsedDate);
+    }
+
+    private string GetHistoryRowClass(ContractDto contract)
+    {
+        return _selectedHistoryContract?.contract_id == contract.contract_id ? "contract-selected-row" : string.Empty;
+    }
+
+    private string GetOdometerDisplay(int? editedValue, ContractDto contract)
+    {
+        if (_selectedHistoryContract?.contract_id == contract.contract_id && editedValue.HasValue)
+        {
+            return editedValue.Value.ToString();
+        }
+
+        return "-";
     }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;

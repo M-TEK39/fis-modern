@@ -2,8 +2,8 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
+@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Incident Report on ONE Reference Number - Fleet Information System</PageTitle>
@@ -14,20 +14,36 @@
             <i class="bx bx-file"></i>
             Incident Report on ONE Reference Number
         </h1>
-        <p class="page-description">Legacy placeholder for CallCentre/RPT_Call_one_num_main.aspx.</p>
+        <p class="page-description">Reference lookup by GMT number.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu">Report Menu</button>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">Reference Number</label>
-            <input class="form-input" @bind="_referenceNumber" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
-        </div>
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <tbody>
+                <tr>
+                    <th>Reference Number</th>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <span class="form-label">GMT</span>
+                            <input class="form-input" style="max-width: 12rem;" @bind="_referenceNumber" />
+                            <button class="btn btn-primary btn-sm" @onclick="LoadReport" disabled="@_loading">Submit</button>
+                            <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu" disabled="@_loading">Menu</button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-error" : "alert-success")">@_message</div>
+    }
 
     @if (_loading)
     {
@@ -36,55 +52,67 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_result == null)
-    {
-        <div class="empty-state">
-            <i class="bx bx-file"></i>
-            <h3>No incident found</h3>
-            <p>Enter a reference number to view incident details.</p>
-        </div>
-    }
-    else
+    else if (_result != null)
     {
         <div class="table-container">
             <div class="table-wrapper">
                 <table class="data-table">
                     <tbody>
-                        <tr><th>Reference</th><td>@_result.Call_centre_code</td></tr>
+                        <tr><th>Reference Number</th><td>@_result.Call_centre_code</td></tr>
+                        <tr><th>Incident</th><td>@ValueOrDash(_result.Incident_type)</td></tr>
                         <tr><th>Call Date</th><td>@FormatDate(_result.Call_date)</td></tr>
-                        <tr><th>Caller</th><td>@_result.Caller_name</td></tr>
+                        <tr><th>Call Time</th><td>@FormatTime(_result.Call_time)</td></tr>
+                        <tr><th>Caller</th><td>@ValueOrDash(_result.Caller_name)</td></tr>
+                        <tr><th>Driver</th><td>@ValueOrDash(_result.Driver_name)</td></tr>
+                        <tr><th>GG Number</th><td>@ValueOrDash(_result.GG_number)</td></tr>
+                        <tr><th>Captured By</th><td>@ValueOrDash(_result.Capture_name)</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     }
-
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/RPT_Call_one_num_main.aspx"
-        Endpoint="api/callcentre/1"
-        HttpMethod="GET"
-        ButtonText="Test One Reference Report Endpoint"
-        ReportType="call-centre-report-one-reference" />
 </div>
 
 @code {
     private bool _loading;
+    private bool _messageIsError;
+    private string _message = string.Empty;
     private string _referenceNumber = string.Empty;
     private CallCentreDto? _result;
 
+    private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
+
     private async Task LoadReport()
     {
-        _loading = true;
+        _message = string.Empty;
         _result = null;
+
+        if (!short.TryParse(_referenceNumber?.Trim(), out var code))
+        {
+            _message = "Enter a valid GMT reference number.";
+            _messageIsError = true;
+            return;
+        }
+
+        _loading = true;
         try
         {
-            if (short.TryParse(_referenceNumber, out var code))
+            _result = await CallCentreService.GetByIdAsync<CallCentreDto>(code);
+            if (_result == null)
             {
-                _result = await CallCentreService.GetByIdAsync<CallCentreDto>(code);
+                _message = $"No incident found for GMT {code}.";
+                _messageIsError = true;
+            }
+            else
+            {
+                _message = $"Incident GMT {code} loaded.";
+                _messageIsError = false;
             }
         }
         catch (Exception ex)
         {
+            _message = "Failed to load incident.";
+            _messageIsError = true;
             await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
         finally
@@ -93,6 +121,7 @@
         }
     }
 
-    private static string FormatDate(DateTime? date) =>
-        date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+    private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
+    private static string FormatTime(DateTime? date) => date.HasValue ? date.Value.ToString("HH:mm:ss") : "-";
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

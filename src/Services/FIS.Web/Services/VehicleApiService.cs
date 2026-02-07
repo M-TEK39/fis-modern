@@ -134,6 +134,7 @@ public class VehicleApiService
                 type_code = vehicle.type_code,
                 vehicle_status_code = vehicle.vehicle_status_code,
                 location_code = vehicle.location_code,
+                site_code = vehicle.site_code,
                 fleet_number = vehicle.fleet_number,
                 registration_number = vehicle.registration_number,
                 engine_number_1 = vehicle.engine_number_1,
@@ -146,7 +147,16 @@ public class VehicleApiService
                 year_manufactured = vehicle.year_manufactured,
                 colour = vehicle.colour,
                 purchase_date = vehicle.purchase_date,
-                purchase_amount = vehicle.purchase_amount
+                purchase_amount = vehicle.purchase_amount,
+                purchased_from = vehicle.purchased_from,
+                invoice_number = vehicle.invoice_number,
+                service_last_done = vehicle.service_last_done,
+                service_last_odo = vehicle.service_last_odo,
+                cof_last_done = vehicle.cof_last_done,
+                cof_required = vehicle.cof_required,
+                cof_number = vehicle.cof_number,
+                cof_amount = vehicle.Cof_amount,
+                extended_service = vehicle.extended_service
             };
 
             var response = await _httpClient.PostAsJsonAsync("api/vehicles", createRequest);
@@ -180,6 +190,7 @@ public class VehicleApiService
                 type_code = vehicle.type_code,
                 vehicle_status_code = vehicle.vehicle_status_code,
                 location_code = vehicle.location_code,
+                site_code = vehicle.site_code,
                 fleet_number = vehicle.fleet_number,
                 registration_number = vehicle.registration_number,
                 engine_number_1 = vehicle.engine_number_1,
@@ -189,7 +200,18 @@ public class VehicleApiService
                 tare = vehicle.tare,
                 gvm = vehicle.gvm,
                 year_manufactured = vehicle.year_manufactured,
-                colour = vehicle.colour
+                colour = vehicle.colour,
+                purchase_date = vehicle.purchase_date,
+                purchase_amount = vehicle.purchase_amount,
+                purchased_from = vehicle.purchased_from,
+                invoice_number = vehicle.invoice_number,
+                service_last_done = vehicle.service_last_done,
+                service_last_odo = vehicle.service_last_odo,
+                cof_last_done = vehicle.cof_last_done,
+                cof_required = vehicle.cof_required,
+                cof_number = vehicle.cof_number,
+                cof_amount = vehicle.Cof_amount,
+                extended_service = vehicle.extended_service
             };
 
             var response = await _httpClient.PutAsJsonAsync($"api/vehicles/{vmfCode}", updateRequest);
@@ -224,6 +246,97 @@ public class VehicleApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting vehicle {VmfCode}", vmfCode);
+            return false;
+        }
+    }
+
+    public async Task<List<VehicleAuthorizationDto>> GetPendingAuthorizationsAsync()
+        => await GetVehicleAuthorizationsAsync("api/vehicle/authorization/pending");
+
+    public async Task<List<VehicleAuthorizationDto>> GetAuthorizedAuthorizationsAsync()
+        => await GetVehicleAuthorizationsAsync("api/vehicle/authorization/authorized");
+
+    public async Task<List<VehicleAuthorizationDto>> GetRejectedAuthorizationsAsync()
+        => await GetVehicleAuthorizationsAsync("api/vehicle/authorization/rejected");
+
+    public async Task<VehicleAuthorizationDto?> GetVehicleAuthorizationAsync(int id)
+    {
+        try
+        {
+            AddAuthorizationHeader();
+            var response = await _httpClient.GetAsync($"api/vehicle/authorization/{id}");
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<VehicleAuthorizationDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading vehicle authorization {Id}", id);
+            return null;
+        }
+    }
+
+    public async Task<bool> ApproveVehicleAuthorizationAsync(int id, string? comment)
+    {
+        return await PostVehicleAuthorizationActionAsync(
+            $"api/vehicle/authorization/{id}/approve",
+            new { comment });
+    }
+
+    public async Task<bool> RejectVehicleAuthorizationAsync(int id, string rejectionReason, string? comment)
+    {
+        return await PostVehicleAuthorizationActionAsync(
+            $"api/vehicle/authorization/{id}/reject",
+            new { rejectionReason, comment });
+    }
+
+    public async Task<bool> AddVehicleAuthorizationCommentAsync(int id, string comment)
+    {
+        return await PostVehicleAuthorizationActionAsync(
+            $"api/vehicle/authorization/{id}/comment",
+            new { comment });
+    }
+
+    private async Task<List<VehicleAuthorizationDto>> GetVehicleAuthorizationsAsync(string endpoint)
+    {
+        try
+        {
+            AddAuthorizationHeader();
+            var response = await _httpClient.GetAsync(endpoint);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<VehicleAuthorizationDto>>()
+                ?? new List<VehicleAuthorizationDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading vehicle authorization list from {Endpoint}", endpoint);
+            return new List<VehicleAuthorizationDto>();
+        }
+    }
+
+    private async Task<bool> PostVehicleAuthorizationActionAsync(string endpoint, object payload)
+    {
+        try
+        {
+            AddAuthorizationHeader();
+            var response = await _httpClient.PostAsJsonAsync(endpoint, payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Vehicle authorization action failed. Endpoint: {Endpoint}. Status: {Status}. Body: {Body}",
+                    endpoint,
+                    response.StatusCode,
+                    error);
+            }
+
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error posting vehicle authorization action to {Endpoint}", endpoint);
             return false;
         }
     }
