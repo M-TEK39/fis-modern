@@ -20,6 +20,7 @@ docker-compose*.yml
 *.md
 
 # Folders
+images
 backup
 fleet
 sources
@@ -29,6 +30,8 @@ obj
 .vscode
 .idea
 .claude
+.gemini
+
 
 # files
 appsettings*.json
