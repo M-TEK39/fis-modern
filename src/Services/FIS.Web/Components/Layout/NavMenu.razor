@@ -1,13 +1,18 @@
 ﻿@using Microsoft.AspNetCore.Components
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using FIS.Web.Services
 @implements IDisposable
 
 <nav class="legacy-nav" aria-label="Fleet navigation">
     @foreach (var group in NavigationGroups)
     {
         var expanded = IsGroupExpanded(group);
-        <div class="nav-group @(expanded ? "expanded" : "collapsed")">
+        var groupVisible = IsGroupVisible(group);
+        <div class="nav-group @(expanded ? "expanded" : "collapsed")"
+             style="display:@(groupVisible ? "block" : "none")">
             <button class="nav-group-toggle"
                     type="button"
                     aria-expanded="@expanded"
@@ -25,7 +30,7 @@
                 <ul id="nav-group-@group.Id" class="nav-list">
                     @foreach (var item in group.Items)
                     {
-                        <li class="@GetItemClasses(item)">
+                        <li class="@GetItemClasses(item)" style="@GetVisibilityStyle(item)">
                             @if (item.Disabled)
                             {
                                 <span class="legacy-link disabled" role="link" aria-disabled="true">
@@ -49,7 +54,13 @@
 </nav>
 
 @code {
-    private sealed record NavItem(string Title, string Href, string Icon, bool Disabled = false, NavLinkMatch Match = NavLinkMatch.Prefix);
+    private sealed record NavItem(
+        string Title,
+        string Href,
+        string Icon,
+        long? RequiredPermission = null,
+        bool Disabled = false,
+        NavLinkMatch Match = NavLinkMatch.Prefix);
     private sealed record NavGroup(string Id, string Title, string Icon, IReadOnlyList<NavItem> Items);
 
     private static readonly IReadOnlyList<NavGroup> NavigationGroups =
@@ -61,76 +72,110 @@
         ]),
         new("fleet-ops", "Fleet Operations", "bx bx-car",
         [
-            new("Vehicle Master", "/vehicles", "bx bx-car", Disabled: false),
-            new("Vehicle Orders", "/vehicle-orders", "bx bx-cart", Disabled: false),
-            new("Vehicle Photos", "/vehicle-photos", "bx bx-image", Disabled: false),
-            new("Vehicle Asset Verification", "/vehicle-verification", "bx bx-clipboard", Disabled: false),
-            new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", Disabled: false),
-            new("Workshop", "/workshop", "bx bx-wrench", Disabled: false),
-            new("Job Cards", "/job-cards", "bx bx-id-card", Disabled: false),
-            new("Driver & Authoriser Mgmt", "/drivers", "bx bx-id-card", Disabled: true),
-            new("Validation Data", "/reference-data", "bx bx-check-shield", Disabled: false)
+            new("Vehicle Master", "/vehicles", "bx bx-car", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Vehicle Orders", "/vehicle-orders", "bx bx-cart", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Vehicle Photos", "/vehicle-photos", "bx bx-image", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Vehicle Asset Verification", "/vehicle-verification", "bx bx-clipboard", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", LegacyPermissionBits.ContractManagement, Disabled: false),
+            new("Workshop", "/workshop", "bx bx-wrench", LegacyPermissionBits.Workshop, Disabled: false),
+            new("Job Cards", "/job-cards", "bx bx-id-card", LegacyPermissionBits.Workshop, Disabled: false),
+            new("Driver & Authoriser Mgmt", "/drivers", "bx bx-id-card", LegacyPermissionBits.UserAdministration, Disabled: true),
+            new("Validation Data", "/reference-data", "bx bx-check-shield", LegacyPermissionBits.VehicleManagement, Disabled: false)
         ]),
         new("trips-hire", "Trips & Hire", "bx bx-navigation",
         [
-            new("Trips", "/trips", "bx bx-navigation", Disabled: false),
-            new("Trip Authorities", "/trip-authorities", "bx bx-clipboard", Disabled: false),
-            new("Trip Queries", "/trip-query", "bx bx-question-mark", Disabled: false),
-            new("Private Hire", "/private-hire", "bx bx-car", Disabled: false),
-            new("Taxis", "/taxis", "bx bx-taxi", Disabled: false),
-            new("Third Party Rentals", "/third-party", "bx bx-building-house", Disabled: false)
+            new("Trips", "/trips", "bx bx-navigation", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Trip Authorities", "/trip-authorities", "bx bx-clipboard", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Trip Queries", "/trip-query", "bx bx-question-mark", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Private Hire", "/private-hire", "bx bx-car", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Taxis", "/taxis", "bx bx-taxi", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Third Party Rentals", "/third-party", "bx bx-building-house", LegacyPermissionBits.ContractManagement, Disabled: false)
         ]),
         new("incidents", "Incidents & Compliance", "bx bx-shield-quarter",
         [
-            new("Accidents", "/accidents", "bx bxs-car-crash", Disabled: false),
-            new("Fines", "/fines", "bx bx-receipt", Disabled: false),
-            new("Licenses", "/licenses", "bx bxs-user-badge", Disabled: false),
-            new("Losses", "/losses", "bx bx-x-circle", Disabled: false),
-            new("Clearance", "/clearance", "bx bx-shield-quarter", Disabled: false)
+            new("Accidents", "/accidents", "bx bxs-car-crash", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Fines", "/fines", "bx bx-receipt", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Licenses", "/licenses", "bx bxs-user-badge", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Losses", "/losses", "bx bx-x-circle", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Clearance", "/clearance", "bx bx-shield-quarter", LegacyPermissionBits.VehicleManagement, Disabled: false)
         ]),
         new("finance", "Finance & Contracts", "bx bx-wallet",
         [
-            new("Contracts", "/contracts", "bx bx-file", Disabled: false),
-            new("Finance", "/finance", "bx bx-wallet", Disabled: false),
-            new("Fuel Cards", "/fuel-cards", "bx bx-credit-card", Disabled: false),
-            new("Reports", "/reports", "bx bx-file-find", Disabled: false),
-            new("Auction", "/auction", "bx bx-dollar", Disabled: false)
+            new("Contracts", "/contracts", "bx bx-file", LegacyPermissionBits.ContractManagement, Disabled: false),
+            new("Finance", "/finance", "bx bx-wallet", LegacyPermissionBits.Financial, Disabled: false),
+            new("Fuel Cards", "/fuel-cards", "bx bx-credit-card", LegacyPermissionBits.Financial, Disabled: false),
+            new("Reports", "/reports", "bx bx-file-find", LegacyPermissionBits.Reports, Disabled: false),
+            new("Auction", "/auction", "bx bx-dollar", LegacyPermissionBits.Financial, Disabled: false)
         ]),
         new("logs", "Logs & Monitoring", "bx bx-pulse",
         [
-            new("Log Books", "/log-books", "bx bx-notepad", Disabled: false),
-            new("Log Sheets", "/log-sheets", "bx bx-table", Disabled: false),
-            new("Monitor", "/monitor", "bx bx-line-chart", Disabled: false),
-            new("Tracking", "/tracking", "bx bx-radar", Disabled: false),
-            new("Towing", "/towing", "bx bx-anchor", Disabled: false)
+            new("Log Books", "/log-books", "bx bx-notepad", LegacyPermissionBits.Reports, Disabled: false),
+            new("Log Sheets", "/log-sheets", "bx bx-table", LegacyPermissionBits.Reports, Disabled: false),
+            new("Monitor", "/monitor", "bx bx-line-chart", LegacyPermissionBits.Reports, Disabled: false),
+            new("Tracking", "/tracking", "bx bx-radar", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("Towing", "/towing", "bx bx-anchor", LegacyPermissionBits.VehicleManagement, Disabled: false)
         ]),
         new("admin", "Admin & Reference", "bx bx-user-circle",
         [
-            new("Call Centre", "/call-centre", "bx bx-phone-call", Disabled: false),
-            new("Troubleshoot", "/troubleshoot", "bx bx-wrench", Disabled: false),
-            new("Notice Management", "/notice-management", "bx bx-bell", Disabled: false)
+            new("Call Centre", "/call-centre", "bx bx-phone-call", LegacyPermissionBits.VehicleManagement, Disabled: false),
+            new("User Administration", "/users", "bx bx-user", LegacyPermissionBits.UserAdministration, Disabled: false),
+            new("Troubleshoot", "/troubleshoot", "bx bx-wrench", LegacyPermissionBits.UserAdministration, Disabled: false),
+            new("Notice Management", "/notice-management", "bx bx-bell", LegacyPermissionBits.UserAdministration, Disabled: false)
         ])
     ];
 
     [Inject]
     private NavigationManager NavigationManager { get; set; } = default!;
+    [Inject]
+    private AuthenticationStateProvider AuthStateProvider { get; set; } = default!;
+    [Inject]
+    private UserAccessContextService UserAccessContextService { get; set; } = default!;
 
     private string _currentPath = "/";
+    private long _userAccessLevel;
     private readonly HashSet<string> _expandedGroups = new(StringComparer.OrdinalIgnoreCase);
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        base.OnInitialized();
+        await base.OnInitializedAsync();
         UpdateCurrentPath();
+        await LoadUserAccessLevelAsync();
         InitializeExpandedGroups();
         NavigationManager.LocationChanged += HandleLocationChanged;
     }
 
-    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    private async void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         UpdateCurrentPath();
+        await LoadUserAccessLevelAsync();
         ExpandActiveGroup();
         StateHasChanged();
+    }
+
+    private async Task LoadUserAccessLevelAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _userAccessLevel = 0;
+            return;
+        }
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        if (long.TryParse(accessLevelClaim, out var accessLevel))
+        {
+            _userAccessLevel = accessLevel;
+            return;
+        }
+
+        var userAccessCodeClaim = user.FindFirst("user_access_code")?.Value;
+        int.TryParse(userAccessCodeClaim, out var userAccessCode);
+        var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+        _userAccessLevel = await UserAccessContextService.EnsureAccessLevelAsync(
+            userAccessCode > 0 ? userAccessCode : null,
+            firstName);
     }
 
     private void UpdateCurrentPath()
@@ -163,7 +208,7 @@
 
     private void ExpandActiveGroup()
     {
-        var activeGroup = NavigationGroups.FirstOrDefault(IsGroupActive);
+        var activeGroup = NavigationGroups.Where(IsGroupVisible).FirstOrDefault(IsGroupActive);
         if (activeGroup is not null)
         {
             _expandedGroups.Add(activeGroup.Id);
@@ -185,7 +230,12 @@
 
     private bool IsGroupActive(NavGroup group)
     {
-        return group.Items.Any(IsActive);
+        return group.Items.Any(item => CanView(item) && IsActive(item));
+    }
+
+    private bool IsGroupVisible(NavGroup group)
+    {
+        return group.Items.Any(CanView);
     }
 
     private string GetItemClasses(NavItem item)
@@ -202,6 +252,21 @@
         }
 
         return string.Join(" ", classes);
+    }
+
+    private string GetVisibilityStyle(NavItem item)
+    {
+        return CanView(item) ? "display:block;" : "display:none;";
+    }
+
+    private bool CanView(NavItem item)
+    {
+        if (item.RequiredPermission is null)
+        {
+            return true;
+        }
+
+        return (_userAccessLevel & item.RequiredPermission.Value) == item.RequiredPermission.Value;
     }
 
     private bool IsActive(NavItem item)

@@ -1,13 +1,128 @@
 @page "/vehicles/demo/report"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Net.Http.Headers
+@using FIS.Web.Services
+@inject HttpClient Http
+@inject TokenService TokenService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Report All Demo Vehicle"
-    Description="Legacy report placeholder (UI-only until API endpoints are available)."
-    LegacyPath="Legacy report placeholder (UI-only until API endpoints are available)."
-    Endpoint="api/demo-vehicles/reports/all"
-    HttpMethod="GET"
-    ReportType="demo-vehicle-report"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Report All Demo Vehicles - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-table"></i> Report: All Demo Vehicles</h1>
+        <p class="page-description">Legacy report layout with live data loading.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-actions">
+        <button class="btn btn-primary" @onclick="LoadAsync">Load Report</button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_loaded && _items.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-info-circle"></i>
+            <h3>No demo vehicles found</h3>
+            <p>No records returned by the report endpoint.</p>
+        </div>
+    }
+    else if (_items.Count > 0)
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>GG Number</th>
+                            <th>Reg Number</th>
+                            <th>Description</th>
+                            <th>Year Model</th>
+                            <th>Site</th>
+                            <th>Bank Code</th>
+                            <th>Tank</th>
+                            <th>Engine Number</th>
+                            <th>Chassis Number</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _items)
+                        {
+                            <tr>
+                                <td>@item.gg_number</td>
+                                <td>@item.reg_number</td>
+                                <td>@item.model_description</td>
+                                <td>@item.year_mnf</td>
+                                <td>@item.description</td>
+                                <td>@item.bank_code</td>
+                                <td>@item.tank</td>
+                                <td>@item.engine_number</td>
+                                <td>@item.chassis_number</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _loaded;
+    private List<DemoVehicleReportRow> _items = new();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loaded = true;
+        try
+        {
+            AddAuthHeader();
+            _items = await Http.GetFromJsonAsync<List<DemoVehicleReportRow>>("api/demo-vehicles/reports/all")
+                ?? await Http.GetFromJsonAsync<List<DemoVehicleReportRow>>("api/demo-vehicles")
+                ?? new List<DemoVehicleReportRow>();
+        }
+        catch (Exception ex)
+        {
+            _items = new List<DemoVehicleReportRow>();
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void AddAuthHeader()
+    {
+        if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
+        }
+    }
+
+    private sealed class DemoVehicleReportRow
+    {
+        public string gg_number { get; set; } = string.Empty;
+        public string reg_number { get; set; } = string.Empty;
+        public string model_description { get; set; } = string.Empty;
+        public string year_mnf { get; set; } = string.Empty;
+        public string description { get; set; } = string.Empty;
+        public string bank_code { get; set; } = string.Empty;
+        public string tank { get; set; } = string.Empty;
+        public string engine_number { get; set; } = string.Empty;
+        public string chassis_number { get; set; } = string.Empty;
+    }
+}

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using FIS.Web.Models;
+using System.Linq;
 
 namespace FIS.Web.Services;
 
@@ -18,8 +19,10 @@ public class UserApiService
     {
         try
         {
-            var result = await _httpClient.GetFromJsonAsync<List<UserSummaryDto>>("api/User");
-            return result ?? new List<UserSummaryDto>();
+            var profiles = await _httpClient.GetFromJsonAsync<List<UserProfileDto>>("api/userprofile")
+                ?? new List<UserProfileDto>();
+
+            return profiles.Select(MapToSummary).ToList();
         }
         catch (Exception ex)
         {
@@ -32,13 +35,19 @@ public class UserApiService
     {
         try
         {
-            var response = await _httpClient.PostAsJsonAsync("api/User", new CreateUserRequest
+            var firstName = ResolveFirstName(email);
+            var response = await _httpClient.PostAsJsonAsync("api/userprofile", new CreateUserProfileRequest
             {
+                FirstName = firstName,
+                LastName = "User",
                 Email = email,
-                TelephoneNumber = telephone
+                Telephone = telephone,
+                Password = "Temp#1234",
+                AccessLevel = 1
             });
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<ApiUserDto>();
+            var created = await response.Content.ReadFromJsonAsync<UserProfileDto>();
+            return created is null ? null : MapToApiUser(created);
         }
         catch (Exception ex)
         {
@@ -51,13 +60,14 @@ public class UserApiService
     {
         try
         {
-            var response = await _httpClient.PutAsJsonAsync($"api/User/{userAccessCode}", new UpdateUserRequest
+            var response = await _httpClient.PutAsJsonAsync($"api/userprofile/{userAccessCode}", new UpdateUserProfileRequest
             {
                 Email = email,
-                TelephoneNumber = telephone
+                Telephone = telephone
             });
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<ApiUserDto>();
+            var refreshed = await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/{userAccessCode}");
+            return refreshed is null ? null : MapToApiUser(refreshed);
         }
         catch (Exception ex)
         {
@@ -70,7 +80,7 @@ public class UserApiService
     {
         try
         {
-            var response = await _httpClient.DeleteAsync($"api/User/{userAccessCode}");
+            var response = await _httpClient.DeleteAsync($"api/userprofile/{userAccessCode}");
             response.EnsureSuccessStatusCode();
         }
         catch (Exception ex)
@@ -78,6 +88,41 @@ public class UserApiService
             _logger.LogError(ex, "Error deleting user {UserAccessCode}", userAccessCode);
             throw;
         }
+    }
+
+    private static UserSummaryDto MapToSummary(UserProfileDto profile)
+    {
+        return new UserSummaryDto
+        {
+            UserAccessCode = profile.UserAccessCode,
+            UserName = profile.FirstName,
+            Email = profile.Email,
+            FirstName = profile.FirstName,
+            LastName = profile.LastName,
+            Telephone = profile.Telephone,
+            LastLoginDate = profile.LastLogOn?.ToString("yyyy-MM-dd HH:mm")
+        };
+    }
+
+    private static ApiUserDto MapToApiUser(UserProfileDto profile)
+    {
+        return new ApiUserDto
+        {
+            UserAccessCode = profile.UserAccessCode,
+            TelephoneNumber = profile.Telephone,
+            Email = profile.Email
+        };
+    }
+
+    private static string ResolveFirstName(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return "User";
+        }
+
+        var prefix = email.Split('@', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return string.IsNullOrWhiteSpace(prefix) ? "User" : prefix.Trim();
     }
 }
 
@@ -88,10 +133,18 @@ public record ApiUserDto
     public string? Email { get; set; }
 }
 
-public record CreateUserRequest
+public record CreateUserProfileRequest
 {
-    public string? TelephoneNumber { get; set; }
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+    public string? Telephone { get; set; }
     public string? Email { get; set; }
+    public long? AccessLevel { get; set; }
 }
 
-public record UpdateUserRequest : CreateUserRequest;
+public record UpdateUserProfileRequest
+{
+    public string? Telephone { get; set; }
+    public string? Email { get; set; }
+}

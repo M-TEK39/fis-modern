@@ -1,13 +1,133 @@
 @page "/vehicles/gg-block-numbers"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Net.Http.Headers
+@using FIS.Web.Services
+@inject HttpClient Http
+@inject TokenService TokenService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Add GG Block Number(s)"
-    Description="Legacy GG block numbering screen (UI-only until API endpoints are available)."
-    LegacyPath="Legacy GG block numbering screen (UI-only until API endpoints are available)."
-    Endpoint="api/vehicle-inception/gg-blocks"
-    HttpMethod="POST"
-    ReportType="vehicle-inception-gg-blocks"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>GG Block Number Maintenance - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-list-ol"></i>
+            GG Block Number Maintenance
+        </h1>
+        <p class="page-description">Capture and review GG block number ranges.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">&lt; Previous Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Start GG Block Number</label>
+            <input class="form-input" maxlength="7" @bind="_startBlock" style="text-transform:uppercase;" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">End GG Block Number</label>
+            <input class="form-input" maxlength="7" @bind="_endBlock" style="text-transform:uppercase;" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@_saving">Submit</button>
+            <button class="btn btn-secondary" @onclick="ClearAsync">Clear</button>
+        </div>
+    </div>
+
+    <div class="table-container" style="margin-top:1rem;">
+        <div class="table-header">
+            <span class="table-title">GG Block Number History...</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Captured By</th>
+                        <th>Date Created</th>
+                        <th>Start GG Number</th>
+                        <th>End GG Number</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_history.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="4">No history records found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _history)
+                        {
+                            <tr>
+                                <td>@row.CapturedBy</td>
+                                <td>@row.DateCreated.ToString("yyyy/MM/dd hh:mm:ss tt")</td>
+                                <td>@row.Start</td>
+                                <td>@row.End</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _startBlock = string.Empty;
+    private string _endBlock = string.Empty;
+    private bool _saving;
+    private readonly List<GgBlockHistoryRow> _history = new();
+
+    private async Task SubmitAsync()
+    {
+        var start = (_startBlock ?? string.Empty).Trim().ToUpperInvariant();
+        var end = (_endBlock ?? string.Empty).Trim().ToUpperInvariant();
+        if (start.Length != 7 || end.Length != 7)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", "Start and End GG numbers must be 7 characters.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
+            {
+                Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
+            }
+
+            var payload = new { startGgNumber = start, endGgNumber = end };
+            var response = await Http.PostAsJsonAsync("api/vehicle-inception/gg-blocks", payload);
+            if (!response.IsSuccessStatusCode)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", $"GG block submission failed: {(int)response.StatusCode}");
+                return;
+            }
+
+            _history.Insert(0, new GgBlockHistoryRow("Current User", DateTime.Now, start, end));
+            _startBlock = string.Empty;
+            _endBlock = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task ClearAsync()
+    {
+        _startBlock = string.Empty;
+        _endBlock = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private sealed record GgBlockHistoryRow(string CapturedBy, DateTime DateCreated, string Start, string End);
+}

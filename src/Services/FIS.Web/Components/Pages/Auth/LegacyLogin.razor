@@ -49,9 +49,9 @@
 
         <div class="form-grid auth-form">
             <div class="form-field">
-                <label class="form-label">Username</label>
-                <InputText class="form-input" @bind-Value="_model.Username" placeholder="User access code or email" />
-                <ValidationMessage For="() => _model.Username" />
+                <label class="form-label">First Name</label>
+                <InputText class="form-input" @bind-Value="_model.FirstName" placeholder="Enter your first name" />
+                <ValidationMessage For="() => _model.FirstName" />
             </div>
             <div class="form-field">
                 <label class="form-label">Password</label>
@@ -104,7 +104,8 @@
         {
             await AuthService.LoginAsync(new LegacyLoginRequest
             {
-                Username = _model.Username,
+                FirstName = _model.FirstName,
+                Username = _model.FirstName,
                 Password = _model.Password
             });
 
@@ -129,7 +130,7 @@
     private class LegacyLoginModel
     {
         [Required]
-        public string Username { get; set; } = "";
+        public string FirstName { get; set; } = "";
         [Required]
         public string Password { get; set; } = "";
     }

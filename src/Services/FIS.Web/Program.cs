@@ -226,6 +226,12 @@ builder.Services.AddHttpClient<UserApiService>(client =>
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<UserProfileApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddScoped<UserAccessContextService>();
 builder.Services.AddHttpClient<AuthApiService>(client =>
 {
     // Point to local web server (AuthProxyController), NOT the API

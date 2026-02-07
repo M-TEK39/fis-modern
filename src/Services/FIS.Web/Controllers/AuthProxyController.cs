@@ -39,9 +39,19 @@ public class AuthProxyController : ControllerBase
 
             using var client = new HttpClient(handler);
             var apiUrl = "http://localhost:5010/api/auth/login";
+            var loginIdentifier = request.FirstName;
+            if (string.IsNullOrWhiteSpace(loginIdentifier))
+            {
+                loginIdentifier = request.Username;
+            }
 
             // Forward login request to API
-            var response = await client.PostAsJsonAsync(apiUrl, request);
+            var response = await client.PostAsJsonAsync(apiUrl, new
+            {
+                firstName = loginIdentifier,
+                username = loginIdentifier,
+                password = request.Password
+            });
 
             if (!response.IsSuccessStatusCode)
             {
@@ -143,6 +153,7 @@ public class AuthProxyController : ControllerBase
 /// </summary>
 public class LegacyLoginRequest
 {
+    public string FirstName { get; set; } = "";
     public string Username { get; set; } = "";
     public string Password { get; set; } = "";
 }

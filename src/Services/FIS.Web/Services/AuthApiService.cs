@@ -12,17 +12,20 @@ public class AuthApiService
     private readonly HttpClient _httpClient;
     private readonly TokenService _tokenService;
     private readonly DualAuthStateProvider _authStateProvider;
+    private readonly UserAccessContextService _userAccessContextService;
     private readonly ILogger<AuthApiService> _logger;
 
     public AuthApiService(
         HttpClient httpClient,
         TokenService tokenService,
         DualAuthStateProvider authStateProvider,
+        UserAccessContextService userAccessContextService,
         ILogger<AuthApiService> logger)
     {
         _httpClient = httpClient;
         _tokenService = tokenService;
         _authStateProvider = authStateProvider;
+        _userAccessContextService = userAccessContextService;
         _logger = logger;
     }
 
@@ -42,12 +45,15 @@ public class AuthApiService
 
         // Store the JWT token in ProtectedSessionStorage (persists across SignalR reconnections)
         await _tokenService.SetTokenAsync(loginResponse.Token, loginResponse.ExpiresAt);
+        await _userAccessContextService.PrimeFromLoginAsync(
+            loginResponse.UserAccessCode,
+            request.FirstName);
 
         // Notify Blazor that user is now authenticated
         _authStateProvider.NotifyAuthenticationStateChanged();
 
-        _logger.LogInformation("Login successful. User: {UserAccessCode}, Expires: {ExpiresAt}",
-            loginResponse.UserAccessCode, loginResponse.ExpiresAt);
+        _logger.LogInformation("Login successful. FirstName: {FirstName}, User: {UserAccessCode}, Expires: {ExpiresAt}",
+            request.FirstName, loginResponse.UserAccessCode, loginResponse.ExpiresAt);
 
         return loginResponse;
     }
@@ -66,6 +72,7 @@ public class AuthApiService
 
         // Clear token from session storage
         await _tokenService.ClearTokenAsync();
+        _userAccessContextService.Clear();
         _authStateProvider.NotifyAuthenticationStateChanged();
 
         _logger.LogInformation("User logged out");
@@ -196,6 +203,7 @@ public class AuthApiService
 
 public class LegacyLoginRequest
 {
+    public string FirstName { get; set; } = "";
     public string Username { get; set; } = "";
     public string Password { get; set; } = "";
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 
 namespace FIS.Web.Services;
 
@@ -11,15 +12,20 @@ namespace FIS.Web.Services;
 public class JwtAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly TokenService _tokenService;
+    private readonly UserAccessContextService _userAccessContextService;
     private readonly ILogger<JwtAuthenticationStateProvider> _logger;
 
-    public JwtAuthenticationStateProvider(TokenService tokenService, ILogger<JwtAuthenticationStateProvider> logger)
+    public JwtAuthenticationStateProvider(
+        TokenService tokenService,
+        UserAccessContextService userAccessContextService,
+        ILogger<JwtAuthenticationStateProvider> logger)
     {
         _tokenService = tokenService;
+        _userAccessContextService = userAccessContextService;
         _logger = logger;
     }
 
-    public override Task<AuthenticationState> GetAuthenticationStateAsync()
+    public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         ClaimsIdentity identity;
 
@@ -30,9 +36,25 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
                 // Parse JWT token to get claims
                 var handler = new JwtSecurityTokenHandler();
                 var token = handler.ReadJwtToken(_tokenService.Token);
+                var claims = token.Claims.ToList();
+
+                // Backfill legacy access level claim from user profile API if token does not include it.
+                var hasAccessLevelClaim = claims.Any(c => c.Type == "access_level");
+                if (!hasAccessLevelClaim)
+                {
+                    var userAccessCodeClaim = claims.FirstOrDefault(c => c.Type == "user_access_code")?.Value;
+                    if (int.TryParse(userAccessCodeClaim, out var userAccessCode))
+                    {
+                        var accessLevel = await _userAccessContextService.EnsureAccessLevelAsync(userAccessCode);
+                        if (accessLevel > 0)
+                        {
+                            claims.Add(new Claim("access_level", accessLevel.ToString()));
+                        }
+                    }
+                }
 
                 // Create authenticated identity with claims from token
-                identity = new ClaimsIdentity(token.Claims, "jwt");
+                identity = new ClaimsIdentity(claims, "jwt");
                 
                 _logger.LogInformation("User authenticated with JWT token. User: {User}", 
                     identity.FindFirst("user_access_code")?.Value ?? "unknown");
@@ -51,7 +73,7 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
         }
 
         var user = new ClaimsPrincipal(identity);
-        return Task.FromResult(new AuthenticationState(user));
+        return new AuthenticationState(user);
     }
 
     /// <summary>

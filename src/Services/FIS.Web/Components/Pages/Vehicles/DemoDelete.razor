@@ -1,13 +1,131 @@
 @page "/vehicles/demo/delete"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Net.Http.Headers
+@using FIS.Web.Services
+@inject HttpClient Http
+@inject TokenService TokenService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Delete a Demo Vehicle"
-    Description="Legacy demo vehicle delete screen (UI-only until API endpoints are available)."
-    LegacyPath="Legacy demo vehicle delete screen (UI-only until API endpoints are available)."
-    Endpoint="api/demo-vehicles/0"
-    HttpMethod="DELETE"
-    ReportType="demo-vehicle-delete"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Delete Demo Vehicle - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-trash"></i> Delete Demo Vehicle</h1>
+        <p class="page-description">Search and delete demo vehicle records.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / GP Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchAsync">Submit</button>
+        </div>
+    </div>
+
+    @if (_matches.Count > 0)
+    {
+        <div class="table-container" style="margin-top:1rem;">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>GG Number</th>
+                            <th>Reg Number</th>
+                            <th>Model</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _matches)
+                        {
+                            <tr>
+                                <td>@item.gg_number</td>
+                                <td>@item.reg_number</td>
+                                <td>@item.model_description</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => DeleteAsync(item.demo_vehicle_code)">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _searchTerm = string.Empty;
+    private List<DemoVehicleDto> _matches = new();
+
+    private async Task SearchAsync()
+    {
+        try
+        {
+            AddAuthHeader();
+            var all = await Http.GetFromJsonAsync<List<DemoVehicleDto>>("api/demo-vehicles") ?? new List<DemoVehicleDto>();
+            var term = _searchTerm.Trim();
+            _matches = all.Where(x =>
+                string.Equals(x.gg_number, term, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.reg_number, term, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        if (id <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            AddAuthHeader();
+            var response = await Http.DeleteAsync($"api/demo-vehicles/{id}");
+            if (response.IsSuccessStatusCode)
+            {
+                _matches = _matches.Where(x => x.demo_vehicle_code != id).ToList();
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", $"Delete failed: {(int)response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void AddAuthHeader()
+    {
+        if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
+        }
+    }
+
+    private sealed class DemoVehicleDto
+    {
+        public int demo_vehicle_code { get; set; }
+        public string gg_number { get; set; } = string.Empty;
+        public string reg_number { get; set; } = string.Empty;
+        public string model_description { get; set; } = string.Empty;
+    }
+}

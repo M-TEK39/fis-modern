@@ -1,13 +1,131 @@
 @page "/vehicles/demo/edit"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Net.Http.Headers
+@using FIS.Web.Services
+@inject HttpClient Http
+@inject SiteApiService SiteService
+@inject TokenService TokenService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Edit a Demo Vehicle"
-    Description="Legacy demo vehicle edit screen (UI-only until API endpoints are available)."
-    LegacyPath="Legacy demo vehicle edit screen (UI-only until API endpoints are available)."
-    Endpoint="api/demo-vehicles/0"
-    HttpMethod="PUT"
-    ReportType="demo-vehicle-edit"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Edit Demo Vehicle - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-edit"></i> Edit Demo Vehicle</h1>
+        <p class="page-description">Search by GG/GP number and update demo vehicle details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / GP number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchAsync">Search</button>
+        </div>
+    </div>
+
+    @if (_editing != null)
+    {
+        <div class="form-card" style="margin-top:1rem;">
+            <div class="form-grid">
+                <div class="form-field"><label class="form-label">GG number</label><input class="form-input" @bind="_editing.gg_number" /></div>
+                <div class="form-field"><label class="form-label">Prov. Registration number</label><input class="form-input" @bind="_editing.reg_number" /></div>
+                <div class="form-field form-group-full"><label class="form-label">Make &amp; Model</label><input class="form-input" @bind="_editing.model_description" /></div>
+                <div class="form-field"><label class="form-label">Site</label><select class="form-select" @bind="_editing.site_code"><option value="">Select...</option>@foreach (var s in _sites){<option value="@s.SiteCode">@s.DepartmentNumber : @s.Description</option>}</select></div>
+                <div class="form-field"><label class="form-label">Year Manufactured</label><input class="form-input" @bind="_editing.year_mnf" /></div>
+                <div class="form-field"><label class="form-label">Bank code</label><input class="form-input" @bind="_editing.bank_code" /></div>
+                <div class="form-field"><label class="form-label">Colour</label><input class="form-input" @bind="_editing.colour" /></div>
+                <div class="form-field"><label class="form-label">Tank Capacity</label><input class="form-input" @bind="_editing.tank" /></div>
+                <div class="form-field"><label class="form-label">Engine number</label><input class="form-input" @bind="_editing.engine_number" /></div>
+                <div class="form-field"><label class="form-label">Chassis number</label><input class="form-input" @bind="_editing.chassis_number" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Submit</button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _searchTerm = string.Empty;
+    private bool _saving;
+    private DemoVehicleDto? _editing;
+    private List<SiteResponseDto> _sites = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        try
+        {
+            AddAuthHeader();
+            var all = await Http.GetFromJsonAsync<List<DemoVehicleDto>>("api/demo-vehicles") ?? new List<DemoVehicleDto>();
+            _editing = all.FirstOrDefault(x =>
+                string.Equals(x.gg_number, _searchTerm.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.reg_number, _searchTerm.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing == null || _editing.demo_vehicle_code <= 0)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            AddAuthHeader();
+            var response = await Http.PutAsJsonAsync($"api/demo-vehicles/{_editing.demo_vehicle_code}", _editing);
+            if (!response.IsSuccessStatusCode)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", $"Edit demo vehicle failed: {(int)response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void AddAuthHeader()
+    {
+        if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
+        }
+    }
+
+    private sealed class DemoVehicleDto
+    {
+        public int demo_vehicle_code { get; set; }
+        public string gg_number { get; set; } = string.Empty;
+        public string reg_number { get; set; } = string.Empty;
+        public string model_description { get; set; } = string.Empty;
+        public short? site_code { get; set; }
+        public string year_mnf { get; set; } = string.Empty;
+        public string bank_code { get; set; } = string.Empty;
+        public string colour { get; set; } = string.Empty;
+        public string tank { get; set; } = string.Empty;
+        public string engine_number { get; set; } = string.Empty;
+        public string chassis_number { get; set; } = string.Empty;
+    }
+}
