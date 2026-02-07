@@ -1,13 +1,138 @@
 @page "/vehicles/recovered"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Update Recovered GG"
-    Description="Legacy recovered vehicle update (UI-only until API endpoints are available)."
-    LegacyPath="Legacy recovered vehicle update (UI-only until API endpoints are available)."
-    Endpoint="api/vehicles/recovered-gg"
-    HttpMethod="POST"
-    ReportType="vehicles-recovered-gg"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Update Recovered GG - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-refresh"></i>
+            Update Recovered GG
+        </h1>
+        <p class="page-description">Search a vehicle and update recovered / renumbering details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / GP Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchVehicleAsync">Search</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_hasSearched && _vehicle == null)
+    {
+        <div class="empty-state">
+            <i class="bx bx-error-circle"></i>
+            <h3>Vehicle not found</h3>
+            <p>No vehicle matched the entered GG/GP number.</p>
+        </div>
+    }
+    else if (_vehicle != null)
+    {
+        <div class="form-card" style="margin-top:1rem;">
+            <div class="form-card-header">
+                <h2>Recovered Vehicle Details</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">GG Number</label>
+                        <input class="form-input" value="@_vehicle.fleet_number" readonly />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Registration Number</label>
+                        <input class="form-input" value="@_vehicle.registration_number" readonly />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Recovered GG Number</label>
+                        <input class="form-input" @bind="_vehicle.recovered_gg_number" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Renumbered To</label>
+                        <input class="form-input" @bind="_vehicle.renumbered_to" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _searchTerm = string.Empty;
+    private bool _loading;
+    private bool _saving;
+    private bool _hasSearched;
+    private VehicleDto? _vehicle;
+
+    private async Task SearchVehicleAsync()
+    {
+        _loading = true;
+        _hasSearched = true;
+        _vehicle = null;
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(_searchTerm.Trim());
+            var match = matches.FirstOrDefault();
+            if (match != null)
+            {
+                _vehicle = await VehicleService.GetVehicleAsync(match.vmf_code);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var ok = await VehicleService.UpdateVehicleAsync(_vehicle.vmf_code, _vehicle);
+            if (!ok)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", "Failed to update recovered vehicle details.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

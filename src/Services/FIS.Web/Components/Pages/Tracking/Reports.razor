@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/tracking/reports"
 @rendermode InteractiveServer
 
@@ -66,18 +65,10 @@
                     <span class="menu-item-badge">Legacy</span>
                 </div>
                 <div class="menu-item">
-                    <a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a>
+                    <a class="menu-item-link" href="/tracking">Return To Main Page</a>
                     <span class="menu-item-badge">Legacy</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Tracking/RPTTrack.aspx"
-        Endpoint="api/tracking/reports/menu"
-        HttpMethod="GET"
-        ButtonText="Test Tracking Reports Menu Endpoint"
-        ReportType="tracking-reports-menu" />
-
 </div>

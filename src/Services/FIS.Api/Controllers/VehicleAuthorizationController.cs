@@ -272,7 +272,7 @@ public class VehicleAuthorizationController : BaseApiController
             {
                 chassis_number = dto.ChassisNumber,
                 engine_number = dto.EngineNumber,
-                model_code = dto.ModelCode ?? 0, // Default to 0 if not provided
+                model_code = dto.ModelCode ?? (short)0, // Default to 0 if not provided
                 colour = dto.Colour,
                 purchase_amount = dto.PurchaseAmount,
                 purchase_date = dto.PurchaseDate,

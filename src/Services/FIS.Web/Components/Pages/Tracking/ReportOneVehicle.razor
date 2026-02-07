@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject TrackingApiService TrackingService
 @inject VehicleLookupApiService VehicleLookupService
 @inject IJSRuntime JSRuntime
@@ -15,18 +14,32 @@
             <i class="bx bx-car"></i>
             Tracking Report for ONE Vehicle
         </h1>
-        <p class="page-description">Legacy placeholder for Tracking/RPT_one_gg_main_track.aspx.</p>
+        <p class="page-description">Legacy Tracking/RPT_one_gg_main_track.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
     <div class="form-card">
         <div class="form-row">
-            <label class="form-label">GG / Reg Number</label>
+            <label class="form-label">Number Type</label>
+            <div class="contract-search-radio">
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "gg")" @onchange='() => _searchMode = "gg"' />
+                    GG
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "gp")" @onchange='() => _searchMode = "gp"' />
+                    GP
+                </label>
+            </div>
+        </div>
+        <div class="form-row">
+            <label class="form-label">@(_searchMode == "gg" ? "GG Number" : "GP Number")</label>
             <input class="form-input" @bind="_searchTerm" />
         </div>
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+            <a class="btn btn-secondary" href="/tracking/reports">Menu</a>
         </div>
     </div>
 
@@ -37,7 +50,7 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_results.Count == 0)
+    else if (_hasSearched && _results.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-car"></i>
@@ -73,22 +86,17 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Tracking/RPT_one_gg_main_track.aspx"
-        Endpoint="api/tracking/reports/one-vehicle"
-        HttpMethod="POST"
-        ButtonText="Test Tracking One Vehicle Report Endpoint"
-        ReportType="tracking-report-one-vehicle" />
-
 @code {
     private bool _loading;
+    private bool _hasSearched;
     private string _searchTerm = string.Empty;
+    private string _searchMode = "gp";
     private List<TrackingDto> _results = new();
 
     private async Task LoadReport()
     {
         _loading = true;
+        _hasSearched = true;
         _results = new List<TrackingDto>();
         try
         {

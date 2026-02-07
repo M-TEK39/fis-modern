@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject TrackingApiService TrackingService
 @inject IJSRuntime JSRuntime
 
@@ -14,13 +13,33 @@
             <i class="bx bx-chip"></i>
             Tracking Report for ALL Tracking Device
         </h1>
-        <p class="page-description">Legacy placeholder for Tracking/RPT_all_trnum_main_track.aspx.</p>
+        <p class="page-description">Legacy Tracking/RPT_all_trnum_main_track.aspx workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="form-actions">
-        <button class="btn btn-primary" @onclick="LoadReport">Load Report</button>
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Tracker Type</label>
+            <div class="contract-search-radio">
+                <label class="form-radio-label">
+                    <input type="radio" name="trackerType" checked="@(_trackerType == "New")" @onchange='() => _trackerType = "New"' />
+                    New
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="trackerType" checked="@(_trackerType == "Reused")" @onchange='() => _trackerType = "Reused"' />
+                    Re-used
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="trackerType" checked="@(_trackerType == "All")" @onchange='() => _trackerType = "All"' />
+                    All
+                </label>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+            <a class="btn btn-secondary" href="/tracking/reports">Report Menu</a>
+        </div>
     </div>
 
     @if (_loading)
@@ -30,7 +49,7 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_results.Count == 0)
+    else if (_hasSearched && _results.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-chip"></i>
@@ -66,25 +85,26 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Tracking/RPT_all_trnum_main_track.aspx"
-        Endpoint="api/tracking/reports/all-devices"
-        HttpMethod="POST"
-        ButtonText="Test Tracking All Devices Report Endpoint"
-        ReportType="tracking-report-all-devices" />
-
 @code {
     private bool _loading;
+    private bool _hasSearched;
+    private string _trackerType = "All";
     private List<TrackingDto> _results = new();
 
     private async Task LoadReport()
     {
         _loading = true;
+        _hasSearched = true;
         _results = new List<TrackingDto>();
         try
         {
-            _results = await TrackingService.GetAllAsync<TrackingDto>();
+            var all = await TrackingService.GetAllAsync<TrackingDto>();
+            _results = _trackerType switch
+            {
+                "New" => all.Where(t => string.Equals(t.track_type, "New", StringComparison.OrdinalIgnoreCase)).ToList(),
+                "Reused" => all.Where(t => string.Equals(t.track_type, "Reused", StringComparison.OrdinalIgnoreCase)).ToList(),
+                _ => all
+            };
         }
         catch (Exception ex)
         {

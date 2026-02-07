@@ -1,6 +1,13 @@
-@using FIS.Web.Components.Shared
 @page "/log-sheets/reports/total-km"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LogsheetApiService LogsheetService
+@inject VehicleApiService VehicleService
+@inject ReferenceDataApiService ReferenceDataService
+@inject ClassApiService ClassService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Total Km per Class Code - Fleet Information System</PageTitle>
 
@@ -10,22 +17,244 @@
             <i class="bx bx-bar-chart-alt-2"></i>
             Report: Total Km per Class Code
         </h1>
-        <p class="page-description">Legacy placeholder for Logs/RPT_log_per_year.aspx.</p>
+        <p class="page-description">Report class codes total distance traveled.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">Main Menu</a>
+        <a class="btn btn-secondary btn-sm" href="/reports/class-code">Class Menu</a>
+        <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
+        <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
     </div>
 </div>
+
+<a id="PageTop"></a>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-chart"></i>
-        <h3>Report pending</h3>
-        <p>This page will mirror the legacy total kilometer report.</p>
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <tbody>
+                <tr>
+                    <th>Start Date (yyyy / mm)</th>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <input class="form-input" style="max-width: 6rem;" placeholder="yyyy" maxlength="4" @bind="_startYear" />
+                            <span>/</span>
+                            <input class="form-input" style="max-width: 5rem;" placeholder="mm" maxlength="2" @bind="_startMonth" />
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <th>End Date (yyyy / mm)</th>
+                    <td>
+                        <div class="contract-search-inputs">
+                            <input class="form-input" style="max-width: 6rem;" placeholder="yyyy" maxlength="4" @bind="_endYear" />
+                            <span>/</span>
+                            <input class="form-input" style="max-width: 5rem;" placeholder="mm" maxlength="2" @bind="_endMonth" />
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReport" disabled="@_loading">Submit</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
     </div>
 
-    <LegacyEndpointActionPanel
-        LegacyPath="Logs/RPT_Log_per_year.aspx"
-        Endpoint="api/logsheet/reports/total-km-per-class-code"
-        HttpMethod="POST"
-        ButtonText="Test Total KM per Class Code Endpoint"
-        ReportType="logsheet-report-total-km" />
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_messageIsError ? "alert-error" : "alert-success")">@_message</div>
+    }
 
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading class totals...</p>
+        </div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-chart"></i>
+            <h3>No class totals found</h3>
+            <p>Enter a valid period and submit.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Date: @_startYear@_startMonth to @_endYear@_endMonth</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Class Code</th>
+                            <th>Class Description</th>
+                            <th>Total Distance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.ClassCode</td>
+                                <td>@row.ClassDescription</td>
+                                <td>@row.TotalDistance.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
 </div>
+
+<a id="PageBottom"></a>
+
+@code {
+    private bool _loading;
+    private bool _messageIsError;
+    private string _message = string.Empty;
+
+    private string _startYear = string.Empty;
+    private string _startMonth = string.Empty;
+    private string _endYear = string.Empty;
+    private string _endMonth = string.Empty;
+
+    private List<ClassDistanceRow> _rows = new();
+
+    private void GoTop() => Navigation.NavigateTo("/log-sheets/reports/total-km#PageTop");
+    private void GoBottom() => Navigation.NavigateTo("/log-sheets/reports/total-km#PageBottom");
+
+    private async Task LoadReport()
+    {
+        _message = string.Empty;
+        _rows = new();
+
+        if (!TryBuildMonth(_startYear, _startMonth, out var startMonthDate))
+        {
+            _message = "Enter a valid start year/month.";
+            _messageIsError = true;
+            return;
+        }
+
+        if (!TryBuildMonth(_endYear, _endMonth, out var endMonthDate))
+        {
+            _message = "Enter a valid end year/month.";
+            _messageIsError = true;
+            return;
+        }
+
+        var startDate = new DateTime(startMonthDate.Year, startMonthDate.Month, 1);
+        var endDate = new DateTime(endMonthDate.Year, endMonthDate.Month, DateTime.DaysInMonth(endMonthDate.Year, endMonthDate.Month));
+
+        if (endDate < startDate)
+        {
+            _message = "End period must be on or after start period.";
+            _messageIsError = true;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            var logsheetsTask = LogsheetService.GetAllAsync<LogsheetDto>();
+            var vehiclesTask = VehicleService.GetVehiclesAsync(1, 5000);
+            var modelsTask = ReferenceDataService.GetModelsAsync();
+            var classesTask = ClassService.GetClassesAsync();
+
+            await Task.WhenAll(logsheetsTask, vehiclesTask, modelsTask, classesTask);
+
+            var logsheets = logsheetsTask.Result;
+            var vehicles = vehiclesTask.Result.Data ?? new List<VehicleDto>();
+            var models = modelsTask.Result ?? new List<ModelDto>();
+            var classes = classesTask.Result ?? new List<ClassDto>();
+
+            var vehicleToModel = vehicles
+                .Where(v => v.vmf_code > 0 && v.model_code > 0)
+                .GroupBy(v => v.vmf_code)
+                .ToDictionary(g => g.Key, g => g.First().model_code);
+
+            var modelToClass = models
+                .Where(m => m.model_code > 0 && m.class_code.HasValue && m.class_code.Value > 0)
+                .GroupBy(m => m.model_code)
+                .ToDictionary(g => g.Key, g => g.First().class_code!.Value);
+
+            var classDescriptions = classes
+                .Where(c => c.class_code > 0)
+                .ToDictionary(c => c.class_code, c => c.class_description ?? c.class_code.ToString());
+
+            var grouped = logsheets
+                .Where(l => l.month.Date >= startDate.Date && l.month.Date <= endDate.Date)
+                .Select(l =>
+                {
+                    if (!vehicleToModel.TryGetValue(l.vmf_code, out var modelCode))
+                    {
+                        return (classCode: 0, distance: 0d);
+                    }
+
+                    if (!modelToClass.TryGetValue(modelCode, out var classCode))
+                    {
+                        return (classCode: 0, distance: 0d);
+                    }
+
+                    var distance = l.end_odo - l.start_odo;
+                    return (classCode, distance: distance < 0 ? 0d : distance);
+                })
+                .Where(x => x.classCode > 0)
+                .GroupBy(x => x.classCode)
+                .Select(g => new ClassDistanceRow
+                {
+                    ClassCode = g.Key,
+                    ClassDescription = classDescriptions.TryGetValue(g.Key, out var desc) ? desc : g.Key.ToString(),
+                    TotalDistance = g.Sum(x => x.distance)
+                })
+                .OrderBy(r => r.ClassCode)
+                .ToList();
+
+            _rows = grouped;
+            _message = _rows.Count == 0
+                ? "No class totals found for the selected period."
+                : $"Loaded total distance for {_rows.Count} class code(s).";
+            _messageIsError = _rows.Count == 0;
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to load class totals.";
+            _messageIsError = true;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static bool TryBuildMonth(string yearText, string monthText, out DateTime month)
+    {
+        month = default;
+        if (!int.TryParse(yearText?.Trim(), out var year) || year < 1900 || year > 9999)
+        {
+            return false;
+        }
+
+        if (!int.TryParse(monthText?.Trim(), out var monthValue) || monthValue < 1 || monthValue > 12)
+        {
+            return false;
+        }
+
+        month = new DateTime(year, monthValue, 1);
+        return true;
+    }
+
+    private sealed class ClassDistanceRow
+    {
+        public int ClassCode { get; set; }
+        public string ClassDescription { get; set; } = string.Empty;
+        public double TotalDistance { get; set; }
+    }
+}

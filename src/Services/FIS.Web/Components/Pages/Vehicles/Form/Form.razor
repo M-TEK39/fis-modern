@@ -88,10 +88,6 @@
                                 <InputText @bind-Value="_vehicle.previos_gg_number" class="form-input" />
                             </div>
                             <div class="form-field">
-                                <label class="form-label">Status</label>
-                                <InputText @bind-Value="_statusText" class="form-input" placeholder="Awaiting Authorization" />
-                            </div>
-                            <div class="form-field">
                                 <label class="form-label">GP-Number <span class="required">*</span></label>
                                 <InputText @bind-Value="_vehicle.registration_number" class="form-input" />
                                 <ValidationMessage For="() => _vehicle.registration_number" />
@@ -135,20 +131,6 @@
                                 <label class="form-label">VIN/Chassis Number <span class="required">*</span></label>
                                 <InputText @bind-Value="_vehicle.chassis_number" class="form-input" />
                                 <ValidationMessage For="() => _vehicle.chassis_number" />
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">Hire Type <span class="required">*</span></label>
-                                <select class="form-select" @bind="_hireTypeCode">
-                                    <option value="0">Select One...</option>
-                                </select>
-                                <span class="form-hint">Aligned to legacy capture flow.</span>
-                            </div>
-                            <div class="form-field">
-                                <label class="form-label">Hired From <span class="required">*</span></label>
-                                <select class="form-select" @bind="_hiredFromCode">
-                                    <option value="0">Select One...</option>
-                                </select>
-                                <span class="form-hint">Aligned to legacy capture flow.</span>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Take On Date <span class="required">*</span></label>
@@ -218,6 +200,42 @@
                                 <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                                     <InputText @bind-Value="_capturerComment" class="form-input" style="flex:1;" />
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ShowComments">List Comments</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-section" style="margin-top:1.5rem;">
+                            <h3 class="form-section-title">Service Information</h3>
+                            <div class="form-grid">
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Status</label>
+                                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                                        <InputText @bind-Value="_statusText" class="form-input" style="max-width: 280px;" placeholder="Awaiting Authorization" />
+                                        <span class="form-hint"><em>Effective From "@(_vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"</em></span>
+                                        <button type="button" class="btn btn-secondary btn-sm" @onclick="ManageVehicleStatus">Manage Vehicle Status</button>
+                                    </div>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Location</label>
+                                    <select class="form-select" @bind="_vehicle.location_code">
+                                        <option value="0">Select Location...</option>
+                                        @foreach (var location in _locations)
+                                        {
+                                            <option value="@ToShort(location.LocationId)">@location.LocationName</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Hired From</label>
+                                    <InputText @bind-Value="_hiredFrom" class="form-input" />
+                                </div>
+                                <div class="form-field">
+                                    <label class="form-label">Hire Type</label>
+                                    <InputText @bind-Value="_hireType" class="form-input" />
+                                </div>
+                                <div class="form-field form-group-full">
+                                    <label class="form-label">Comment</label>
+                                    <InputText @bind-Value="_vehicle.Licence_receiver" class="form-input" />
                                 </div>
                             </div>
                         </div>
@@ -517,6 +535,14 @@
                     </div>
                     <div class="form-card-body">
                         <div class="form-grid">
+                            <div class="form-field form-group-full">
+                                <label class="form-label">Status</label>
+                                <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                                    <InputText @bind-Value="_statusText" class="form-input" style="max-width: 280px;" placeholder="Awaiting Authorization" />
+                                    <span class="form-hint"><em>Effective From "@(_vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"</em></span>
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ManageVehicleStatus">Manage Vehicle Status</button>
+                                </div>
+                            </div>
                             <div class="form-field">
                                 <label class="form-label">Location</label>
                                 <select class="form-select" @bind="_vehicle.location_code">
@@ -538,12 +564,14 @@
                             <div class="form-field">
                                 <label class="form-label">Hire Type</label>
                                 <InputText @bind-Value="_hireType" class="form-input" />
-                                <span class="form-hint">Legacy service information field.</span>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Hired From</label>
                                 <InputText @bind-Value="_hiredFrom" class="form-input" />
-                                <span class="form-hint">Legacy service information field.</span>
+                            </div>
+                            <div class="form-field form-group-full">
+                                <label class="form-label">Comment</label>
+                                <InputText @bind-Value="_vehicle.Licence_receiver" class="form-input" />
                             </div>
                         </div>
                     </div>
@@ -758,8 +786,6 @@
     private string _fleetNotes = "";
     private string _capturerComment = "";
     private short _siteCode;
-    private short _hireTypeCode;
-    private short _hiredFromCode;
     private string _previousRegistrationNumber = "";
     private bool _extendedService;
 
@@ -786,6 +812,9 @@
                 _vehicle = vehicle;
                 _siteCode = _vehicle.site_code ?? 0;
                 _extendedService = string.Equals(_vehicle.extended_service, "1", StringComparison.OrdinalIgnoreCase);
+                _statusText = _vehicle.status_description ?? string.Empty;
+                _hiredFrom = _vehicle.purchased_from ?? string.Empty;
+                _hireType = _vehicle.type_name ?? string.Empty;
             }
             else
             {
@@ -908,6 +937,10 @@
 
     private void NormalizeVehicleFields()
     {
+        _vehicle.status_description = _statusText?.Trim();
+        _vehicle.purchased_from = _hiredFrom?.Trim();
+        _vehicle.type_name = _hireType?.Trim();
+        _vehicle.Licence_receiver = _vehicle.Licence_receiver?.Trim();
         _vehicle.fleet_number = _vehicle.fleet_number?.Trim().ToUpperInvariant();
         _vehicle.registration_number = _vehicle.registration_number?.Trim().ToUpperInvariant();
         _vehicle.previos_gg_number = _vehicle.previos_gg_number?.Trim().ToUpperInvariant();
@@ -957,6 +990,17 @@
     private void NavigateToList()
     {
         Navigation.NavigateTo("/vehicles");
+    }
+
+    private void ManageVehicleStatus()
+    {
+        if (VmfCode.HasValue)
+        {
+            Navigation.NavigateTo($"/vehicles/status-maintenance?vmfCode={VmfCode.Value}");
+            return;
+        }
+
+        Navigation.NavigateTo("/vehicles/status-maintenance");
     }
 
     private void QuickSearch()
@@ -1086,13 +1130,13 @@
         _otherColor = "";
         _quickSearch = "";
         _statusText = "";
+        _hiredFrom = "";
+        _hireType = "";
         _hasDamages = false;
         _damagesDescription = "";
         _fleetNotes = "";
         _capturerComment = "";
         _siteCode = 0;
-        _hireTypeCode = 0;
-        _hiredFromCode = 0;
         _maintenanceTypeId = 0;
         _maintenanceStartDate = null;
         _maintenancePeriod = "";

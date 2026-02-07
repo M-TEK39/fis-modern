@@ -208,13 +208,6 @@
                     <button class="btn btn-primary btn-sm">Save</button>
                 </div>
             }
-
-            <LegacyEndpointActionPanel
-                LegacyPath="Trips/MaintainDriver.aspx"
-                Endpoint="@GetEndpointForMode()"
-                HttpMethod="@GetHttpMethodForMode()"
-                ButtonText="Run Driver Maintenance API"
-                ReportType="trips-driver-maintenance" />
         </div>
     </div>
 </div>
@@ -227,19 +220,4 @@
         _activeTab = tab;
     }
 
-    private string GetEndpointForMode()
-        => _activeTab switch
-        {
-            "add" => "api/driver",
-            "update" => "api/driver/1",
-            _ => "api/driver"
-        };
-
-    private string GetHttpMethodForMode()
-        => _activeTab switch
-        {
-            "add" => "POST",
-            "update" => "PUT",
-            _ => "GET"
-        };
 }

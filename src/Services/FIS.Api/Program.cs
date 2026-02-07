@@ -214,6 +214,7 @@ builder.Services.AddScoped<IVehicleAuthorizationRepository, VehicleAuthorization
 builder.Services.AddScoped<IContractRepository, ContractRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+builder.Services.AddScoped<IAccessLevelRepository, AccessLevelRepository>();
 builder.Services.AddScoped<ISiteRepository, SiteRepository>();
 builder.Services.AddScoped<IDepartmentRepository, DepartmentRepository>();
 builder.Services.AddScoped<IDriverRepository, DriverRepository>();

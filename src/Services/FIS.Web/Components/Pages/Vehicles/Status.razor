@@ -1,13 +1,123 @@
 @page "/vehicles/status"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Vehicle List by Status Selection"
-    Description="Select a vehicle status and date range to view legacy reports."
-    LegacyPath="Select a vehicle status and date range to view legacy reports."
-    Endpoint="api/report/vehicle-status-range"
-    HttpMethod="POST"
-    ReportType="vehicle-status-range-report"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Vehicle List by Status - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-list-check"></i>
+            Vehicle List by Status Selection
+        </h1>
+        <p class="page-description">Filter vehicles by status and status date.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">Status Contains</label>
+            <input class="form-input" @bind="_statusText" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">From Date</label>
+            <input type="date" class="form-input" @bind="_fromDate" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">To Date</label>
+            <input type="date" class="form-input" @bind="_toDate" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="LoadReportAsync">Submit</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading report...</p>
+        </div>
+    }
+    else if (_hasSearched && _results.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-error-circle"></i>
+            <h3>No vehicles found</h3>
+            <p>No vehicles matched the selected status filters.</p>
+        </div>
+    }
+    else if (_results.Count > 0)
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_results.Count vehicle(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>GG Number</th>
+                            <th>Registration Number</th>
+                            <th>Status</th>
+                            <th>Status Date</th>
+                            <th>Location</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var vehicle in _results)
+                        {
+                            <tr>
+                                <td>@vehicle.fleet_number</td>
+                                <td>@vehicle.registration_number</td>
+                                <td>@vehicle.status_description</td>
+                                <td>@(vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@vehicle.location_description</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _hasSearched;
+    private string _statusText = string.Empty;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+    private List<VehicleDto> _results = new();
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        _hasSearched = true;
+        _results = new();
+        try
+        {
+            var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _results = page.Data
+                .Where(v => string.IsNullOrWhiteSpace(_statusText) || (v.status_description ?? string.Empty).Contains(_statusText, StringComparison.OrdinalIgnoreCase))
+                .Where(v => !_fromDate.HasValue || (v.vehicle_status_date.HasValue && v.vehicle_status_date.Value.Date >= _fromDate.Value.Date))
+                .Where(v => !_toDate.HasValue || (v.vehicle_status_date.HasValue && v.vehicle_status_date.Value.Date <= _toDate.Value.Date))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

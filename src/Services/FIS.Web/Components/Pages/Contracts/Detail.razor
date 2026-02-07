@@ -66,7 +66,7 @@
                             <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunContractActionAsync("decline")' disabled="@_actionRunning">Decline</button>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunContractActionAsync("review-pending")' disabled="@_actionRunning">Pending Contract Exists : Click to Review</button>
+                            <button class="btn btn-danger btn-sm contract-pending-btn" type="button" @onclick='() => RunContractActionAsync("review-pending")' disabled="@_actionRunning">Pending Contract Exists : Click to Review</button>
                         </div>
                         @if (!string.IsNullOrWhiteSpace(_actionStatusMessage))
                         {
@@ -74,6 +74,23 @@
                                 @_actionStatusMessage
                             </div>
                         }
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="contract-section">
+        <table class="contract-legacy-table">
+            <thead>
+                <tr class="contract-legacy-heading">
+                    <th colspan="4">Approval Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="contract-approval-summary">
+                        @BuildApprovalSummary()
                     </td>
                 </tr>
             </tbody>
@@ -831,5 +848,14 @@
             "E" => "Lease",
             _ => string.IsNullOrWhiteSpace(code) ? "-" : code
         };
+    }
+
+    private string BuildApprovalSummary()
+    {
+        var openedBy = ValueOrDash(_contract?.contractor_name) ?? "Unknown";
+        var openedOn = _contract?.start_date.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy");
+        var status = ValueOrDash(_contract?.status) ?? "Awaiting Approval";
+
+        return $"CONTRACT OPENED BY {openedBy.ToUpperInvariant()} ON THE {openedOn} AND CURRENTLY IN STATUS: {status.ToUpperInvariant()}.";
     }
 }

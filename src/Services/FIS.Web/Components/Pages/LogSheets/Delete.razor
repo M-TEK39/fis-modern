@@ -41,7 +41,7 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_logsheets.Count == 0)
+    else if (_hasSearched && _logsheets.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-error-circle"></i>
@@ -88,16 +88,9 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logs/Log_Delete.aspx"
-        Endpoint="api/logsheet/entry/1"
-        HttpMethod="DELETE"
-        ButtonText="Test Logsheet Delete Endpoint"
-        ReportType="logsheet-delete" />
-
 @code {
     private bool _loading;
+    private bool _hasSearched;
     private string _requisition = string.Empty;
     private string _fleetNumber = string.Empty;
     private List<LogsheetDto> _logsheets = new();
@@ -105,6 +98,7 @@
     private async Task SearchLogsheets()
     {
         _loading = true;
+        _hasSearched = true;
         _logsheets = new List<LogsheetDto>();
         try
         {

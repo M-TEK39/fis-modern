@@ -95,6 +95,21 @@ public interface IUserProfileRepository
 }
 
 /// <summary>
+/// Repository interface for access level operations (bitwise permissions)
+/// </summary>
+public interface IAccessLevelRepository
+{
+    Task<AccessLevel?> GetByIdAsync(short accessLevelId);
+    Task<AccessLevel?> GetByNameAsync(string accessLevelName);
+    Task<IEnumerable<AccessLevel>> GetAllAsync();
+    Task<AccessLevel> CreateAsync(AccessLevel accessLevel, int currentUserId);
+    Task UpdateAsync(AccessLevel accessLevel, int currentUserId);
+    Task DeleteAsync(short accessLevelId, int currentUserId);
+    Task<bool> UserHasPermissionAsync(long userAccessLevel, string permissionName);
+    Task<IEnumerable<string>> GetUserPermissionsAsync(long userAccessLevel);
+}
+
+/// <summary>
 /// Repository interface for site operations
 /// </summary>
 public interface ISiteRepository

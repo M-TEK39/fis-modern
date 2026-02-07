@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject LogsheetApiService LogsheetService
 @inject VehicleLookupApiService VehicleLookupService
 @inject SiteApiService SiteService
@@ -22,6 +21,7 @@
 
 <div class="page-content">
     <div class="form-card">
+        <h3 class="section-title">Step 1: Select Vehicle</h3>
         <div class="form-row">
             <label class="form-label">Batch Number</label>
             <input class="form-input" @bind="_bundNum" />
@@ -38,6 +38,7 @@
     @if (_showForm)
     {
         <div class="form-card">
+            <h3 class="section-title">Step 2: Enter Logsheet</h3>
             <div class="form-row">
                 <label class="form-label">Requisition Number</label>
                 <input class="form-input" @bind="_logsheet.rek_num" />
@@ -73,6 +74,14 @@
             </div>
         </div>
     }
+    else if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="empty-state">
+            <i class="bx bx-info-circle"></i>
+            <h3>Vehicle not found</h3>
+            <p>@_statusMessage</p>
+        </div>
+    }
 
     @if (_loading)
     {
@@ -83,19 +92,12 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logs/Log_Entry_A.aspx"
-        Endpoint="api/logsheet/entry"
-        HttpMethod="POST"
-        ButtonText="Test Logsheet Entry Endpoint"
-        ReportType="logsheet-enter" />
-
 @code {
     private bool _loading;
     private bool _showForm;
     private string _vehicleSearch = string.Empty;
     private string _bundNum = string.Empty;
+    private string _statusMessage = string.Empty;
     private LogsheetDto _logsheet = new();
     private List<SiteResponseDto> _sites = new();
 
@@ -106,6 +108,7 @@
 
     private async Task LoadVehicle()
     {
+        _statusMessage = string.Empty;
         _loading = true;
         try
         {
@@ -119,7 +122,11 @@
                     _logsheet.bund_num = bundle;
                 }
                 _showForm = true;
+                return;
             }
+
+            _showForm = false;
+            _statusMessage = "No vehicle was found for the GG/GP number entered.";
         }
         catch (Exception ex)
         {
@@ -141,6 +148,7 @@
             _showForm = false;
             _vehicleSearch = string.Empty;
             _bundNum = string.Empty;
+            _statusMessage = string.Empty;
         }
         catch (Exception ex)
         {

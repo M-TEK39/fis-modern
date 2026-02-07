@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject TrackingApiService TrackingService
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +13,7 @@
             <i class="bx bx-chip"></i>
             Tracking Report for ONE Tracking Device
         </h1>
-        <p class="page-description">Legacy placeholder for Tracking/RPT_one_trnum_main_track.aspx.</p>
+        <p class="page-description">Legacy Tracking/RPT_one_trnum_main_track.aspx workflow.</p>
     </div>
 </div>
 
@@ -26,6 +25,7 @@
         </div>
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+            <a class="btn btn-secondary" href="/tracking/reports">Menu</a>
         </div>
     </div>
 
@@ -36,7 +36,7 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_results.Count == 0)
+    else if (_hasSearched && _results.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-chip"></i>
@@ -72,22 +72,16 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Tracking/RPT_one_trnum_main_track.aspx"
-        Endpoint="api/tracking/reports/one-device"
-        HttpMethod="POST"
-        ButtonText="Test Tracking One Device Report Endpoint"
-        ReportType="tracking-report-one-device" />
-
 @code {
     private bool _loading;
+    private bool _hasSearched;
     private string _trackerNumber = string.Empty;
     private List<TrackingDto> _results = new();
 
     private async Task LoadReport()
     {
         _loading = true;
+        _hasSearched = true;
         _results = new List<TrackingDto>();
         try
         {

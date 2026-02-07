@@ -32,7 +32,10 @@ public class Program
         {
             Console.WriteLine("👥 Seeding users and credentials...");
             await SeedTestUsers(dbContext);
-            
+
+            Console.WriteLine("🔐 Seeding access levels (bitwise permissions)...");
+            await SeedAccessLevelData(dbContext);
+
             Console.WriteLine("📑 Seeding reference data (Batch 1)...");
             await SeedReferenceData(dbContext);
 
@@ -106,11 +109,15 @@ public class Program
 
     private static async Task SeedTestUsers(FisDbContext dbContext)
     {
-        if (await dbContext.Users.AnyAsync())
+        bool usersExist = await dbContext.Users.AnyAsync();
+
+        if (usersExist)
         {
-            Console.WriteLine("  ✓ Users already exist. Skipping user seeding.");
-            return;
+            Console.WriteLine("  ✓ Users already exist. Skipping TS_Users, credentials, and mappings seeding.");
+            // Continue to seed/update UserAccessOlds profiles below
         }
+        else
+        {
 
         // Use raw SQL to insert users with explicit IDs
         await dbContext.Database.ExecuteSqlRawAsync(@"
@@ -171,83 +178,75 @@ public class Program
         await dbContext.SaveChangesAsync();
 
         Console.WriteLine("  ✓ Credentials and mappings seeded.");
+        }
 
         // Seed User Profiles (user_access_old1 table) with FirstName/LastName for login
+        // This section ALWAYS runs to allow updating AccessLevel values
         Console.WriteLine("  🧑 Seeding user profiles (FirstName, LastName, etc.)...");
 
-        var userProfiles = new[]
+        // Delete existing user profiles and re-insert with IDENTITY_INSERT ON
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            -- Delete existing test profiles
+            DELETE FROM user_access_old1 WHERE user_access_code BETWEEN 1 AND 4;
+
+            -- Re-insert with updated AccessLevel values
+            SET IDENTITY_INSERT user_access_old1 ON;
+
+            INSERT INTO user_access_old1
+            (user_access_code, FirstName, LastName, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted)
+            VALUES
+            (1, 'Murcus', 'Developer', 'murcus@corptech.co.za', '+27 11 123 4567', 'Password123!', 'Active', 1, 1, 1, 1, GETDATE(), 0),
+            (2, 'Admin', 'User', 'xxodbeats@gmail.com', '+27 82 555 1234', 'Password123!', 'Active', 1, 1, 1, 32767, GETDATE(), 0),
+            (3, 'IT', 'Support', 'It@kulungwana.co.za', '+27 11 987 6543', 'Password123!', 'Active', 1, 1, 2, 2, GETDATE(), 0),
+            (4, 'Backup', 'Admin', 'info.backup@kulungwana.co.za', '+27 11 987 6544', 'Password123!', 'Active', 1, 1, 1, 1, GETDATE(), 0);
+
+            SET IDENTITY_INSERT user_access_old1 OFF;
+        ");
+
+        Console.WriteLine("  ✓ User profiles updated with new AccessLevel values");
+        Console.WriteLine("  📝 Test login: FirstName='Murcus', Password='Password123!' (AccessLevel=1 - Vehicle Management only)");
+        Console.WriteLine("  👑 Admin login: FirstName='Admin', Password='Password123!' (AccessLevel=32767 - ALL PERMISSIONS)");
+    }
+
+    private static async Task SeedAccessLevelData(FisDbContext dbContext)
+    {
+        if (await dbContext.AccessLevels.AnyAsync())
         {
-            new UserAccessOld
-            {
-                user_access_code = 1,
-                FirstName = "Murcus",
-                LastName = "Developer",
-                E_Mail = "murcus@corptech.co.za",
-                telephone = "+27 11 123 4567",
-                password = "Password123!", // TODO: Hash in production
-                user_status = "Active",
-                user_active = true,
-                Site_code = 1,
-                Position_Code = 1,
-                AccessLevel = 1,
-                date_created = DateTime.UtcNow,
-                is_deleted = false
-            },
-            new UserAccessOld
-            {
-                user_access_code = 2,
-                FirstName = "Admin",
-                LastName = "User",
-                E_Mail = "xxodbeats@gmail.com",
-                telephone = "+27 82 555 1234",
-                password = "Password123!",
-                user_status = "Active",
-                user_active = true,
-                Site_code = 1,
-                Position_Code = 1,
-                AccessLevel = 1,
-                date_created = DateTime.UtcNow,
-                is_deleted = false
-            },
-            new UserAccessOld
-            {
-                user_access_code = 3,
-                FirstName = "IT",
-                LastName = "Support",
-                E_Mail = "It@kulungwana.co.za",
-                telephone = "+27 11 987 6543",
-                password = "Password123!",
-                user_status = "Active",
-                user_active = true,
-                Site_code = 1,
-                Position_Code = 2,
-                AccessLevel = 2,
-                date_created = DateTime.UtcNow,
-                is_deleted = false
-            },
-            new UserAccessOld
-            {
-                user_access_code = 4,
-                FirstName = "Backup",
-                LastName = "Admin",
-                E_Mail = "info.backup@kulungwana.co.za",
-                telephone = "+27 11 987 6544",
-                password = "Password123!",
-                user_status = "Active",
-                user_active = true,
-                Site_code = 1,
-                Position_Code = 1,
-                AccessLevel = 1,
-                date_created = DateTime.UtcNow,
-                is_deleted = false
-            }
-        };
+            Console.WriteLine("  ✓ Access levels already exist. Skipping access level seeding.");
+            return;
+        }
 
-        dbContext.UserAccessOlds.AddRange(userProfiles);
-        await dbContext.SaveChangesAsync();
+        // Seed module-based permissions using bitwise values (powers of 2)
+        // Users can have multiple permissions by summing the values
+        // Example: Admin = 1+2+4+8 = 15 (Vehicle, Contract, User Admin, Reports)
 
-        Console.WriteLine($"  ✓ Added {userProfiles.Length} user profiles with FirstName/LastName");
-        Console.WriteLine("  📝 Test login: FirstName='Murcus', Password='Password123!'");
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            SET IDENTITY_INSERT AccessLevels ON;
+            INSERT INTO AccessLevels (AccessLevelID, AccessLevelName, AccessLevelValue, date_created, created_by_user_code, is_deleted) VALUES
+            (1, 'Vehicle Management', 1, GETDATE(), 1, 0),
+            (2, 'Contract Management', 2, GETDATE(), 1, 0),
+            (3, 'User Administration', 4, GETDATE(), 1, 0),
+            (4, 'Reports', 8, GETDATE(), 1, 0),
+            (5, 'Financial', 16, GETDATE(), 1, 0),
+            (6, 'Workshop', 32, GETDATE(), 1, 0),
+            (7, 'Trip Management', 64, GETDATE(), 1, 0),
+            (8, 'Driver Management', 128, GETDATE(), 1, 0),
+            (9, 'Maintenance', 256, GETDATE(), 1, 0),
+            (10, 'Accident Management', 512, GETDATE(), 1, 0),
+            (11, 'Fine Management', 1024, GETDATE(), 1, 0),
+            (12, 'Fuel Card Management', 2048, GETDATE(), 1, 0),
+            (13, 'Asset Verification', 4096, GETDATE(), 1, 0),
+            (14, 'Workflow Management', 8192, GETDATE(), 1, 0),
+            (15, 'Third Party Integration', 16384, GETDATE(), 1, 0);
+            SET IDENTITY_INSERT AccessLevels OFF;
+        ");
+
+        Console.WriteLine("  ✓ Access levels seeded (15 module permissions)");
+        Console.WriteLine("  📊 Bitwise Permission Examples:");
+        Console.WriteLine("     Admin (All Access) = 32767 (sum of all 15 permissions)");
+        Console.WriteLine("     Fleet Manager = 451 (Vehicle + Contract + Reports + Trip + Maintenance = 1+2+8+64+256+128)");
+        Console.WriteLine("     Workshop Manager = 288 (Workshop + Maintenance = 32+256)");
+        Console.WriteLine("     Basic User = 9 (Vehicle + Reports = 1+8)");
     }
 
     private static async Task SeedReferenceData(FisDbContext dbContext)

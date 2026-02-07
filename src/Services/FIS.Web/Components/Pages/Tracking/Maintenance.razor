@@ -38,7 +38,7 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_tracking.Count == 0)
+    else if (_hasSearched && _tracking.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-wrench"></i>
@@ -98,11 +98,20 @@
                     </div>
                     <div class="form-row">
                         <label class="form-label">Tracker Status</label>
-                        <input class="form-input" @bind="_form.track_status" />
+                        <select class="form-select" @bind="_form.track_status">
+                            <option value="Installed">Installed</option>
+                            <option value="Removed">Removed</option>
+                            <option value="Stolen">Stolen</option>
+                            <option value="None">None</option>
+                        </select>
                     </div>
                     <div class="form-row">
                         <label class="form-label">Tracker Type</label>
-                        <input class="form-input" @bind="_form.track_type" />
+                        <select class="form-select" @bind="_form.track_type">
+                            <option value="New">New</option>
+                            <option value="Reused">Re-used</option>
+                            <option value="None">None</option>
+                        </select>
                     </div>
                     <div class="form-row">
                         <label class="form-label">Previous GG</label>
@@ -130,17 +139,10 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Tracking/MNT_track_getreg.aspx"
-        Endpoint="api/tracking/vehicle-search?identifier=GG123"
-        HttpMethod="GET"
-        ButtonText="Test Tracking Maintenance Search Endpoint"
-        ReportType="tracking-maintenance-search" />
-
 @code {
     private bool _loading;
     private bool _showForm;
+    private bool _hasSearched;
     private string _searchTerm = string.Empty;
     private List<TrackingDto> _tracking = new();
     private TrackingDto _form = new();
@@ -149,6 +151,7 @@
     private async Task SearchTracking()
     {
         _loading = true;
+        _hasSearched = true;
         _tracking = new List<TrackingDto>();
         try
         {

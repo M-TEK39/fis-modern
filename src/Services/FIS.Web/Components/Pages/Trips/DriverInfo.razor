@@ -1,7 +1,5 @@
 @page "/trips/driver-info"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>Driver Information - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -35,12 +33,6 @@
                 <button class="btn btn-primary btn-sm">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/trips">Back</a>
             </div>
-            <LegacyEndpointActionPanel
-                LegacyPath="Trips/DriverInfo.aspx"
-                Endpoint="api/tripdriver"
-                HttpMethod="GET"
-                ButtonText="Run Driver Info API"
-                ReportType="trips-driver-info" />
         </div>
     </div>
 </div>

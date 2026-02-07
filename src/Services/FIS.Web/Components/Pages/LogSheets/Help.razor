@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/log-sheets/help"
 @rendermode InteractiveServer
 
@@ -10,22 +9,51 @@
             <i class="bx bx-help-circle"></i>
             Logsheet Maintenance Information / Help
         </h1>
-        <p class="page-description">Legacy help placeholder.</p>
+        <p class="page-description">Legacy-aligned guidance for logsheet capture and reporting.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/log-sheets">Back to Logsheet Menu</a>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-book"></i>
-        <h3>Help content pending</h3>
-        <p>This page will mirror Logs/Doc/Doc_Logsheets.htm.</p>
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Overview</h2>
+        </div>
+        <div class="form-card-body">
+            <p>Use this module to capture monthly logsheets, correct captured entries, and generate operational reports.</p>
+            <p>The workflow and report names mirror the legacy `Logs/Log_menu.aspx` menu structure.</p>
+        </div>
     </div>
 
-    <LegacyEndpointActionPanel
-        LegacyPath="Logs/Doc/Doc_Logsheets.htm"
-        Endpoint="api/logsheet/help"
-        HttpMethod="GET"
-        ButtonText="Test Logsheet Help Endpoint"
-        ReportType="logsheet-help" />
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Core Actions</h2>
+        </div>
+        <div class="form-card-body">
+            <ul>
+                <li>`Enter a Logsheet`: capture monthly odometer and usage data.</li>
+                <li>`Delete a Logsheet`: remove incorrect logsheet entries.</li>
+                <li>`Edit Logsheets`: update captured values where allowed.</li>
+                <li>`Report: Logsheets captured`: run date/time and user-level capture activity reports.</li>
+                <li>`Report: Total Km per Class Code`: summarize traveled distance by vehicle class over a selected period.</li>
+            </ul>
+        </div>
+    </div>
 
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Navigation</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-actions">
+                <a class="btn btn-primary btn-sm" href="/log-sheets/enter">Enter Logsheet</a>
+                <a class="btn btn-secondary btn-sm" href="/log-sheets/delete">Delete Logsheet</a>
+                <a class="btn btn-secondary btn-sm" href="/log-sheets/edit">Edit Logsheets</a>
+                <a class="btn btn-secondary btn-sm" href="/log-sheets/reports/captured">Logsheets Captured Report</a>
+                <a class="btn btn-secondary btn-sm" href="/log-sheets/reports/total-km">Total Km per Class Code</a>
+            </div>
+        </div>
+    </div>
 </div>

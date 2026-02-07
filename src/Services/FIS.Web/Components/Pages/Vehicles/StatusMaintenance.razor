@@ -1,13 +1,217 @@
 @page "/vehicles/status-maintenance"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Vehicle Status Maintenance"
-    Description="Select the vehicle for status management (UI-only until API endpoints are available)."
-    LegacyPath="Select the vehicle for status management (UI-only until API endpoints are available)."
-    Endpoint="api/vehicles/status-maintenance/search?query="
-    HttpMethod="GET"
-    ReportType="vehicle-status-maintenance"
-    BackLink="/vehicles"
-    Icon="bx-wrench" />
+<PageTitle>Vehicle Status Maintenance - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-cog"></i>
+            Vehicle Status Maintenance
+        </h1>
+        <p class="page-description">Search and update vehicle status details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">GG / GP Number</label>
+            <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" @onclick="SearchVehiclesAsync">Search</button>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading...</p>
+        </div>
+    }
+    else if (_hasSearched && _searchResults.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-search"></i>
+            <h3>No vehicles found</h3>
+            <p>Check the GG/GP number and search again.</p>
+        </div>
+    }
+    else if (_searchResults.Count > 0)
+    {
+        <div class="table-container">
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>GG Number</th>
+                            <th>Registration</th>
+                            <th>Status</th>
+                            <th>Status Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var vehicle in _searchResults)
+                        {
+                            <tr>
+                                <td>@vehicle.fleet_number</td>
+                                <td>@vehicle.registration_number</td>
+                                <td>@vehicle.status_description</td>
+                                <td>@(vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => SelectVehicleAsync(vehicle.vmf_code)">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    @if (_selectedVehicle != null)
+    {
+        <div class="form-card" style="margin-top:1rem;">
+            <div class="form-card-header">
+                <h2>Manage Vehicle Status</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">GG Number</label>
+                        <input class="form-input" value="@_selectedVehicle.fleet_number" readonly />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Registration Number</label>
+                        <input class="form-input" value="@_selectedVehicle.registration_number" readonly />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Status Description</label>
+                        <input class="form-input" @bind="_statusDescription" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Status Date</label>
+                        <input type="date" class="form-input" @bind="_statusDate" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Status Code</label>
+                        <input type="number" class="form-input" @bind="_statusCode" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="SaveStatusAsync" disabled="@_saving">Save Status</button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "vmfCode")] public int? VmfCode { get; set; }
+
+    private string _searchTerm = string.Empty;
+    private bool _loading;
+    private bool _saving;
+    private bool _hasSearched;
+    private List<VehicleDto> _searchResults = new();
+    private VehicleDto? _selectedVehicle;
+    private string _statusDescription = string.Empty;
+    private DateTime? _statusDate;
+    private short _statusCode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (VmfCode.HasValue && VmfCode.Value > 0)
+        {
+            await SelectVehicleAsync(VmfCode.Value);
+        }
+    }
+
+    private async Task SearchVehiclesAsync()
+    {
+        _loading = true;
+        _hasSearched = true;
+        _searchResults = new();
+        try
+        {
+            _searchResults = await VehicleService.SearchVehiclesAsync(_searchTerm.Trim());
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectVehicleAsync(int vmfCode)
+    {
+        _loading = true;
+        try
+        {
+            _selectedVehicle = await VehicleService.GetVehicleAsync(vmfCode);
+            if (_selectedVehicle == null)
+            {
+                return;
+            }
+
+            _statusDescription = _selectedVehicle.status_description ?? string.Empty;
+            _statusDate = _selectedVehicle.vehicle_status_date ?? DateTime.Today;
+            _statusCode = _selectedVehicle.vehicle_status_code;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveStatusAsync()
+    {
+        if (_selectedVehicle == null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            _selectedVehicle.status_description = _statusDescription;
+            _selectedVehicle.vehicle_status_date = _statusDate;
+            _selectedVehicle.vehicle_status_code = _statusCode;
+            var ok = await VehicleService.UpdateVehicleAsync(_selectedVehicle.vmf_code, _selectedVehicle);
+            if (!ok)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", "Failed to save vehicle status.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
