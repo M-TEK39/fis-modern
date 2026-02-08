@@ -1,13 +1,99 @@
 @page "/full-maintenance-lease/reports/expired-contracts-open"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Expired FML Contracts Still Open Contracts With Clients Report"
-    Description="Legacy fleet operations endpoint wiring page."
-    LegacyPath="Legacy fleet operations endpoint wiring page."
-    Endpoint="api/leasecontractterms/reports/expired-open"
-    HttpMethod="POST"
-    ReportType="fml-report-expired-open"
-    BackLink="/full-maintenance-lease/reports"
-    Icon="bx-wrench" />
+<PageTitle>Expired FML Contracts Still Open Contracts With Clients Report</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-error-circle"></i>Expired FML Contracts Still Open</h1>
+        <p class="page-description">Expired contracts requiring operational cleanup.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/full-maintenance-lease/reports">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state"><div class="spinner"></div><p>Loading report...</p></div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="empty-state"><i class="bx bx-check-circle"></i><h3>No records</h3><p>No expired contracts identified.</p></div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header"><span class="table-title">@_rows.Count contract(s)</span></div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Lease ID</th><th>VMF</th><th>Start Date</th><th>End Date</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.VehicleContractTermID</td>
+                                <td>@row.vmf_Code</td>
+                                <td>@FormatDate(row.StartDate)</td>
+                                <td>@FormatDate(row.EndDate)</td>
+                                <td>@MapStatus(row.AuthorityStatus)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<LeaseTermDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var all = await LeaseService.GetAllAsync<LeaseTermDto>();
+            var today = DateTime.Today;
+            _rows = all
+                .Where(x => x.EndDate.HasValue && x.EndDate.Value.Date < today)
+                .OrderBy(x => x.EndDate)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _rows = new List<LeaseTermDto>();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading expired-open report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string MapStatus(int? status) => status switch
+    {
+        1 => "Pending",
+        2 => "Approved",
+        4 => "Rejected",
+        _ => "Unknown"
+    };
+
+    private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private sealed class LeaseTermDto
+    {
+        public int VehicleContractTermID { get; set; }
+        public int vmf_Code { get; set; }
+        public int? AuthorityStatus { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+}

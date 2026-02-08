@@ -49,58 +49,54 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">First Name</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="text" @bind="_profile.FirstName" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Last Name</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="text" @bind="_profile.LastName" />
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Site</label>
-                        <select class="form-select">
-                            <option>Select a Site</option>
-                        </select>
+                        <input class="form-input" type="number" @bind="_profile.SiteCode" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Position</label>
-                        <select class="form-select">
-                            <option>Select Position</option>
-                        </select>
+                        <input class="form-input" type="number" @bind="_profile.PositionCode" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Persal</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="number" @bind="_profile.PersalNumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Contract Number</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="number" @bind="_profile.ContractNumber" />
                         <span class="text-muted">(if No PersalNo is available)</span>
                     </div>
                     <div class="form-field">
                         <label class="form-label">ID</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="number" @bind="_profile.SaIdNumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Passport Number</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="number" @bind="_profile.PassportNumber" />
                         <span class="text-muted">(if No SA ID is available)</span>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Email</label>
-                        <input class="form-input" type="email" @bind="_email" />
+                        <input class="form-input" type="email" @bind="_profile.Email" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Tel</label>
-                        <input class="form-input" type="text" @bind="_telephone" />
+                        <input class="form-input" type="text" @bind="_profile.Telephone" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Fax</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="number" @bind="_profile.FaxNumber" />
                         <span class="text-muted">(optional)</span>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Cell</label>
-                        <input class="form-input" type="text" />
+                        <input class="form-input" type="number" @bind="_profile.CellphoneNumber" />
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Client Approver Name</label>
@@ -125,11 +121,13 @@
             </div>
             <div class="card-body">
                 <div class="form-grid">
-                    @foreach (var role in UserAdminRoleData.Roles)
+                    @foreach (var role in UserAdminRoleData.AccessOptions)
                     {
                         <label class="form-label form-checkbox">
-                            <input type="checkbox" />
-                            <span>@role</span>
+                            <input type="checkbox"
+                                   checked="@HasPermission(role.PermissionBit)"
+                                   disabled />
+                            <span>@role.Role</span>
                         </label>
                     }
                 </div>
@@ -161,9 +159,10 @@
 @code {
     private bool _showEditProfile;
     private string _selectedUsername = "";
-    private string _displayName = "Authenticated User";
-    private string _email = string.Empty;
-    private string _telephone = string.Empty;
+    private string _displayName = string.Empty;
+    private UserProfileEditorModel _profile = new();
+    private long _selectedAccessLevel;
+    private int _selectedUserAccessCode;
     private bool _loadingUser;
     private bool _saving;
     private string? _errorMessage;
@@ -177,14 +176,14 @@
         _userSummaries = await UserApiService.GetAllSummariesAsync();
     }
 
-    private Task ShowEditProfile()
+    private async Task ShowEditProfile()
     {
         _errorMessage = null;
         _successMessage = null;
         if (string.IsNullOrWhiteSpace(_selectedUsername))
         {
             _errorMessage = "Username is required.";
-            return Task.CompletedTask;
+            return;
         }
 
         _loadingUser = true;
@@ -195,19 +194,17 @@
             {
                 _errorMessage = $"No profile could be found for user {_selectedUsername}.";
                 _showEditProfile = false;
-                return Task.CompletedTask;
+                return;
             }
 
-            _email = match.Email ?? string.Empty;
-            _telephone = match.Telephone ?? string.Empty;
+            _selectedUserAccessCode = match.UserAccessCode;
+            await LoadSelectedProfileAsync(match.UserAccessCode);
             _showEditProfile = true;
         }
         finally
         {
             _loadingUser = false;
         }
-
-        return Task.CompletedTask;
     }
 
     private static string ResolveDisplayName(ClaimsPrincipal user)
@@ -222,7 +219,7 @@
             ?? user.FindFirst("preferred_username")?.Value
             ?? user.Identity?.Name;
 
-        return string.IsNullOrWhiteSpace(email) ? "Authenticated User" : email;
+        return string.IsNullOrWhiteSpace(email) ? string.Empty : email;
     }
 
     private void NavigateToMenu()
@@ -234,8 +231,7 @@
     {
         _errorMessage = null;
         _successMessage = null;
-        var match = _userSummaries.FirstOrDefault(u => string.Equals(u.UserName, _selectedUsername, StringComparison.OrdinalIgnoreCase));
-        if (match == null)
+        if (_selectedUserAccessCode <= 0)
         {
             _errorMessage = "Selected user not found.";
             return;
@@ -244,8 +240,28 @@
         _saving = true;
         try
         {
-            await UserApiService.UpdateAsync(match.UserAccessCode, _email, _telephone);
-            _successMessage = "User updated successfully.";
+            var updated = await UserApiService.UpdateProfileAsync(_selectedUserAccessCode, new UpdateUserProfileRequest
+            {
+                FirstName = _profile.FirstName,
+                LastName = _profile.LastName,
+                Email = _profile.Email,
+                Telephone = _profile.Telephone,
+                SiteCode = _profile.SiteCode,
+                PositionCode = _profile.PositionCode,
+                PersalNumber = _profile.PersalNumber,
+                ContractNumber = _profile.ContractNumber,
+                SaIdNumber = _profile.SaIdNumber,
+                PassportNumber = _profile.PassportNumber,
+                CellphoneNumber = _profile.CellphoneNumber,
+                FaxNumber = _profile.FaxNumber
+            });
+
+            if (updated is not null)
+            {
+                ApplyProfile(updated);
+            }
+
+            _successMessage = "User profile updated in user_access_old1.";
         }
         catch (Exception ex)
         {
@@ -259,9 +275,69 @@
 
     private void ResetChanges()
     {
-        _email = string.Empty;
-        _telephone = string.Empty;
+        _profile = new UserProfileEditorModel();
+        _selectedAccessLevel = 0;
         _errorMessage = null;
         _successMessage = null;
+    }
+
+    private async Task LoadSelectedProfileAsync(int userAccessCode)
+    {
+        var selected = await UserApiService.GetProfileAsync(userAccessCode);
+        if (selected is null)
+        {
+            _errorMessage = "Could not load selected user profile.";
+            return;
+        }
+
+        ApplyProfile(selected);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplyProfile(UserProfileDto profile)
+    {
+        _profile = new UserProfileEditorModel
+        {
+            FirstName = profile.FirstName ?? string.Empty,
+            LastName = profile.LastName ?? string.Empty,
+            Email = profile.Email ?? string.Empty,
+            Telephone = profile.Telephone ?? string.Empty,
+            SiteCode = profile.SiteCode,
+            PositionCode = profile.PositionCode,
+            PersalNumber = profile.PersalNumber,
+            ContractNumber = profile.ContractNumber,
+            SaIdNumber = profile.SaIdNumber,
+            PassportNumber = profile.PassportNumber,
+            CellphoneNumber = profile.CellphoneNumber,
+            FaxNumber = profile.FaxNumber
+        };
+
+        _selectedAccessLevel = profile.AccessLevel;
+    }
+
+    private bool HasPermission(long? permissionBit)
+    {
+        if (permissionBit is null)
+        {
+            return false;
+        }
+
+        return (_selectedAccessLevel & permissionBit.Value) == permissionBit.Value;
+    }
+
+    private sealed class UserProfileEditorModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Telephone { get; set; } = string.Empty;
+        public short? SiteCode { get; set; }
+        public byte? PositionCode { get; set; }
+        public int? PersalNumber { get; set; }
+        public int? ContractNumber { get; set; }
+        public int? SaIdNumber { get; set; }
+        public int? PassportNumber { get; set; }
+        public int? CellphoneNumber { get; set; }
+        public int? FaxNumber { get; set; }
     }
 }

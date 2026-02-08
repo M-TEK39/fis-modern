@@ -135,7 +135,7 @@
 
         var result = await FinanceService.GetActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}");
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
     }
 
     private async Task ApproveYearAsync()
@@ -143,7 +143,7 @@
         _submitting = true;
         var result = await FinanceService.PostActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}/approve", new { });
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
         _submitting = false;
     }
 
@@ -152,7 +152,7 @@
         _submitting = true;
         var result = await FinanceService.PostActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}/reject", new { });
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
         _submitting = false;
     }
 }

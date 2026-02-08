@@ -225,7 +225,7 @@
         });
 
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
         _submitting = false;
     }
 
@@ -246,7 +246,7 @@
         });
 
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
         _submitting = false;
     }
 

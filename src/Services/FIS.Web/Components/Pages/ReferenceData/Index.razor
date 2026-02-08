@@ -1,5 +1,6 @@
 @page "/reference-data"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using FIS.Web.Components.Pages.ReferenceData
@@ -130,59 +131,30 @@
         }
     </div>
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNTValidation.aspx"
-        Endpoint="api/validation/menu"
-        HttpMethod="GET"
-        ButtonText="Test Validation Menu Endpoint"
-        ReportType="validation-menu" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/Doc/Doc_ValidationData.htm"
-        Endpoint="api/validation/help"
-        HttpMethod="GET"
-        ButtonText="Test Validation Help Endpoint"
-        ReportType="validation-help" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_Make.aspx"
-        Endpoint="api/make"
-        HttpMethod="GET"
-        ButtonText="Test Make Reference Endpoint"
-        ReportType="validation-make" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_Model.aspx"
-        Endpoint="api/model"
-        HttpMethod="GET"
-        ButtonText="Test Model Reference Endpoint"
-        ReportType="validation-model" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_Site.aspx"
-        Endpoint="api/site"
-        HttpMethod="GET"
-        ButtonText="Test Site Reference Endpoint"
-        ReportType="validation-site" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_Class.aspx"
-        Endpoint="api/class"
-        HttpMethod="GET"
-        ButtonText="Test Class Reference Endpoint"
-        ReportType="validation-class" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_DriversLicence.aspx"
-        Endpoint="api/driverlicence"
-        HttpMethod="GET"
-        ButtonText="Test Driver Licence Reference Endpoint"
-        ReportType="validation-driver-licence" />
-
 @code {
     private string _activeTab = "makes";
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(Tab))
+        {
+            return;
+        }
+
+        var requested = Tab.Trim().ToLowerInvariant();
+        var allowed = new HashSet<string>
+        {
+            "makes", "types", "fueltypes", "classes", "units", "licenses", "models",
+            "departments", "sites", "licensefees", "driverlicenses", "extras", "losstypes"
+        };
+
+        if (allowed.Contains(requested))
+        {
+            _activeTab = requested;
+        }
+    }
 
     private void SetActiveTab(string tab)
     {

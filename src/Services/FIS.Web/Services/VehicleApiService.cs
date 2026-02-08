@@ -124,7 +124,7 @@ public class VehicleApiService
         }
     }
 
-    public async Task<bool> CreateVehicleAsync(VehicleDto vehicle)
+    public async Task<bool> CreateVehicleAsync(VehicleDto vehicle, bool recalculateTariff = false)
     {
         try
         {
@@ -156,7 +156,8 @@ public class VehicleApiService
                 cof_required = vehicle.cof_required,
                 cof_number = vehicle.cof_number,
                 cof_amount = vehicle.Cof_amount,
-                extended_service = vehicle.extended_service
+                extended_service = vehicle.extended_service,
+                recalculate_tariff = recalculateTariff
             };
 
             var response = await _httpClient.PostAsJsonAsync("api/vehicles", createRequest);
@@ -180,7 +181,7 @@ public class VehicleApiService
         }
     }
 
-    public async Task<bool> UpdateVehicleAsync(int vmfCode, VehicleDto vehicle)
+    public async Task<bool> UpdateVehicleAsync(int vmfCode, VehicleDto vehicle, bool recalculateTariff = false)
     {
         try
         {
@@ -211,7 +212,8 @@ public class VehicleApiService
                 cof_required = vehicle.cof_required,
                 cof_number = vehicle.cof_number,
                 cof_amount = vehicle.Cof_amount,
-                extended_service = vehicle.extended_service
+                extended_service = vehicle.extended_service,
+                recalculate_tariff = recalculateTariff
             };
 
             var response = await _httpClient.PutAsJsonAsync($"api/vehicles/{vmfCode}", updateRequest);
@@ -279,21 +281,21 @@ public class VehicleApiService
         }
     }
 
-    public async Task<bool> ApproveVehicleAuthorizationAsync(int id, string? comment)
+    public async Task<FinanceApiResult> ApproveVehicleAuthorizationAsync(int id, string? comment)
     {
         return await PostVehicleAuthorizationActionAsync(
             $"api/vehicle/authorization/{id}/approve",
             new { comment });
     }
 
-    public async Task<bool> RejectVehicleAuthorizationAsync(int id, string rejectionReason, string? comment)
+    public async Task<FinanceApiResult> RejectVehicleAuthorizationAsync(int id, string rejectionReason, string? comment)
     {
         return await PostVehicleAuthorizationActionAsync(
             $"api/vehicle/authorization/{id}/reject",
             new { rejectionReason, comment });
     }
 
-    public async Task<bool> AddVehicleAuthorizationCommentAsync(int id, string comment)
+    public async Task<FinanceApiResult> AddVehicleAuthorizationCommentAsync(int id, string comment)
     {
         return await PostVehicleAuthorizationActionAsync(
             $"api/vehicle/authorization/{id}/comment",
@@ -317,27 +319,79 @@ public class VehicleApiService
         }
     }
 
-    private async Task<bool> PostVehicleAuthorizationActionAsync(string endpoint, object payload)
+    private async Task<FinanceApiResult> PostVehicleAuthorizationActionAsync(string endpoint, object payload)
     {
         try
         {
             AddAuthorizationHeader();
             var response = await _httpClient.PostAsJsonAsync(endpoint, payload);
+            var body = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                var error = await response.Content.ReadAsStringAsync();
                 _logger.LogWarning("Vehicle authorization action failed. Endpoint: {Endpoint}. Status: {Status}. Body: {Body}",
                     endpoint,
                     response.StatusCode,
-                    error);
+                    body);
             }
 
-            return response.IsSuccessStatusCode;
+            return new FinanceApiResult
+            {
+                Success = response.IsSuccessStatusCode,
+                StatusCode = (int)response.StatusCode,
+                Endpoint = endpoint,
+                Message = response.IsSuccessStatusCode
+                    ? "Request completed successfully."
+                    : ExtractApiErrorMessage(body) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
+                ResponseBody = body
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error posting vehicle authorization action to {Endpoint}", endpoint);
-            return false;
+            return new FinanceApiResult
+            {
+                Success = false,
+                Endpoint = endpoint,
+                Message = ex.Message
+            };
         }
+    }
+
+    private static string? ExtractApiErrorMessage(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("error", out var errorValue))
+            {
+                var errorMessage = errorValue.GetString();
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    return errorMessage.Trim();
+                }
+            }
+
+            if (root.TryGetProperty("message", out var messageValue))
+            {
+                var message = messageValue.GetString();
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    return message.Trim();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore parse failures and keep fallback status message.
+        }
+
+        return null;
     }
 }

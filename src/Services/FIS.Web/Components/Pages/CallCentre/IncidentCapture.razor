@@ -16,18 +16,25 @@
             <i class="bx bx-edit"></i>
             Capture a New Incident
         </h1>
-        <p class="page-description">Legacy CallCentre/MNT_call_getgg.aspx workflow.</p>
+        <p class="page-description">Capture and submit a new call centre incident.</p>
     </div>
 </div>
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">GG / Reg Number</label>
-            <input class="form-input" @bind="_searchTerm" />
+        <div class="form-card-header">
+            <h2>Vehicle Lookup</h2>
         </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="LoadVehicle">Submit</button>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">GG / Reg Number</label>
+                    <input class="form-input" @bind="_searchTerm" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="LoadVehicle">Load Vehicle</button>
+            </div>
         </div>
     </div>
 
@@ -42,72 +49,65 @@
     @if (_showForm)
     {
         <div class="form-card">
-            <div class="form-row">
-                <label class="form-label">Call Date</label>
-                <input type="date" class="form-input" @bind="_form.Call_date" />
+            <div class="form-card-header">
+                <h2>Incident Details</h2>
             </div>
-            <div class="form-row">
-                <label class="form-label">Call Time</label>
-                <input type="time" class="form-input" @bind="_callTime" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Capture Name</label>
-                <input class="form-input" @bind="_form.Capture_name" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Caller Name</label>
-                <input class="form-input" @bind="_form.Caller_name" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Driver Name</label>
-                <input class="form-input" @bind="_form.Driver_name" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Driver Persal No</label>
-                <input class="form-input" @bind="_form.Driver_persalno" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Driver License No</label>
-                <input class="form-input" @bind="_form.Driver_Licno" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Driver Site</label>
-                <select class="form-select" @bind="_form.Driver_Site">
-                    <option value="">Select site</option>
-                    @foreach (var site in _sites)
-                    {
-                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
-                    }
-                </select>
-            </div>
-            <div class="form-row">
-                <label class="form-label">Driver Tel</label>
-                <input class="form-input" @bind="_form.Driver_tel" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">Driver Cell</label>
-                <input class="form-input" @bind="_form.Driver_cell" />
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-primary" @onclick="SaveIncident">Submit</button>
-                <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Call Date</label>
+                        <input type="date" class="form-input" @bind="_form.Call_date" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Call Time</label>
+                        <input type="time" class="form-input" @bind="_callTime" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Capture Name</label>
+                        <input class="form-input" @bind="_form.Capture_name" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Caller Name</label>
+                        <input class="form-input" @bind="_form.Caller_name" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver Name</label>
+                        <input class="form-input" @bind="_form.Driver_name" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver Persal No</label>
+                        <input class="form-input" @bind="_form.Driver_persalno" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver License No</label>
+                        <input class="form-input" @bind="_form.Driver_Licno" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver Site</label>
+                        <select class="form-select" @bind="_form.Driver_Site">
+                            <option value="">Select site</option>
+                            @foreach (var site in _sites)
+                            {
+                                <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver Tel</label>
+                        <input class="form-input" @bind="_form.Driver_tel" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver Cell</label>
+                        <input class="form-input" @bind="_form.Driver_cell" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="SaveIncident">Submit</button>
+                    <button class="btn btn-secondary" @onclick="ResetForm">Cancel</button>
+                </div>
             </div>
         </div>
     }
-
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/MNT_call_getgg.aspx"
-        Endpoint="api/VehicleLookup?keyword=GG123"
-        HttpMethod="GET"
-        ButtonText="Test Vehicle Lookup Endpoint"
-        ReportType="call-centre-capture-lookup" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/MNT_call_update.aspx"
-        Endpoint="api/callcentre"
-        HttpMethod="POST"
-        ButtonText="Test Capture Incident Endpoint"
-        ReportType="call-centre-capture-save" />
 </div>
 
 @code {

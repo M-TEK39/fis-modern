@@ -19,8 +19,6 @@
 </div>
 
 <div class="page-content">
-    <span style="display:none">@_lookupType</span>
-    <span style="display:none">@_deptBy</span>
     <div class="form-card">
         <div class="form-card-body">
             <div class="form-grid">
@@ -32,11 +30,11 @@
                     <label class="form-label">Lookup Type</label>
                     <div class="form-grid">
                         <label class="form-label">
-                            <input type="radio" name="lookup" checked @onchange='() => _lookupType = "GG"' />
+                            <input type="radio" name="lookup" checked="@(_lookupType == "GG")" @onchange='() => SetLookupType("GG")' />
                             GG
                         </label>
                         <label class="form-label">
-                            <input type="radio" name="lookup" @onchange='() => _lookupType = "GP"' />
+                            <input type="radio" name="lookup" checked="@(_lookupType == "GP")" @onchange='() => SetLookupType("GP")' />
                             GP
                         </label>
                     </div>
@@ -45,11 +43,11 @@
                     <label class="form-label">Show Dept By</label>
                     <div class="form-grid">
                         <label class="form-label">
-                            <input type="radio" name="dept" checked @onchange='() => _deptBy = "Code"' />
+                            <input type="radio" name="dept" checked="@(_deptBy == "Code")" @onchange='() => SetDeptBy("Code")' />
                             Code
                         </label>
                         <label class="form-label">
-                            <input type="radio" name="dept" @onchange='() => _deptBy = "Name"' />
+                            <input type="radio" name="dept" checked="@(_deptBy == "Name")" @onchange='() => SetDeptBy("Name")' />
                             Name (Description)
                         </label>
                     </div>
@@ -63,7 +61,7 @@
         </div>
     </div>
 
-    <div class="table-container" style="margin-top: 1.5rem;">
+    <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Previous Workshop Entries</span>
         </div>
@@ -72,6 +70,7 @@
                 <thead>
                     <tr>
                         <th>Vehicle Number</th>
+                        <th>Department</th>
                         <th>Date Received</th>
                         <th>Inquiry Refer</th>
                         <th>Workshop</th>
@@ -83,13 +82,13 @@
                     @if (_loading)
                     {
                         <tr>
-                            <td colspan="6">Loading entries...</td>
+                            <td colspan="7">Loading entries...</td>
                         </tr>
                     }
                     else if (_entries.Count == 0)
                     {
                         <tr>
-                            <td colspan="6">No previous records found.</td>
+                            <td colspan="7">No previous records found.</td>
                         </tr>
                     }
                     else
@@ -98,16 +97,17 @@
                         {
                             <tr>
                                 <td>@entry.VehicleNumber</td>
+                                <td>@GetDepartmentDisplay(entry)</td>
                                 <td>@entry.DateReceived</td>
                                 <td>@entry.InquiryRefer</td>
                                 <td>@entry.WorkshopType</td>
                                 <td>@entry.JobClosed</td>
                                 <td class="actions-column">
                                     <div class="table-actions">
-                                        <a class="btn-icon btn-icon-edit" href="/workshop/entry/modify">
+                                        <a class="btn-icon btn-icon-edit" href="@($"/workshop/entry/modify?id={entry.InquiryRefer}")">
                                             <i class="bx bx-edit"></i>
                                         </a>
-                                        <a class="btn-icon btn-icon-delete" href="/workshop/entry/delete">
+                                        <a class="btn-icon btn-icon-delete" href="@($"/workshop/entry/delete?id={entry.InquiryRefer}")">
                                             <i class="bx bx-trash"></i>
                                         </a>
                                     </div>
@@ -132,6 +132,7 @@
     private readonly List<WorkshopEntryRow> _entries = new();
     private List<WorkshopEntryRow> _allEntries = new();
     private bool _loading = true;
+    private FIS.Web.Models.VehicleDto? _selectedVehicle;
 
     protected override async Task OnInitializedAsync()
     {
@@ -172,22 +173,95 @@
     {
         if (string.IsNullOrWhiteSpace(_vehicleNumber))
         {
+            _selectedVehicle = null;
             _entries.Clear();
-            _entries.AddRange(_allEntries);
+            _entries.AddRange(OrderEntries(_allEntries));
             return;
         }
 
         var query = _vehicleNumber.Trim();
-        var vehicles = await VehicleService.SearchVehiclesAsync(query);
-        var match = vehicles.FirstOrDefault();
-        if (match == null)
+        try
         {
-            _entries.Clear();
-            return;
-        }
+            var vehicles = await VehicleService.SearchVehiclesAsync(query);
+            var normalized = Normalize(query);
+            var match = _lookupType == "GP"
+                ? vehicles.FirstOrDefault(v => Normalize(v.registration_number) == normalized)
+                : vehicles.FirstOrDefault(v => Normalize(v.fleet_number) == normalized);
 
-        _entries.Clear();
-        _entries.AddRange(_allEntries.Where(e => e.VmfCode == match.vmf_code));
+            if (match == null)
+            {
+                match = _lookupType == "GP"
+                    ? vehicles.FirstOrDefault(v => Normalize(v.registration_number).Contains(normalized, StringComparison.OrdinalIgnoreCase))
+                    : vehicles.FirstOrDefault(v => Normalize(v.fleet_number).Contains(normalized, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (match == null)
+            {
+                _selectedVehicle = null;
+                _entries.Clear();
+                return;
+            }
+
+            _selectedVehicle = match;
+
+            var filtered = _allEntries.Where(e => e.VmfCode == match.vmf_code).ToList();
+            _entries.Clear();
+
+            if (filtered.Count == 0)
+            {
+                _entries.Add(new WorkshopEntryRow
+                {
+                    VmfCode = match.vmf_code,
+                    VehicleNumber = _lookupType == "GP"
+                        ? ValueOrDash(match.registration_number)
+                        : ValueOrDash(match.fleet_number),
+                    DepartmentCode = ValueOrDash(match.location_code.ToString()),
+                    DepartmentName = ValueOrDash(match.location_description),
+                    DateReceived = "-",
+                    InquiryRefer = "-",
+                    WorkshopType = "Workshop",
+                    JobClosed = "No entries yet"
+                });
+            }
+            else
+            {
+                foreach (var row in filtered)
+                {
+                    row.VehicleNumber = _lookupType == "GP"
+                        ? ValueOrDash(match.registration_number)
+                        : ValueOrDash(match.fleet_number);
+                    row.DepartmentCode = ValueOrDash(match.location_code.ToString());
+                    row.DepartmentName = ValueOrDash(match.location_description);
+                }
+
+                _entries.AddRange(OrderEntries(filtered));
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error searching vehicle: {ex.Message}");
+            _entries.Clear();
+        }
+    }
+
+    private void SetLookupType(string value)
+    {
+        _lookupType = value;
+        if (!string.IsNullOrWhiteSpace(_vehicleNumber))
+        {
+            _ = Submit();
+        }
+    }
+
+    private void SetDeptBy(string value)
+    {
+        _deptBy = value;
+        if (_entries.Count > 0)
+        {
+            var current = _entries.ToList();
+            _entries.Clear();
+            _entries.AddRange(OrderEntries(current));
+        }
     }
 
     private void AddEntry()
@@ -203,10 +277,28 @@
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 
+    private IEnumerable<WorkshopEntryRow> OrderEntries(List<WorkshopEntryRow> source)
+    {
+        return _deptBy == "Name"
+            ? source.OrderBy(x => x.DepartmentName)
+            : source.OrderByDescending(x => x.DateReceived);
+    }
+
+    private static string Normalize(string? value)
+        => (value ?? string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetDepartmentDisplay(WorkshopEntryRow row)
+        => _deptBy == "Name" ? row.DepartmentName : row.DepartmentCode;
+
     private sealed class WorkshopEntryRow
     {
         public int? VmfCode { get; set; }
         public string VehicleNumber { get; set; } = "";
+        public string DepartmentCode { get; set; } = "-";
+        public string DepartmentName { get; set; } = "-";
         public string DateReceived { get; set; } = "";
         public string InquiryRefer { get; set; } = "";
         public string WorkshopType { get; set; } = "";

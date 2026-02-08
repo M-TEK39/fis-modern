@@ -185,6 +185,41 @@ namespace FIS.Api.DTOs
         [Required]
         [MaxLength(255)]
         public string fuel_description { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Initial rate per litre (optional - creates fuel_tariff record if provided)
+        /// </summary>
+        public decimal? rate_per_litre { get; set; }
+
+        /// <summary>
+        /// Optional notes about the initial rate
+        /// </summary>
+        [MaxLength(1000)]
+        public string? rate_notes { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for updating an existing FuelType entity
+    /// </summary>
+    public class UpdateFuelTypeDto
+    {
+        /// <summary>
+        /// Description of the fuel type (e.g., "Petrol", "Diesel", "Electric", "Hybrid")
+        /// </summary>
+        [Required]
+        [MaxLength(255)]
+        public string fuel_description { get; set; } = string.Empty;
+
+        /// <summary>
+        /// New rate per litre (optional - creates new fuel_tariff record if provided and different from current)
+        /// </summary>
+        public decimal? rate_per_litre { get; set; }
+
+        /// <summary>
+        /// Optional notes about the rate change
+        /// </summary>
+        [MaxLength(1000)]
+        public string? rate_notes { get; set; }
     }
 
     /// <summary>
@@ -205,5 +240,85 @@ namespace FIS.Api.DTOs
         /// </summary>
         [MaxLength(50)]
         public string? trigger_id { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for creating a new job card
+    /// </summary>
+    public class CreateJobCardDto
+    {
+        [Required]
+        public int vmf_code { get; set; }
+
+        [Required]
+        public short extra_code { get; set; }
+
+        [MaxLength(2000)]
+        public string? jcs_comment { get; set; }
+
+        [MaxLength(2000)]
+        public string? damages { get; set; }
+
+        [MaxLength(1)]
+        public string? priority { get; set; } // 'H' or 'N'
+    }
+
+    /// <summary>
+    /// DTO for updating an existing job card
+    /// </summary>
+    public class UpdateJobCardDto
+    {
+        [MaxLength(2000)]
+        public string? jcs_comment { get; set; }
+
+        [MaxLength(2000)]
+        public string? damages { get; set; }
+
+        [MaxLength(2000)]
+        public string? comments { get; set; }
+
+        public int? assigned_to { get; set; }
+
+        public DateTime? assigned_date { get; set; }
+
+        [MaxLength(1)]
+        public string? priority { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for authorizing a job card
+    /// </summary>
+    public class JobCardAuthorizationDto
+    {
+        [MaxLength(2000)]
+        public string? comment { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for declining a job card
+    /// </summary>
+    public class JobCardDeclineDto
+    {
+        [Required]
+        [MaxLength(2000)]
+        public string decline_reason { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// DTO for canceling a job card
+    /// </summary>
+    public class JobCardCancelDto
+    {
+        [MaxLength(2000)]
+        public string? cancel_reason { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for closing a job card
+    /// </summary>
+    public class JobCardCloseDto
+    {
+        [MaxLength(2000)]
+        public string? close_notes { get; set; }
     }
 }

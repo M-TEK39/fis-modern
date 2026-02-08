@@ -526,3 +526,16 @@ public interface ILossTypeRepository
     Task UpdateAsync(LossType lossType, int currentUserId);
     Task DeleteAsync(short lossTypeCode, int currentUserId);
 }
+
+/// <summary>
+/// Repository interface for vehicle tariff operations
+/// </summary>
+public interface IVehicleTariffRepository
+{
+    Task<VehicleTariff?> GetByIdAsync(int vehicleTariffCode);
+    Task<VehicleTariff?> GetCurrentTariffForVehicleAsync(int vmfCode);
+    Task<IEnumerable<VehicleTariff>> GetTariffHistoryForVehicleAsync(int vmfCode);
+    Task<VehicleTariff> CreateAsync(VehicleTariff tariff);
+    Task UpdateAsync(VehicleTariff tariff);
+    Task RecalculateTariffAsync(int vmfCode);
+}

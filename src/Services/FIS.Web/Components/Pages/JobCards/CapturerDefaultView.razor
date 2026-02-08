@@ -1,13 +1,167 @@
 @page "/job-cards/capturer-default"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using FIS.Web.Services
+@inject JobCardApiService JobCardService
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
-<LegacyReportEndpointPage
-    Title="Job Cards Main Menu"
-    Description="Capture, edit, print, cancel, and close jobcards from the legacy capturer view."
-    LegacyPath="Capture, edit, print, cancel, and close jobcards from the legacy capturer view."
-    Endpoint="api/jobcards/priority/unassigned"
-    HttpMethod="GET"
-    ReportType="jobcards-priority-unassigned"
-    BackLink="/job-cards"
-    Icon="bx-wrench" />
+<PageTitle>Job Cards Main Menu</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-clipboard"></i>Capturer</h1>
+        <p class="page-description">Capture, edit, print, cancel, and close job cards.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/job-cards">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (!_authResolved)
+    {
+        <div class="loading-state"><div class="spinner"></div><p>Loading permissions...</p></div>
+    }
+    else if (!_canCapturer)
+    {
+        <div class="empty-state">
+            <i class="bx bx-lock-alt"></i>
+            <h3>Access restricted</h3>
+            <p>Your profile does not include Job Card capturer access.</p>
+        </div>
+    }
+    else
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <button class="menu-tile-header"><span>Actions</span><i class="bx bx-chevron-down"></i></button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="/job-cards/select-vehicle">Create New Job Card</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/job-cards/list">List / Edit Job Cards</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/job-cards/print">Print Job Cards</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/job-cards/cancel">Cancel Job Cards</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/job-cards/close">Close Job Cards</a></div>
+                </div>
+            </div>
+        </div>
+        @if (_loading)
+        {
+            <div class="loading-state"><div class="spinner"></div><p>Loading priority job cards...</p></div>
+        }
+        else if (_items.Count == 0)
+        {
+            <div class="empty-state"><i class="bx bx-info-circle"></i><h3>No priority unassigned job cards</h3><p>No records returned by the API.</p></div>
+        }
+        else
+        {
+            <div class="table-container">
+                <div class="table-header"><span class="table-title">@_items.Count job card(s)</span></div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Job Card ID</th><th>GG Number</th><th>Description</th><th>Status</th><th>Priority</th><th>Captured By</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in _items)
+                            {
+                                <tr>
+                                    <td>@item.JobCardId</td>
+                                    <td>@ValueOrDash(item.GGNumber)</td>
+                                    <td>@ValueOrDash(item.JobDescription)</td>
+                                    <td>@ValueOrDash(item.Status)</td>
+                                    <td>@ValueOrDash(item.Priority)</td>
+                                    <td>@ValueOrDash(item.CapturedBy)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _authResolved;
+    private bool _canCapturer;
+    private bool _loading = true;
+    private List<JobCardDto> _items = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ResolveAccessAsync();
+        if (!_canCapturer)
+        {
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            _items = await JobCardService.GetPriorityUnassignedAsync();
+        }
+        catch (Exception ex)
+        {
+            _items = new List<JobCardDto>();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading priority job cards: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ResolveAccessAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _authResolved = true;
+            return;
+        }
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        long accessLevel;
+        if (!long.TryParse(accessLevelClaim, out accessLevel))
+        {
+            var userAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(userAccessCode, firstName);
+        }
+
+        var hasWorkshopBit = (accessLevel & LegacyPermissionBits.Workshop) == LegacyPermissionBits.Workshop;
+        var hasVehicleBit = (accessLevel & LegacyPermissionBits.VehicleManagement) == LegacyPermissionBits.VehicleManagement;
+        _canCapturer = HasRole(user, "jobcard capturer");
+        if ((hasWorkshopBit || hasVehicleBit) && !_canCapturer)
+        {
+            _canCapturer = true;
+        }
+
+        _authResolved = true;
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static int? TryParseInt(string? value)
+        => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+}

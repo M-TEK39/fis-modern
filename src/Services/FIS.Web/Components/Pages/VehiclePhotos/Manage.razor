@@ -3,6 +3,7 @@
 @using FIS.Web.Services
 @using FIS.Web.Models
 @inject VehiclePhotoApiService VehiclePhotoService
+@inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <PageTitle>Manage Vehicle Photos - Fleet Information System</PageTitle>
@@ -13,7 +14,7 @@
             <i class="bx bx-image"></i>
             Manage Vehicle Photos
         </h1>
-        <p class="page-description">Vehicle photo maintenance (UI-only until full upload workflow is wired).</p>
+        <p class="page-description">Vehicle photo maintenance</p>
     </div>
 </div>
 
@@ -33,21 +34,81 @@
                     </div>
                 }
             </div>
+            <div class="form-actions fis-mt-1">
+                <button type="button" class="btn btn-secondary" @onclick="BackToSearch">
+                    Back to Search
+                </button>
+            </div>
         </div>
     </div>
 
-    <div class="table-container" style="margin-top:1.5rem;">
+    <EditForm Model="_editor" OnValidSubmit="SavePhotoAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary class="validation-summary" />
+        <div class="form-card fis-mt-15">
+            <div class="form-card-header">
+                <h2>@(_editingId > 0 ? "Edit Photo Reference" : "Add Photo Reference")</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Orientation <span class="required">*</span></label>
+                        <InputSelect class="form-select" @bind-Value="_editor.Orientation">
+                            @foreach (var option in OrientationOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Photo URL <span class="required">*</span></label>
+                        <InputText class="form-input" @bind-Value="_editor.FileUrl" />
+                        <span class="form-hint">Use a full URL or relative path from the image store.</span>
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Description</label>
+                        <InputText class="form-input" @bind-Value="_editor.Description" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_editorError))
+                {
+                    <div class="alert alert-error">
+                        <i class="bx bx-error-circle"></i>
+                        <span>@_editorError</span>
+                    </div>
+                }
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-sm"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>@(_editingId > 0 ? "Update" : "Save")</span>
+                        }
+                    </button>
+                    <button type="button" class="btn btn-secondary" @onclick="ClearEditor" disabled="@_saving">Clear</button>
+                </div>
+            </div>
+        </div>
+    </EditForm>
+
+    <div class="table-container fis-mt-15">
         <div class="table-header">
-            <span class="table-title">Photo References</span>
+            <span class="table-title">@_photos.Count Photo Reference(s)</span>
         </div>
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>Type</th>
-                        <th>Status</th>
                         <th>File</th>
                         <th>Notes</th>
+                        <th class="actions-column">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -68,8 +129,7 @@
                         @foreach (var photo in _photos)
                         {
                             <tr>
-                                <td>@ValueOrDash(photo.Orientation?.ToString())</td>
-                                <td>@ValueOrDash(photo.VehiclePhotoInfoCode.ToString())</td>
+                                <td>@GetOrientationLabel(photo.Orientation)</td>
                                 <td>
                                     @if (!string.IsNullOrWhiteSpace(photo.FileUrl))
                                     {
@@ -81,6 +141,16 @@
                                     }
                                 </td>
                                 <td>@ValueOrDash(photo.Description)</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => StartEdit(photo)" title="Edit">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => DeletePhotoAsync(photo)" title="Delete">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         }
                     }
@@ -98,10 +168,26 @@
     public string? Keyword { get; set; }
 
     private bool _loading = true;
+    private bool _saving;
     private List<VehiclePhotoDto> _photos = new();
+    private readonly PhotoEditorModel _editor = new();
+    private int _editingId;
+    private string? _editorError;
+
+    private static readonly (int Value, string Label)[] OrientationOptions =
+    [
+        (0, "Select orientation..."),
+        (1, "Front"),
+        (2, "Back"),
+        (3, "Left"),
+        (4, "Right"),
+        (5, "Interior"),
+        (6, "Other")
+    ];
 
     protected override async Task OnInitializedAsync()
     {
+        _editor.Orientation = 0;
         await LoadPhotos();
     }
 
@@ -123,5 +209,118 @@
         }
     }
 
+    private async Task SavePhotoAsync()
+    {
+        _editorError = null;
+
+        if (_editor.Orientation <= 0)
+        {
+            _editorError = "Please select an orientation.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_editor.FileUrl))
+        {
+            _editorError = "Photo URL is required.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var payload = new VehiclePhotoDto
+            {
+                VehiclePhotoInfoCode = _editingId,
+                VehicleMasterCode = VmfCode,
+                Orientation = _editor.Orientation,
+                FileUrl = _editor.FileUrl?.Trim(),
+                Description = _editor.Description?.Trim()
+            };
+
+            if (_editingId > 0)
+            {
+                await VehiclePhotoService.UpdateAsync(_editingId, payload);
+            }
+            else
+            {
+                await VehiclePhotoService.CreateAsync(payload);
+            }
+
+            await LoadPhotos();
+            ClearEditor();
+        }
+        catch (Exception ex)
+        {
+            _editorError = "Unable to save photo reference.";
+            await JS.InvokeVoidAsync("console.error", $"Error saving photo reference: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void StartEdit(VehiclePhotoDto photo)
+    {
+        _editingId = photo.VehiclePhotoInfoCode;
+        _editor.Orientation = photo.Orientation ?? 0;
+        _editor.FileUrl = photo.FileUrl ?? "";
+        _editor.Description = photo.Description ?? "";
+        _editorError = null;
+    }
+
+    private async Task DeletePhotoAsync(VehiclePhotoDto photo)
+    {
+        try
+        {
+            await VehiclePhotoService.DeleteAsync(photo.VehiclePhotoInfoCode);
+            await LoadPhotos();
+            if (_editingId == photo.VehiclePhotoInfoCode)
+            {
+                ClearEditor();
+            }
+        }
+        catch (Exception ex)
+        {
+            await JS.InvokeVoidAsync("console.error", $"Error deleting photo reference: {ex.Message}");
+            _editorError = "Unable to delete photo reference.";
+        }
+    }
+
+    private void ClearEditor()
+    {
+        _editingId = 0;
+        _editor.Orientation = 0;
+        _editor.FileUrl = "";
+        _editor.Description = "";
+        _editorError = null;
+    }
+
+    private void BackToSearch()
+    {
+        var suffix = !string.IsNullOrWhiteSpace(Keyword)
+            ? $"?q={Uri.EscapeDataString(Keyword)}"
+            : string.Empty;
+        Navigation.NavigateTo($"/vehicle-photos{suffix}");
+    }
+
+    private static string GetOrientationLabel(int? orientation)
+    {
+        if (!orientation.HasValue || orientation.Value <= 0)
+        {
+            return "-";
+        }
+
+        var match = OrientationOptions.FirstOrDefault(option => option.Value == orientation.Value);
+        return string.IsNullOrWhiteSpace(match.Label) ? orientation.Value.ToString() : match.Label;
+    }
+
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed class PhotoEditorModel
+    {
+        public int Orientation { get; set; }
+        public string FileUrl { get; set; } = "";
+        public string Description { get; set; } = "";
+    }
 }

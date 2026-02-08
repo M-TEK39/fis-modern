@@ -1,13 +1,197 @@
 @page "/job-cards/close"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject JobCardApiService JobCardService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Close Jobcards"
-    Description="Locate jobcards ready for closing and update final status."
-    LegacyPath="Locate jobcards ready for closing and update final status."
-    Endpoint="api/jobcards/0/close"
-    HttpMethod="POST"
-    ReportType="jobcards-close"
-    BackLink="/job-cards/capturer-default"
-    Icon="bx-wrench" />
+<PageTitle>Close Job Cards</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-check-circle"></i>
+            Close Job Cards
+        </h1>
+        <p class="page-description">Search by job card number, then select completion or failed status.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/job-cards/capturer-default">Main Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_isError ? "alert-error" : "alert-success")">@_message</div>
+    }
+
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Job Card Number</label>
+                    <input class="form-input" @bind="_searchJobCardNumber" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SearchAsync">Search</button>
+                <button class="btn btn-secondary" @onclick="Clear">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading job cards...</p>
+        </div>
+    }
+    else if (_filtered.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-info-circle"></i>
+            <h3>No Job Cards Found</h3>
+            <p>No job cards found for the selected number.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Job cards ready for closing</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Job Card #</th>
+                            <th>GG Number</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Close As</th>
+                            <th>Comments</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _filtered)
+                        {
+                            <tr>
+                                <td>@item.JobCardId</td>
+                                <td>@ValueOrDash(item.GGNumber)</td>
+                                <td>@ValueOrDash(item.JobDescription)</td>
+                                <td>@ValueOrDash(item.Status)</td>
+                                <td>
+                                    <select class="form-select" @bind="_selectedCloseStatus[item.JobCardId]">
+                                        <option value="Completed">Completed</option>
+                                        <option value="Failed">Failed</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input class="form-input" @bind="_selectedComments[item.JobCardId]" />
+                                </td>
+                                <td class="actions-column">
+                                    <button class="btn btn-primary btn-sm"
+                                            disabled="@_actionRunning"
+                                            @onclick="() => CloseItem(item)">
+                                        Close
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _actionRunning;
+    private bool _isError;
+    private string _searchJobCardNumber = string.Empty;
+    private string _message = string.Empty;
+    private List<JobCardDto> _all = new();
+    private List<JobCardDto> _filtered = new();
+    private readonly Dictionary<int, string> _selectedCloseStatus = new();
+    private readonly Dictionary<int, string> _selectedComments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SearchAsync();
+    }
+
+    private async Task SearchAsync()
+    {
+        _loading = true;
+        try
+        {
+            _all = await JobCardService.GetAllAsync();
+            var number = _searchJobCardNumber.Trim();
+            _filtered = string.IsNullOrWhiteSpace(number)
+                ? new(_all)
+                : _all.Where(x => x.JobCardId.ToString().Contains(number, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            foreach (var item in _filtered)
+            {
+                if (!_selectedCloseStatus.ContainsKey(item.JobCardId))
+                {
+                    _selectedCloseStatus[item.JobCardId] = "Completed";
+                }
+
+                if (!_selectedComments.ContainsKey(item.JobCardId))
+                {
+                    _selectedComments[item.JobCardId] = string.Empty;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _all = new();
+            _filtered = new();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading closable job cards: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Clear()
+    {
+        _searchJobCardNumber = string.Empty;
+        _filtered = new(_all);
+    }
+
+    private async Task CloseItem(JobCardDto item)
+    {
+        var closeStatus = _selectedCloseStatus.GetValueOrDefault(item.JobCardId, "Completed");
+        var comment = _selectedComments.GetValueOrDefault(item.JobCardId, string.Empty);
+
+        _actionRunning = true;
+        _isError = false;
+        _message = string.Empty;
+        try
+        {
+            var notes = string.IsNullOrWhiteSpace(comment) ? closeStatus : $"{closeStatus}: {comment}";
+            var result = await JobCardService.CloseAsync(item.JobCardId, notes);
+            if (!result.Success)
+            {
+                _isError = true;
+                _message = result.Message;
+                return;
+            }
+
+            _message = "Request completed successfully.";
+            await SearchAsync();
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+}

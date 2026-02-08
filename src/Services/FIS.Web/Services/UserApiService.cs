@@ -76,6 +76,34 @@ public class UserApiService
         }
     }
 
+    public async Task<UserProfileDto?> GetProfileAsync(int userAccessCode)
+    {
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/{userAccessCode}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching user profile {UserAccessCode}", userAccessCode);
+            return null;
+        }
+    }
+
+    public async Task<UserProfileDto?> UpdateProfileAsync(int userAccessCode, UpdateUserProfileRequest request)
+    {
+        try
+        {
+            var response = await _httpClient.PutAsJsonAsync($"api/userprofile/{userAccessCode}", request);
+            response.EnsureSuccessStatusCode();
+            return await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/{userAccessCode}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating user profile {UserAccessCode}", userAccessCode);
+            throw;
+        }
+    }
+
     public async Task DeleteAsync(int userAccessCode)
     {
         try
@@ -145,6 +173,16 @@ public record CreateUserProfileRequest
 
 public record UpdateUserProfileRequest
 {
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
     public string? Telephone { get; set; }
     public string? Email { get; set; }
+    public short? SiteCode { get; set; }
+    public byte? PositionCode { get; set; }
+    public int? PersalNumber { get; set; }
+    public int? ContractNumber { get; set; }
+    public int? SaIdNumber { get; set; }
+    public int? PassportNumber { get; set; }
+    public int? CellphoneNumber { get; set; }
+    public int? FaxNumber { get; set; }
 }

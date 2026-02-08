@@ -1,13 +1,110 @@
 @page "/full-maintenance-lease/reports/over-utilized"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="List of over utilized FML vehicles (based on km's)"
-    Description="Legacy fleet operations endpoint wiring page."
-    LegacyPath="Legacy fleet operations endpoint wiring page."
-    Endpoint="api/leasecontractterms/reports/over-utilized"
-    HttpMethod="POST"
-    ReportType="fml-report-over-utilized"
-    BackLink="/full-maintenance-lease/reports"
-    Icon="bx-wrench" />
+<PageTitle>List of over utilized FML vehicles (based on km's)</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-line-chart"></i>Over Utilized FML Vehicles</h1>
+        <p class="page-description">Vehicles where current odometer is above agreed lease kilometers.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/full-maintenance-lease/reports">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state"><div class="spinner"></div><p>Loading report...</p></div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="empty-state"><i class="bx bx-check-circle"></i><h3>No records</h3><p>No over-utilized FML vehicles found.</p></div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header"><span class="table-title">@_rows.Count vehicle(s)</span></div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>VMF</th><th>GG Number</th><th>Current Odo</th><th>Agreed Kilos</th><th>Variance</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.VmfCode</td>
+                                <td>@ValueOrDash(row.GgNumber)</td>
+                                <td>@row.CurrentOdo.ToString("N0")</td>
+                                <td>@row.AgreedKilos.ToString("N0")</td>
+                                <td>@row.Variance.ToString("N0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<OverUtilizedRow> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var leaseTerms = await LeaseService.GetAllAsync<LeaseTermDto>();
+            var checkedVehicles = new HashSet<int>();
+
+            foreach (var term in leaseTerms.Where(x => x.vmf_Code > 0 && x.AgreedKilos.HasValue && x.AgreedKilos.Value > 0))
+            {
+                if (!checkedVehicles.Add(term.vmf_Code))
+                {
+                    continue;
+                }
+
+                var vehicle = await VehicleService.GetVehicleAsync(term.vmf_Code);
+                var currentOdo = vehicle?.current_odo ?? 0;
+                var agreed = term.AgreedKilos!.Value;
+                if (currentOdo > agreed)
+                {
+                    _rows.Add(new OverUtilizedRow(
+                        term.vmf_Code,
+                        vehicle?.fleet_number,
+                        currentOdo,
+                        agreed,
+                        currentOdo - agreed));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _rows = new List<OverUtilizedRow>();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading over-utilized report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed record OverUtilizedRow(int VmfCode, string? GgNumber, long CurrentOdo, long AgreedKilos, long Variance);
+
+    private sealed class LeaseTermDto
+    {
+        public int VehicleContractTermID { get; set; }
+        public int vmf_Code { get; set; }
+        public long? AgreedKilos { get; set; }
+    }
+}

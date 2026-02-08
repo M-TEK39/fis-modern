@@ -1,13 +1,104 @@
 @page "/workshop/merchant"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject MerchantApiService MerchantService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Merchant Info Maintenance"
-    Description="Search and update workshop merchants."
-    LegacyPath="Search and update workshop merchants."
-    Endpoint="api/workshop/merchants?name="
-    HttpMethod="GET"
-    ReportType="workshop-merchants-search"
-    BackLink="/workshop"
-    Icon="bx-wrench" />
+<PageTitle>Merchant Info Maintenance</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-store"></i>Merchant Info Maintenance</h1>
+        <p class="page-description">Search and update workshop merchants.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-primary btn-sm" href="/workshop/merchant/edit">Add Merchant</a>
+        <a class="btn btn-secondary btn-sm" href="/workshop">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Merchant Name</label>
+                <input class="form-input" @bind="_search" placeholder="Search by name" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="ApplyFilter">Search</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state"><div class="spinner"></div><p>Loading merchants...</p></div>
+    }
+    else if (_filtered.Count == 0)
+    {
+        <div class="empty-state"><i class="bx bx-info-circle"></i><h3>No merchants found</h3><p>No records match the current filter.</p></div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header"><span class="table-title">@_filtered.Count merchant(s)</span></div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>Code</th><th>Name</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _filtered)
+                        {
+                            <tr>
+                                <td>@item.Merchant_code</td>
+                                <td>@item.Merchant_Name</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <a class="btn-icon btn-icon-edit" href="@($"/workshop/merchant/edit?id={item.Merchant_code}")"><i class="bx bx-edit"></i></a>
+                                        <a class="btn-icon btn-icon-delete" href="@($"/workshop/merchant/delete?id={item.Merchant_code}")"><i class="bx bx-trash"></i></a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string _search = string.Empty;
+    private List<MerchantDto> _all = new();
+    private List<MerchantDto> _filtered = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _all = await MerchantService.GetAllAsync();
+            _filtered = new List<MerchantDto>(_all);
+        }
+        catch (Exception ex)
+        {
+            _all = new();
+            _filtered = new();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading merchants: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        var query = _search.Trim();
+        _filtered = string.IsNullOrWhiteSpace(query)
+            ? new List<MerchantDto>(_all)
+            : _all.Where(x => (x.Merchant_Name ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+}

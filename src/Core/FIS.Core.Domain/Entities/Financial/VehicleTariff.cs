@@ -105,9 +105,19 @@ public class VehicleTariff
     [Column("vehicle_kilometer_tariff")]
     public decimal? vehicle_kilometer_tariff { get; set; }
 
+    [Column("fuel_kilo_tariff")]
+    public decimal? fuel_kilo_tariff { get; set; }
+
     // Metadata
     [Column("calculation_date")]
     public DateTime calculation_date { get; set; }
+
+    [StringLength(1000)]
+    [Column("comment")]
+    public string? comment { get; set; }
+
+    [Column("TariffWeightCalculation_Code")]
+    public int? TariffWeightCalculation_Code { get; set; }
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
     [Column("date_created")]

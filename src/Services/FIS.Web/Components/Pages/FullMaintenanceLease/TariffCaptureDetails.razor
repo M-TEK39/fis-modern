@@ -1,13 +1,175 @@
 @page "/full-maintenance-lease/tariffs/details"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Lease Vehicle Capturing and Approval"
-    Description="Lease vehicle tariff capture and approval details."
-    LegacyPath="Lease vehicle tariff capture and approval details."
-    Endpoint="api/leasecontractterms/tariff-capture/0/approve"
-    HttpMethod="POST"
-    ReportType="fml-tariff-capture-approve"
-    BackLink="/full-maintenance-lease/tariffs"
-    Icon="bx-wrench" />
+<PageTitle>Lease Vehicle Capturing and Approval</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-edit-alt"></i>
+            Lease Vehicle Capturing and Approval
+        </h1>
+        <p class="page-description">Review and update lease tariff details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/full-maintenance-lease/tariffs">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading lease detail...</p>
+        </div>
+    }
+    else if (_item == null)
+    {
+        <div class="empty-state">
+            <i class="bx bx-error-circle"></i>
+            <h3>Record not found</h3>
+            <p>Open this page from tariff capture list.</p>
+        </div>
+    }
+    else
+    {
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Lease Term ID</label>
+                        <input class="form-input" value="@_item.VehicleContractTermID" readonly />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">VMF Code</label>
+                        <input class="form-input" value="@_item.vmf_Code" readonly />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Start Date</label>
+                        <InputDate @bind-Value="_item.StartDate" class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">End Date</label>
+                        <InputDate @bind-Value="_item.EndDate" class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Agreed Terms (months)</label>
+                        <InputNumber @bind-Value="_item.AgreedTerms" class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Agreed Kilos</label>
+                        <InputNumber @bind-Value="_item.AgreedKilos" class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Applied Interest</label>
+                        <InputNumber @bind-Value="_item.AppliedInterest" class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Fixed Monthly Amount</label>
+                        <InputNumber @bind-Value="_item.FixedMonthlyAmount" class="form-input" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Authority Status</label>
+                        <select class="form-select" @bind="_item.AuthorityStatus">
+                            <option value="1">Pending</option>
+                            <option value="2">Approved</option>
+                            <option value="4">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_error ? "alert-error" : "alert-success") fis-alert-tight">
+            <i class="bx @(_error ? "bx-error-circle" : "bx-check-circle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")]
+    public int? Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _error;
+    private string _message = string.Empty;
+    private LeaseTermDto? _item;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Id.HasValue || Id.Value <= 0)
+        {
+            _item = null;
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _item = await LeaseService.GetByIdAsync<LeaseTermDto>(Id.Value);
+        }
+        catch (Exception ex)
+        {
+            _item = null;
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lease tariff detail: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_item == null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _error = false;
+        _message = string.Empty;
+        try
+        {
+            var updated = await LeaseService.UpdateAsync(_item.VehicleContractTermID, _item);
+            _error = updated == null;
+            _message = _error ? "Failed to save lease tariff detail." : "Lease tariff detail updated.";
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to save lease tariff detail.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error updating lease tariff detail: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class LeaseTermDto
+    {
+        public int VehicleContractTermID { get; set; }
+        public int vmf_Code { get; set; }
+        public int? AgreedTerms { get; set; }
+        public long? AgreedKilos { get; set; }
+        public decimal? AppliedInterest { get; set; }
+        public decimal? FixedMonthlyAmount { get; set; }
+        public int? AuthorityStatus { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+}

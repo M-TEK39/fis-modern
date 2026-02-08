@@ -177,6 +177,7 @@ public class FisDbContext : DbContext
     public DbSet<VehicleOrder> VehicleOrders { get; set; } = null!;
     public DbSet<VehiclePhoto> VehiclePhotos { get; set; } = null!;
     public DbSet<Extra> Extras { get; set; } = null!;
+    public DbSet<JobCard> JobCards { get; set; } = null!;
     public DbSet<Workshop> Workshops { get; set; } = null!;
     public DbSet<Tracking> Trackings { get; set; } = null!;
     public DbSet<VehicleAssessment> VehicleAssessments { get; set; } = null!;
@@ -397,6 +398,24 @@ public class FisDbContext : DbContext
             entity.Property(e => e.last_password_change).HasDefaultValueSql("GETUTCDATE()");
             entity.Property(e => e.failed_login_attempts).HasDefaultValue(0);
             entity.Property(e => e.is_active).HasDefaultValue(true);
+        });
+
+        // JobCard constraints and indexes
+        modelBuilder.Entity<JobCard>(entity =>
+        {
+            // Unique constraint: Only one active jobcard per vehicle+extra combination
+            entity.HasIndex(e => new { e.vmf_code, e.extra_code })
+                .HasFilter("is_deleted = 0 AND status_code NOT IN (5, 7)") // Not complete or canceled
+                .IsUnique()
+                .HasDatabaseName("UX_JobCard_Vehicle_Extra_Active");
+
+            // Index for priority queries
+            entity.HasIndex(e => new { e.priority, e.assigned_to, e.status_code })
+                .HasDatabaseName("IX_JobCard_Priority_Assigned_Status");
+
+            // Index for authorizer queries
+            entity.HasIndex(e => new { e.authorizer, e.status_code })
+                .HasDatabaseName("IX_JobCard_Authorizer_Status");
         });
 
         modelBuilder.HasDefaultSchema("dbo");

@@ -89,6 +89,12 @@ namespace FIS.Api.DTOs
     {
         public short fuel_type_code { get; set; }
         public string fuel_description { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Current rate per litre from fuel_tariff table (null if no active tariff)
+        /// </summary>
+        public decimal? rate_per_litre { get; set; }
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
@@ -111,5 +117,40 @@ namespace FIS.Api.DTOs
         public int? created_by_user_code { get; set; }
         public int? modified_by_user_code { get; set; }
         public bool is_deleted { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for job card responses - excludes navigation properties to prevent circular references
+    /// </summary>
+    public class JobCardResponseDto
+    {
+        public int job_card_id { get; set; }
+        public int vmf_code { get; set; }
+        public string? gg_number { get; set; } // From Vehicle navigation
+        public string? registration_number { get; set; } // From Vehicle navigation
+        public short extra_code { get; set; }
+        public string? extra_description { get; set; } // From ExtraCodeRef navigation
+        public int status_code { get; set; }
+        public string? status_text { get; set; } // Friendly status name
+        public string? priority { get; set; }
+        public int? assigned_to { get; set; }
+        public string? assigned_to_name { get; set; } // From AssignedToUser navigation
+        public DateTime? assigned_date { get; set; }
+        public string? jcs_comment { get; set; }
+        public string? damages { get; set; }
+        public string? comments { get; set; }
+        public int? authorizer { get; set; }
+        public string? authorizer_name { get; set; } // From AuthorizerUser navigation
+        public string? reviewed { get; set; }
+
+        // Required for frontend self-approval enforcement
+        public int? captured_by_user_code { get; set; }
+        public int? authorized_by_user_code { get; set; }
+
+        // Audit fields
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
     }
 }

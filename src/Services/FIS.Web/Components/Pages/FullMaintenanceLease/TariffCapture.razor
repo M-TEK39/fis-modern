@@ -1,13 +1,158 @@
 @page "/full-maintenance-lease/tariffs"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Capturing of Tariffs for Lease Vehicles"
-    Description="Lease vehicle tariff capture and approval queue."
-    LegacyPath="Lease vehicle tariff capture and approval queue."
-    Endpoint="api/leasecontractterms/tariff-capture/pending"
-    HttpMethod="GET"
-    ReportType="fml-tariff-capture-pending"
-    BackLink="/full-maintenance-lease"
-    Icon="bx-wrench" />
+<PageTitle>Capturing of Tariffs for Lease Vehicles</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-list-check"></i>
+            Capturing of Tariffs for Lease Vehicles
+        </h1>
+        <p class="page-description">Review captured lease tariffs and open a record for approval/edit.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/full-maintenance-lease">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Authority Status</label>
+                <select class="form-select" @bind="_statusFilter">
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="LoadAsync" disabled="@_loading">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading lease tariff records...</p>
+        </div>
+    }
+    else if (FilteredItems.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-info-circle"></i>
+            <h3>No records found</h3>
+            <p>No lease tariff records match the selected filter.</p>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@FilteredItems.Count record(s)</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>VMF</th>
+                            <th>Status</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Fixed Amount</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in FilteredItems)
+                        {
+                            <tr>
+                                <td>@item.VehicleContractTermID</td>
+                                <td>@item.vmf_Code</td>
+                                <td>@MapStatus(item.AuthorityStatus)</td>
+                                <td>@FormatDate(item.StartDate)</td>
+                                <td>@FormatDate(item.EndDate)</td>
+                                <td>@FormatCurrency(item.FixedMonthlyAmount)</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <a class="btn btn-secondary btn-sm" href="@($"/full-maintenance-lease/tariffs/details?id={item.VehicleContractTermID}")">Open</a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private string _statusFilter = "all";
+    private List<LeaseTermDto> _items = new();
+
+    private List<LeaseTermDto> FilteredItems =>
+        _statusFilter switch
+        {
+            "pending" => _items.Where(x => (x.AuthorityStatus ?? 0) == 1).ToList(),
+            "approved" => _items.Where(x => (x.AuthorityStatus ?? 0) == 2).ToList(),
+            "rejected" => _items.Where(x => (x.AuthorityStatus ?? 0) == 4).ToList(),
+            _ => _items
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = await LeaseService.GetAllAsync<LeaseTermDto>();
+        }
+        catch (Exception ex)
+        {
+            _items = new List<LeaseTermDto>();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lease tariff capture list: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string MapStatus(int? status) => status switch
+    {
+        1 => "Pending",
+        2 => "Approved",
+        4 => "Rejected",
+        _ => "Unknown"
+    };
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string FormatCurrency(decimal? value)
+        => value.HasValue ? $"R {value.Value:N2}" : "-";
+
+    private sealed class LeaseTermDto
+    {
+        public int VehicleContractTermID { get; set; }
+        public int vmf_Code { get; set; }
+        public int? AuthorityStatus { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public decimal? FixedMonthlyAmount { get; set; }
+    }
+}

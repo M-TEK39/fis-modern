@@ -34,6 +34,32 @@ public class ContractsController : BaseApiController
     }
 
     /// <summary>
+    /// Validates that the current user is not the contract owner (prevents self-approval)
+    /// </summary>
+    /// <returns>Null if validation passes, or ForbidResult with error message if validation fails</returns>
+    private ActionResult? ValidateSelfApprovalPrevention(Contract contract, int currentUserId)
+    {
+        // Determine contract owner: use user_code, fallback to created_by_user_code
+        int? contractOwnerCode = contract.user_code ?? contract.created_by_user_code;
+
+        if (contractOwnerCode.HasValue && contractOwnerCode.Value == currentUserId)
+        {
+            _logger.LogWarning(
+                "Self-approval blocked: User {UserId} attempted to approve their own contract {ContractId}",
+                currentUserId, contract.contract_code);
+
+            return StatusCode(403, new
+            {
+                error = "You cannot review or approve your own contract.",
+                contractId = contract.contract_code,
+                userId = currentUserId
+            });
+        }
+
+        return null; // Validation passed
+    }
+
+    /// <summary>
     /// Hire a vehicle (create new contract)
     /// Uses ContractService with full validation and journal integration
     /// </summary>
@@ -103,25 +129,82 @@ public class ContractsController : BaseApiController
     /// Get all active contracts
     /// </summary>
     [HttpGet("active")]
-    [ProducesResponseType(typeof(IEnumerable<Contract>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<Contract>>> GetActive()
+    [ProducesResponseType(typeof(IEnumerable<ContractResponseDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<ContractResponseDto>>> GetActive()
     {
         var list = await _contractService.GetActiveContractsAsync();
-        return Ok(list);
+        var dtos = list.Select(MapToDto).ToList();
+        return Ok(dtos);
     }
 
     /// <summary>
     /// Get contract by ID
     /// </summary>
     [HttpGet("{id}")]
-    [ProducesResponseType(typeof(Contract), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ContractResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<Contract?>> GetById(int id)
+    public async Task<ActionResult<ContractResponseDto?>> GetById(int id)
     {
         var contract = await _contractRepository.GetByIdAsync(id);
         if (contract == null) return NotFound();
-        return Ok(contract);
+        return Ok(MapToDto(contract));
     }
+
+    #region Mapping
+
+    private static ContractResponseDto MapToDto(Contract contract)
+    {
+        return new ContractResponseDto
+        {
+            ContractCode = contract.contract_code,
+            VmfCode = contract.vmf_code,
+            SiteCode = contract.site_code,
+            ContractTypeCode = contract.contract_type,
+            ContractStatusCode = contract.contract_status_code,
+            ContractStatusDate = contract.contract_status_date,
+            StillCurrent = contract.still_current,
+            StartDate = contract.start_date,
+            StartTime = contract.start_time,
+            StartOdometer = contract.start_odometer,
+            EndDate = contract.end_date,
+            EndTime = contract.end_time,
+            EndOdometer = contract.end_odometer,
+            MonthlyKm = contract.monthly_km,
+            HoursUsed = contract.hours_used,
+            TargetReturnDate = contract.target_return_date,
+            DriverId = contract.Driver_id,
+            DriverName = contract.Driver_name,
+            SiteDriverCode = contract.site_driver_code,
+            ApproverCode = contract.approver_code,
+            ParentContractCode = contract.parent_contract_code,
+            ReliefForContract = contract.relief_for_contract,
+            VehicleAssessmentCode = contract.vehicle_assessment_code,
+            JournalDetailCode = contract.journal_detail_code,
+            LockedForTransfer = contract.locked_for_transfer,
+            Notes = contract.Notes,
+            Authorisation = contract.Authorisation,
+            ChargedUntil = contract.Charged_Until,
+            CollectorFirstname = contract.collector_firstname,
+            UserCode = contract.user_code,
+            ContractGroupCode = contract.contract_group_code,
+            BasFundCode = contract.bas_fund_code,
+            BasObjectiveCode = contract.bas_objective_code,
+            BasProjectNumber = contract.bas_project_number,
+            BasResponsibilityCode = contract.bas_responsibility_code,
+            DateCreated = contract.date_created,
+            DateUpdated = contract.date_updated,
+            CreatedByUserCode = contract.created_by_user_code,
+            ModifiedByUserCode = contract.modified_by_user_code,
+            IsDeleted = contract.is_deleted,
+
+            // Include nested data without circular references
+            VehicleFleetNumber = contract.Vehicle?.fleet_number,
+            VehicleRegistrationNumber = contract.Vehicle?.registration_number,
+            SiteDescription = contract.Site?.description
+        };
+    }
+
+    #endregion
 
     #region Legacy Contract Operations
 
@@ -397,6 +480,7 @@ public class ContractsController : BaseApiController
     [HttpPost("{contractId}/approve")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult> ApproveContract(
         int contractId,
         [FromBody] ContractApprovalDto? request = null)
@@ -408,6 +492,11 @@ public class ContractsController : BaseApiController
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+
+            // Prevent self-approval
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             // Update contract status to approved (status code 2 = Approved)
             contract.contract_status_code = 2; // Approved
@@ -434,6 +523,7 @@ public class ContractsController : BaseApiController
     [HttpPost("{contractId}/approve-activate")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult> ApproveAndActivateContract(
         int contractId,
         [FromBody] ContractApprovalDto? request = null)
@@ -445,6 +535,11 @@ public class ContractsController : BaseApiController
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+
+            // Prevent self-approval
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             // Update contract status to active (status code 3 = Active)
             contract.contract_status_code = 3; // Active
@@ -472,6 +567,7 @@ public class ContractsController : BaseApiController
     [HttpPost("{contractId}/decline-correction")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult> DeclineContractWithCorrection(
         int contractId,
         [FromBody] ContractDeclineDto request)
@@ -483,6 +579,11 @@ public class ContractsController : BaseApiController
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+
+            // Prevent self-review/decline
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             // Update contract status to correction required (status code 4 = Needs Correction)
             contract.contract_status_code = 4; // Needs correction
@@ -507,6 +608,7 @@ public class ContractsController : BaseApiController
     [HttpPost("{contractId}/decline")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult> DeclineContract(
         int contractId,
         [FromBody] ContractDeclineDto request)
@@ -518,6 +620,11 @@ public class ContractsController : BaseApiController
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+
+            // Prevent self-review/decline
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(contract, currentUserId);
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             // Update contract status to declined (status code 5 = Declined)
             contract.contract_status_code = 5; // Declined
@@ -718,6 +825,55 @@ public class ReliefVehicleSearchResultDto
     public short? MakeCode { get; set; }
     public short? ModelCode { get; set; }
     public bool IsAvailable { get; set; }
+}
+
+public class ContractResponseDto
+{
+    public int ContractCode { get; set; }
+    public int VmfCode { get; set; }
+    public short SiteCode { get; set; }
+    public string? ContractTypeCode { get; set; }
+    public short? ContractStatusCode { get; set; }
+    public DateTime? ContractStatusDate { get; set; }
+    public string? StillCurrent { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime StartTime { get; set; }
+    public int StartOdometer { get; set; }
+    public DateTime? EndDate { get; set; }
+    public DateTime? EndTime { get; set; }
+    public int? EndOdometer { get; set; }
+    public int? MonthlyKm { get; set; }
+    public short? HoursUsed { get; set; }
+    public DateTime? TargetReturnDate { get; set; }
+    public string? DriverId { get; set; }
+    public string? DriverName { get; set; }
+    public int? SiteDriverCode { get; set; }
+    public int? ApproverCode { get; set; }
+    public int? ParentContractCode { get; set; }
+    public int? ReliefForContract { get; set; }
+    public int? VehicleAssessmentCode { get; set; }
+    public Guid? JournalDetailCode { get; set; }
+    public bool LockedForTransfer { get; set; }
+    public string? Notes { get; set; }
+    public string? Authorisation { get; set; }
+    public DateTime? ChargedUntil { get; set; }
+    public string? CollectorFirstname { get; set; }
+    public short? UserCode { get; set; }
+    public int? ContractGroupCode { get; set; }
+    public string? BasFundCode { get; set; }
+    public string? BasObjectiveCode { get; set; }
+    public string? BasProjectNumber { get; set; }
+    public string? BasResponsibilityCode { get; set; }
+    public DateTime DateCreated { get; set; }
+    public DateTime? DateUpdated { get; set; }
+    public int? CreatedByUserCode { get; set; }
+    public int? ModifiedByUserCode { get; set; }
+    public bool IsDeleted { get; set; }
+
+    // Navigation properties - flattened to prevent circular references
+    public string? VehicleFleetNumber { get; set; }
+    public string? VehicleRegistrationNumber { get; set; }
+    public string? SiteDescription { get; set; }
 }
 
 #endregion

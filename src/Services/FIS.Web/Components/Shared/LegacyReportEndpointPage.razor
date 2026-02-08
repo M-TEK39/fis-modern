@@ -24,7 +24,6 @@
         </div>
         <div class="form-card-body">
             <p><strong>Legacy source:</strong> @LegacyPath</p>
-            <p><strong>Expected endpoint:</strong> @Endpoint (@HttpMethod)</p>
 
             <div class="contract-action-group">
                 <button class="btn btn-primary btn-sm" @onclick="RunAsync" disabled="@_running">
@@ -56,7 +55,7 @@
     [Parameter] public string HttpMethod { get; set; } = "POST";
     [Parameter] public string ReportType { get; set; } = string.Empty;
     [Parameter] public string Icon { get; set; } = "bx-file";
-    [Parameter] public string ActionText { get; set; } = "Run Endpoint";
+    [Parameter] public string ActionText { get; set; } = "Run";
     [Parameter] public string BackLink { get; set; } = "/reports";
 
     private bool _running;
@@ -90,7 +89,7 @@
         }
 
         _error = !result.Success;
-        _status = $"{result.Message} Endpoint: {result.Endpoint}";
+        _status = result.Message;
         _responseBody = string.IsNullOrWhiteSpace(result.ResponseBody)
             ? string.Empty
             : result.ResponseBody.Length > 4000

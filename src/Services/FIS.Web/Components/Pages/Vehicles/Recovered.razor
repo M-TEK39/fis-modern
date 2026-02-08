@@ -22,12 +22,14 @@
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">GG / GP Number</label>
-            <input class="form-input" @bind="_searchTerm" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SearchVehicleAsync">Search</button>
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">GG / GP Number</label>
+                <input class="form-input" @bind="_searchTerm" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SearchVehicleAsync">Search</button>
+            </div>
         </div>
     </div>
 
@@ -48,7 +50,7 @@
     }
     else if (_vehicle != null)
     {
-        <div class="form-card" style="margin-top:1rem;">
+        <div class="form-card fis-mt-1">
             <div class="form-card-header">
                 <h2>Recovered Vehicle Details</h2>
             </div>

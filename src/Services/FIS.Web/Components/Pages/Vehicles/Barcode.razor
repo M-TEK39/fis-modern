@@ -25,13 +25,15 @@
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">GG Number</label>
-            <input class="form-input" @bind="_ggNumber" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SearchVehicleAsync">Submit</button>
-            <button class="btn btn-secondary" @onclick="ResetAsync">Cancel</button>
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">GG Number</label>
+                <input class="form-input" @bind="_ggNumber" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SearchVehicleAsync">Submit</button>
+                <button class="btn btn-secondary" @onclick="ResetAsync">Cancel</button>
+            </div>
         </div>
     </div>
 
@@ -52,7 +54,7 @@
     }
     else if (_vehicle != null)
     {
-        <div class="form-card" style="margin-top:1rem;">
+        <div class="form-card fis-mt-1">
             <div class="form-card-body">
                 <div class="form-grid">
                     <div class="form-field">

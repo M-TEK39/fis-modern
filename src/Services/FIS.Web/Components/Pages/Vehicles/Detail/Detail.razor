@@ -28,6 +28,14 @@ else if (_vehicle == null)
 }
 else
 {
+    @if (!string.IsNullOrWhiteSpace(_actionError))
+    {
+        <div class="alert alert-error fis-alert-bottom">
+            <i class="bx bx-error-circle"></i>
+            <span>@_actionError</span>
+        </div>
+    }
+
     <div class="detail-header">
         <div class="breadcrumb">
             <button class="breadcrumb-link" @onclick="NavigateToList">
@@ -292,6 +300,7 @@ else
     private bool _loading = true;
     private bool _showDeleteDialog = false;
     private bool _deleting = false;
+    private string? _actionError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -345,7 +354,7 @@ else
         }
         else
         {
-            // TODO: Show error notification
+            _actionError = "Unable to delete vehicle. Please try again.";
             _showDeleteDialog = false;
         }
     }

@@ -1,9 +1,10 @@
 @page "/vehicle-orders"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using FIS.Web.Services
-@inject VehicleOrderApiService VehicleOrderService
-@inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Vehicle Orders - Fleet Information System</PageTitle>
 
@@ -13,147 +14,132 @@
             <i class="bx bx-cart"></i>
             Vehicle Orders
         </h1>
-        <p class="page-description">Vehicle Orders replaced by Vehicle Inception in legacy.</p>
+        <p class="page-description">Vehicle Master Inception Maintenance</p>
     </div>
 </div>
 
 <div class="page-content">
-    <span style="display:none">@_loading</span>
-    <span style="display:none">@_orders.Count</span>
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleInceptionMenu">
-                <span>Vehicle Master Inception Maintenance</span>
-                <i class="bx @(_showInceptionMenu ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showInceptionMenu)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/create">1) Add / Edit New Vehicle</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/gg-block-numbers">2) Add GG Block Number(s)</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/authorize">Authorize Captured Vehicle Information</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/home">Return to Main Report Page.</a>
-                    </div>
-                    <div class="menu-item" style="margin-top:0.5rem;">
-                        <span class="form-hint">Legacy access is role-based (capturer vs authorizer).</span>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-
-    @if (_loading)
+    @if (!_authResolved)
     {
         <div class="loading-state">
             <div class="spinner"></div>
-            <p>Loading vehicle orders...</p>
+            <p>Loading access profile...</p>
         </div>
     }
-    else if (_orders.Count == 0)
+    else if (!_hasVehicleAccess)
     {
         <div class="empty-state">
-            <i class="bx bx-cart"></i>
-            <h3>No vehicle orders</h3>
-            <p>No vehicle orders are available.</p>
+            <i class="bx bx-lock-alt"></i>
+            <h3>Access restricted</h3>
+            <p>You do not have permission to access Vehicle Orders.</p>
         </div>
     }
     else
     {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_orders.Count Order(s)</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Order #</th>
-                            <th>Vehicle</th>
-                            <th>Status</th>
-                            <th>Ordered</th>
-                            <th>Expected</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var order in _orders)
+        <div class="menu-tiles fis-menu-tiles-bottom">
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleInceptionMenu">
+                    <span>Vehicle Master Inception Maintenance</span>
+                    <i class="bx @(_showInceptionMenu ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showInceptionMenu)
+                {
+                    <div class="menu-tile-body">
+                        @if (_canCaptureInception)
                         {
-                            <tr>
-                                <td>@order.Number</td>
-                                <td>@order.Vehicle</td>
-                                <td><span class="badge">@order.Status</span></td>
-                                <td>@FormatDate(order.Ordered)</td>
-                                <td>@FormatDate(order.Expected)</td>
-                                <td>@order.Notes</td>
-                            </tr>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/create">1) Add / Edit New Vehicle</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/gg-block-numbers">2) Add GG Block Number(s)</a>
+                            </div>
                         }
-                    </tbody>
-                </table>
+                        @if (_canAuthorizeInception)
+                        {
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/authorize">Authorize Captured Vehicle Information</a>
+                            </div>
+                        }
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/home">Return to Main Report Page.</a>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<VehicleOrderItem> _orders = new();
     private bool _showInceptionMenu = true;
+    private bool _authResolved;
+    private bool _hasVehicleAccess;
+    private bool _canCaptureInception;
+    private bool _canAuthorizeInception;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadOrders();
+        await ResolveAccessAsync();
     }
 
-    private async Task LoadOrders()
+    private async Task ResolveAccessAsync()
     {
-        _loading = true;
-        try
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
         {
-            var apiItems = await VehicleOrderService.GetAllAsync<VehicleOrderDto>();
-            _orders = apiItems.Select(o => new VehicleOrderItem(
-                VmfCode: o.vmf_code,
-                Number: o.vehicle_order_code.ToString(),
-                Vehicle: o.vmf_code?.ToString() ?? "Unknown",
-                Status: o.order_status ?? "Unknown",
-                Ordered: o.order_date,
-                Expected: o.delivery_date ?? o.order_date,
-                Notes: o.order_notes ?? string.Empty
-            )).ToList();
+            _authResolved = true;
+            return;
         }
-        catch (Exception ex)
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        long accessLevel;
+        if (!long.TryParse(accessLevelClaim, out accessLevel))
         {
-            await JS.InvokeVoidAsync("console.error", $"Error loading vehicle orders: {ex.Message}");
-            _orders = new();
+            var userAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(userAccessCode, firstName);
         }
-        finally
+
+        _hasVehicleAccess =
+            (accessLevel & LegacyPermissionBits.VehicleManagement) == LegacyPermissionBits.VehicleManagement;
+
+        _canCaptureInception = HasRole(user, "vehicle inception capturer");
+        _canAuthorizeInception = HasRole(user, "vehicle inception authorizer");
+
+        if (_hasVehicleAccess && !_canCaptureInception && !_canAuthorizeInception)
         {
-            _loading = false;
+            _canCaptureInception = true;
+            _canAuthorizeInception = true;
         }
+
+        _authResolved = true;
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static int? TryParseInt(string? value)
+    {
+        return int.TryParse(value, out var parsed) ? parsed : null;
     }
 
     private void ToggleInceptionMenu()
     {
         _showInceptionMenu = !_showInceptionMenu;
-    }
-
-    private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
-
-    private sealed record VehicleOrderItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime? Ordered, DateTime? Expected, string Notes);
-
-    private sealed class VehicleOrderDto
-    {
-        public int vehicle_order_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? order_status { get; set; }
-        public DateTime? order_date { get; set; }
-        public DateTime? delivery_date { get; set; }
-        public string? order_notes { get; set; }
     }
 }

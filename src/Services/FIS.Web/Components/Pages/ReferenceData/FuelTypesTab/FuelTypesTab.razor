@@ -65,6 +65,14 @@ else
     </div>
 }
 
+@if (!string.IsNullOrWhiteSpace(_message))
+{
+    <div class="alert @(_isError ? "alert-error" : "alert-success")">
+        <i class="bx @(_isError ? "bx-error-circle" : "bx-check-circle")"></i>
+        <span>@_message</span>
+    </div>
+}
+
 @if (_showDialog)
 {
     <Modal IsVisible="_showDialog"
@@ -125,6 +133,8 @@ else
     private bool _isEdit = false;
     private bool _saving = false;
     private bool _deleting = false;
+    private string _message = string.Empty;
+    private bool _isError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,6 +154,8 @@ else
         _currentFuelType = new FuelTypeDto();
         _isEdit = false;
         _showDialog = true;
+        _message = string.Empty;
+        _isError = false;
     }
 
     private void ShowEditDialog(FuelTypeDto fuelType)
@@ -151,6 +163,8 @@ else
         _currentFuelType = fuelType with { };
         _isEdit = true;
         _showDialog = true;
+        _message = string.Empty;
+        _isError = false;
     }
 
     private void ShowDeleteDialog(FuelTypeDto fuelType)
@@ -174,6 +188,8 @@ else
     {
         _saving = true;
         bool success;
+        _message = string.Empty;
+        _isError = false;
 
         if (_isEdit)
         {
@@ -190,6 +206,13 @@ else
         {
             HideDialog();
             await LoadFuelTypes();
+            _isError = false;
+            _message = _isEdit ? "Fuel type updated." : "Fuel type created.";
+        }
+        else
+        {
+            _isError = true;
+            _message = _isEdit ? "Failed to update fuel type." : "Failed to create fuel type.";
         }
     }
 
@@ -203,6 +226,13 @@ else
         {
             HideDeleteDialog();
             await LoadFuelTypes();
+            _isError = false;
+            _message = "Fuel type deleted.";
+        }
+        else
+        {
+            _isError = true;
+            _message = "Failed to delete fuel type.";
         }
     }
 }

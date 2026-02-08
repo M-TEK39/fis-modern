@@ -226,6 +226,8 @@ builder.Services.AddScoped<IModelRepository, ModelRepository>();
 builder.Services.AddScoped<ITypeRepository, TypeRepository>();
 builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddScoped<IFuelTypeRepository, FuelTypeRepository>();
+builder.Services.AddScoped<IFuelTariffRepository, FuelTariffRepository>();
+builder.Services.AddScoped<IJobCardRepository, JobCardRepository>();
 builder.Services.AddScoped<IMaintenanceTriggerRepository, MaintenanceTriggerRepository>();
 builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
 builder.Services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();
@@ -344,7 +346,7 @@ builder.Services.AddScoped<IPasswordService, PasswordService>();
 
 // Financial system repositories - temporarily disabled for debugging
 //builder.Services.AddScoped<ITariffRepository, TariffRepository>();
-//builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>();
+builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>(); // ✅ Re-enabled for tariff recalculation
 //builder.Services.AddScoped<ILeaseTariffRepository, LeaseTariffRepository>();
 //builder.Services.AddScoped<ITariffParameterRepository, TariffParameterRepository>();
 //builder.Services.AddScoped<IMaintenanceValueRepository, MaintenanceValueRepository>();

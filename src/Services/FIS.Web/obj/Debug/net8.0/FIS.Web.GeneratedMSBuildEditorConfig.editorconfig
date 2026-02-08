@@ -462,6 +462,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Kb2JDYXJkcy9DbG9zZUpvYmNhcmRzLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/JobCards/CreateJobcard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Kb2JDYXJkcy9DcmVhdGVKb2JjYXJkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/JobCards/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Kb2JDYXJkcy9JbmRleC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -740,6 +744,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/UnitOfMeasureTab/UnitOfMeasureTab.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL1VuaXRPZk1lYXN1cmVUYWIvVW5pdE9mTWVhc3VyZVRhYi5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/ReferenceData/ValidationData.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZWZlcmVuY2VEYXRhL1ZhbGlkYXRpb25EYXRhLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/AssetList.razor]
@@ -1270,10 +1278,6 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9TdGF0dXMucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
-[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Vehicles/StatusMaintenance.razor]
-build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9TdGF0dXNNYWludGVuYW5jZS5yYXpvcg==
-build_metadata.AdditionalFiles.CssScope = 
-
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/VehicleVerification/Add.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlVmVyaWZpY2F0aW9uL0FkZC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -1445,3 +1449,7 @@ build_metadata.AdditionalFiles.CssScope = b-9lwsk67fq3
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Vehicles/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9JbmRleC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = b-1mioas3jt6
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Vehicles/StatusMaintenance.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9WZWhpY2xlcy9TdGF0dXNNYWludGVuYW5jZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = b-25yfqxaz43

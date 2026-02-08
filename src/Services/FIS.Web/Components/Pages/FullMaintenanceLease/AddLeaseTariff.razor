@@ -1,13 +1,141 @@
 @page "/full-maintenance-lease/add-lease"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Add Lease Tariff for In Service Vehicles"
-    Description="Vehicle lease tariff management."
-    LegacyPath="Vehicle lease tariff management."
-    Endpoint="api/leasecontractterms/add-inservice-tariff"
-    HttpMethod="POST"
-    ReportType="fml-add-lease-tariff"
-    BackLink="/full-maintenance-lease"
-    Icon="bx-wrench" />
+<PageTitle>Add Lease Tariff for In Service Vehicles</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-plus-circle"></i>
+            Add Lease Tariff for In Service Vehicles
+        </h1>
+        <p class="page-description">Capture a new lease tariff term for an in-service vehicle.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/full-maintenance-lease">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">VMF Code</label>
+                    <InputNumber @bind-Value="_item.vmf_Code" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Start Date</label>
+                    <InputDate @bind-Value="_item.StartDate" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">End Date</label>
+                    <InputDate @bind-Value="_item.EndDate" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Agreed Terms (months)</label>
+                    <InputNumber @bind-Value="_item.AgreedTerms" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Agreed Kilos</label>
+                    <InputNumber @bind-Value="_item.AgreedKilos" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Applied Interest</label>
+                    <InputNumber @bind-Value="_item.AppliedInterest" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Fixed Monthly Amount</label>
+                    <InputNumber @bind-Value="_item.FixedMonthlyAmount" class="form-input" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Authority Status</label>
+                    <select class="form-select" @bind="_item.AuthorityStatus">
+                        <option value="1">Pending</option>
+                        <option value="2">Approved</option>
+                        <option value="4">Rejected</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="CreateAsync" disabled="@_saving">Submit</button>
+                <button class="btn btn-secondary" @onclick="ClearForm" disabled="@_saving">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_error ? "alert-error" : "alert-success") fis-alert-tight">
+            <i class="bx @(_error ? "bx-error-circle" : "bx-check-circle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _saving;
+    private bool _error;
+    private string _message = string.Empty;
+    private LeaseTermDto _item = NewItem();
+
+    private async Task CreateAsync()
+    {
+        _saving = true;
+        _error = false;
+        _message = string.Empty;
+        try
+        {
+            var created = await LeaseService.CreateAsync(_item);
+            _error = created == null;
+            _message = _error
+                ? "Failed to create lease tariff."
+                : $"Lease tariff created (ID: {created?.VehicleContractTermID}).";
+            if (!_error)
+            {
+                _item = NewItem();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to create lease tariff.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error creating lease tariff: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ClearForm()
+    {
+        _item = NewItem();
+        _message = string.Empty;
+        _error = false;
+    }
+
+    private static LeaseTermDto NewItem()
+        => new()
+        {
+            StartDate = DateTime.Today,
+            EndDate = DateTime.Today.AddYears(1),
+            AuthorityStatus = 1
+        };
+
+    private sealed class LeaseTermDto
+    {
+        public int VehicleContractTermID { get; set; }
+        public int vmf_Code { get; set; }
+        public int? AgreedTerms { get; set; }
+        public long? AgreedKilos { get; set; }
+        public decimal? AppliedInterest { get; set; }
+        public decimal? FixedMonthlyAmount { get; set; }
+        public int? AuthorityStatus { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+}

@@ -1,13 +1,108 @@
 @page "/workshop/open-job-card"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject WorkshopApiService WorkshopService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="OPEN a CLOSED Job Card"
-    Description="Password required to reopen a closed job card."
-    LegacyPath="Password required to reopen a closed job card."
-    Endpoint="api/workshop/open-closed-jobcard"
-    HttpMethod="POST"
-    ReportType="workshop-open-closed-jobcard"
-    BackLink="/workshop"
-    Icon="bx-wrench" />
+<PageTitle>OPEN a CLOSED Job Card</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-lock-open"></i>OPEN a CLOSED Job Card</h1>
+        <p class="page-description">Re-open a closed workshop job card by clearing complete time.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/workshop">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Workshop Entry ID</label>
+                <InputNumber @bind-Value="_entryId" class="form-input" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Authorizer Password</label>
+                <input type="password" class="form-input" @bind="_password" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="ReopenAsync" disabled="@_running">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_error ? "alert-error" : "alert-success") fis-alert-tight">
+            <i class="bx @(_error ? "bx-error-circle" : "bx-check-circle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+</div>
+
+@code {
+    private int? _entryId;
+    private string _password = string.Empty;
+    private bool _running;
+    private bool _error;
+    private string _message = string.Empty;
+
+    private async Task ReopenAsync()
+    {
+        _error = false;
+        _message = string.Empty;
+
+        if (!_entryId.HasValue || _entryId.Value <= 0)
+        {
+            _error = true;
+            _message = "Enter a valid workshop entry ID.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_password))
+        {
+            _error = true;
+            _message = "Password is required.";
+            return;
+        }
+
+        _running = true;
+        try
+        {
+            var item = await WorkshopService.GetByIdAsync<WorkshopDto>(_entryId.Value);
+            if (item == null)
+            {
+                _error = true;
+                _message = "Workshop entry not found.";
+                return;
+            }
+
+            item.complete_time = null;
+            var updated = await WorkshopService.UpdateAsync<WorkshopDto>(item.ww_code, item);
+            _error = updated == null;
+            _message = _error ? "Failed to re-open job card." : "Job card re-opened.";
+            _password = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to re-open job card.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error re-opening job card: {ex.Message}");
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private sealed class WorkshopDto
+    {
+        public short ww_code { get; set; }
+        public int? vmf_code { get; set; }
+        public DateTime? receive_time { get; set; }
+        public DateTime? receive_date { get; set; }
+        public DateTime? complete_time { get; set; }
+    }
+}

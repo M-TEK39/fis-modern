@@ -569,6 +569,24 @@ textarea.form-input:focus,
     padding: 2rem;
 }
 
+.form-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--fis-border);
+}
+
+.form-row .form-label {
+    margin: 0;
+}
+
+.form-card > .form-actions {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--fis-border);
+}
+
 .form-section {
     margin-bottom: 2rem;
     padding-bottom: 2rem;
@@ -668,6 +686,12 @@ textarea.form-input:focus,
         padding: 1.5rem;
     }
 
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        padding: 0.875rem 1rem;
+    }
+
     .form-actions {
         flex-direction: column-reverse;
     }
@@ -697,6 +721,100 @@ textarea.form-input:focus,
     color: var(--fis-error);
     font-size: 0.75rem;
     margin-top: 0.35rem;
+}
+
+/* ----------------------------------------
+   Shared Spacing/Utility Helpers
+   ---------------------------------------- */
+.fis-mt-1 {
+    margin-top: 1rem;
+}
+
+.fis-mt-15 {
+    margin-top: 1.5rem;
+}
+
+.fis-mb-1 {
+    margin-bottom: 1rem;
+}
+
+.fis-mb-15 {
+    margin-bottom: 1.5rem;
+}
+
+.fis-menu-tiles-top-bottom {
+    margin: 1.5rem 0;
+}
+
+.fis-menu-tiles-bottom {
+    margin-bottom: 1.5rem;
+}
+
+.fis-alert-tight {
+    margin-top: 1rem;
+}
+
+.fis-alert-bottom {
+    margin-bottom: 1rem;
+}
+
+.fis-input-group-compact {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.fis-input-group-spaced {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.fis-radio-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.35rem;
+}
+
+.fis-label-inline {
+    margin: 0;
+}
+
+.fis-flex-1 {
+    flex: 1;
+}
+
+.fis-max-w-280 {
+    max-width: 280px;
+}
+
+.fis-chip-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.fis-grid-220 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.5rem;
+}
+
+.fis-photo-preview {
+    max-width: 100%;
+    border-radius: 0.5rem;
+}
+
+.fis-help-frame {
+    width: 100%;
+    min-height: 75vh;
+    border: 0;
+}
+
+.fis-uppercase {
+    text-transform: uppercase;
 }
 
 /* ----------------------------------------
@@ -830,12 +948,15 @@ textarea.form-input:focus,
     background: var(--fis-surface);
     border: 1px solid var(--fis-border);
     border-radius: 0.75rem;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     box-shadow: var(--fis-shadow);
 }
 
 .data-table {
     width: 100%;
+    min-width: max-content;
     border-collapse: collapse;
 }
 
@@ -2004,13 +2125,19 @@ body.sidebar-collapsed .legacy-shell .legacy-label {
     display: none;
 }
 
-.nav-list .legacy-link {
+.legacy-nav a.legacy-link,
+.legacy-nav a.legacy-link:link,
+.legacy-nav a.legacy-link:visited {
     color: #c5ccd8;
+    text-decoration: none;
 }
 
-.nav-item:hover .legacy-link,
-.nav-item.active .legacy-link {
+.legacy-nav .nav-item:hover > a.legacy-link,
+.legacy-nav .nav-item.active > a.legacy-link,
+.legacy-nav a.legacy-link.active,
+.legacy-nav a.legacy-link.active:visited {
     color: var(--fis-text);
+    text-decoration: none;
 }
 
 .nav-item.disabled .legacy-link {
@@ -2085,16 +2212,25 @@ body.sidebar-collapsed .legacy-shell .sidebar-notification {
     gap: 0.15rem;
     min-width: 0;
     flex: 1;
+    overflow: hidden;
 }
 
 .sidebar-user-name {
     font-size: 0.9rem;
     font-weight: 600;
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .sidebar-user-role {
     font-size: 0.75rem;
     color: var(--fis-muted-text);
+    line-height: 1.2;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .sidebar-notification {

@@ -1,12 +1,19 @@
 @page "/contracts/detail"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@using System.Security.Claims
+@using System.Text.Json
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
 @inject DepartmentApiService DepartmentService
 @inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Vehicle Contract Detail Management</PageTitle>
 
@@ -26,10 +33,6 @@
 </div>
 
 <div class="page-content">
-    <div class="contract-banner contract-banner-warning">
-        <i class="bx bx-error-circle"></i>
-        <span>Limited access: some contract actions may be restricted based on your role.</span>
-    </div>
     <div class="contract-banner contract-banner-info">
         <i class="bx bx-info-circle"></i>
         <span>Contract for <strong>@GetQuery("ggnumber")</strong> || <strong>@GetQuery("regnumber")</strong></span>
@@ -46,28 +49,76 @@
                 <tr>
                     <th class="contract-cell-label">Available Actions:</th>
                     <td colspan="3">
-                        <div class="contract-action-group">
-                            <button class="btn btn-primary btn-sm" type="button" @onclick='() => RunContractActionAsync("open")' disabled="@_actionRunning">Open a Contract</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("extend")' disabled="@_actionRunning">Extend Active Contract</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("reassign")' disabled="@_actionRunning">Reassign Contract</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("close")' disabled="@_actionRunning">Close Active Contract</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("relief")' disabled="@_actionRunning">Create Relief Contract</button>
-                        </div>
-                        <div class="contract-action-group">
-                            <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("validate")' disabled="@_actionRunning">Validate Form Data</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("submit")' disabled="@_actionRunning">Submit For approval</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
-                        </div>
-                        <div class="contract-action-group">
-                            <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("validate")' disabled="@_actionRunning">Validate Form Data</button>
-                            <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("approve")' disabled="@_actionRunning">Approve</button>
-                            <button class="btn btn-success btn-sm" type="button" @onclick='() => RunContractActionAsync("approve-activate")' disabled="@_actionRunning">Approve and Activate</button>
-                            <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("decline-correction")' disabled="@_actionRunning">Decline For Correction</button>
-                            <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunContractActionAsync("decline")' disabled="@_actionRunning">Decline</button>
-                        </div>
-                        <div class="contract-action-group">
-                            <button class="btn btn-danger btn-sm contract-pending-btn" type="button" @onclick='() => RunContractActionAsync("review-pending")' disabled="@_actionRunning">Pending Contract Exists : Click to Review</button>
-                        </div>
+                        @if (IsPendingAwaitingReview() && CanCurrentUserReviewPendingContract())
+                        {
+                            <div class="contract-action-group">
+                                <button class="btn btn-danger btn-sm contract-pending-btn" type="button" @onclick='() => RunContractActionAsync("review-pending")' disabled="@_actionRunning">Pending Contract Exists : Click to Review</button>
+                            </div>
+                        }
+                        else if (IsPendingAwaitingReview())
+                        {
+                            <div class="contract-action-group">
+                                <span class="contract-muted">Pending contract submitted and awaiting reviewer action.</span>
+                            </div>
+                        }
+                        else if (IsPendingInReview())
+                        {
+                            <div class="contract-action-group">
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("approve")' disabled="@_actionRunning">Approve</button>
+                                <button class="btn btn-success btn-sm" type="button" @onclick='() => RunContractActionAsync("approve-activate")' disabled="@_actionRunning">Approve and Activate</button>
+                                <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("decline-correction")' disabled="@_actionRunning">Decline For Correction</button>
+                                <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunContractActionAsync("decline")' disabled="@_actionRunning">Decline</button>
+                            </div>
+                        }
+                        else if (IsApprovedAwaitingActivationState())
+                        {
+                            <div class="contract-action-group">
+                                <button class="btn btn-success btn-sm" type="button" @onclick='() => RunContractActionAsync("approve-activate")' disabled="@_actionRunning">Activate Approved Contract</button>
+                                <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("decline-correction")' disabled="@_actionRunning">Decline For Correction</button>
+                                <button class="btn btn-danger btn-sm" type="button" @onclick='() => RunContractActionAsync("decline")' disabled="@_actionRunning">Decline</button>
+                            </div>
+                        }
+                        else if (IsCorrectionState())
+                        {
+                            if (!_openContractMode)
+                            {
+                                <div class="contract-action-group">
+                                    <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("review-correction")' disabled="@_actionRunning">Load Correction and Resubmit</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="contract-action-group">
+                                    <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("submit")' disabled="@_actionRunning">Submit For approval</button>
+                                    <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
+                                </div>
+                            }
+                        }
+                        else if (IsNewContractState())
+                        {
+                            @if (!_openContractMode)
+                            {
+                                <div class="contract-action-group">
+                                    <button class="btn btn-primary btn-sm" type="button" @onclick='() => RunContractActionAsync("open")' disabled="@_actionRunning">Open a Contract</button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="contract-action-group">
+                                    <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("submit")' disabled="@_actionRunning">Submit For approval</button>
+                                    <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
+                                </div>
+                            }
+                        }
+                        else if (IsActiveContractState())
+                        {
+                            <div class="contract-action-group">
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("extend")' disabled="@_actionRunning">Extend Active Contract</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("reassign")' disabled="@_actionRunning">Reassign Contract</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("close")' disabled="@_actionRunning">Close Active Contract</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
+                            </div>
+                        }
                         @if (!string.IsNullOrWhiteSpace(_actionStatusMessage))
                         {
                             <div class="alert @(_actionStatusError ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">
@@ -80,51 +131,67 @@
         </table>
     </div>
 
-    <div class="contract-section">
-        <table class="contract-legacy-table">
-            <thead>
-                <tr class="contract-legacy-heading">
-                    <th colspan="4">Approval Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="contract-approval-summary">
-                        @BuildApprovalSummary()
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <div class="contract-section">
-        <div class="contract-banner contract-banner-info">
-            <i class="bx bx-link-alt"></i>
-            <span>
-                This vehicle is currently assigned as Relief Vehicle for contract of <strong>GG-000</strong> / <strong>REG-000</strong>.
-                | The vehicle <strong>GG-000</strong> / <strong>REG-000</strong> is currently assigned as Relief Vehicle for this contract.
-            </span>
-            <a class="btn btn-secondary btn-sm" href="/contracts/detail">View Linked Relief Contract</a>
+    @if (ShowContractForm())
+    {
+    @if (IsReviewerMode())
+    {
+        <div class="contract-section">
+            <table class="contract-legacy-table">
+                <thead>
+                    <tr class="contract-legacy-heading">
+                        <th colspan="4">Approval Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="contract-approval-summary">
+                            @BuildApprovalSummary()
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
-    </div>
+    }
+    else if (HasReviewerNotes())
+    {
+        <div class="contract-section">
+            <table class="contract-legacy-table">
+                <thead>
+                    <tr class="contract-legacy-heading">
+                        <th colspan="4">Reviewer Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <textarea class="form-input contract-notes" rows="4" readonly>@NormalizeNotesForDisplay(_contract?.contract_notes)</textarea>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
 
-    <div class="contract-section">
-        <table class="contract-legacy-table">
-            <thead>
-                <tr class="contract-legacy-heading">
-                    <th colspan="4">Approval Notes</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>
-                        <textarea class="form-input contract-notes" rows="4" placeholder="Approval notes..." @bind="_approvalNotes"></textarea>
-                        <input class="form-input" style="margin-top:0.5rem;" placeholder="Decline reason (required for decline actions)" @bind="_declineReason" />
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
+    @if (IsReviewerMode())
+    {
+        <div class="contract-section">
+            <table class="contract-legacy-table">
+                <thead>
+                    <tr class="contract-legacy-heading">
+                        <th colspan="4">Approval Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <textarea class="form-input contract-notes" rows="4" placeholder="Approval notes..." @bind="_approvalNotes"></textarea>
+                            <input class="form-input" style="margin-top:0.5rem;" placeholder="Decline reason (required for decline actions)" @bind="_declineReason" />
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
 
     <div class="contract-section">
         <table class="contract-legacy-table">
@@ -181,9 +248,6 @@
                                 </tr>
                             </tbody>
                         </table>
-                        <div class="contract-banner contract-banner-warning contract-banner-inline">
-                            The vehicle is no longer in service and thus no contracts can be activated against it.
-                        </div>
                     </td>
                 </tr>
             </tbody>
@@ -270,12 +334,6 @@
                                 </tr>
                             </tbody>
                         </table>
-                        <div class="contract-banner contract-banner-warning contract-banner-inline">
-                            [Invalid Financial Configuration]: The selected department does not have a valid financial system configuration.
-                        </div>
-                        <div class="contract-banner contract-banner-info contract-banner-inline">
-                            [No valid Fuel Card]: The selected vehicle does not have a valid fuel card.
-                        </div>
                     </td>
                 </tr>
             </tbody>
@@ -607,6 +665,7 @@
             </tbody>
         </table>
     </div>
+    }
 </div>
 
 @code {
@@ -624,11 +683,22 @@
     private string _actionStatusMessage = string.Empty;
     private string _approvalNotes = string.Empty;
     private string _declineReason = string.Empty;
+    private bool _isContractActive;
+    private bool _hasPendingContract;
+    private bool _openContractMode;
+    private bool _reviewPendingMode;
+    private bool _scrollToTopPending = true;
+    private bool _submittedByCurrentUserInSession;
+    private int? _currentUserAccessCode;
+    private long _currentAccessLevel;
+    private bool _hasContractApproverRole;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            await ResolveCurrentUserContextAsync();
+
             if (int.TryParse(ContractId, out var contractId))
             {
                 _contract = await ContractService.GetContractAsync(contractId);
@@ -646,8 +716,7 @@
 
             if (_contract == null && _vehicle != null)
             {
-                var contracts = await ContractService.GetContractsAsync();
-                _contract = contracts.FirstOrDefault(c => c.vmf_code == _vehicle.vmf_code);
+                _contract = await ContractService.GetLatestContractForVehicleAsync(_vehicle.vmf_code);
             }
 
             if (_contract?.site_code != null)
@@ -659,16 +728,36 @@
                 }
             }
 
-            _approvalNotes = _contract?.contract_notes ?? string.Empty;
+        _approvalNotes = string.Empty;
+            await EvaluateContractStateAsync();
         }
         catch
         {
         }
     }
 
+    protected override Task OnParametersSetAsync()
+    {
+        _scrollToTopPending = true;
+        return base.OnParametersSetAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollToTopPending)
+        {
+            _scrollToTopPending = false;
+            await JSRuntime.InvokeVoidAsync("window.scrollTo", 0, 0);
+        }
+    }
+
     private async Task<VehicleDto?> FindVehicleFromQuery()
     {
-        var query = (GgNumber ?? RegNumber ?? string.Empty).Trim();
+        var query = !string.IsNullOrWhiteSpace(GgNumber)
+            ? GgNumber.Trim()
+            : !string.IsNullOrWhiteSpace(RegNumber)
+                ? RegNumber.Trim()
+                : string.Empty;
         if (string.IsNullOrWhiteSpace(query))
         {
             return null;
@@ -692,12 +781,55 @@
 
     private async Task RunContractActionAsync(string action)
     {
+        var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code ?? 0;
+
+        if (action == "open")
+        {
+            if (vmfCode <= 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a valid vehicle before opening a contract.";
+                return;
+            }
+
+            _openContractMode = true;
+            _reviewPendingMode = false;
+            _actionStatusError = false;
+            _actionStatusMessage = "Complete contract details, then submit for approval.";
+            return;
+        }
+
+        if (action == "review-pending")
+        {
+            if (!CanCurrentUserReviewPendingContract())
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "You cannot review or approve your own pending contract.";
+                return;
+            }
+
+            _reviewPendingMode = true;
+            _openContractMode = false;
+            _actionStatusError = false;
+            _actionStatusMessage = "Pending contract loaded for review.";
+            return;
+        }
+
+        if (action == "review-correction")
+        {
+            _openContractMode = true;
+            _reviewPendingMode = false;
+            _actionStatusError = false;
+            _actionStatusMessage = "Correction contract loaded. Update details and submit for approval.";
+            return;
+        }
+
         _actionRunning = true;
         _actionStatusMessage = string.Empty;
 
         var contractId = ResolveContractId();
-        var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code ?? 0;
-        if (contractId <= 0 && action != "open" && action != "validate")
+        var actionContractId = await ResolveActionContractIdAsync(action, contractId);
+        if (actionContractId <= 0 && action != "submit" && action != "cancel")
         {
             _actionStatusError = true;
             _actionStatusMessage = "Contract ID is required for this action.";
@@ -713,35 +845,34 @@
             return;
         }
 
+        if (action is "approve" or "approve-activate" or "decline" or "decline-correction")
+        {
+            if (!CanCurrentUserReviewPendingContract())
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "You cannot review or approve your own pending contract.";
+                _actionRunning = false;
+                return;
+            }
+        }
+
         var endpoint = action switch
         {
-            "open" => "api/contracts/hire",
-            "extend" => $"api/contracts/{contractId}/extend",
-            "reassign" => $"api/contracts/{contractId}/reassign",
-            "close" => $"api/contracts/{contractId}/close",
-            "relief" => $"api/contracts/{contractId}/relief",
-            "validate" => "api/contracts/validate",
-            "submit" => $"api/contracts/{contractId}/submit",
-            "cancel" => $"api/contracts/{contractId}/cancel",
-            "approve" => $"api/contracts/{contractId}/approve",
-            "approve-activate" => $"api/contracts/{contractId}/approve-activate",
-            "decline-correction" => $"api/contracts/{contractId}/decline-correction",
-            "decline" => $"api/contracts/{contractId}/decline",
-            _ => $"api/contracts/{contractId}/pending"
+            "extend" => $"api/contracts/{actionContractId}/extend",
+            "reassign" => $"api/contracts/{actionContractId}/reassign",
+            "close" => $"api/contracts/{actionContractId}/close",
+            "relief" => $"api/contracts/{actionContractId}/relief",
+            "submit" => $"api/contracts/{actionContractId}/submit",
+            "cancel" => $"api/contracts/{actionContractId}/cancel",
+            "approve" => $"api/contracts/{actionContractId}/approve",
+            "approve-activate" => $"api/contracts/{actionContractId}/approve-activate",
+            "decline-correction" => $"api/contracts/{actionContractId}/decline-correction",
+            "decline" => $"api/contracts/{actionContractId}/decline",
+            _ => $"api/contracts/{actionContractId}/pending"
         };
 
         FinanceApiResult result;
-        if (action == "open")
-        {
-            result = await ContractService.PostActionAsync(endpoint, new
-            {
-                VmfCode = vmfCode,
-                SiteCode = _contract?.site_code ?? (short)0,
-                StartOdometer = _vehicle?.current_odo,
-                Notes = _approvalNotes
-            });
-        }
-        else if (action == "extend")
+        if (action == "extend")
         {
             result = await ContractService.PutActionAsync(endpoint, new
             {
@@ -776,17 +907,67 @@
                 Reason = string.IsNullOrWhiteSpace(_approvalNotes) ? "Relief contract requested from contract detail." : _approvalNotes
             });
         }
-        else if (action == "validate")
+        else if (action == "submit")
         {
-            result = await ContractService.PostActionAsync(endpoint, new
+            if (vmfCode <= 0)
             {
-                VmfCode = vmfCode,
-                SiteCode = _contract?.site_code ?? (short)0,
-                StartOdometer = _vehicle?.current_odo
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a valid vehicle before submitting a contract.";
+                _actionRunning = false;
+                return;
+            }
+
+            if (contractId <= 0)
+            {
+                var createResult = await ContractService.PostActionAsync("api/contracts/hire", new
+                {
+                    VmfCode = vmfCode,
+                    SiteCode = _contract?.site_code ?? (short)0,
+                    StartOdometer = _vehicle?.current_odo,
+                    Notes = _approvalNotes
+                });
+
+                if (!createResult.Success)
+                {
+                    _actionStatusError = true;
+                    _actionStatusMessage = createResult.Message;
+                    _actionRunning = false;
+                    return;
+                }
+
+                var createdContractId = TryExtractContractId(createResult.ResponseBody);
+                if (createdContractId > 0)
+                {
+                    _contract = await ContractService.GetContractAsync(createdContractId);
+                    contractId = createdContractId;
+                    actionContractId = createdContractId;
+                }
+            }
+
+            if (actionContractId <= 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Contract could not be created for submission.";
+                _actionRunning = false;
+                return;
+            }
+
+            result = await ContractService.PostActionAsync($"api/contracts/{actionContractId}/submit", new
+            {
+                ApprovalNotes = _approvalNotes
             });
         }
         else if (action == "cancel")
         {
+            if (_openContractMode && contractId <= 0)
+            {
+                _openContractMode = false;
+                _actionStatusError = false;
+                _actionStatusMessage = "Open contract draft cancelled.";
+                _actionRunning = false;
+                return;
+            }
+
             result = await ContractService.PostActionAsync(endpoint, new
             {
                 CancellationReason = _declineReason
@@ -806,18 +987,27 @@
                 DeclineReason = _declineReason
             });
         }
-        else if (action == "review-pending")
-        {
-            result = await ContractService.GetActionAsync(endpoint);
-        }
         else
         {
             result = await ContractService.PostActionAsync(endpoint, new { });
         }
 
         _actionStatusError = !result.Success;
-        _actionStatusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _actionStatusMessage = result.Message;
         _actionRunning = false;
+
+        if (result.Success)
+        {
+            if (action == "submit")
+            {
+                _submittedByCurrentUserInSession = true;
+            }
+
+            await RefreshContractContextAsync(actionContractId);
+            await EvaluateContractStateAsync();
+            _approvalNotes = string.Empty;
+            _declineReason = string.Empty;
+        }
     }
 
     private int ResolveContractId()
@@ -857,5 +1047,317 @@
         var status = ValueOrDash(_contract?.status) ?? "Awaiting Approval";
 
         return $"CONTRACT OPENED BY {openedBy.ToUpperInvariant()} ON THE {openedOn} AND CURRENTLY IN STATUS: {status.ToUpperInvariant()}.";
+    }
+
+    private async Task EvaluateContractStateAsync()
+    {
+        var statusCode = _contract?.contract_status_code;
+        var stillCurrent = (_contract?.still_current ?? string.Empty).Trim().ToUpperInvariant();
+        var status = (_contract?.status ?? string.Empty).Trim().ToLowerInvariant();
+
+        if (stillCurrent is "Y" or "N")
+        {
+            _isContractActive = stillCurrent == "Y";
+        }
+        else
+        {
+            _isContractActive =
+                statusCode == 3
+                || (!string.IsNullOrWhiteSpace(status) && (status.Contains("active") || status.Contains("in service")));
+        }
+
+        _hasPendingContract = statusCode == 1;
+        var contractId = ResolveContractId();
+        if (!_hasPendingContract && contractId > 0)
+        {
+            var pendingResponse = await ContractService.GetActionAsync($"api/contracts/{contractId}/pending");
+            if (pendingResponse.Success && !string.IsNullOrWhiteSpace(pendingResponse.ResponseBody))
+            {
+                var pendingDetails = ExtractPendingDetails(pendingResponse.ResponseBody);
+                _hasPendingContract = pendingDetails.IsPending;
+                if (pendingDetails.SubmittedByUserCode is > 0 && _contract != null)
+                {
+                    _contract.created_by_user_code = pendingDetails.SubmittedByUserCode.Value;
+                }
+            }
+        }
+
+        var action = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (_hasPendingContract)
+        {
+            _reviewPendingMode = CanCurrentUserReviewPendingContract() && (action is "review" or "process");
+            _openContractMode = false;
+        }
+        else if (!_isContractActive)
+        {
+            _openContractMode = action is "open";
+            _reviewPendingMode = false;
+        }
+        else
+        {
+            _openContractMode = false;
+            _reviewPendingMode = false;
+        }
+    }
+
+    private bool IsPendingAwaitingReview() => _hasPendingContract && !_reviewPendingMode;
+    private bool IsPendingInReview() => _hasPendingContract && _reviewPendingMode;
+    private bool IsActiveContractState() => _isContractActive && !_hasPendingContract;
+    private bool IsApprovedAwaitingActivationState() => _contract?.contract_status_code == 2 && !IsActiveContractState();
+    private bool IsCorrectionState() => _contract?.contract_status_code == 4;
+    private bool IsNewContractState() => !_isContractActive && !_hasPendingContract && !IsApprovedAwaitingActivationState() && !IsCorrectionState();
+    private bool IsReviewerMode() => IsPendingInReview();
+    private bool CanCurrentUserReviewPendingContract() => _hasContractApproverRole && !IsCurrentUserContractCapturer();
+    private bool HasReviewerNotes() => !string.IsNullOrWhiteSpace(_contract?.contract_notes);
+    private bool ShowContractForm() => _reviewPendingMode || _openContractMode || IsActiveContractState() || IsApprovedAwaitingActivationState();
+
+    private bool IsCurrentUserContractCapturer()
+    {
+        if (_currentUserAccessCode is not > 0)
+        {
+            return false;
+        }
+
+        var contractUserCode = _contract?.user_code;
+        if (contractUserCode is > 0 && contractUserCode.Value == _currentUserAccessCode.Value)
+        {
+            return true;
+        }
+
+        var createdByUserCode = _contract?.created_by_user_code;
+        if (createdByUserCode is > 0 && createdByUserCode.Value == _currentUserAccessCode.Value)
+        {
+            return true;
+        }
+
+        return _submittedByCurrentUserInSession;
+    }
+
+    private async Task ResolveCurrentUserContextAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        _currentUserAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+        _hasContractApproverRole = HasAnyRole(user, "contracts approver", "contracts_approver", "back dating contract (approver)");
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        if (!long.TryParse(accessLevelClaim, out _currentAccessLevel))
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            _currentAccessLevel = await UserAccessContextService.EnsureAccessLevelAsync(_currentUserAccessCode, firstName);
+        }
+
+        if (!_hasContractApproverRole && (_currentAccessLevel & LegacyPermissionBits.ContractManagement) == LegacyPermissionBits.ContractManagement)
+        {
+            _hasContractApproverRole = true;
+        }
+    }
+
+    private static int? TryParseInt(string? value)
+    {
+        return int.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private static bool HasAnyRole(ClaimsPrincipal user, params string[] roles)
+    {
+        foreach (var role in roles)
+        {
+            if (user.IsInRole(role))
+            {
+                return true;
+            }
+        }
+
+        var roleClaims = user.Claims
+            .Where(c =>
+                c.Type == ClaimTypes.Role
+                || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => roles.Any(role => string.Equals(item, role, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    private async Task RefreshContractContextAsync(int contractIdHint)
+    {
+        var contractId = contractIdHint > 0 ? contractIdHint : ResolveContractId();
+        if (contractId > 0)
+        {
+            _contract = await ContractService.GetContractAsync(contractId);
+        }
+        else if (_vehicle != null)
+        {
+            _contract = await ContractService.GetLatestContractForVehicleAsync(_vehicle.vmf_code);
+        }
+
+        if (_contract?.vmf_code != null)
+        {
+            _vehicle = await VehicleService.GetVehicleAsync(_contract.vmf_code.Value);
+        }
+    }
+
+    private async Task<int> ResolveActionContractIdAsync(string action, int fallbackContractId)
+    {
+        if (action is not ("close" or "extend" or "reassign"))
+        {
+            return fallbackContractId;
+        }
+
+        var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code ?? 0;
+        if (vmfCode <= 0)
+        {
+            return fallbackContractId;
+        }
+
+        var activeContracts = await ContractService.GetContractsAsync();
+        var activeForVehicle = activeContracts
+            .Where(c => c.vmf_code == vmfCode)
+            .Where(c =>
+                string.Equals((c.still_current ?? string.Empty).Trim(), "Y", StringComparison.OrdinalIgnoreCase)
+                || c.contract_status_code == 3
+                || ((c.status ?? string.Empty).Contains("active", StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(c => c.contract_id)
+            .FirstOrDefault();
+
+        return activeForVehicle?.contract_id ?? fallbackContractId;
+    }
+
+    private static bool ExtractIsPending(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            return doc.RootElement.TryGetProperty("isPending", out var value) && value.GetBoolean();
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static (bool IsPending, int? SubmittedByUserCode) ExtractPendingDetails(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return (false, null);
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+            var isPending = root.TryGetProperty("isPending", out var pendingValue) && pendingValue.GetBoolean();
+
+            int? submittedBy = null;
+            if (root.TryGetProperty("submittedByUserCode", out var submittedByValue))
+            {
+                if (submittedByValue.ValueKind == JsonValueKind.Number && submittedByValue.TryGetInt32(out var parsed))
+                {
+                    submittedBy = parsed;
+                }
+                else if (submittedByValue.ValueKind == JsonValueKind.String && int.TryParse(submittedByValue.GetString(), out parsed))
+                {
+                    submittedBy = parsed;
+                }
+            }
+
+            return (isPending, submittedBy);
+        }
+        catch
+        {
+            return (false, null);
+        }
+    }
+
+    private static int TryExtractContractId(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return 0;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+            if (TryReadInt(root, "contract_id", out var id)
+                || TryReadInt(root, "contractId", out id)
+                || TryReadInt(root, "contract_code", out id)
+                || TryReadInt(root, "contractCode", out id))
+            {
+                return id;
+            }
+        }
+        catch
+        {
+        }
+
+        return 0;
+    }
+
+    private static bool TryReadInt(JsonElement root, string propertyName, out int value)
+    {
+        value = 0;
+        if (!root.TryGetProperty(propertyName, out var property))
+        {
+            return false;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out value))
+        {
+            return true;
+        }
+
+        return property.ValueKind == JsonValueKind.String && int.TryParse(property.GetString(), out value);
+    }
+
+    private static string NormalizeNotesForDisplay(string? notes)
+    {
+        if (string.IsNullOrWhiteSpace(notes))
+        {
+            return string.Empty;
+        }
+
+        var lines = notes
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(static l => l.Trim())
+            .Where(static l => !string.IsNullOrWhiteSpace(l))
+            .ToList();
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var line = lines[i];
+            line = CollapseRepeatedPrefix(line, "Approval:");
+            line = CollapseRepeatedPrefix(line, "Approved & Activated:");
+            line = CollapseRepeatedPrefix(line, "Correction Required:");
+            line = CollapseRepeatedPrefix(line, "Declined:");
+            lines[i] = line;
+        }
+
+        return string.Join(Environment.NewLine, lines.Distinct());
+    }
+
+    private static string CollapseRepeatedPrefix(string input, string prefix)
+    {
+        var output = input;
+        var repeated = $"{prefix} {prefix}";
+        while (output.Contains(repeated, StringComparison.OrdinalIgnoreCase))
+        {
+            output = output.Replace(repeated, prefix, StringComparison.OrdinalIgnoreCase).Trim();
+        }
+
+        return output;
     }
 }

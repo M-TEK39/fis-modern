@@ -485,6 +485,12 @@ public class ReferenceDataApiService
             };
             
             var response = await _httpClient.PostAsJsonAsync("api/fueltype", createFuelTypeDto);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning("Create fuel type failed. Status: {StatusCode}, Body: {Body}", response.StatusCode, body);
+            }
+
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -510,6 +516,16 @@ public class ReferenceDataApiService
                 $"api/fueltype/{fuelTypeCode}",
                 fuelTypeEntity
             );
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.LogWarning(
+                    "Update fuel type failed for {FuelTypeCode}. Status: {StatusCode}, Body: {Body}",
+                    fuelTypeCode,
+                    response.StatusCode,
+                    body);
+            }
+
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

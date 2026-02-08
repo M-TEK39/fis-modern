@@ -1,13 +1,76 @@
 @page "/workshop/entry/delete"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject WorkshopApiService WorkshopService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Delete Workshop Entry"
-    Description="Delete workflow placeholder."
-    LegacyPath="Delete workflow placeholder."
-    Endpoint="api/workshop/0"
-    HttpMethod="DELETE"
-    ReportType="workshop-entry-delete"
-    BackLink="/workshop/entry"
-    Icon="bx-wrench" />
+<PageTitle>Delete Workshop Entry</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-trash"></i>Delete Workshop Entry</h1>
+        <p class="page-description">Delete a workshop entry by ID.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/workshop/entry">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Workshop Entry ID</label>
+                <InputNumber @bind-Value="_entryId" class="form-input" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@_running">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_error ? "alert-error" : "alert-success") fis-alert-tight">
+            <i class="bx @(_error ? "bx-error-circle" : "bx-check-circle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+</div>
+
+@code {
+    private int? _entryId;
+    private bool _running;
+    private bool _error;
+    private string _message = string.Empty;
+
+    private async Task DeleteAsync()
+    {
+        _message = string.Empty;
+        _error = false;
+        if (!_entryId.HasValue || _entryId.Value <= 0)
+        {
+            _error = true;
+            _message = "Enter a valid workshop entry ID.";
+            return;
+        }
+
+        _running = true;
+        try
+        {
+            await WorkshopService.DeleteAsync(_entryId.Value);
+            _message = "Workshop entry deleted.";
+            _entryId = null;
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to delete workshop entry.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error deleting workshop entry: {ex.Message}");
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+}

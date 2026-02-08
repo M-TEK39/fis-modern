@@ -20,7 +20,7 @@
 
 <div class="page-content">
     <form class="search-bar" @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
-        <div class="search-input-wrapper" style="gap:0.75rem;">
+        <div class="search-input-wrapper fis-input-group-spaced">
             <i class="bx bx-search"></i>
             <input
                 id="keyword"
@@ -111,6 +111,9 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
     private bool _isLoaded;
     private string _searchQuery = "";
     private bool _searching;
@@ -120,7 +123,16 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (!string.IsNullOrWhiteSpace(Query))
+        {
+            _searchQuery = Query.Trim();
+        }
+
         await LoadSearchCriteria();
+        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        {
+            await HandleSubmit();
+        }
     }
 
     private async Task LoadSearchCriteria()

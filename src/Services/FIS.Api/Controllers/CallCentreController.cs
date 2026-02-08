@@ -41,17 +41,78 @@ public class CallCentreController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<CallCentre>> Create([FromBody] CallCentre item)
+    public async Task<ActionResult<CallCentre>> Create([FromBody] CreateCallCentreDto dto)
     {
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.Call_centre_code }, created); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500, "Error"); }
+        try
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var item = new CallCentre
+            {
+                vmf_code = dto.VmfCode,
+                Call_time = dto.CallTime,
+                Call_date = dto.CallDate,
+                Capture_name = dto.CaptureName,
+                User_access_code = dto.UserAccessCode,
+                Caller_name = dto.CallerName,
+                Driver_name = dto.DriverName,
+                Driver_persalno = dto.DriverPersalno,
+                Driver_Licno = dto.DriverLicno,
+                GG_number = dto.GGNumber,
+                Driver_base_station = dto.DriverBaseStation,
+                Driver_Site = dto.DriverSite,
+                Driver_tel = dto.DriverTel,
+                Driver_cell = dto.DriverCell,
+                date_created = DateTime.UtcNow
+            };
+
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.Call_centre_code }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating call centre record");
+            return StatusCode(500, new { error = "Failed to create call centre record", message = ex.Message });
+        }
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<CallCentre>> Update(short id, [FromBody] CallCentre item)
+    public async Task<ActionResult<CallCentre>> Update(short id, [FromBody] UpdateCallCentreDto dto)
     {
-        try { if (id != item.Call_centre_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500, "Error"); }
+        try
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+                return NotFound(new { error = "Call centre record not found", id });
+
+            // Update only provided fields
+            existing.vmf_code = dto.VmfCode;
+            existing.Call_time = dto.CallTime;
+            existing.Call_date = dto.CallDate;
+            existing.Capture_name = dto.CaptureName;
+            existing.User_access_code = dto.UserAccessCode;
+            existing.Caller_name = dto.CallerName;
+            existing.Driver_name = dto.DriverName;
+            existing.Driver_persalno = dto.DriverPersalno;
+            existing.Driver_Licno = dto.DriverLicno;
+            existing.GG_number = dto.GGNumber;
+            existing.Driver_base_station = dto.DriverBaseStation;
+            existing.Driver_Site = dto.DriverSite;
+            existing.Driver_tel = dto.DriverTel;
+            existing.Driver_cell = dto.DriverCell;
+
+            var updated = await _repository.UpdateAsync(existing, GetCurrentUserId());
+            return Ok(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating call centre record {Id}", id);
+            return StatusCode(500, new { error = "Failed to update call centre record", message = ex.Message });
+        }
     }
 
     [HttpDelete("{id}")]
@@ -439,6 +500,42 @@ public class CallCentreReportDto
     public DateTime GeneratedDate { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+}
+
+public class CreateCallCentreDto
+{
+    public int? VmfCode { get; set; }
+    public DateTime? CallTime { get; set; }
+    public DateTime? CallDate { get; set; }
+    public string? CaptureName { get; set; }
+    public short? UserAccessCode { get; set; }
+    public string? CallerName { get; set; }
+    public string? DriverName { get; set; }
+    public string? DriverPersalno { get; set; }
+    public string? DriverLicno { get; set; }
+    public string? GGNumber { get; set; }
+    public string? DriverBaseStation { get; set; }
+    public short? DriverSite { get; set; }
+    public string? DriverTel { get; set; }
+    public string? DriverCell { get; set; }
+}
+
+public class UpdateCallCentreDto
+{
+    public int? VmfCode { get; set; }
+    public DateTime? CallTime { get; set; }
+    public DateTime? CallDate { get; set; }
+    public string? CaptureName { get; set; }
+    public short? UserAccessCode { get; set; }
+    public string? CallerName { get; set; }
+    public string? DriverName { get; set; }
+    public string? DriverPersalno { get; set; }
+    public string? DriverLicno { get; set; }
+    public string? GGNumber { get; set; }
+    public string? DriverBaseStation { get; set; }
+    public short? DriverSite { get; set; }
+    public string? DriverTel { get; set; }
+    public string? DriverCell { get; set; }
 }
 
 #endregion

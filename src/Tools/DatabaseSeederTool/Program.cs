@@ -48,6 +48,9 @@ public class Program
             Console.WriteLine("📜 Seeding contract data...");
             await SeedContractData(dbContext);
 
+            Console.WriteLine("🧪 Seeding frontend demo coverage data...");
+            await SeedFrontendDemoCoverage(dbContext);
+
             Console.WriteLine("⛽ Seeding fuel card data...");
             await SeedFuelCardData(dbContext);
 
@@ -109,103 +112,117 @@ public class Program
 
     private static async Task SeedTestUsers(FisDbContext dbContext)
     {
-        bool usersExist = await dbContext.Users.AnyAsync();
-
-        if (usersExist)
-        {
-            Console.WriteLine("  ✓ Users already exist. Skipping TS_Users, credentials, and mappings seeding.");
-            // Continue to seed/update UserAccessOlds profiles below
-        }
-        else
-        {
-
-        // Use raw SQL to insert users with explicit IDs
+        // Keep seeded users deterministic for demo and UI role testing.
         await dbContext.Database.ExecuteSqlRawAsync(@"
+            UPDATE TS_Users SET email = 'murcus@corptech.co.za', tel_no = '+27 11 123 4567', is_deleted = 0 WHERE user_access_code = 1;
+            UPDATE TS_Users SET email = 'admin@fis.local', tel_no = '+27 11 000 0001', is_deleted = 0 WHERE user_access_code = 2;
+            UPDATE TS_Users SET email = 'it.support@fis.local', tel_no = '+27 11 000 0002', is_deleted = 0 WHERE user_access_code = 3;
+            UPDATE TS_Users SET email = 'contracts.capturer@fis.local', tel_no = '+27 11 000 0003', is_deleted = 0 WHERE user_access_code = 4;
+            UPDATE TS_Users SET email = 'contracts.reviewer@fis.local', tel_no = '+27 11 000 0004', is_deleted = 0 WHERE user_access_code = 5;
+            UPDATE TS_Users SET email = 'vehicles.capturer@fis.local', tel_no = '+27 11 000 0005', is_deleted = 0 WHERE user_access_code = 6;
+            UPDATE TS_Users SET email = 'workshop.manager@fis.local', tel_no = '+27 11 000 0006', is_deleted = 0 WHERE user_access_code = 7;
+            UPDATE TS_Users SET email = 'finance.officer@fis.local', tel_no = '+27 11 000 0007', is_deleted = 0 WHERE user_access_code = 8;
+            UPDATE TS_Users SET email = 'fleet.supervisor@fis.local', tel_no = '+27 11 000 0008', is_deleted = 0 WHERE user_access_code = 9;
+            UPDATE TS_Users SET email = 'reports.analyst@fis.local', tel_no = '+27 11 000 0009', is_deleted = 0 WHERE user_access_code = 10;
+            UPDATE TS_Users SET email = 'user.admin@fis.local', tel_no = '+27 11 000 0010', is_deleted = 0 WHERE user_access_code = 11;
+            UPDATE TS_Users SET email = 'trip.coordinator@fis.local', tel_no = '+27 11 000 0011', is_deleted = 0 WHERE user_access_code = 12;
+
             SET IDENTITY_INSERT TS_Users ON;
-            INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES 
-            (1, 'murcus@corptech.co.za', '+27 11 123 4567', GETDATE(), 0),
-            (2, 'xxodbeats@gmail.com', '+27 82 555 1234', GETDATE(), 0),
-            (3, 'It@kulungwana.co.za', '+27 11 987 6543', GETDATE(), 0),
-            (4, 'info.backup@kulungwana.co.za', '+27 11 987 6544', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 1) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (1,  'murcus@corptech.co.za', '+27 11 123 4567', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 2) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (2,  'admin@fis.local', '+27 11 000 0001', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 3) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (3,  'it.support@fis.local', '+27 11 000 0002', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 4) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (4,  'contracts.capturer@fis.local', '+27 11 000 0003', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 5) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (5,  'contracts.reviewer@fis.local', '+27 11 000 0004', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 6) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (6,  'vehicles.capturer@fis.local', '+27 11 000 0005', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 7) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (7,  'workshop.manager@fis.local', '+27 11 000 0006', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 8) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (8,  'finance.officer@fis.local', '+27 11 000 0007', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 9) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (9,  'fleet.supervisor@fis.local', '+27 11 000 0008', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 10) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (10, 'reports.analyst@fis.local', '+27 11 000 0009', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 11) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (11, 'user.admin@fis.local', '+27 11 000 0010', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 12) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (12, 'trip.coordinator@fis.local', '+27 11 000 0011', GETDATE(), 0);
             SET IDENTITY_INSERT TS_Users OFF;
         ");
 
-        Console.WriteLine($"  ✓ Added 4 users to TS_Users table");
+        Console.WriteLine("  ✓ TS_Users seeded (12 demo users)");
 
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword("Password123!");
-        
-        var jwtCredentials = new[]
+        var seededCodes = Enumerable.Range(1, 12).ToList();
+        var existingCreds = await dbContext.LegacyUserCredentials
+            .Where(c => seededCodes.Contains(c.user_access_code))
+            .ToListAsync();
+        var existingMappings = await dbContext.EntraIdUserMappings
+            .Where(m => seededCodes.Contains(m.user_access_code))
+            .ToListAsync();
+
+        if (existingCreds.Count > 0)
         {
-            new LegacyUserCredential
-            {
-                user_access_code = 1,
-                password_hash = passwordHash,
-                password_salt = "",
-                created_date = DateTime.UtcNow,
-                last_password_change = DateTime.UtcNow,
-                is_active = true
-            },
-            new LegacyUserCredential
-            {
-                user_access_code = 2,
-                password_hash = passwordHash,
-                password_salt = "",
-                created_date = DateTime.UtcNow,
-                last_password_change = DateTime.UtcNow,
-                is_active = true
-            }
-        };
-
-        dbContext.LegacyUserCredentials.AddRange(jwtCredentials);
-        
-        var entraIdMappings = new[]
-        {
-            new EntraIdUserMapping
-            {
-                user_access_code = 3,
-                entra_object_id = "simulated-guid-3",
-                created_date = DateTime.UtcNow
-            },
-            new EntraIdUserMapping
-            {
-                user_access_code = 4,
-                entra_object_id = "simulated-guid-4",
-                created_date = DateTime.UtcNow
-            }
-        };
-
-        dbContext.EntraIdUserMappings.AddRange(entraIdMappings);
-        await dbContext.SaveChangesAsync();
-
-        Console.WriteLine("  ✓ Credentials and mappings seeded.");
+            dbContext.LegacyUserCredentials.RemoveRange(existingCreds);
         }
 
-        // Seed User Profiles (user_access_old1 table) with FirstName/LastName for login
-        // This section ALWAYS runs to allow updating AccessLevel values
-        Console.WriteLine("  🧑 Seeding user profiles (FirstName, LastName, etc.)...");
+        if (existingMappings.Count > 0)
+        {
+            dbContext.EntraIdUserMappings.RemoveRange(existingMappings);
+        }
 
-        // Delete existing user profiles and re-insert with IDENTITY_INSERT ON
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword("Password123!");
+        var now = DateTime.UtcNow;
+
+        var jwtCredentials = seededCodes
+            .Select(code => new LegacyUserCredential
+            {
+                user_access_code = code,
+                password_hash = passwordHash,
+                password_salt = "",
+                created_date = now,
+                last_password_change = now,
+                is_active = true
+            })
+            .ToList();
+
+        dbContext.LegacyUserCredentials.AddRange(jwtCredentials);
+
+        // Keep a couple of Entra mappings available for dual-auth testing.
+        dbContext.EntraIdUserMappings.AddRange(
+            new EntraIdUserMapping { user_access_code = 3, entra_object_id = "simulated-guid-it-support", created_date = now },
+            new EntraIdUserMapping { user_access_code = 5, entra_object_id = "simulated-guid-contract-reviewer", created_date = now });
+
+        await dbContext.SaveChangesAsync();
+        Console.WriteLine("  ✓ Legacy credentials + Entra mappings seeded.");
+
+        // Seed User Profiles (user_access_old1) used by first-name login + bitwise authorization.
         await dbContext.Database.ExecuteSqlRawAsync(@"
-            -- Delete existing test profiles
-            DELETE FROM user_access_old1 WHERE user_access_code BETWEEN 1 AND 4;
+            UPDATE user_access_old1 SET FirstName='Murcus', LastName='Developer', name='Murcus Developer', E_Mail='murcus@corptech.co.za', telephone='+27 11 123 4567', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=1, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=1;
+            UPDATE user_access_old1 SET FirstName='Admin', LastName='User', name='Admin User', E_Mail='admin@fis.local', telephone='+27 11 000 0001', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=32767, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=2;
+            UPDATE user_access_old1 SET FirstName='IT', LastName='Support', name='IT Support', E_Mail='it.support@fis.local', telephone='+27 11 000 0002', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=15, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=3;
+            UPDATE user_access_old1 SET FirstName='Contract', LastName='Capturer', name='Contract Capturer', E_Mail='contracts.capturer@fis.local', telephone='+27 11 000 0003', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=11, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=4;
+            UPDATE user_access_old1 SET FirstName='Contract', LastName='Reviewer', name='Contract Reviewer', E_Mail='contracts.reviewer@fis.local', telephone='+27 11 000 0004', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=8202, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=5;
+            UPDATE user_access_old1 SET FirstName='Vehicle', LastName='Master', name='Vehicle Master Capturer', E_Mail='vehicles.capturer@fis.local', telephone='+27 11 000 0005', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=1, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=6;
+            UPDATE user_access_old1 SET FirstName='Workshop', LastName='Manager', name='Workshop Manager', E_Mail='workshop.manager@fis.local', telephone='+27 11 000 0006', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=2, AccessLevel=296, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=7;
+            UPDATE user_access_old1 SET FirstName='Finance', LastName='Officer', name='Finance Officer', E_Mail='finance.officer@fis.local', telephone='+27 11 000 0007', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=24, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=8;
+            UPDATE user_access_old1 SET FirstName='Fleet', LastName='Supervisor', name='Fleet Supervisor', E_Mail='fleet.supervisor@fis.local', telephone='+27 11 000 0008', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=451, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=9;
+            UPDATE user_access_old1 SET FirstName='Reports', LastName='Analyst', name='Reports Analyst', E_Mail='reports.analyst@fis.local', telephone='+27 11 000 0009', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=8, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=10;
+            UPDATE user_access_old1 SET FirstName='User', LastName='Admin', name='User Admin', E_Mail='user.admin@fis.local', telephone='+27 11 000 0010', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=12, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=11;
+            UPDATE user_access_old1 SET FirstName='Trip', LastName='Coordinator', name='Trip Coordinator', E_Mail='trip.coordinator@fis.local', telephone='+27 11 000 0011', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=2, AccessLevel=200, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=12;
 
-            -- Re-insert with updated AccessLevel values
             SET IDENTITY_INSERT user_access_old1 ON;
-
-            INSERT INTO user_access_old1
-            (user_access_code, FirstName, LastName, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted)
-            VALUES
-            (1, 'Murcus', 'Developer', 'murcus@corptech.co.za', '+27 11 123 4567', 'Password123!', 'Active', 1, 1, 1, 1, GETDATE(), 0),
-            (2, 'Admin', 'User', 'xxodbeats@gmail.com', '+27 82 555 1234', 'Password123!', 'Active', 1, 1, 1, 32767, GETDATE(), 0),
-            (3, 'IT', 'Support', 'It@kulungwana.co.za', '+27 11 987 6543', 'Password123!', 'Active', 1, 1, 2, 2, GETDATE(), 0),
-            (4, 'Backup', 'Admin', 'info.backup@kulungwana.co.za', '+27 11 987 6544', 'Password123!', 'Active', 1, 1, 1, 1, GETDATE(), 0);
-
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 1) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (1,  'Murcus', 'Developer', 'Murcus Developer', 'murcus@corptech.co.za', '+27 11 123 4567', 'Password123!', 'Active', 1, 1, 1, 1, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 2) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (2,  'Admin', 'User', 'Admin User', 'admin@fis.local', '+27 11 000 0001', 'Password123!', 'Active', 1, 1, 1, 32767, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 3) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (3,  'IT', 'Support', 'IT Support', 'it.support@fis.local', '+27 11 000 0002', 'Password123!', 'Active', 1, 1, 1, 15, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 4) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (4,  'Contract', 'Capturer', 'Contract Capturer', 'contracts.capturer@fis.local', '+27 11 000 0003', 'Password123!', 'Active', 1, 1, 1, 11, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 5) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (5,  'Contract', 'Reviewer', 'Contract Reviewer', 'contracts.reviewer@fis.local', '+27 11 000 0004', 'Password123!', 'Active', 1, 1, 1, 8202, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 6) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (6,  'Vehicle', 'Master', 'Vehicle Master Capturer', 'vehicles.capturer@fis.local', '+27 11 000 0005', 'Password123!', 'Active', 1, 1, 1, 1, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 7) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (7,  'Workshop', 'Manager', 'Workshop Manager', 'workshop.manager@fis.local', '+27 11 000 0006', 'Password123!', 'Active', 1, 1, 2, 296, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 8) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (8,  'Finance', 'Officer', 'Finance Officer', 'finance.officer@fis.local', '+27 11 000 0007', 'Password123!', 'Active', 1, 1, 1, 24, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 9) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (9,  'Fleet', 'Supervisor', 'Fleet Supervisor', 'fleet.supervisor@fis.local', '+27 11 000 0008', 'Password123!', 'Active', 1, 1, 1, 451, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 10) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (10, 'Reports', 'Analyst', 'Reports Analyst', 'reports.analyst@fis.local', '+27 11 000 0009', 'Password123!', 'Active', 1, 1, 1, 8, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 11) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (11, 'User', 'Admin', 'User Admin', 'user.admin@fis.local', '+27 11 000 0010', 'Password123!', 'Active', 1, 1, 1, 12, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 12) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (12, 'Trip', 'Coordinator', 'Trip Coordinator', 'trip.coordinator@fis.local', '+27 11 000 0011', 'Password123!', 'Active', 1, 1, 2, 200, GETDATE(), 0);
             SET IDENTITY_INSERT user_access_old1 OFF;
         ");
 
-        Console.WriteLine("  ✓ User profiles updated with new AccessLevel values");
-        Console.WriteLine("  📝 Test login: FirstName='Murcus', Password='Password123!' (AccessLevel=1 - Vehicle Management only)");
-        Console.WriteLine("  👑 Admin login: FirstName='Admin', Password='Password123!' (AccessLevel=32767 - ALL PERMISSIONS)");
+        Console.WriteLine("  ✓ User profiles seeded (12 role-based profiles)");
+        Console.WriteLine("  📝 Demo login: FirstName='Murcus', Password='Password123!'");
+        Console.WriteLine("  👑 Admin login: FirstName='Admin', Password='Password123!'");
+        Console.WriteLine("  ✅ Contract reviewer login: FirstName='Contract', Password='Password123!'");
     }
 
     private static async Task SeedAccessLevelData(FisDbContext dbContext)
@@ -342,6 +359,84 @@ public class Program
                 SET IDENTITY_INSERT extra_codes OFF;
             ");
             Console.WriteLine("  ✓ Extra Codes seeded.");
+        }
+
+        // Seed Classes (Validation Data)
+        if (!await dbContext.Classes.AnyAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                SET IDENTITY_INSERT class ON;
+                INSERT INTO class (class_code, description, date_created, is_deleted) VALUES
+                (1, 'Passenger Vehicle', GETDATE(), 0),
+                (2, 'Light Commercial Vehicle', GETDATE(), 0),
+                (3, 'Heavy Commercial Vehicle', GETDATE(), 0),
+                (4, 'Motorcycle', GETDATE(), 0),
+                (5, 'Special Purpose Vehicle', GETDATE(), 0);
+                SET IDENTITY_INSERT class OFF;
+            ");
+            Console.WriteLine("  ✓ Vehicle Classes seeded.");
+        }
+
+        // Seed Units of Measure (Validation Data)
+        if (!await dbContext.UnitsOfMeasure.AnyAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                SET IDENTITY_INSERT unit_of_measure ON;
+                INSERT INTO unit_of_measure (unit_of_measure_code, unit_description, unit_abbreviation, unit_category, date_created, is_deleted) VALUES
+                (1, 'Kilometers', 'km', 'Distance', GETDATE(), 0),
+                (2, 'Miles', 'mi', 'Distance', GETDATE(), 0),
+                (3, 'Litres', 'L', 'Volume', GETDATE(), 0),
+                (4, 'Gallons', 'gal', 'Volume', GETDATE(), 0),
+                (5, 'Hours', 'hr', 'Time', GETDATE(), 0);
+                SET IDENTITY_INSERT unit_of_measure OFF;
+            ");
+            Console.WriteLine("  ✓ Units of Measure seeded.");
+        }
+
+        // Seed Maintenance Triggers (Validation Data)
+        if (!await dbContext.MaintenanceTriggers.AnyAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                SET IDENTITY_INSERT maintenance_trigger ON;
+                INSERT INTO maintenance_trigger (maint_trigger_code, description, trigger_id, date_created, is_deleted) VALUES
+                (1, 'Mileage Based', 'KM', GETDATE(), 0),
+                (2, 'Time Based', 'TIME', GETDATE(), 0),
+                (3, 'Hours Based', 'HOURS', GETDATE(), 0),
+                (4, 'Condition Based', 'COND', GETDATE(), 0);
+                SET IDENTITY_INSERT maintenance_trigger OFF;
+            ");
+            Console.WriteLine("  ✓ Maintenance Triggers seeded.");
+        }
+
+        // Seed License Fees (Validation Data)
+        if (!await dbContext.LicenseFees.AnyAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                SET IDENTITY_INSERT licence_fee ON;
+                INSERT INTO licence_fee (licence_fee_code, licence_description, licence_fee, date_created, is_deleted) VALUES
+                (1, 'Passenger Vehicle Annual License', 680.00, GETDATE(), 0),
+                (2, 'LDV Annual License', 940.00, GETDATE(), 0),
+                (3, 'Truck Annual License', 1850.00, GETDATE(), 0),
+                (4, 'Motorcycle Annual License', 320.00, GETDATE(), 0);
+                SET IDENTITY_INSERT licence_fee OFF;
+            ");
+            Console.WriteLine("  ✓ License Fees seeded.");
+        }
+
+        // Seed Loss Types (Validation Data)
+        if (!await dbContext.LossTypes.AnyAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                SET IDENTITY_INSERT Loss_type ON;
+                INSERT INTO Loss_type (loss_type_code, loss_description, date_created, is_deleted) VALUES
+                (1, 'Theft', GETDATE(), 0),
+                (2, 'Accident Write-Off', GETDATE(), 0),
+                (3, 'Fire Damage', GETDATE(), 0),
+                (4, 'Flood Damage', GETDATE(), 0),
+                (5, 'Hijacking', GETDATE(), 0);
+                SET IDENTITY_INSERT Loss_type OFF;
+            ");
+            Console.WriteLine("  ✓ Loss Types seeded.");
         }
 
         await dbContext.SaveChangesAsync();
@@ -1143,6 +1238,472 @@ public class Program
                       (3, 1, 'Harsh Braking', 'Excessive g-force recorded', DATEADD(day, -1, GETDATE()), 'John Doe', GETDATE(), 0)");
             }
             Console.WriteLine("  ✓ Monitor alerts seeded.");
+        }
+    }
+
+    private static async Task SeedFrontendDemoCoverage(FisDbContext dbContext)
+    {
+        Console.WriteLine("  ├── Seeding frontend demo coverage (validation + vehicles + contract workflow)...");
+
+        await SeedContractWorkflowReferenceData(dbContext);
+        await SeedValidationTopUpData(dbContext);
+        await SeedDemoVehicles(dbContext);
+        await SeedDemoContracts(dbContext);
+        await SeedVehicleAuthorizationQueue(dbContext);
+
+        Console.WriteLine("  ✓ Frontend demo coverage scenarios ready.");
+    }
+
+    private static async Task SeedContractWorkflowReferenceData(FisDbContext dbContext)
+    {
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                SET IDENTITY_INSERT contract_status ON;
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 1)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (1, 'Pending Approval', 'PEND', 0, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 2)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (2, 'Approved', 'APPR', 0, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 3)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (3, 'Active', 'ACTV', 1, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 4)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (4, 'Declined For Correction', 'CORR', 0, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 5)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (5, 'Declined', 'DECL', 0, 1, GETDATE(), 0);
+                SET IDENTITY_INSERT contract_status OFF;
+            ");
+        }
+        catch
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 1)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (1, 'Pending Approval', 'PEND', 0, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 2)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (2, 'Approved', 'APPR', 0, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 3)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (3, 'Active', 'ACTV', 1, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 4)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (4, 'Declined For Correction', 'CORR', 0, 0, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 5)
+                    INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
+                    VALUES (5, 'Declined', 'DECL', 0, 1, GETDATE(), 0);
+            ");
+        }
+
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            IF NOT EXISTS (SELECT 1 FROM Contract_type WHERE contract_type = 'H')
+                INSERT INTO Contract_type (contract_type, CT_description, CT_Active, date_created, is_deleted)
+                VALUES ('H', 'Hire Contract', 1, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM Contract_type WHERE contract_type = 'R')
+                INSERT INTO Contract_type (contract_type, CT_description, CT_Active, date_created, is_deleted)
+                VALUES ('R', 'Relief Contract', 1, GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM Contract_type WHERE contract_type = 'D')
+                INSERT INTO Contract_type (contract_type, CT_description, CT_Active, date_created, is_deleted)
+                VALUES ('D', 'Daily Contract', 1, GETDATE(), 0);
+        ");
+    }
+
+    private static async Task SeedValidationTopUpData(FisDbContext dbContext)
+    {
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT class ON;
+                IF NOT EXISTS (SELECT 1 FROM class WHERE class_code = 6)
+                    INSERT INTO class (class_code, description, date_created, is_deleted) VALUES (6, 'Bus', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM class WHERE class_code = 7)
+                    INSERT INTO class (class_code, description, date_created, is_deleted) VALUES (7, 'Trailer', GETDATE(), 0);
+                SET IDENTITY_INSERT class OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM class WHERE class_code = 6)
+                    INSERT INTO class (class_code, description, date_created, is_deleted) VALUES (6, 'Bus', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM class WHERE class_code = 7)
+                    INSERT INTO class (class_code, description, date_created, is_deleted) VALUES (7, 'Trailer', GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT unit_of_measure ON;
+                IF NOT EXISTS (SELECT 1 FROM unit_of_measure WHERE unit_of_measure_code = 6)
+                    INSERT INTO unit_of_measure (unit_of_measure_code, unit_description, unit_abbreviation, unit_category, date_created, is_deleted)
+                    VALUES (6, 'Days', 'day', 'Time', GETDATE(), 0);
+                SET IDENTITY_INSERT unit_of_measure OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM unit_of_measure WHERE unit_of_measure_code = 6)
+                    INSERT INTO unit_of_measure (unit_of_measure_code, unit_description, unit_abbreviation, unit_category, date_created, is_deleted)
+                    VALUES (6, 'Days', 'day', 'Time', GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT maintenance_trigger ON;
+                IF NOT EXISTS (SELECT 1 FROM maintenance_trigger WHERE maint_trigger_code = 5)
+                    INSERT INTO maintenance_trigger (maint_trigger_code, description, trigger_id, date_created, is_deleted)
+                    VALUES (5, 'Hybrid (Time + KM)', 'HYBRID', GETDATE(), 0);
+                SET IDENTITY_INSERT maintenance_trigger OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM maintenance_trigger WHERE maint_trigger_code = 5)
+                    INSERT INTO maintenance_trigger (maint_trigger_code, description, trigger_id, date_created, is_deleted)
+                    VALUES (5, 'Hybrid (Time + KM)', 'HYBRID', GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT licence_fee ON;
+                IF NOT EXISTS (SELECT 1 FROM licence_fee WHERE licence_fee_code = 5)
+                    INSERT INTO licence_fee (licence_fee_code, licence_description, licence_fee, date_created, is_deleted)
+                    VALUES (5, 'Bus Annual License', 2400.00, GETDATE(), 0);
+                SET IDENTITY_INSERT licence_fee OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM licence_fee WHERE licence_fee_code = 5)
+                    INSERT INTO licence_fee (licence_fee_code, licence_description, licence_fee, date_created, is_deleted)
+                    VALUES (5, 'Bus Annual License', 2400.00, GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT Loss_type ON;
+                IF NOT EXISTS (SELECT 1 FROM Loss_type WHERE loss_type_code = 6)
+                    INSERT INTO Loss_type (loss_type_code, loss_description, date_created, is_deleted)
+                    VALUES (6, 'Natural Disaster', GETDATE(), 0);
+                SET IDENTITY_INSERT Loss_type OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM Loss_type WHERE loss_type_code = 6)
+                    INSERT INTO Loss_type (loss_type_code, loss_description, date_created, is_deleted)
+                    VALUES (6, 'Natural Disaster', GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT fuel_type ON;
+                IF NOT EXISTS (SELECT 1 FROM fuel_type WHERE fuel_type_code = 3)
+                    INSERT INTO fuel_type (fuel_type_code, fuel_description, date_created, is_deleted)
+                    VALUES (3, 'Hybrid', GETDATE(), 0);
+                SET IDENTITY_INSERT fuel_type OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM fuel_type WHERE fuel_type_code = 3)
+                    INSERT INTO fuel_type (fuel_type_code, fuel_description, date_created, is_deleted)
+                    VALUES (3, 'Hybrid', GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT driver_licence_types ON;
+                IF NOT EXISTS (SELECT 1 FROM driver_licence_types WHERE driver_licence_type_id = 4)
+                    INSERT INTO driver_licence_types (driver_licence_type_id, driver_licence_type_code, driver_licence_type_description, date_created, is_deleted)
+                    VALUES (4, 'B', 'Code B', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM driver_licence_types WHERE driver_licence_type_id = 5)
+                    INSERT INTO driver_licence_types (driver_licence_type_id, driver_licence_type_code, driver_licence_type_description, date_created, is_deleted)
+                    VALUES (5, 'C', 'Code C', GETDATE(), 0);
+                SET IDENTITY_INSERT driver_licence_types OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM driver_licence_types WHERE driver_licence_type_id = 4)
+                    INSERT INTO driver_licence_types (driver_licence_type_id, driver_licence_type_code, driver_licence_type_description, date_created, is_deleted)
+                    VALUES (4, 'B', 'Code B', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM driver_licence_types WHERE driver_licence_type_id = 5)
+                    INSERT INTO driver_licence_types (driver_licence_type_id, driver_licence_type_code, driver_licence_type_description, date_created, is_deleted)
+                    VALUES (5, 'C', 'Code C', GETDATE(), 0);
+            ");
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT vehicle_status ON;
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 1)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (1, 'In Service', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 2)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (2, 'Out Of Service', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 3)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (3, 'Sold', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 4)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (4, 'Accident Hold', GETDATE(), 0);
+                SET IDENTITY_INSERT vehicle_status OFF;
+            ",
+            @"
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 1)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (1, 'In Service', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 2)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (2, 'Out Of Service', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 3)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (3, 'Sold', GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 4)
+                    INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
+                    VALUES (4, 'Accident Hold', GETDATE(), 0);
+            ");
+    }
+
+    private static async Task SeedDemoVehicles(FisDbContext dbContext)
+    {
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
+                SET IDENTITY_INSERT vehicle_master ON;
+
+                DECLARE @vmf INT = 1001;
+                WHILE @vmf <= 1120
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = @vmf)
+                    BEGIN
+                        INSERT INTO vehicle_master
+                        (
+                            vmf_code, fleet_number, registration_number, model_code, type_code,
+                            colour, engine_number_1, chassis_number, year_manufactured,
+                            current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code,
+                            purchase_date, purchase_amount, monthly_overhead, service_last_done, service_last_odo,
+                            date_created, is_deleted
+                        )
+                        VALUES
+                        (
+                            @vmf,
+                            CONCAT('GGD', RIGHT('0000' + CAST(@vmf AS varchar(4)), 4)),
+                            CONCAT('DEM ', RIGHT('000' + CAST(@vmf - 1000 AS varchar(3)), 3), ' GP'),
+                            ((@vmf - 1001) % 4) + 1,
+                            ((@vmf - 1001) % 3) + 1,
+                            CASE WHEN @vmf % 5 = 0 THEN 'White' WHEN @vmf % 5 = 1 THEN 'Silver' WHEN @vmf % 5 = 2 THEN 'Blue' WHEN @vmf % 5 = 3 THEN 'Grey' ELSE 'Black' END,
+                            CONCAT('ENG', @vmf, 'X'),
+                            CONCAT('CHS', @vmf, 'Z'),
+                            2020 + ((@vmf - 1001) % 6),
+                            12000 + ((@vmf - 1001) * 850),
+                            0,
+                            DATEADD(day, -(@vmf - 950), GETDATE()),
+                            CASE WHEN @vmf % 12 = 0 THEN 2 ELSE 1 END,
+                            CASE WHEN @vmf % 2 = 0 THEN 2 ELSE 1 END,
+                            DATEADD(day, -(@vmf - 980), GETDATE()),
+                            320000 + ((@vmf - 1001) * 1200),
+                            1450 + ((@vmf - 1001) * 5),
+                            DATEADD(day, -30, GETDATE()),
+                            10000 + ((@vmf - 1001) * 700),
+                            GETDATE(),
+                            0
+                        );
+                    END
+
+                    SET @vmf = @vmf + 1;
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1201)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1201, 'GGNO0001', 'NOC 001 GP', 1, 1, 'White', 'ENG1201A', 'CHS1201A', 2025, 2100, 0, DATEADD(month, -1, GETDATE()), 1, 1, 345000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1202)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1202, 'GGPD0002', 'PND 002 GP', 2, 2, 'Silver', 'ENG1202A', 'CHS1202A', 2024, 16000, 0, DATEADD(month, -6, GETDATE()), 1, 1, 380000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1203)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1203, 'GGAC0003', 'ACT 003 GP', 3, 1, 'Blue', 'ENG1203A', 'CHS1203A', 2023, 45200, 0, DATEADD(year, -2, GETDATE()), 1, 2, 415000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1204)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1204, 'GGCR0004', 'COR 004 GP', 4, 2, 'Grey', 'ENG1204A', 'CHS1204A', 2022, 69300, 0, DATEADD(year, -3, GETDATE()), 1, 2, 295000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1205)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1205, 'GGDC0005', 'DEC 005 GP', 1, 1, 'Black', 'ENG1205A', 'CHS1205A', 2021, 98500, 0, DATEADD(year, -4, GETDATE()), 1, 1, 255000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1206)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1206, 'GGPR0006', 'PAR 006 GP', 2, 2, 'White', 'ENG1206A', 'CHS1206A', 2024, 22100, 0, DATEADD(month, -8, GETDATE()), 1, 1, 420000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1207)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1207, 'GGRE0007', 'REL 007 GP', 3, 1, 'Silver', 'ENG1207A', 'CHS1207A', 2025, 5500, 0, DATEADD(month, -2, GETDATE()), 1, 2, 450000, GETDATE(), 0);
+
+                SET IDENTITY_INSERT vehicle_master OFF;
+            ",
+            @"
+                DECLARE @vmf INT = 1001;
+                WHILE @vmf <= 1120
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = @vmf)
+                    BEGIN
+                        INSERT INTO vehicle_master
+                        (
+                            vmf_code, fleet_number, registration_number, model_code, type_code,
+                            colour, engine_number_1, chassis_number, year_manufactured,
+                            current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code,
+                            purchase_date, purchase_amount, monthly_overhead, service_last_done, service_last_odo,
+                            date_created, is_deleted
+                        )
+                        VALUES
+                        (
+                            @vmf,
+                            CONCAT('GGD', RIGHT('0000' + CAST(@vmf AS varchar(4)), 4)),
+                            CONCAT('DEM ', RIGHT('000' + CAST(@vmf - 1000 AS varchar(3)), 3), ' GP'),
+                            ((@vmf - 1001) % 4) + 1,
+                            ((@vmf - 1001) % 3) + 1,
+                            CASE WHEN @vmf % 5 = 0 THEN 'White' WHEN @vmf % 5 = 1 THEN 'Silver' WHEN @vmf % 5 = 2 THEN 'Blue' WHEN @vmf % 5 = 3 THEN 'Grey' ELSE 'Black' END,
+                            CONCAT('ENG', @vmf, 'X'),
+                            CONCAT('CHS', @vmf, 'Z'),
+                            2020 + ((@vmf - 1001) % 6),
+                            12000 + ((@vmf - 1001) * 850),
+                            0,
+                            DATEADD(day, -(@vmf - 950), GETDATE()),
+                            CASE WHEN @vmf % 12 = 0 THEN 2 ELSE 1 END,
+                            CASE WHEN @vmf % 2 = 0 THEN 2 ELSE 1 END,
+                            DATEADD(day, -(@vmf - 980), GETDATE()),
+                            320000 + ((@vmf - 1001) * 1200),
+                            1450 + ((@vmf - 1001) * 5),
+                            DATEADD(day, -30, GETDATE()),
+                            10000 + ((@vmf - 1001) * 700),
+                            GETDATE(),
+                            0
+                        );
+                    END
+
+                    SET @vmf = @vmf + 1;
+                END;
+
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1201)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1201, 'GGNO0001', 'NOC 001 GP', 1, 1, 'White', 'ENG1201A', 'CHS1201A', 2025, 2100, 0, DATEADD(month, -1, GETDATE()), 1, 1, 345000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1202)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1202, 'GGPD0002', 'PND 002 GP', 2, 2, 'Silver', 'ENG1202A', 'CHS1202A', 2024, 16000, 0, DATEADD(month, -6, GETDATE()), 1, 1, 380000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1203)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1203, 'GGAC0003', 'ACT 003 GP', 3, 1, 'Blue', 'ENG1203A', 'CHS1203A', 2023, 45200, 0, DATEADD(year, -2, GETDATE()), 1, 2, 415000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1204)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1204, 'GGCR0004', 'COR 004 GP', 4, 2, 'Grey', 'ENG1204A', 'CHS1204A', 2022, 69300, 0, DATEADD(year, -3, GETDATE()), 1, 2, 295000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1205)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1205, 'GGDC0005', 'DEC 005 GP', 1, 1, 'Black', 'ENG1205A', 'CHS1205A', 2021, 98500, 0, DATEADD(year, -4, GETDATE()), 1, 1, 255000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1206)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1206, 'GGPR0006', 'PAR 006 GP', 2, 2, 'White', 'ENG1206A', 'CHS1206A', 2024, 22100, 0, DATEADD(month, -8, GETDATE()), 1, 1, 420000, GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1207)
+                    INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
+                    VALUES (1207, 'GGRE0007', 'REL 007 GP', 3, 1, 'Silver', 'ENG1207A', 'CHS1207A', 2025, 5500, 0, DATEADD(month, -2, GETDATE()), 1, 2, 450000, GETDATE(), 0);
+            ");
+    }
+
+    private static async Task SeedDemoContracts(FisDbContext dbContext)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            DECLARE @can_seed_with_explicit_ids BIT = 1;
+
+            BEGIN TRY
+                SET IDENTITY_INSERT contract ON;
+            END TRY
+            BEGIN CATCH
+                SET @can_seed_with_explicit_ids = 0;
+            END CATCH
+
+                IF @can_seed_with_explicit_ids = 1
+                BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9001)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, date_created, is_deleted)
+                    VALUES (9001, 1203, 2, 'H', DATEADD(month, -5, GETDATE()), DATEADD(month, -5, GETDATE()), 12000, 'Y', 0, 3, GETDATE(), 'Active contract for UX demo', 4, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9002)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, date_created, is_deleted)
+                    VALUES (9002, 1202, 1, 'H', DATEADD(day, -2, GETDATE()), DATEADD(day, -2, GETDATE()), 15900, 'N', 0, 1, GETDATE(), 'Pending approval contract for reviewer flow', 4, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9003)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, approver_code, date_created, is_deleted)
+                    VALUES (9003, 1204, 2, 'H', DATEADD(day, -7, GETDATE()), DATEADD(day, -7, GETDATE()), 68800, 'N', 0, 4, GETDATE(), 'Declined for correction example', 4, 5, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9004)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, approver_code, date_created, is_deleted)
+                    VALUES (9004, 1205, 1, 'H', DATEADD(day, -10, GETDATE()), DATEADD(day, -10, GETDATE()), 98000, 'N', 0, 5, GETDATE(), 'Declined example', 4, 5, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9005)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, end_date, end_time, end_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, approver_code, date_created, is_deleted)
+                    VALUES (9005, 1206, 1, 'H', DATEADD(month, -9, GETDATE()), DATEADD(month, -9, GETDATE()), 5000, DATEADD(month, -1, GETDATE()), DATEADD(month, -1, GETDATE()), 21900, 'N', 0, 2, GETDATE(), 'Previously approved and ended contract', 4, 5, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9006)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, approver_code, date_created, is_deleted)
+                    VALUES (9006, 1206, 1, 'H', DATEADD(day, -20, GETDATE()), DATEADD(day, -20, GETDATE()), 21950, 'Y', 0, 3, GETDATE(), 'Parent active contract for relief flow', 4, 5, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9007)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, relief_for_contract, parent_contract_code, date_created, is_deleted)
+                    VALUES (9007, 1207, 1, 'R', DATEADD(day, -1, GETDATE()), DATEADD(day, -1, GETDATE()), 5300, 'N', 0, 1, GETDATE(), 'Relief contract pending approval', 4, 9006, 9006, GETDATE(), 0);
+
+                    IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9008)
+                    INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, end_date, end_time, end_odometer, still_current, locked_for_transfer, contract_status_code, contract_status_date, Notes, user_code, approver_code, date_created, is_deleted)
+                    VALUES (9008, 1001, 1, 'H', DATEADD(month, -8, GETDATE()), DATEADD(month, -8, GETDATE()), 6000, DATEADD(month, -3, GETDATE()), DATEADD(month, -3, GETDATE()), 18200, 'N', 0, 2, GETDATE(), 'Historical completed contract on generated demo vehicle', 4, 5, GETDATE(), 0);
+
+                BEGIN TRY
+                    SET IDENTITY_INSERT contract OFF;
+                END TRY
+                BEGIN CATCH
+                END CATCH
+            END
+        ");
+    }
+
+    private static async Task SeedVehicleAuthorizationQueue(FisDbContext dbContext)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            DECLARE @can_seed_explicit_pre_vehicle_ids BIT = 1;
+
+            BEGIN TRY
+                SET IDENTITY_INSERT pre_vehicle_master ON;
+            END TRY
+            BEGIN CATCH
+                SET @can_seed_explicit_pre_vehicle_ids = 0;
+            END CATCH
+
+            IF @can_seed_explicit_pre_vehicle_ids = 1
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, chassis_number, engine_number, model_code, registration_number, colour, purchase_amount, purchase_date, purchase_from, take_on_date, take_on_odo, Fleet_Notes, damage_status, Authority_Status, created_by_user_code, date_created, is_deleted)
+                    VALUES (3001, 'PRE-CHS-3001', 'PRE-ENG-3001', 1, 'PRC 301 GP', 'White', 365000, DATEADD(day, -7, GETDATE()), 'Toyota SA', DATEADD(day, -2, GETDATE()), 0, 'Awaiting approval by vehicle reviewer', 'N', 'Awaiting Authorization', 4, GETDATE(), 0);
+
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, chassis_number, engine_number, model_code, registration_number, colour, purchase_amount, purchase_date, purchase_from, take_on_date, take_on_odo, Fleet_Notes, damage_status, Authority_Status, authorized_by_user_code, authorization_date, authorization_comment, vmf_code, created_by_user_code, date_created, is_deleted)
+                    VALUES (3002, 'PRE-CHS-3002', 'PRE-ENG-3002', 2, 'PRA 302 GP', 'Silver', 402000, DATEADD(day, -25, GETDATE()), 'Ford SA', DATEADD(day, -20, GETDATE()), 120, 'Approved pre-capture', 'N', 'Authorized', 5, DATEADD(day, -18, GETDATE()), 'All documents verified', 1203, 4, GETDATE(), 0);
+
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, chassis_number, engine_number, model_code, registration_number, colour, purchase_amount, purchase_date, purchase_from, take_on_date, take_on_odo, Fleet_Notes, damage_status, Authority_Status, authorized_by_user_code, authorization_date, rejection_reason, authorization_comment, created_by_user_code, date_created, is_deleted)
+                    VALUES (3003, 'PRE-CHS-3003', 'PRE-ENG-3003', 3, 'PRR 303 GP', 'Blue', 331000, DATEADD(day, -9, GETDATE()), 'VW Fleet', DATEADD(day, -3, GETDATE()), 0, 'Rejected sample for queue testing', 'Y', 'Rejected', 5, DATEADD(day, -2, GETDATE()), 'Missing finance approval docs', 'Please re-upload signed approval', 4, GETDATE(), 0);
+
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, chassis_number, engine_number, model_code, registration_number, colour, purchase_amount, purchase_date, purchase_from, take_on_date, take_on_odo, Fleet_Notes, damage_status, Authority_Status, created_by_user_code, date_created, is_deleted)
+                    VALUES (3004, 'PRE-CHS-3004', 'PRE-ENG-3004', 4, 'PRC 304 GP', 'Grey', 288500, DATEADD(day, -1, GETDATE()), 'Avis Fleet', GETDATE(), 0, 'Second pending record to test paging/filtering', 'N', 'Awaiting Authorization', 6, GETDATE(), 0);
+
+                BEGIN TRY
+                    SET IDENTITY_INSERT pre_vehicle_master OFF;
+                END TRY
+                BEGIN CATCH
+                END CATCH
+            END
+        ");
+    }
+
+    private static async Task ExecuteIdentityAwareSqlAsync(FisDbContext dbContext, string sqlWithIdentityInsert, string sqlFallback)
+    {
+        try
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(sqlWithIdentityInsert);
+        }
+        catch
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(sqlFallback);
         }
     }
 

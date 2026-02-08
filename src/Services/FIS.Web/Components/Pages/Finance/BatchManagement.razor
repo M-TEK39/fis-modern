@@ -102,7 +102,7 @@
 
         var result = await FinanceService.PostActionAsync(endpoint, new { });
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
         _batchStatus = await FinanceService.GetBatchStatusAsync();
     }
 }

@@ -17,18 +17,21 @@ public class VehiclesController : BaseApiController
     private readonly IVehicleRepository _vehicleRepository;
     private readonly VehicleService _vehicleService;
     private readonly FisDbContext _context; // Keep for db-status endpoint
+    private readonly IVehicleTariffRepository _tariffRepository;
     private readonly ILogger<VehiclesController> _logger;
 
     public VehiclesController(
         IVehicleRepository vehicleRepository,
         VehicleService vehicleService,
         FisDbContext context,
+        IVehicleTariffRepository tariffRepository,
         ILogger<VehiclesController> logger
     )
     {
         _vehicleRepository = vehicleRepository;
         _vehicleService = vehicleService;
         _context = context;
+        _tariffRepository = tariffRepository;
         _logger = logger;
     }
 
@@ -218,7 +221,14 @@ public class VehiclesController : BaseApiController
 
             var created = await _vehicleRepository.CreateAsync(vehicle, currentUserId);
             _logger.LogInformation("Created vehicle with vmf_code {VmfCode}", created.vmf_code);
-            
+
+            // Handle tariff recalculation if requested
+            if (request.recalculate_tariff)
+            {
+                _logger.LogInformation("Tariff recalculation requested for vehicle {VmfCode}", created.vmf_code);
+                await _tariffRepository.RecalculateTariffAsync(created.vmf_code);
+            }
+
             return CreatedAtAction(nameof(GetVehicle), new { vmfCode = created.vmf_code }, created);
         }
         catch (Exception ex)
@@ -264,7 +274,14 @@ public class VehiclesController : BaseApiController
 
             await _vehicleRepository.UpdateAsync(existing, currentUserId);
             _logger.LogInformation("Updated vehicle with vmf_code {VmfCode}", vmfCode);
-            
+
+            // Handle tariff recalculation if requested
+            if (request.recalculate_tariff)
+            {
+                _logger.LogInformation("Tariff recalculation requested for vehicle {VmfCode}", vmfCode);
+                await _tariffRepository.RecalculateTariffAsync(vmfCode);
+            }
+
             return Ok(existing);
         }
         catch (Exception ex)
@@ -312,13 +329,13 @@ public class VehicleCreationApiRequest
     public short type_code { get; set; } = 1;
     public short vehicle_status_code { get; set; } = 1;
     public short location_code { get; set; } = 1;
-    
+
     [Required]
     public string? fleet_number { get; set; }
-    
+
     [Required]
     public string? registration_number { get; set; }
-    
+
     public string? engine_number_1 { get; set; }
     public string? chassis_number { get; set; }
     public DateTime? take_on_date { get; set; }
@@ -330,6 +347,11 @@ public class VehicleCreationApiRequest
     public string? colour { get; set; }
     public DateTime? purchase_date { get; set; }
     public decimal? purchase_amount { get; set; }
+
+    /// <summary>
+    /// Flag to trigger tariff recalculation for this vehicle
+    /// </summary>
+    public bool recalculate_tariff { get; set; } = false;
 }
 
 /// <summary>
@@ -351,6 +373,11 @@ public class VehicleUpdateApiRequest
     public int? gvm { get; set; }
     public short? year_manufactured { get; set; }
     public string? colour { get; set; }
+
+    /// <summary>
+    /// Flag to trigger tariff recalculation for this vehicle
+    /// </summary>
+    public bool recalculate_tariff { get; set; } = false;
 }
 
 /// <summary>

@@ -2,6 +2,8 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @using System.Text.Json
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
@@ -9,6 +11,8 @@
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Vehicle Contract Back Date Requests - Approval</PageTitle>
 <a id="PageTop"></a>
@@ -29,21 +33,6 @@
 </div>
 
 <div class="page-content">
-    <div class="contract-banner contract-banner-warning">
-        <i class="bx bx-error-circle"></i>
-        <span>@_limitedAccessMessage</span>
-    </div>
-    <div class="contract-banner contract-banner-info">
-        <i class="bx bx-info-circle"></i>
-        <span>@_infoMessage</span>
-    </div>
-    @if (!string.IsNullOrWhiteSpace(_apiStatusMessage))
-    {
-        <div class="alert @(_apiStatusError ? "alert-error" : "alert-success")" style="margin-bottom: 1rem;">
-            @_apiStatusMessage
-        </div>
-    }
-
     <div class="contract-section">
         <table class="contract-legacy-table">
             <thead>
@@ -163,9 +152,15 @@
                                             <th rowspan="2" class="contract-action-header">Action</th>
                                             <td rowspan="2" class="contract-actions">
                                                 <button class="btn btn-secondary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "view")'>View</button>
-                                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "review")'>Review</button>
-                                                <button class="btn btn-warning btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "edit")'>Edit</button>
-                                                <button class="btn btn-success btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "process")'>Process</button>
+                                                @if (CanReviewContract(contract))
+                                                {
+                                                    <button class="btn btn-primary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "review")'>Review</button>
+                                                    <button class="btn btn-success btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "process")'>Process</button>
+                                                }
+                                                @if (CanEditContract(contract))
+                                                {
+                                                    <button class="btn btn-warning btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "edit")'>Edit</button>
+                                                }
                                             </td>
                                         </tr>
                                         <tr>
@@ -195,8 +190,6 @@
 <a id="PageBottom"></a>
 
 @code {
-    private string _limitedAccessMessage = "Limited access: some backdating actions may be restricted based on your role.";
-    private string _infoMessage = "Review pending backdating requests or search for a vehicle.";
 
     private string _searchType = "GG";
     private string _searchQuery = "";
@@ -206,11 +199,13 @@
 
     private bool _loadingContracts = true;
     private List<ContractDto> _pendingContracts = new();
-    private bool _apiStatusError;
-    private string _apiStatusMessage = string.Empty;
+    private int? _currentUserAccessCode;
+    private long _currentAccessLevel;
+    private bool _hasContractApproverRole;
 
     protected override async Task OnInitializedAsync()
     {
+        await ResolveCurrentUserContextAsync();
         await LoadPendingContracts();
     }
 
@@ -219,10 +214,6 @@
         _loadingContracts = true;
         try
         {
-            var apiResult = await ContractService.GetActionAsync("api/contracts/active");
-            _apiStatusError = !apiResult.Success;
-            _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
-
             var contracts = await ContractService.GetContractsAsync();
             _pendingContracts = await FilterPendingContractsAsync(contracts);
             await HydratePendingContractsAsync();
@@ -249,6 +240,18 @@
                 using var doc = JsonDocument.Parse(pendingResponse.ResponseBody);
                 if (doc.RootElement.TryGetProperty("isPending", out var isPending) && isPending.GetBoolean())
                 {
+                    if (doc.RootElement.TryGetProperty("submittedByUserCode", out var submittedBy))
+                    {
+                        if (submittedBy.ValueKind == JsonValueKind.Number && submittedBy.TryGetInt32(out var submittedByCode))
+                        {
+                            contract.created_by_user_code = submittedByCode;
+                        }
+                        else if (submittedBy.ValueKind == JsonValueKind.String && int.TryParse(submittedBy.GetString(), out submittedByCode))
+                        {
+                            contract.created_by_user_code = submittedByCode;
+                        }
+                    }
+
                     pending.Add(contract);
                 }
             }
@@ -430,5 +433,78 @@
         }
 
         return $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+    }
+
+    private bool CanReviewContract(ContractDto contract)
+        => _hasContractApproverRole && !IsCurrentUserContractCapturer(contract);
+
+    private bool CanEditContract(ContractDto contract)
+        => IsCurrentUserContractCapturer(contract) || !_hasContractApproverRole;
+
+    private bool IsCurrentUserContractCapturer(ContractDto contract)
+    {
+        if (_currentUserAccessCode is not > 0)
+        {
+            return false;
+        }
+
+        if (contract.user_code is > 0 && contract.user_code.Value == _currentUserAccessCode.Value)
+        {
+            return true;
+        }
+
+        return contract.created_by_user_code is > 0 && contract.created_by_user_code.Value == _currentUserAccessCode.Value;
+    }
+
+    private async Task ResolveCurrentUserContextAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            return;
+        }
+
+        _currentUserAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+        _hasContractApproverRole = HasAnyRole(user, "contracts approver", "contracts_approver", "back dating contract (approver)");
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        if (!long.TryParse(accessLevelClaim, out _currentAccessLevel))
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            _currentAccessLevel = await UserAccessContextService.EnsureAccessLevelAsync(_currentUserAccessCode, firstName);
+        }
+
+        if (!_hasContractApproverRole && (_currentAccessLevel & LegacyPermissionBits.ContractManagement) == LegacyPermissionBits.ContractManagement)
+        {
+            _hasContractApproverRole = true;
+        }
+    }
+
+    private static int? TryParseInt(string? value)
+    {
+        return int.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private static bool HasAnyRole(ClaimsPrincipal user, params string[] roles)
+    {
+        foreach (var role in roles)
+        {
+            if (user.IsInRole(role))
+            {
+                return true;
+            }
+        }
+
+        var roleClaims = user.Claims
+            .Where(c =>
+                c.Type == ClaimTypes.Role
+                || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => roles.Any(role => string.Equals(item, role, StringComparison.OrdinalIgnoreCase))));
     }
 }

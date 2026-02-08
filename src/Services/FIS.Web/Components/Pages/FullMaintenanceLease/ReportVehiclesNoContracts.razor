@@ -1,13 +1,87 @@
 @page "/full-maintenance-lease/reports/vehicles-no-contracts"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="List of FML vehicles that do not have contract with Clients"
-    Description="Legacy fleet operations endpoint wiring page."
-    LegacyPath="Legacy fleet operations endpoint wiring page."
-    Endpoint="api/leasecontractterms/reports/vehicles-no-contracts"
-    HttpMethod="POST"
-    ReportType="fml-report-vehicles-no-contracts"
-    BackLink="/full-maintenance-lease/reports"
-    Icon="bx-wrench" />
+<PageTitle>List of FML vehicles that do not have contracts with Clients</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-car"></i>FML Vehicles with No Contracts</h1>
+        <p class="page-description">Vehicles with no matching lease term records.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/full-maintenance-lease/reports">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state"><div class="spinner"></div><p>Loading report...</p></div>
+    }
+    else if (_rows.Count == 0)
+    {
+        <div class="empty-state"><i class="bx bx-check-circle"></i><h3>No records</h3><p>No vehicles without lease contracts found.</p></div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header"><span class="table-title">@_rows.Count vehicle(s)</span></div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr><th>VMF</th><th>GG Number</th><th>Registration</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in _rows)
+                        {
+                            <tr>
+                                <td>@row.vmf_code</td>
+                                <td>@ValueOrDash(row.fleet_number)</td>
+                                <td>@ValueOrDash(row.registration_number)</td>
+                                <td>@ValueOrDash(row.status_description)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<VehicleDto> _rows = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var leases = await LeaseService.GetAllAsync<LeaseTermDto>();
+            var leasedVmfCodes = leases.Select(x => x.vmf_Code).Where(x => x > 0).Distinct().ToHashSet();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _rows = vehicles.Data.Where(v => !leasedVmfCodes.Contains(v.vmf_code)).ToList();
+        }
+        catch (Exception ex)
+        {
+            _rows = new List<VehicleDto>();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-no-contracts report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed class LeaseTermDto
+    {
+        public int VehicleContractTermID { get; set; }
+        public int vmf_Code { get; set; }
+    }
+}

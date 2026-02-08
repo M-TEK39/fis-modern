@@ -347,7 +347,7 @@
         _statusError = !success;
         _statusMessage = string.IsNullOrWhiteSpace(endpoint)
             ? message
-            : $"{message} Endpoint: {endpoint}";
+            : message;
     }
 
     private string PageTitleText => Action switch

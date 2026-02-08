@@ -29,21 +29,6 @@
 </div>
 
 <div class="page-content">
-    <div class="contract-banner contract-banner-warning">
-        <i class="bx bx-error-circle"></i>
-        <span>@_limitedAccessMessage</span>
-    </div>
-    <div class="contract-banner contract-banner-info">
-        <i class="bx bx-info-circle"></i>
-        <span>@_infoMessage</span>
-    </div>
-    @if (!string.IsNullOrWhiteSpace(_apiStatusMessage))
-    {
-        <div class="alert @(_apiStatusError ? "alert-error" : "alert-success")" style="margin-bottom: 1rem;">
-            @_apiStatusMessage
-        </div>
-    }
-
     <div class="contract-section">
         <table class="contract-legacy-table">
             <thead>
@@ -220,8 +205,6 @@
 <a id="PageBottom"></a>
 
 @code {
-    private string _limitedAccessMessage = "Limited access: some history actions may be restricted based on your role.";
-    private string _infoMessage = "Search for a vehicle to view contract history backdating.";
     private string _feedbackMessage = "";
 
     private string _searchType = "GG";
@@ -238,8 +221,6 @@
     private bool _submitting;
     private Dictionary<short, string> _siteNames = new();
     private List<DriverDto> _drivers = new();
-    private bool _apiStatusError;
-    private string _apiStatusMessage = string.Empty;
 
     private void GoTop() => Navigation.NavigateTo("/contracts/backdating-history#PageTop");
     private void GoBottom() => Navigation.NavigateTo("/contracts/backdating-history#PageBottom");
@@ -300,9 +281,7 @@
             return;
         }
 
-        var apiResult = await ContractService.GetActionAsync($"api/contracts/backdating/history/{_selectedVehicle.vmf_code}");
-        _apiStatusError = !apiResult.Success;
-        _apiStatusMessage = $"{apiResult.Message} Endpoint: {apiResult.Endpoint}";
+        await ContractService.GetActionAsync($"api/contracts/backdating/history/{_selectedVehicle.vmf_code}");
 
         var contracts = await ContractService.GetContractsAsync();
         _historyContracts = contracts

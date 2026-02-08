@@ -90,3 +90,4 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Contracts/Detail.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Contracts/BackdatingApprovalDetail.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/PrivateHire/Maintenance.razor.rz.scp.css
+/home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Vehicles/StatusMaintenance.razor.rz.scp.css

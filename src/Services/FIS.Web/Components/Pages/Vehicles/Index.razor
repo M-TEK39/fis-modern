@@ -1,9 +1,10 @@
 @page "/vehicles"
 @rendermode InteractiveServer
-@using FIS.Web.Models
 @using FIS.Web.Services
-@inject VehicleApiService VehicleService
-@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Vehicle Master - Fleet Information System</PageTitle>
 <a id="PageTop"></a>
@@ -29,261 +30,147 @@
 <a id="PageBottom"></a>
 
 <div class="page-content">
-    <span style="display:none">@_loading</span>
-    @* Legacy menu is primary. Search/table UX kept for future reuse. *@
-    @*
-    <div class="search-bar">
-        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.5rem; flex-wrap:wrap;">
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")"
-                       @onchange='() => SetSearchType("GG")' />
-                GG
-            </label>
-            <label class="form-label" style="margin:0;">
-                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")"
-                       @onchange='() => SetSearchType("GP")' />
-                GP Number
-            </label>
-        </div>
-        <div class="search-input-wrapper">
-            <i class="bx bx-search"></i>
-            <input
-                type="text"
-                class="search-input"
-                placeholder="@(_searchType == "GG" ? "Enter GG Number" : "Enter GP Number")"
-                @bind="_searchQuery"
-                @bind:event="oninput"
-                @onkeyup="HandleSearchKeyUp" />
-            @if (!string.IsNullOrWhiteSpace(_searchQuery))
-            {
-                <button class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
-                    <i class="bx bx-x" style="margin-left:-10px; margin-top: -10px"></i>
-                </button>
-            }
-        </div>
-        <div style="margin-top:0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
-            <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoVehiclesMenu">Vehicles Menu</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoTop">Top</button>
-            <button class="btn btn-secondary btn-sm" @onclick="GoBottom">Bottom</button>
-        </div>
-    </div>
-    *@
-
-    <div class="menu-tiles" style="margin: 1.5rem 0;">
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleVehicleInfo">
-                <span>Vehicle Master Information / Help</span>
-                <i class="bx @(_showVehicleInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showVehicleInfo)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/help">Vehicle Master Information / Help</a>
-                    </div>
-                </div>
-            }
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleVehicleMaintenance">
-                <span>Vehicle Master Maintenance</span>
-                <i class="bx @(_showVehicleMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showVehicleMaintenance)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/create">1) Add New Vehicle</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/authorize">1) Authorize Captured Vehicle Information</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/edit">2) Edit A Vehicle</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/status-maintenance">3) Vehicle Status Maintenance</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/barcode">4) Add/Edit Barcode</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/gg-block-numbers">5) Add GG Block Number(s)</a>
-                    </div>
-                </div>
-            }
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleVehicleSource">
-                <span>Vehicle Source Maintenance</span>
-                <i class="bx @(_showVehicleSource ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showVehicleSource)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/source-maintenance">1) Vehicle Source Maintenance</a>
-                    </div>
-                </div>
-            }
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleRecoveredVehicles">
-                <span>Stolen & Recovered Vehicles</span>
-                <i class="bx @(_showRecoveredVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showRecoveredVehicles)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/recovered">1) Update Recovered GG</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/renumbered-report">2) Report All Renumbered vehicles</a>
-                    </div>
-                </div>
-            }
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleDemoVehicles">
-                <span>Demo Vehicles</span>
-                <i class="bx @(_showDemoVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showDemoVehicles)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/demo/add">1) Add a Demo Vehicle</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/demo/edit">2) Edit a Demo Vehicle</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/demo/delete">3) Delete a Demo Vehicle</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicles/demo/report">4) Report All Demo Vehicle</a>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-
-    @*
-    @if (_loading)
+    @if (!_authResolved)
     {
         <div class="loading-state">
             <div class="spinner"></div>
-            <p>Loading vehicles...</p>
+            <p>Loading access profile...</p>
         </div>
     }
-    else if (_vehicles.Data.Count == 0)
+    else if (!_hasVehicleAccess)
     {
         <div class="empty-state">
-            <i class="bx bx-car"></i>
-            <h3>No vehicles found</h3>
-            <p>@(_hasSearched ? "Try adjusting your search criteria" : "Get started by adding your first vehicle")</p>
-            @if (!_hasSearched)
-            {
-                <button class="btn btn-primary" @onclick="NavigateToCreate">
-                    <i class="bx bx-plus plus-icon"></i>
-                    Add Vehicle
-                </button>
-            }
+            <i class="bx bx-lock-alt"></i>
+            <h3>Access restricted</h3>
+            <p>You do not have permission to access Vehicle Master.</p>
         </div>
     }
     else
     {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_vehicles.TotalCount Vehicle(s)</span>
-                <div class="table-controls">
-                    <button class="btn btn-secondary btn-sm" @onclick="LoadVehicles">
-                        <i class="bx bx-refresh"></i>
-                    </button>
-                </div>
+        <div class="menu-tiles fis-menu-tiles-top-bottom">
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleVehicleInfo">
+                    <span>Vehicle Master Information / Help</span>
+                    <i class="bx @(_showVehicleInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showVehicleInfo)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/vehicles/help">Vehicle Master Information / Help</a>
+                        </div>
+                    </div>
+                }
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Registration</th>
-                            <th>Fleet Number</th>
-                            <th>Model</th>
-                            <th>Status</th>
-                            <th>Location</th>
-                            <th>Odometer</th>
-                            <th>Take On Date</th>
-                            <th class="actions-column">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var vehicle in _vehicles.Data)
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleVehicleMaintenance">
+                    <span>Vehicle Master Maintenance</span>
+                    <i class="bx @(_showVehicleMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showVehicleMaintenance)
+                {
+                    <div class="menu-tile-body">
+                        @if (_canCaptureInception)
                         {
-                            <tr>
-                                <td>@vehicle.registration_number</td>
-                                <td>@vehicle.fleet_number</td>
-                                <td>@vehicle.model_name</td>
-                                <td>@vehicle.status_description</td>
-                                <td>@vehicle.location_description</td>
-                                <td>@((vehicle.current_odo ?? 0).ToString("N0"))</td>
-                                <td>@(vehicle.take_on_date?.ToString("yyyy-MM-dd") ?? "N/A")</td>
-                                <td class="actions-column">
-                                    <div class="table-actions">
-                                        <button class="btn-icon btn-icon-view" @onclick="() => NavigateToDetail(vehicle.vmf_code)" title="View">
-                                            <i class="bx bx-show"></i>
-                                        </button>
-                                        <button class="btn-icon btn-icon-edit" @onclick="() => NavigateToDetail(vehicle.vmf_code)" title="Edit">
-                                            <i class="bx bx-edit"></i>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/create">1) Add New Vehicle</a>
+                            </div>
                         }
-                    </tbody>
-                </table>
+                        @if (_canAuthorizeInception)
+                        {
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/authorize">1) Authorize Captured Vehicle Information</a>
+                            </div>
+                        }
+                        @if (_canMaintainVehicleMaster)
+                        {
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/edit">2) Edit A Vehicle</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/status-maintenance">3) Vehicle Status Maintenance</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/barcode">4) Add/Edit Barcode</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/gg-block-numbers">5) Add GG Block Number(s)</a>
+                            </div>
+                        }
+                    </div>
+                }
             </div>
-        </div>
-
-        @if (_vehicles.TotalPages > 1 && string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            <div class="pagination">
-                <button 
-                    class="pagination-btn" 
-                    @onclick="PreviousPage" 
-                    disabled="@(_vehicles.PageNumber <= 1)">
-                    <i class="bx bx-chevron-left"></i>
-                    Previous
-                </button>
-                
-                <div class="pagination-info">
-                    Page @_vehicles.PageNumber of @_vehicles.TotalPages
-                    <span class="pagination-meta">(@_vehicles.TotalCount vehicles)</span>
+            @if (_canMaintainVehicleMaster)
+            {
+                <div class="menu-tile">
+                    <button class="menu-tile-header" @onclick="ToggleVehicleSource">
+                        <span>Vehicle Source Maintenance</span>
+                        <i class="bx @(_showVehicleSource ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                    </button>
+                    @if (_showVehicleSource)
+                    {
+                        <div class="menu-tile-body">
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/source-maintenance">1) Vehicle Source Maintenance</a>
+                            </div>
+                        </div>
+                    }
                 </div>
-                
-                <button 
-                    class="pagination-btn" 
-                    @onclick="NextPage" 
-                    disabled="@(_vehicles.PageNumber >= _vehicles.TotalPages)">
-                    Next
-                    <i class="bx bx-chevron-right"></i>
-                </button>
-            </div>
-        }
+            }
+            @if (_canViewDemoVehicles)
+            {
+                <div class="menu-tile">
+                    <button class="menu-tile-header" @onclick="ToggleRecoveredVehicles">
+                        <span>Stolen & Recovered Vehicles</span>
+                        <i class="bx @(_showRecoveredVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                    </button>
+                    @if (_showRecoveredVehicles)
+                    {
+                        <div class="menu-tile-body">
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/recovered">1) Update Recovered GG</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/renumbered-report">2) Report All Renumbered vehicles</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="menu-tile">
+                    <button class="menu-tile-header" @onclick="ToggleDemoVehicles">
+                        <span>Demo Vehicles</span>
+                        <i class="bx @(_showDemoVehicles ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                    </button>
+                    @if (_showDemoVehicles)
+                    {
+                        <div class="menu-tile-body">
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/demo/add">1) Add a Demo Vehicle</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/demo/edit">2) Edit a Demo Vehicle</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/demo/delete">3) Delete a Demo Vehicle</a>
+                            </div>
+                            <div class="menu-item">
+                                <a class="menu-item-link" href="/vehicles/demo/report">4) Report All Demo Vehicle</a>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
     }
-    *@
 </div>
 
 @code {
-    private PagedResult<VehicleDto> _vehicles = new();
-    private string _searchQuery = string.Empty;
-    private string _searchType = "GG";
-    private int _currentPage = 1;
-    private const int PageSize = 12;
-    private bool _loading = true;
-    private bool _hasSearched = false;
-    private System.Threading.Timer? _searchTimer;
+    private bool _authResolved;
+    private bool _hasVehicleAccess;
+    private bool _canCaptureInception;
+    private bool _canAuthorizeInception;
+    private bool _canMaintainVehicleMaster;
+    private bool _canViewDemoVehicles;
     private bool _showVehicleInfo = true;
     private bool _showVehicleMaintenance = true;
     private bool _showVehicleSource = true;
@@ -292,160 +179,67 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadVehicles();
+        await ResolveAccessAsync();
     }
 
-    private async Task LoadVehicles()
+    private async Task ResolveAccessAsync()
     {
-        _loading = true;
-        if (!string.IsNullOrWhiteSpace(_searchQuery))
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
         {
-            // Legacy search is exact by GG (fleet number) or GP (registration number)
-            var result = await VehicleService.GetVehiclesAsync(1, 5000, _searchQuery);
-            var filtered = ApplyLegacyFilter(result.Data);
-            _vehicles = new PagedResult<VehicleDto>
-            {
-                Data = filtered,
-                TotalCount = filtered.Count,
-                PageNumber = 1,
-                PageSize = filtered.Count == 0 ? 1 : filtered.Count
-            };
-        }
-        else
-        {
-            _vehicles = await VehicleService.GetVehiclesAsync(_currentPage, PageSize, _searchQuery);
-        }
-        _loading = false;
-        StateHasChanged();
-    }
-
-    private void HandleSearchKeyUp(KeyboardEventArgs e)
-    {
-        _searchTimer?.Dispose();
-        _searchTimer = new System.Threading.Timer(async _ =>
-        {
-            _hasSearched = !string.IsNullOrWhiteSpace(_searchQuery);
-            _currentPage = 1;
-            await InvokeAsync(async () =>
-            {
-                await LoadVehicles();
-            });
-        }, null, 500, Timeout.Infinite);
-    }
-
-    private async Task ClearSearch()
-    {
-        _searchQuery = string.Empty;
-        _hasSearched = false;
-        _currentPage = 1;
-        await LoadVehicles();
-    }
-
-    private void SetSearchType(string type)
-    {
-        _searchType = type;
-        _searchQuery = string.Empty;
-        _hasSearched = false;
-        _currentPage = 1;
-    }
-
-    private void GoMainMenu()
-    {
-        Navigation.NavigateTo("/home");
-    }
-
-    private void GoVehiclesMenu()
-    {
-        Navigation.NavigateTo("/vehicles");
-    }
-
-    private void GoTop()
-    {
-        Navigation.NavigateTo("/vehicles#PageTop");
-    }
-
-    private void GoBottom()
-    {
-        Navigation.NavigateTo("/vehicles#PageBottom");
-    }
-
-    private async Task NextPage()
-    {
-        if (_vehicles.PageNumber < _vehicles.TotalPages)
-        {
-            _currentPage++;
-            await LoadVehicles();
-        }
-    }
-
-    private async Task PreviousPage()
-    {
-        if (_vehicles.PageNumber > 1)
-        {
-            _currentPage--;
-            await LoadVehicles();
-        }
-    }
-
-    private void NavigateToDetail(int vmfCode)
-    {
-        Navigation.NavigateTo($"/vehicles/{vmfCode}");
-    }
-
-    private void NavigateToCreate()
-    {
-        Navigation.NavigateTo("/vehicles/create");
-    }
-
-    public void Dispose()
-    {
-        _searchTimer?.Dispose();
-    }
-
-    private void ToggleVehicleInfo()
-    {
-        _showVehicleInfo = !_showVehicleInfo;
-    }
-
-    private void ToggleVehicleMaintenance()
-    {
-        _showVehicleMaintenance = !_showVehicleMaintenance;
-    }
-
-    private void ToggleVehicleSource()
-    {
-        _showVehicleSource = !_showVehicleSource;
-    }
-
-    private void ToggleDemoVehicles()
-    {
-        _showDemoVehicles = !_showDemoVehicles;
-    }
-
-    private void ToggleRecoveredVehicles()
-    {
-        _showRecoveredVehicles = !_showRecoveredVehicles;
-    }
-
-    private List<VehicleDto> ApplyLegacyFilter(List<VehicleDto> vehicles)
-    {
-        var query = _searchQuery.Trim();
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            return vehicles;
+            _authResolved = true;
+            return;
         }
 
-        if (_searchType == "GG")
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        long accessLevel;
+        if (!long.TryParse(accessLevelClaim, out accessLevel))
         {
-            return vehicles.Where(v =>
-                !string.IsNullOrWhiteSpace(v.fleet_number) &&
-                string.Equals(v.fleet_number.Trim(), query, StringComparison.OrdinalIgnoreCase)
-            ).ToList();
+            var userAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(userAccessCode, firstName);
         }
 
-        return vehicles.Where(v =>
-            !string.IsNullOrWhiteSpace(v.registration_number) &&
-            string.Equals(v.registration_number.Trim(), query, StringComparison.OrdinalIgnoreCase)
-        ).ToList();
+        _hasVehicleAccess =
+            (accessLevel & LegacyPermissionBits.VehicleManagement) == LegacyPermissionBits.VehicleManagement;
+        _canMaintainVehicleMaster = _hasVehicleAccess;
+        _canCaptureInception = HasRole(user, "vehicle inception capturer");
+        _canAuthorizeInception = HasRole(user, "vehicle inception authorizer");
+        _canViewDemoVehicles = HasRole(user, "demo vehicles");
+
+        if (_hasVehicleAccess && !_canCaptureInception && !_canAuthorizeInception)
+        {
+            _canCaptureInception = true;
+            _canAuthorizeInception = true;
+        }
+
+        _authResolved = true;
     }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static int? TryParseInt(string? value)
+        => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private void ToggleVehicleInfo() => _showVehicleInfo = !_showVehicleInfo;
+    private void ToggleVehicleMaintenance() => _showVehicleMaintenance = !_showVehicleMaintenance;
+    private void ToggleVehicleSource() => _showVehicleSource = !_showVehicleSource;
+    private void ToggleDemoVehicles() => _showDemoVehicles = !_showDemoVehicles;
+    private void ToggleRecoveredVehicles() => _showRecoveredVehicles = !_showRecoveredVehicles;
 }

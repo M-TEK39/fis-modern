@@ -1,13 +1,115 @@
 @page "/workshop/merchant/edit"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject MerchantApiService MerchantService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
-<LegacyReportEndpointPage
-    Title="Edit Merchant"
-    Description="Edit merchant details (placeholder)."
-    LegacyPath="Edit merchant details (placeholder)."
-    Endpoint="api/workshop/merchants/0"
-    HttpMethod="PUT"
-    ReportType="workshop-merchants-edit"
-    BackLink="/workshop/merchant"
-    Icon="bx-wrench" />
+<PageTitle>Edit Merchant</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-edit"></i>@(Id.HasValue ? "Edit Merchant" : "Add Merchant")</h1>
+        <p class="page-description">Capture merchant details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/workshop/merchant">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Merchant Name</label>
+                <input class="form-input" @bind="_name" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_error ? "alert-error" : "alert-success") fis-alert-tight">
+            <i class="bx @(_error ? "bx-error-circle" : "bx-check-circle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")]
+    public int? Id { get; set; }
+
+    private string _name = string.Empty;
+    private bool _saving;
+    private bool _error;
+    private string _message = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Id.HasValue || Id.Value <= 0)
+        {
+            _name = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var merchant = await MerchantService.GetByIdAsync(Id.Value);
+            _name = merchant?.Merchant_Name ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading merchant detail: {ex.Message}");
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = false;
+        _message = string.Empty;
+        var name = _name.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _error = true;
+            _message = "Merchant name is required.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (Id.HasValue && Id.Value > 0)
+            {
+                var updated = await MerchantService.UpdateAsync(Id.Value, new MerchantCreateDto { Merchant_Name = name });
+                _error = updated == null;
+                _message = _error ? "Failed to update merchant." : "Merchant updated.";
+            }
+            else
+            {
+                var created = await MerchantService.CreateAsync(new MerchantCreateDto { Merchant_Name = name });
+                _error = created == null;
+                _message = _error ? "Failed to create merchant." : "Merchant created.";
+            }
+
+            if (!_error)
+            {
+                Navigation.NavigateTo("/workshop/merchant");
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to save merchant.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error saving merchant: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

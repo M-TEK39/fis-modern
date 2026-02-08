@@ -7,6 +7,12 @@ public class ContractDto
     public int contract_id { get; set; }
     public int? vmf_code { get; set; }
     public short? site_code { get; set; }
+    public short? contract_status_code { get; set; }
+    public string? still_current { get; set; }
+    public short? user_code { get; set; }
+    public int? approver_code { get; set; }
+    public int? created_by_user_code { get; set; }
+    public int? modified_by_user_code { get; set; }
     [Required]
     public string contract_number { get; set; } = "";
     [Required]

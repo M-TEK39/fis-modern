@@ -822,6 +822,12 @@
             Associated vehicle class
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Operations.JobCard">
+            <summary>
+            Represents a job card (work order) for vehicle maintenance/repairs
+            Legacy: Managed via DEV_INS_NewJobCards, DEV_UPD_Jobcards stored procedures
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Operations.Supplier">
             <summary>
             Supplier Entity - Third party suppliers and vendors

@@ -5,11 +5,14 @@
 @using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components
 @inject TripApiService TripService
+@inject ContractApiService ContractService
 @inject TripDriverApiService TripDriverService
 @inject DriverApiService DriverService
 @inject VehicleApiService VehicleService
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Show Trip Authority - Fleet Information System</PageTitle>
 
@@ -27,6 +30,11 @@
 </div>
 
 <div class="page-content">
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_isError ? "alert-error" : "alert-success")">@_message</div>
+    }
+
     <div class="form-card">
         <div class="form-card-body">
             <div class="form-section" style="margin-bottom: 1rem;">
@@ -69,7 +77,7 @@
                                         <tr><th>Make</th><td>@ValueOrDash(_vehicle?.type_name)</td></tr>
                                         <tr><th>Model</th><td>@ValueOrDash(_vehicle?.model_name)</td></tr>
                                         <tr><th>Registration Number</th><td>@ValueOrDash(_vehicle?.registration_number)</td></tr>
-                                        <tr><th>Start ODO Meter</th><td>@ValueOrDash(_trip?.TripDate.ToString("yyyy-MM-dd"))</td></tr>
+                                        <tr><th>Start ODO Meter</th><td>-</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -84,15 +92,15 @@
                             <div class="table-wrapper">
                                 <table class="data-table">
                                     <tbody>
-                                        <tr><th>Approver Name</th><td>@ValueOrDash(_approverName)</td></tr>
-                                        <tr><th>Approver Rank</th><td>-</td></tr>
-                                        <tr><th>Approver Telephone</th><td>-</td></tr>
-                                        <tr><th>Expiry Date</th><td>-</td></tr>
-                                        <tr><th>End ODO Meter</th><td>-</td></tr>
+                                        <tr><th>Approver Name</th><td>@ValueOrDash(_trip?.ApproverName)</td></tr>
+                                        <tr><th>Approver Rank</th><td>@ValueOrDash(_trip?.ApproverRank)</td></tr>
+                                        <tr><th>Approver Telephone</th><td>@ValueOrDash(_trip?.ApproverTelephone)</td></tr>
+                                        <tr><th>Expiry Date</th><td>@ValueOrDash(_trip?.ExpiryDate?.ToString("yyyy-MM-dd"))</td></tr>
+                                        <tr><th>End ODO Meter</th><td>@ValueOrDash(_trip?.EndOdometer?.ToString())</td></tr>
                                         <tr><th>Trip Reason</th><td>@ValueOrDash(_trip?.Notes)</td></tr>
-                                        <tr><th>Trip Type</th><td>@ValueOrDash(_trip?.Status)</td></tr>
-                                        <tr><th>Trip Type Code</th><td>@ValueOrDash(_trip?.TripId.ToString())</td></tr>
-                                        <tr><th>Trip Captured by</th><td>-</td></tr>
+                                        <tr><th>Trip Type</th><td>@TripTypeLabel(_trip?.TripTypeCode)</td></tr>
+                                        <tr><th>Trip Type Code</th><td>@ValueOrDash(_trip?.TripTypeCode.ToString())</td></tr>
+                                        <tr><th>Trip Captured by</th><td>@ValueOrDash(_trip?.UserAccessCode?.ToString())</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -182,7 +190,7 @@
                                     <tr><th>End Location</th><td></td></tr>
                                     <tr>
                                         <th>End ODO Meter</th>
-                                        <td><input class="form-input" placeholder="Enter End ODO" /></td>
+                                        <td><input class="form-input" type="number" @bind="_endOdometerInput" placeholder="Enter End ODO" /></td>
                                     </tr>
                                     <tr><th>Estimated Distance</th><td></td></tr>
                                     <tr>
@@ -234,11 +242,11 @@
             </div>
 
             <div class="contract-action-group">
-                <button class="btn btn-secondary">&lt; Back to Trips</button>
-                <button class="btn btn-primary">Save and Close</button>
-                <button class="btn btn-secondary">Save and Renew</button>
-                <button class="btn btn-secondary">Print Trip Authority</button>
-                <button class="btn btn-secondary">Print Invoice</button>
+                <a class="btn btn-secondary" href="/trips">&lt; Back to Trips</a>
+                <button class="btn btn-primary" @onclick="SaveAndCloseAsync" disabled="@_saving">Save and Close</button>
+                <button class="btn btn-secondary" @onclick="SaveAndRenewAsync" disabled="@_saving">Save and Renew</button>
+                <button class="btn btn-secondary" @onclick="PrintAuthorityAsync">Print Trip Authority</button>
+                <button class="btn btn-secondary" @onclick="PrintInvoiceAsync">Print Invoice</button>
             </div>
         </div>
     </div>
@@ -247,14 +255,17 @@
 @code {
     [SupplyParameterFromQuery(Name = "tripId")] public string? TripId { get; set; }
 
-    private string _activeTab = "routes";
+    private string _activeTab = "vehicle";
     private TripDto? _trip;
     private VehicleDto? _vehicle;
     private SiteResponseDto? _site;
     private DepartmentDto? _department;
     private List<DriverDto> _drivers = new();
-    private string? _approverName;
     private string? _primaryDriver;
+    private bool _saving;
+    private bool _isError;
+    private string _message = string.Empty;
+    private int? _endOdometerInput;
 
     protected override async Task OnInitializedAsync()
     {
@@ -269,17 +280,32 @@
             return;
         }
 
-        _vehicle = await VehicleService.GetVehicleAsync(_trip.VmfCode);
-        if (_vehicle?.site_code != null)
+        // Trip API returns contract_code; resolve VMF/site from contract for accurate view details.
+        var vmfCode = _trip.VmfCode;
+        int? siteCode = null;
+        if (_trip.ContractCode > 0)
         {
-            _site = await SiteService.GetByIdAsync(_vehicle.site_code.Value);
+            var contract = await ContractService.GetContractAsync(_trip.ContractCode);
+            if (contract != null)
+            {
+                vmfCode = contract.vmf_code ?? vmfCode;
+                siteCode = contract.site_code;
+                _trip.VmfCode = vmfCode;
+            }
+        }
+
+        _vehicle = vmfCode > 0 ? await VehicleService.GetVehicleAsync(vmfCode) : null;
+        siteCode ??= _vehicle?.site_code;
+        if (siteCode != null)
+        {
+            _site = await SiteService.GetByIdAsync((short)siteCode.Value);
             if (_site?.DepartmentCode != null)
             {
                 _department = await DepartmentService.GetDepartmentAsync(_site.DepartmentCode.Value);
             }
         }
 
-        _approverName = _vehicle?.fleet_number;
+        _endOdometerInput = _trip.EndOdometer;
 
         var tripDrivers = await TripDriverService.GetAllAsync();
         var driverCodes = tripDrivers.Select(td => td.DriverCode).Distinct().ToList();
@@ -296,6 +322,103 @@
         _activeTab = tab;
     }
 
+    private async Task SaveAndCloseAsync()
+    {
+        var updated = await SaveTripAsync();
+        if (!updated)
+        {
+            return;
+        }
+
+        Navigation.NavigateTo("/trips");
+    }
+
+    private async Task SaveAndRenewAsync()
+    {
+        var updated = await SaveTripAsync();
+        if (!updated || _trip == null)
+        {
+            return;
+        }
+
+        Navigation.NavigateTo($"/trips/create?vmfCode={_trip.VmfCode}&contractCode={_trip.ContractCode}");
+    }
+
+    private async Task<bool> SaveTripAsync()
+    {
+        if (_trip == null)
+        {
+            return false;
+        }
+
+        _saving = true;
+        _isError = false;
+        _message = string.Empty;
+        try
+        {
+            var request = new UpdateTripRequest
+            {
+                ContractCode = _trip.ContractCode,
+                ApproverName = _trip.ApproverName,
+                ApproverRank = _trip.ApproverRank,
+                ApproverTelephone = _trip.ApproverTelephone,
+                EndOdometer = _endOdometerInput,
+                ExpiryDate = _trip.ExpiryDate,
+                TripReason = _trip.Notes,
+                TripRequestNumber = _trip.TripRequestNumber,
+                IssueDate = _trip.TripDate,
+                TripTypeCode = _trip.TripTypeCode,
+                TripIncidentTypeCode = _trip.TripIncidentTypeCode,
+                UserAccessCode = _trip.UserAccessCode,
+                LockedForTransfer = _trip.LockedForTransfer,
+                TripIsMonthly = _trip.TripIsMonthly
+            };
+
+            var updated = await TripService.UpdateAsync(_trip.TripId, request);
+            if (updated == null)
+            {
+                _isError = true;
+                _message = "Unable to save trip authority.";
+                return false;
+            }
+
+            _trip = updated;
+            _endOdometerInput = updated.EndOdometer;
+            _message = "Request completed successfully.";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _isError = true;
+            _message = "Unable to save trip authority.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+            return false;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task PrintAuthorityAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private async Task PrintInvoiceAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string TripTypeLabel(short? tripTypeCode)
+        => tripTypeCode switch
+        {
+            1 => "Normal (Official Business)",
+            2 => "Emergency",
+            3 => "Standby",
+            _ => "-"
+        };
 }

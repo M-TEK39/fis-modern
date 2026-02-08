@@ -74,6 +74,11 @@ public class TokenService
                 }
             }
         }
+        catch (InvalidOperationException ex) when (IsPrerenderInteropException(ex))
+        {
+            // ProtectedSessionStorage uses JS interop and is unavailable during prerender.
+            _logger.LogDebug("Token storage unavailable during prerender. Initialization deferred.");
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load token from session storage");
@@ -96,6 +101,10 @@ public class TokenService
             await _sessionStorage.SetAsync(EXPIRY_KEY, expiresAt);
 
             _logger.LogInformation("✅ Token stored, expires: {Expiry}", expiresAt);
+        }
+        catch (InvalidOperationException ex) when (IsPrerenderInteropException(ex))
+        {
+            _logger.LogDebug("Token saved in memory only during prerender. Browser storage write deferred.");
         }
         catch (Exception ex)
         {
@@ -120,10 +129,21 @@ public class TokenService
 
             _logger.LogInformation("Token cleared");
         }
+        catch (InvalidOperationException ex) when (IsPrerenderInteropException(ex))
+        {
+            _logger.LogDebug("Token cleared in memory during prerender. Browser storage clear deferred.");
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to clear token");
         }
+    }
+
+    private static bool IsPrerenderInteropException(InvalidOperationException ex)
+    {
+        return ex.Message.Contains("statically rendered", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("prerender", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("JavaScript interop calls cannot be issued", StringComparison.OrdinalIgnoreCase);
     }
 
     // Synchronous methods for backward compatibility

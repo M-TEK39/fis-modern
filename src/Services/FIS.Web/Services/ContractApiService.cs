@@ -1,24 +1,56 @@
 using FIS.Web.Models;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FIS.Web.Services;
 
 internal class ApiContractResponse
 {
-    public int contract_code { get; set; }
-    public int vmf_code { get; set; }
-    public short site_code { get; set; }
-    public DateTime start_date { get; set; }
-    public DateTime? end_date { get; set; }
-    public string? still_current { get; set; }
-    public string? contract_type { get; set; }
+    [JsonPropertyName("contractCode")]
+    public int ContractCode { get; set; }
+
+    [JsonPropertyName("vmfCode")]
+    public int VmfCode { get; set; }
+
+    [JsonPropertyName("siteCode")]
+    public short SiteCode { get; set; }
+
+    [JsonPropertyName("startDate")]
+    public DateTime StartDate { get; set; }
+
+    [JsonPropertyName("endDate")]
+    public DateTime? EndDate { get; set; }
+
+    [JsonPropertyName("stillCurrent")]
+    public string? StillCurrent { get; set; }
+
+    [JsonPropertyName("contractTypeCode")]
+    public string? ContractTypeCode { get; set; }
+
+    [JsonPropertyName("contractStatusCode")]
+    public short? ContractStatusCode { get; set; }
+
+    [JsonPropertyName("userCode")]
+    public short? UserCode { get; set; }
+
+    [JsonPropertyName("approverCode")]
+    public int? ApproverCode { get; set; }
+
+    [JsonPropertyName("createdByUserCode")]
+    public int? CreatedByUserCode { get; set; }
+
+    [JsonPropertyName("modifiedByUserCode")]
+    public int? ModifiedByUserCode { get; set; }
+
+    [JsonPropertyName("notes")]
     public string? Notes { get; set; }
 }
 
 public class ContractApiService
 {
     private readonly HttpClient _httpClient;
+    private const int RecentContractWindow = 80;
 
     public ContractApiService(HttpClient httpClient)
     {
@@ -50,6 +82,58 @@ public class ContractApiService
             // Return empty list for any other errors
             return new List<FIS.Web.Models.ContractDto>();
         }
+    }
+
+    public async Task<List<FIS.Web.Models.ContractDto>> GetRecentContractsWindowAsync()
+    {
+        var active = await GetContractsAsync();
+        var results = new List<ContractDto>();
+        if (active.Count == 0)
+        {
+            return results;
+        }
+
+        var maxId = active.Max(c => c.contract_id);
+        var minId = Math.Max(1, maxId - RecentContractWindow);
+        var upperId = maxId + 10;
+
+        for (var id = minId; id <= upperId; id++)
+        {
+            var contract = await GetContractAsync(id);
+            if (contract != null)
+            {
+                results.Add(contract);
+            }
+        }
+
+        return results
+            .GroupBy(c => c.contract_id)
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    public async Task<ContractDto?> GetLatestContractForVehicleAsync(int vmfCode)
+    {
+        if (vmfCode <= 0)
+        {
+            return null;
+        }
+
+        var active = await GetContractsAsync();
+        var directActive = active
+            .Where(c => c.vmf_code == vmfCode)
+            .OrderByDescending(c => c.contract_id)
+            .FirstOrDefault();
+        if (directActive != null)
+        {
+            return directActive;
+        }
+
+        var recent = await GetRecentContractsWindowAsync();
+        return recent
+            .Where(c => c.vmf_code == vmfCode)
+            .OrderByDescending(c => c.contract_id)
+            .FirstOrDefault();
     }
 
     public async Task<FIS.Web.Models.ContractDto?> GetContractAsync(int contractId)
@@ -182,7 +266,7 @@ public class ContractApiService
                 Endpoint = endpoint,
                 Message = response.IsSuccessStatusCode
                     ? "Request completed successfully."
-                    : $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
+                    : ExtractApiErrorMessage(body) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
                 ResponseBody = body
             };
         }
@@ -197,20 +281,75 @@ public class ContractApiService
         }
     }
 
+    private static string? ExtractApiErrorMessage(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(responseBody);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("error", out var errorValue))
+            {
+                var errorMessage = errorValue.GetString();
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    return errorMessage.Trim();
+                }
+            }
+
+            if (root.TryGetProperty("message", out var messageValue))
+            {
+                var message = messageValue.GetString();
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    return message.Trim();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore parse failures and keep the fallback status message.
+        }
+
+        return null;
+    }
+
     private static ContractDto MapToDto(ApiContractResponse api)
     {
+        var stillCurrent = (api.StillCurrent ?? string.Empty).Trim().ToUpperInvariant();
+        var statusLabel = api.ContractStatusCode switch
+        {
+            1 => "Pending Approval",
+            2 => "Approved",
+            3 => stillCurrent == "Y" ? "Active" : "Closed",
+            4 => "Declined For Correction",
+            5 => "Declined",
+            _ => stillCurrent == "Y" ? "Active" : stillCurrent == "N" ? "Closed" : "Unknown"
+        };
+
         return new ContractDto
         {
-            contract_id = api.contract_code,
-            vmf_code = api.vmf_code,
-            site_code = api.site_code,
-            contract_number = api.contract_code.ToString(),
-            vehicle_registration = api.vmf_code.ToString(),
+            contract_id = api.ContractCode,
+            vmf_code = api.VmfCode,
+            site_code = api.SiteCode,
+            contract_status_code = api.ContractStatusCode,
+            still_current = stillCurrent,
+            user_code = api.UserCode,
+            approver_code = api.ApproverCode,
+            created_by_user_code = api.CreatedByUserCode,
+            modified_by_user_code = api.ModifiedByUserCode,
+            contract_number = api.ContractCode.ToString(),
+            vehicle_registration = api.VmfCode.ToString(),
             department_code = 0,
-            contractor_name = api.contract_type ?? "",
-            start_date = api.start_date,
-            end_date = api.end_date,
-            status = api.still_current == "Y" ? "Active" : api.still_current == "N" ? "Closed" : "Unknown",
+            contractor_name = api.ContractTypeCode ?? "",
+            start_date = api.StartDate,
+            end_date = api.EndDate,
+            status = statusLabel,
             contract_notes = api.Notes
         };
     }

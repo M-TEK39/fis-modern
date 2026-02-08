@@ -173,7 +173,7 @@
         });
 
         _statusError = !result.Success;
-        _statusMessage = $"{result.Message} Endpoint: {result.Endpoint}";
+        _statusMessage = result.Message;
     }
 
     private string PageTitleText => Mode switch

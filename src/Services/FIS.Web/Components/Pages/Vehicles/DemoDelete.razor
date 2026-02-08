@@ -20,18 +20,20 @@
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">GG / GP Number</label>
-            <input class="form-input" @bind="_searchTerm" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SearchAsync">Submit</button>
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">GG / GP Number</label>
+                <input class="form-input" @bind="_searchTerm" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SearchAsync">Submit</button>
+            </div>
         </div>
     </div>
 
     @if (_matches.Count > 0)
     {
-        <div class="table-container" style="margin-top:1rem;">
+        <div class="table-container fis-mt-1">
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>

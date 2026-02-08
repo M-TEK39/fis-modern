@@ -21,20 +21,22 @@
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-grid">
-            <div class="form-field"><label class="form-label">GG number</label><input class="form-input" @bind="_item.gg_number" /></div>
-            <div class="form-field"><label class="form-label">Prov. Registration number</label><input class="form-input" @bind="_item.reg_number" /></div>
-            <div class="form-field form-group-full"><label class="form-label">Make &amp; Model</label><input class="form-input" @bind="_item.model_description" /></div>
-            <div class="form-field"><label class="form-label">Site</label><select class="form-select" @bind="_item.site_code"><option value="">Select...</option>@foreach (var s in _sites){<option value="@s.SiteCode">@s.DepartmentNumber : @s.Description</option>}</select></div>
-            <div class="form-field"><label class="form-label">Year Manufactured</label><input class="form-input" @bind="_item.year_mnf" /></div>
-            <div class="form-field"><label class="form-label">Bank code</label><input class="form-input" @bind="_item.bank_code" /></div>
-            <div class="form-field"><label class="form-label">Colour</label><input class="form-input" @bind="_item.colour" /></div>
-            <div class="form-field"><label class="form-label">Tank Capacity</label><input class="form-input" @bind="_item.tank" /></div>
-            <div class="form-field"><label class="form-label">Engine number</label><input class="form-input" @bind="_item.engine_number" /></div>
-            <div class="form-field"><label class="form-label">Chassis number</label><input class="form-input" @bind="_item.chassis_number" /></div>
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@_saving">Submit</button>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field"><label class="form-label">GG number</label><input class="form-input" @bind="_item.gg_number" /></div>
+                <div class="form-field"><label class="form-label">Prov. Registration number</label><input class="form-input" @bind="_item.reg_number" /></div>
+                <div class="form-field form-group-full"><label class="form-label">Make &amp; Model</label><input class="form-input" @bind="_item.model_description" /></div>
+                <div class="form-field"><label class="form-label">Site</label><select class="form-select" @bind="_item.site_code"><option value="">Select...</option>@foreach (var s in _sites){<option value="@s.SiteCode">@s.DepartmentNumber : @s.Description</option>}</select></div>
+                <div class="form-field"><label class="form-label">Year Manufactured</label><input class="form-input" @bind="_item.year_mnf" /></div>
+                <div class="form-field"><label class="form-label">Bank code</label><input class="form-input" @bind="_item.bank_code" /></div>
+                <div class="form-field"><label class="form-label">Colour</label><input class="form-input" @bind="_item.colour" /></div>
+                <div class="form-field"><label class="form-label">Tank Capacity</label><input class="form-input" @bind="_item.tank" /></div>
+                <div class="form-field"><label class="form-label">Engine number</label><input class="form-input" @bind="_item.engine_number" /></div>
+                <div class="form-field"><label class="form-label">Chassis number</label><input class="form-input" @bind="_item.chassis_number" /></div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@_saving">Submit</button>
+            </div>
         </div>
     </div>
 </div>

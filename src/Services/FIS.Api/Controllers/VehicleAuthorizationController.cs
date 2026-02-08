@@ -26,6 +26,31 @@ public class VehicleAuthorizationController : BaseApiController
     }
 
     /// <summary>
+    /// Validates that the current user is not the vehicle capturer (prevents self-approval)
+    /// </summary>
+    /// <returns>Null if validation passes, or ForbidResult with error message if validation fails</returns>
+    private ActionResult? ValidateSelfApprovalPrevention(PreVehicleMaster preVehicle, int currentUserId)
+    {
+        // Check if current user is the vehicle capturer
+        if (preVehicle.created_by_user_code.HasValue &&
+            preVehicle.created_by_user_code.Value == currentUserId)
+        {
+            _logger.LogWarning(
+                "Self-approval blocked: User {UserId} attempted to approve their own captured vehicle {VehicleId}",
+                currentUserId, preVehicle.temp_vmf_code);
+
+            return StatusCode(403, new
+            {
+                error = "You cannot review or approve your own captured vehicle.",
+                vehicleId = preVehicle.temp_vmf_code,
+                userId = currentUserId
+            });
+        }
+
+        return null; // Validation passed
+    }
+
+    /// <summary>
     /// Get all vehicles awaiting authorization (pending queue)
     /// </summary>
     [HttpGet("pending")]
@@ -157,12 +182,25 @@ public class VehicleAuthorizationController : BaseApiController
     /// Approve vehicle authorization
     /// </summary>
     [HttpPost("{id}/approve")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> ApproveVehicle(int id, [FromBody] ApprovalDto? approval = null)
     {
         try
         {
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} approving vehicle authorization {Id}", userId, id);
+
+            // Fetch vehicle to validate self-approval prevention
+            var preVehicle = await _repository.GetByIdAsync(id);
+            if (preVehicle == null)
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            // Prevent self-approval
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(preVehicle, userId);
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             await _repository.ApproveAsync(id, userId, approval?.Comment);
 
@@ -190,6 +228,10 @@ public class VehicleAuthorizationController : BaseApiController
     /// Reject vehicle authorization
     /// </summary>
     [HttpPost("{id}/reject")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult> RejectVehicle(int id, [FromBody] RejectionDto rejection)
     {
         try
@@ -200,6 +242,16 @@ public class VehicleAuthorizationController : BaseApiController
             var userId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} rejecting vehicle authorization {Id} with reason: {Reason}",
                 userId, id, rejection.RejectionReason);
+
+            // Fetch vehicle to validate self-approval prevention
+            var preVehicle = await _repository.GetByIdAsync(id);
+            if (preVehicle == null)
+                return NotFound(new { message = $"Vehicle authorization not found with ID: {id}" });
+
+            // Prevent self-review/rejection
+            var selfApprovalCheck = ValidateSelfApprovalPrevention(preVehicle, userId);
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             await _repository.RejectAsync(id, userId, rejection.RejectionReason, rejection.Comment);
 

@@ -23,25 +23,27 @@
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">Vehicle Source</label>
-            <select class="form-select" @bind="_selectedId">
-                <option value="">Select source...</option>
-                @foreach (var source in _sources)
-                {
-                    <option value="@source.Id">@source.Name</option>
-                }
-            </select>
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="LoadSelectedAsync">Edit Vehicle Source</button>
-            <button class="btn btn-secondary" @onclick="PrepareAddAsync">Add New Vehicle Source</button>
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Vehicle Source</label>
+                <select class="form-select" @bind="_selectedId">
+                    <option value="">Select source...</option>
+                    @foreach (var source in _sources)
+                    {
+                        <option value="@source.Id">@source.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="LoadSelectedAsync">Edit Vehicle Source</button>
+                <button class="btn btn-secondary" @onclick="PrepareAddAsync">Add New Vehicle Source</button>
+            </div>
         </div>
     </div>
 
     @if (_editing != null)
     {
-        <div class="form-card" style="margin-top:1rem;">
+        <div class="form-card fis-mt-1">
             <div class="form-card-header">
                 <h2>@(_editing.Id == 0 ? "Add Vehicle Source" : "Edit Vehicle Source")</h2>
             </div>
@@ -49,7 +51,7 @@
                 <div class="form-grid">
                     <div class="form-field form-group-full">
                         <label class="form-label">Name</label>
-                        <input class="form-input" @bind="_editing.Name" style="text-transform:uppercase;" />
+                        <input class="form-input fis-uppercase" @bind="_editing.Name" />
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Physical Address</label>

@@ -23,21 +23,23 @@
 
 <div class="page-content">
     <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">Start GG Block Number</label>
-            <input class="form-input" maxlength="7" @bind="_startBlock" style="text-transform:uppercase;" />
-        </div>
-        <div class="form-row">
-            <label class="form-label">End GG Block Number</label>
-            <input class="form-input" maxlength="7" @bind="_endBlock" style="text-transform:uppercase;" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@_saving">Submit</button>
-            <button class="btn btn-secondary" @onclick="ClearAsync">Clear</button>
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Start GG Block Number</label>
+                <input class="form-input fis-uppercase" maxlength="7" @bind="_startBlock" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">End GG Block Number</label>
+                <input class="form-input fis-uppercase" maxlength="7" @bind="_endBlock" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SubmitAsync" disabled="@_saving">Submit</button>
+                <button class="btn btn-secondary" @onclick="ClearAsync">Clear</button>
+            </div>
         </div>
     </div>
 
-    <div class="table-container" style="margin-top:1rem;">
+    <div class="table-container fis-mt-1">
         <div class="table-header">
             <span class="table-title">GG Block Number History...</span>
         </div>

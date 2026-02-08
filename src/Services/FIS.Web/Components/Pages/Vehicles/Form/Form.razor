@@ -162,6 +162,13 @@
                                 <ValidationMessage For="() => _vehicle.purchase_amount" />
                             </div>
                             <div class="form-field form-group-full">
+                                <label class="form-label form-checkbox">
+                                    <input type="checkbox" @bind="_recalculateTariff" />
+                                    Recalculate vehicle tariff components
+                                </label>
+                                <span class="form-hint">Tick this to request tariff component recalculation on submit.</span>
+                            </div>
+                            <div class="form-field form-group-full">
                                 <label class="form-label">Site Allocation <span class="required">*</span></label>
                                 <select class="form-select" @bind="_siteCode">
                                     <option value="0">Select Site...</option>
@@ -173,12 +180,12 @@
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Damages?</label>
-                                <div style="display:flex; gap:1rem; margin-top:0.35rem;">
-                                    <label class="form-label" style="margin:0;">
+                                <div class="fis-radio-group">
+                                    <label class="form-label fis-label-inline">
                                         <input type="radio" name="damages" checked="@_hasDamages" @onchange="() => _hasDamages = true" />
                                         Yes
                                     </label>
-                                    <label class="form-label" style="margin:0;">
+                                    <label class="form-label fis-label-inline">
                                         <input type="radio" name="damages" checked="@(!_hasDamages)" @onchange="() => _hasDamages = false" />
                                         No
                                     </label>
@@ -190,27 +197,27 @@
                             </div>
                             <div class="form-field form-group-full">
                                 <label class="form-label">Fleet Notes</label>
-                                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <InputText @bind-Value="_fleetNotes" class="form-input" style="flex:1;" />
+                                <div class="fis-input-group-compact">
+                                    <InputText @bind-Value="_fleetNotes" class="form-input fis-flex-1" />
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ClearFleetNotes">Add New Notes</button>
                                 </div>
                             </div>
                             <div class="form-field form-group-full">
                                 <label class="form-label">Capturer's Comment <span class="required">*</span></label>
-                                <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-                                    <InputText @bind-Value="_capturerComment" class="form-input" style="flex:1;" />
+                                <div class="fis-input-group-compact">
+                                    <InputText @bind-Value="_capturerComment" class="form-input fis-flex-1" />
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ShowComments">List Comments</button>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="form-section" style="margin-top:1.5rem;">
+                        <div class="form-section fis-mt-15">
                             <h3 class="form-section-title">Service Information</h3>
                             <div class="form-grid">
                                 <div class="form-field form-group-full">
                                     <label class="form-label">Status</label>
-                                    <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-                                        <InputText @bind-Value="_statusText" class="form-input" style="max-width: 280px;" placeholder="Awaiting Authorization" />
+                                    <div class="fis-input-group-spaced">
+                                        <InputText @bind-Value="_statusText" class="form-input fis-max-w-280" placeholder="Awaiting Authorization" />
                                         <span class="form-hint"><em>Effective From "@(_vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"</em></span>
                                         <button type="button" class="btn btn-secondary btn-sm" @onclick="ManageVehicleStatus">Manage Vehicle Status</button>
                                     </div>
@@ -240,7 +247,7 @@
                             </div>
                         </div>
 
-                        <div class="form-section" style="margin-top:1.5rem;">
+                        <div class="form-section fis-mt-15">
                             <h3 class="form-section-title">Vehicle Maintenance Options</h3>
                             <div class="table-wrapper">
                                 <table class="data-table">
@@ -274,16 +281,16 @@
                             </div>
                         </div>
 
-                        <div class="form-section" style="margin-top:1.5rem;">
+                        <div class="form-section fis-mt-15">
                             <button type="button" class="btn btn-secondary" @onclick="ShowExtras">Add Extras</button>
-                            <div style="margin-top:0.75rem;">
+                            <div class="fis-mt-1">
                                 @if (_selectedExtras.Count == 0)
                                 {
                                     <span class="form-hint">No extras selected.</span>
                                 }
                                 else
                                 {
-                                    <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+                                    <div class="fis-chip-wrap">
                                         @foreach (var extra in _selectedExtras)
                                         {
                                             <span class="badge">@extra.extra_description</span>
@@ -324,88 +331,18 @@
                 }
             </EditForm>
 
-            <div class="table-container" style="margin-top:1.5rem;">
-                <div class="table-header">
-                    <span class="table-title">REJECTED VEHICLE LIST</span>
+            <div class="form-card fis-mt-15">
+                <div class="form-card-header">
+                    <h2>Vehicle Authorization Queue</h2>
                 </div>
-                <div class="table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Chassis NO</th>
-                                <th>Model</th>
-                                <th>Year Model</th>
-                                <th>Engine NO</th>
-                                <th>Hire Type</th>
-                                <th>Hired From</th>
-                                <th>Notes</th>
-                                <th>Authority Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="8">No Rejected Vehicles</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="table-container" style="margin-top:1.5rem;">
-                <div class="table-header">
-                    <span class="table-title">AWAITING AUTHORIZATION VEHICLE LIST</span>
-                </div>
-                <div class="table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Chassis NO</th>
-                                <th>Model</th>
-                                <th>Year Model</th>
-                                <th>Engine Number</th>
-                                <th>Location</th>
-                                <th>Hire Type</th>
-                                <th>Hired From</th>
-                                <th>Purchase Amount</th>
-                                <th>Purchase From</th>
-                                <th>Site Name</th>
-                                <th>Authority Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="11">No Vehicles awaiting Authorization</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div class="table-container" style="margin-top:1.5rem;">
-                <div class="table-header">
-                    <span class="table-title">AUTHORIZED VEHICLES READY FOR PRINTING AND INCEPTION INTO THE DATABASE</span>
-                </div>
-                <div class="table-wrapper">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Chassis NO</th>
-                                <th>GG Number</th>
-                                <th>Model</th>
-                                <th>Year Model</th>
-                                <th>Engine NO</th>
-                                <th>Hire Type</th>
-                                <th>Hired From</th>
-                                <th>Notes</th>
-                                <th>Authority Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td colspan="9">No Authorized Vehicles</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="form-card-body">
+                    <p class="form-hint">
+                        Captured vehicles are processed through the authorization queue.
+                        Use the queue page to review pending, rejected, and authorized captures.
+                    </p>
+                    <div class="form-actions">
+                        <a class="btn btn-secondary" href="/vehicles/authorize">Open Authorization Queue</a>
+                    </div>
                 </div>
             </div>
         }
@@ -435,7 +372,7 @@
                             </div>
                         </div>
 
-                        <div class="form-section" style="margin-top:1rem;">
+                        <div class="form-section fis-mt-1">
                             <h3 class="form-section-title">VEHICLE REPLACEMENT</h3>
                             <div class="form-grid">
                                 <div class="form-field">
@@ -453,21 +390,21 @@
                             </div>
                         </div>
 
-                        <div class="form-section" style="margin-top:1rem;">
+                        <div class="form-section fis-mt-1">
                             <h3 class="form-section-title">Extended Service</h3>
-                            <div style="display:flex; gap:1rem; margin-top:0.35rem;">
-                                <label class="form-label" style="margin:0;">
+                            <div class="fis-radio-group">
+                                <label class="form-label fis-label-inline">
                                     <input type="radio" name="extendedService" checked="@(!_extendedService)" @onchange="() => _extendedService = false" />
                                     No
                                 </label>
-                                <label class="form-label" style="margin:0;">
+                                <label class="form-label fis-label-inline">
                                     <input type="radio" name="extendedService" checked="@_extendedService" @onchange="() => _extendedService = true" />
                                     Yes
                                 </label>
                             </div>
                         </div>
 
-                        <div class="form-section" style="margin-top:1rem;">
+                        <div class="form-section fis-mt-1">
                             <h3 class="form-section-title">VEHICLE RECOVERY (Stolen/Lost)</h3>
                             <div class="form-grid">
                                 <div class="form-field">
@@ -537,8 +474,8 @@
                         <div class="form-grid">
                             <div class="form-field form-group-full">
                                 <label class="form-label">Status</label>
-                                <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
-                                    <InputText @bind-Value="_statusText" class="form-input" style="max-width: 280px;" placeholder="Awaiting Authorization" />
+                                <div class="fis-input-group-spaced">
+                                    <InputText @bind-Value="_statusText" class="form-input fis-max-w-280" placeholder="Awaiting Authorization" />
                                     <span class="form-hint"><em>Effective From "@(_vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? DateTime.Today.ToString("yyyy-MM-dd"))"</em></span>
                                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ManageVehicleStatus">Manage Vehicle Status</button>
                                 </div>
@@ -645,6 +582,13 @@
                                 <label class="form-label">Purchase Amount</label>
                                 <InputNumber @bind-Value="_vehicle.purchase_amount" class="form-input" />
                             </div>
+                            <div class="form-field form-group-full">
+                                <label class="form-label form-checkbox">
+                                    <input type="checkbox" @bind="_recalculateTariff" />
+                                    Recalculate vehicle tariff components
+                                </label>
+                                <span class="form-hint">Tick this to request tariff component recalculation on submit.</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -700,10 +644,10 @@
                 else
                 {
                     <div class="form-field form-group-full">
-                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.5rem;">
+                        <div class="fis-grid-220">
                             @foreach (var extra in _extras)
                             {
-                                <label class="form-label" style="margin:0;">
+                                <label class="form-label fis-label-inline">
                                     <input type="checkbox"
                                            checked="@IsExtraSelected(extra.extra_code)"
                                            @onchange="(e) => ToggleExtra(extra, e)" />
@@ -714,7 +658,7 @@
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" @onclick="HideExtras">&lt; Cancel</button>
-                        <button type="button" class="btn btn-primary" @onclick="HideExtras">Submit</button>
+                        <button type="button" class="btn btn-primary" @onclick="ApplyExtrasSelectionAsync">Apply Selection</button>
                     </div>
                 }
             </div>
@@ -797,6 +741,7 @@
 
     private bool _showExtrasModal;
     private bool _showCommentsModal;
+    private bool _recalculateTariff;
     private readonly HashSet<int> _selectedExtraCodes = new();
     private List<ExtraCodeDto> _selectedExtras = new();
 
@@ -877,11 +822,11 @@
         bool success;
         if (_isEditMode && VmfCode.HasValue)
         {
-            success = await VehicleService.UpdateVehicleAsync(VmfCode.Value, _vehicle);
+            success = await VehicleService.UpdateVehicleAsync(VmfCode.Value, _vehicle, _recalculateTariff);
         }
         else
         {
-            success = await VehicleService.CreateVehicleAsync(_vehicle);
+            success = await VehicleService.CreateVehicleAsync(_vehicle, _recalculateTariff);
         }
 
         _saving = false;
@@ -1086,6 +1031,12 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private async Task ApplyExtrasSelectionAsync()
+    {
+        _showExtrasModal = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
     private bool IsExtraSelected(int extraCode) => _selectedExtraCodes.Contains(extraCode);
 
     private void ToggleExtra(ExtraCodeDto extra, ChangeEventArgs args)
@@ -1142,6 +1093,7 @@
         _maintenancePeriod = "";
         _maintenanceKilos = "";
         _maintenanceValue = "";
+        _recalculateTariff = false;
         _selectedExtraCodes.Clear();
         _selectedExtras = new List<ExtraCodeDto>();
     }

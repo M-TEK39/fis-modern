@@ -3,8 +3,12 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using FIS.Web.Components.Shared
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Authorize Captured Vehicle Master Information</PageTitle>
 
@@ -37,9 +41,17 @@
             <p>Loading authorization queues...</p>
         </div>
     }
+    else if (!_canAuthorizeInception)
+    {
+        <div class="empty-state">
+            <i class="bx bx-lock-alt"></i>
+            <h3>Access restricted</h3>
+            <p>You do not have permission to authorize captured vehicles.</p>
+        </div>
+    }
     else
     {
-        <div class="table-container" style="margin-bottom:1rem;">
+        <div class="table-container fis-mb-1">
             <div class="table-header">
                 <span class="table-title">REJECTED VEHICLE LIST (@_rejectedVehicles.Count)</span>
             </div>
@@ -87,7 +99,7 @@
             }
         </div>
 
-        <div class="table-container" style="margin-bottom:1rem;">
+        <div class="table-container fis-mb-1">
             <div class="table-header">
                 <span class="table-title">AWAITING AUTHORIZATION VEHICLE LIST (@_awaitingVehicles.Count)</span>
             </div>
@@ -131,7 +143,9 @@
                                     <td>-</td>
                                     <td>@ValueOrDash(vehicle.AuthorityStatus)</td>
                                     <td>
-                                        <button class="btn btn-primary btn-sm" @onclick="() => OpenReviewModal(vehicle)">Review</button>
+                                        <button class="btn @(CanReviewVehicle(vehicle) ? "btn-primary" : "btn-secondary") btn-sm" @onclick="() => OpenReviewModal(vehicle)">
+                                            @(CanReviewVehicle(vehicle) ? "Review" : "View")
+                                        </button>
                                     </td>
                                 </tr>
                             }
@@ -247,7 +261,15 @@
                     <label class="form-label">Rejection Reason (required when rejecting)</label>
                     <input class="form-input" @bind="_rejectionReason" />
                 </div>
-                @if (!string.IsNullOrWhiteSpace(_selectedVehicle.RejectionReason))
+                @if (_selectedVehicle != null
+                    && string.Equals(_selectedVehicle.AuthorityStatus, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase)
+                    && !CanReviewSelectedVehicle())
+                {
+                    <div class="form-field form-group-full">
+                        <div class="alert alert-error">You cannot review or approve your own captured vehicle.</div>
+                    </div>
+                }
+                @if (_selectedVehicle != null && !string.IsNullOrWhiteSpace(_selectedVehicle.RejectionReason))
                 {
                     <div class="form-field form-group-full">
                         <label class="form-label">Latest Rejection Reason</label>
@@ -268,10 +290,10 @@
                         <span>Add Comment</span>
                     }
                 </button>
-                <button type="button" class="btn btn-primary" @onclick="ApproveAsync" disabled="@(_actionRunning || !CanApproveOrReject())">
+                <button type="button" class="btn btn-primary" @onclick="ApproveAsync" disabled="@(_actionRunning || !CanApproveOrReject() || !CanReviewSelectedVehicle())">
                     Approve
                 </button>
-                <button type="button" class="btn btn-danger" @onclick="RejectAsync" disabled="@(_actionRunning || !CanApproveOrReject())">
+                <button type="button" class="btn btn-danger" @onclick="RejectAsync" disabled="@(_actionRunning || !CanApproveOrReject() || !CanReviewSelectedVehicle())">
                     Reject
                 </button>
             </div>
@@ -292,9 +314,19 @@
     private List<VehicleAuthorizationDto> _rejectedVehicles = new();
     private List<VehicleAuthorizationDto> _awaitingVehicles = new();
     private List<VehicleAuthorizationDto> _authorizedVehicles = new();
+    private int? _currentUserAccessCode;
+    private bool _canAuthorizeInception;
+    private long _currentAccessLevel;
 
     protected override async Task OnInitializedAsync()
     {
+        await ResolveAccessAsync();
+        if (!_canAuthorizeInception)
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadAuthorizationQueues();
     }
 
@@ -362,6 +394,23 @@
         return string.Equals(_selectedVehicle?.AuthorityStatus, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase);
     }
 
+    private bool CanReviewSelectedVehicle()
+    {
+        return _selectedVehicle != null && CanReviewVehicle(_selectedVehicle);
+    }
+
+    private bool CanReviewVehicle(VehicleAuthorizationDto vehicle)
+    {
+        return _canAuthorizeInception && !IsCurrentUserVehicleCapturer(vehicle);
+    }
+
+    private bool IsCurrentUserVehicleCapturer(VehicleAuthorizationDto vehicle)
+    {
+        return _currentUserAccessCode is > 0
+            && vehicle.CreatedByUserCode is > 0
+            && vehicle.CreatedByUserCode.Value == _currentUserAccessCode.Value;
+    }
+
     private async Task AddCommentAsync()
     {
         if (_selectedVehicle == null)
@@ -379,11 +428,11 @@
         _actionRunning = true;
         try
         {
-            var ok = await VehicleService.AddVehicleAuthorizationCommentAsync(_selectedVehicle.TempVmfCode, _authorizerComment.Trim());
-            if (!ok)
+            var result = await VehicleService.AddVehicleAuthorizationCommentAsync(_selectedVehicle.TempVmfCode, _authorizerComment.Trim());
+            if (!result.Success)
             {
                 _statusError = true;
-                _statusMessage = "Failed to add comment.";
+                _statusMessage = result.Message;
                 return;
             }
 
@@ -405,6 +454,13 @@
             return;
         }
 
+        if (!CanReviewSelectedVehicle())
+        {
+            _statusError = true;
+            _statusMessage = "You cannot review or approve your own captured vehicle.";
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(_authorizerComment))
         {
             _statusError = true;
@@ -415,11 +471,11 @@
         _actionRunning = true;
         try
         {
-            var ok = await VehicleService.ApproveVehicleAuthorizationAsync(_selectedVehicle.TempVmfCode, _authorizerComment.Trim());
-            if (!ok)
+            var result = await VehicleService.ApproveVehicleAuthorizationAsync(_selectedVehicle.TempVmfCode, _authorizerComment.Trim());
+            if (!result.Success)
             {
                 _statusError = true;
-                _statusMessage = "Failed to approve vehicle authorization.";
+                _statusMessage = result.Message;
                 return;
             }
 
@@ -441,6 +497,13 @@
             return;
         }
 
+        if (!CanReviewSelectedVehicle())
+        {
+            _statusError = true;
+            _statusMessage = "You cannot review or approve your own captured vehicle.";
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(_authorizerComment))
         {
             _statusError = true;
@@ -458,14 +521,14 @@
         _actionRunning = true;
         try
         {
-            var ok = await VehicleService.RejectVehicleAuthorizationAsync(
+            var result = await VehicleService.RejectVehicleAuthorizationAsync(
                 _selectedVehicle.TempVmfCode,
                 _rejectionReason.Trim(),
                 _authorizerComment.Trim());
-            if (!ok)
+            if (!result.Success)
             {
                 _statusError = true;
-                _statusMessage = "Failed to reject vehicle authorization.";
+                _statusMessage = result.Message;
                 return;
             }
 
@@ -498,5 +561,56 @@
     private static string GetYear(DateTime? value)
     {
         return value.HasValue ? value.Value.Year.ToString() : "-";
+    }
+
+    private async Task ResolveAccessAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _canAuthorizeInception = false;
+            return;
+        }
+
+        _currentUserAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+        _canAuthorizeInception = HasRole(user, "vehicle inception authorizer");
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        if (!long.TryParse(accessLevelClaim, out _currentAccessLevel))
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            _currentAccessLevel = await UserAccessContextService.EnsureAccessLevelAsync(_currentUserAccessCode, firstName);
+        }
+
+        var hasVehicleAccess =
+            (_currentAccessLevel & LegacyPermissionBits.VehicleManagement) == LegacyPermissionBits.VehicleManagement;
+
+        if (!_canAuthorizeInception && hasVehicleAccess)
+        {
+            _canAuthorizeInception = true;
+        }
+    }
+
+    private static int? TryParseInt(string? value)
+        => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c =>
+                c.Type == ClaimTypes.Role
+                || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
     }
 }

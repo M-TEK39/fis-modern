@@ -9,8 +9,7 @@
         API Wiring
     </h3>
     <p class="form-hint">
-        Legacy source: @LegacyPath<br />
-        Endpoint: @Endpoint (@HttpMethod)
+        Legacy source: @LegacyPath
     </p>
     <div class="contract-action-group">
         <button class="btn btn-primary btn-sm" @onclick="RunAsync" disabled="@_running">
@@ -35,7 +34,7 @@
     [Parameter] public string LegacyPath { get; set; } = string.Empty;
     [Parameter] public string Endpoint { get; set; } = string.Empty;
     [Parameter] public string HttpMethod { get; set; } = "GET";
-    [Parameter] public string ButtonText { get; set; } = "Run Endpoint";
+    [Parameter] public string ButtonText { get; set; } = "Run";
     [Parameter] public string ReportType { get; set; } = "legacy-endpoint";
 
     private bool _running;
@@ -69,7 +68,7 @@
         }
 
         _error = !result.Success;
-        _status = NormalizeForDisplay($"{result.Message} Endpoint: {result.Endpoint}");
+        _status = NormalizeForDisplay(result.Message);
         _responseBody = string.IsNullOrWhiteSpace(result.ResponseBody)
             ? string.Empty
             : NormalizeForDisplay(result.ResponseBody.Length > 3000

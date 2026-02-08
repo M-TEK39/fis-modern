@@ -1,13 +1,148 @@
 @page "/workshop/entry/modify"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject WorkshopApiService WorkshopService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Modify Workshop Entry"
-    Description="Edit existing workshop entry (placeholder)."
-    LegacyPath="Edit existing workshop entry (placeholder)."
-    Endpoint="api/workshop/0"
-    HttpMethod="PUT"
-    ReportType="workshop-entry-edit"
-    BackLink="/workshop/entry"
-    Icon="bx-wrench" />
+<PageTitle>Modify Workshop Entry</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-edit"></i>Modify Workshop Entry</h1>
+        <p class="page-description">Search and edit a workshop entry.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/workshop/entry">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">Workshop Entry ID</label>
+                <InputNumber @bind-Value="_entryId" class="form-input" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="LoadAsync" disabled="@_loading">Load</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_item != null)
+    {
+        <div class="form-card fis-mt-1">
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field"><label class="form-label">VMF Code</label><InputNumber @bind-Value="_item.vmf_code" class="form-input" /></div>
+                    <div class="form-field"><label class="form-label">Receive Date</label><InputDate @bind-Value="_item.receive_date" class="form-input" /></div>
+                    <div class="form-field"><label class="form-label">Receive Time</label><InputDate @bind-Value="_item.receive_time" class="form-input" /></div>
+                    <div class="form-field"><label class="form-label">Complete Time</label><InputDate @bind-Value="_item.complete_time" class="form-input" /></div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Submit</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_message))
+    {
+        <div class="alert @(_error ? "alert-error" : "alert-success") fis-alert-tight">
+            <i class="bx @(_error ? "bx-error-circle" : "bx-check-circle")"></i>
+            <span>@_message</span>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")]
+    public int? Id { get; set; }
+
+    private int? _entryId;
+    private bool _loading;
+    private bool _saving;
+    private bool _error;
+    private string _message = string.Empty;
+    private WorkshopDto? _item;
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (Id.HasValue && Id.Value > 0)
+        {
+            _entryId = Id;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadAsync()
+    {
+        _message = string.Empty;
+        _error = false;
+        if (!_entryId.HasValue || _entryId.Value <= 0)
+        {
+            _error = true;
+            _message = "Enter a valid workshop entry ID.";
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            _item = await WorkshopService.GetByIdAsync<WorkshopDto>(_entryId.Value);
+            if (_item == null)
+            {
+                _error = true;
+                _message = "Workshop entry not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to load workshop entry.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading workshop entry: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_item == null)
+        {
+            return;
+        }
+
+        _saving = true;
+        _message = string.Empty;
+        _error = false;
+        try
+        {
+            var updated = await WorkshopService.UpdateAsync<WorkshopDto>(_item.ww_code, _item);
+            _error = updated == null;
+            _message = _error ? "Failed to update workshop entry." : "Workshop entry updated.";
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Failed to update workshop entry.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error updating workshop entry: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private sealed class WorkshopDto
+    {
+        public short ww_code { get; set; }
+        public int? vmf_code { get; set; }
+        public DateTime? receive_time { get; set; }
+        public DateTime? receive_date { get; set; }
+        public DateTime? complete_time { get; set; }
+    }
+}

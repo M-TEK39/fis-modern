@@ -1,9 +1,12 @@
 @page "/vehicles/status-maintenance"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicle Status Maintenance - Fleet Information System</PageTitle>
@@ -14,29 +17,42 @@
             <i class="bx bx-cog"></i>
             Vehicle Status Maintenance
         </h1>
-        <p class="page-description">Search and update vehicle status details.</p>
+        <p class="page-description">Select the vehicle for status management and capture the next status.</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
+        <a class="btn btn-secondary btn-sm" href="/vehicles">Back to Vehicle Master</a>
     </div>
 </div>
 
-<div class="page-content">
-    <div class="form-card">
-        <div class="form-row">
-            <label class="form-label">GG / GP Number</label>
-            <input class="form-input" @bind="_searchTerm" />
-        </div>
-        <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SearchVehiclesAsync">Search</button>
+<div class="page-content status-maintenance-page">
+    <div class="status-search-panel">
+        <label class="form-label" for="statusSearchInput">Select the vehicle for status management:</label>
+        <div class="status-search-row">
+            <input id="statusSearchInput" class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="GG number or registration" />
+            <button class="btn btn-primary" @onclick="SearchVehiclesAsync" disabled="@_loading">Submit</button>
         </div>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(_limitedAccessMessage))
+    {
+        <div class="status-message status-message-error">@_limitedAccessMessage</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_statusValidationIssues))
+    {
+        <div class="status-message status-message-error">@_statusValidationIssues</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_statusUpdateMessage))
+    {
+        <div class="status-message status-message-success">@_statusUpdateMessage</div>
+    }
 
     @if (_loading)
     {
         <div class="loading-state">
             <div class="spinner"></div>
-            <p>Loading...</p>
+            <p>Loading vehicle status data...</p>
         </div>
     }
     else if (_hasSearched && _searchResults.Count == 0)
@@ -47,31 +63,36 @@
             <p>Check the GG/GP number and search again.</p>
         </div>
     }
-    else if (_searchResults.Count > 0)
+
+    @if (_searchResults.Count > 0)
     {
-        <div class="table-container">
+        <div class="table-container fis-mt-1">
+            <div class="table-header">
+                <span class="table-title">Select Vehicle (@_searchResults.Count)</span>
+            </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>GG Number</th>
                             <th>Registration</th>
-                            <th>Status</th>
+                            <th>Current Status</th>
                             <th>Status Date</th>
-                            <th>Actions</th>
+                            <th class="actions-column">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (var vehicle in _searchResults)
                         {
-                            <tr>
-                                <td>@vehicle.fleet_number</td>
-                                <td>@vehicle.registration_number</td>
-                                <td>@vehicle.status_description</td>
-                                <td>@(vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                            var selected = _selectedVehicle?.vmf_code == vehicle.vmf_code;
+                            <tr class="@(selected ? "status-row-selected" : string.Empty)">
+                                <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(vehicle.registration_number)</td>
+                                <td>@ValueOrDash(vehicle.status_description)</td>
+                                <td>@FormatDate(vehicle.vehicle_status_date)</td>
                                 <td class="actions-column">
                                     <div class="table-actions">
-                                        <button class="btn-icon btn-icon-edit" @onclick="() => SelectVehicleAsync(vehicle.vmf_code)">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => SelectVehicleAsync(vehicle.vmf_code)" title="Manage status">
                                             <i class="bx bx-edit"></i>
                                         </button>
                                     </div>
@@ -86,64 +107,242 @@
 
     @if (_selectedVehicle != null)
     {
-        <div class="form-card" style="margin-top:1rem;">
-            <div class="form-card-header">
-                <h2>Manage Vehicle Status</h2>
-            </div>
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">GG Number</label>
-                        <input class="form-input" value="@_selectedVehicle.fleet_number" readonly />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Registration Number</label>
-                        <input class="form-input" value="@_selectedVehicle.registration_number" readonly />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Status Description</label>
-                        <input class="form-input" @bind="_statusDescription" />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Status Date</label>
-                        <input type="date" class="form-input" @bind="_statusDate" />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Status Code</label>
-                        <input type="number" class="form-input" @bind="_statusCode" />
+        <div class="status-workspace">
+            <section class="status-column-left">
+                <div class="status-legacy-table">
+                    <div class="status-legacy-header">Vehicle Information</div>
+                    <table>
+                        <tbody>
+                            <tr><th>GG Number:</th><td>@ValueOrDash(_selectedVehicle.fleet_number)</td></tr>
+                            <tr><th>Registration Number:</th><td>@ValueOrDash(_selectedVehicle.registration_number)</td></tr>
+                            <tr><th>Make &amp; Model:</th><td>@ValueOrDash(_selectedVehicle.model_name)</td></tr>
+                            <tr><th>Year Manufactured:</th><td>@(_selectedVehicle.year_manufactured?.ToString() ?? "-")</td></tr>
+                            <tr><th>Colour:</th><td>@ValueOrDash(_selectedVehicle.colour)</td></tr>
+                            <tr><th>VIN/Chassis Number:</th><td>@ValueOrDash(_selectedVehicle.chassis_number)</td></tr>
+                            <tr><th>Engine Number:</th><td>@ValueOrDash(_selectedVehicle.engine_number_1)</td></tr>
+                            <tr><th>Hired From:</th><td>@ValueOrDash(_selectedVehicle.purchased_from)</td></tr>
+                            <tr><th>Hire Type:</th><td>@ValueOrDash(_selectedVehicle.type_name)</td></tr>
+                            <tr><th>Location:</th><td>@ValueOrDash(_selectedVehicle.location_description)</td></tr>
+                            <tr><th>Current Status:</th><td>@ValueOrDash(_selectedVehicle.status_description)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="status-legacy-table fis-mt-1">
+                    <div class="status-legacy-header">Vehicle Status History</div>
+                    <div class="table-wrapper">
+                        <table class="data-table status-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Status</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Capture Date</th>
+                                    <th>Odometer</th>
+                                    <th>User Name</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_statusHistory.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6">No history records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _statusHistory)
+                                    {
+                                        <tr>
+                                            <td>@row.StatusDescription</td>
+                                            <td>@FormatDate(row.StartDate)</td>
+                                            <td>@FormatDate(row.EndDate)</td>
+                                            <td>@FormatDateTime(row.CaptureDate)</td>
+                                            <td>@(row.Odometer?.ToString("N0") ?? "-")</td>
+                                            <td>@row.CapturedBy</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-                <div class="form-actions">
-                    <button class="btn btn-primary" @onclick="SaveStatusAsync" disabled="@_saving">Save Status</button>
+            </section>
+
+            <section class="status-column-right">
+                <div class="status-legacy-table">
+                    <div class="status-legacy-header">Next Statuses Available</div>
+                    @if (NextStatuses.Count == 0)
+                    {
+                        <p class="status-inline-note">No follow-on statuses found in system.</p>
+                    }
+                    else
+                    {
+                        <div class="status-radio-list">
+                            @foreach (var status in NextStatuses)
+                            {
+                                <label>
+                                    <input type="radio" name="radStatuses" value="@status.Code" checked="@(_selectedStatusCode == status.Code)" @onchange="() => SelectStatus(status.Code)" />
+                                    @status.Description
+                                </label>
+                            }
+                        </div>
+                    }
+
+                    <div class="status-field-row">
+                        <label class="form-label">Effective From:</label>
+                        <input type="date" class="form-input status-date-input" @bind="_effectiveDate" />
+                    </div>
+
+                    <div class="status-field-row">
+                        <label class="form-label">Odometer:</label>
+                        <input type="number" class="form-input" @bind="_endOdometer" min="0" />
+                    </div>
+
+                    <div class="status-field-row status-comments-row">
+                        <label class="form-label">Comments:</label>
+                        <textarea class="form-input" rows="3" maxlength="500" @bind="_comments"></textarea>
+                    </div>
                 </div>
-            </div>
+
+                @if (ShowSoldInformation)
+                {
+                    <div class="status-legacy-table fis-mt-1">
+                        <div class="status-legacy-header">Sold Information</div>
+                        <div class="status-field-row">
+                            <label class="form-label">Sold Amount:</label>
+                            <input type="number" class="form-input" @bind="_soldAmount" min="0" step="0.01" />
+                        </div>
+                        <div class="status-field-row">
+                            <label class="form-label">Sold Date:</label>
+                            <input type="date" class="form-input status-date-input" @bind="_soldDate" />
+                        </div>
+                        <div class="status-field-row">
+                            <label class="form-label">Sold To:</label>
+                            <input class="form-input" @bind="_soldTo" maxlength="60" />
+                        </div>
+                    </div>
+                }
+
+                <div class="status-actions">
+                    <button class="btn btn-primary" @onclick="SaveStatusAsync" disabled="@_saving">Update Status</button>
+                    <button class="btn btn-secondary" @onclick="ReturnToMenu">Return to Previous Page</button>
+                </div>
+            </section>
         </div>
     }
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "vmfCode")] public int? VmfCode { get; set; }
+    private const short SoldStatusCode = 5;
+
+    [SupplyParameterFromQuery(Name = "vmfCode")]
+    public int? VmfCode { get; set; }
 
     private string _searchTerm = string.Empty;
     private bool _loading;
     private bool _saving;
     private bool _hasSearched;
     private List<VehicleDto> _searchResults = new();
+    private List<StatusOption> _statusCatalog = new();
     private VehicleDto? _selectedVehicle;
-    private string _statusDescription = string.Empty;
-    private DateTime? _statusDate;
-    private short _statusCode;
+    private short? _selectedStatusCode;
+    private DateTime? _effectiveDate;
+    private int? _endOdometer;
+    private string _comments = string.Empty;
+    private decimal? _soldAmount;
+    private DateTime? _soldDate;
+    private string _soldTo = string.Empty;
+    private string _statusValidationIssues = string.Empty;
+    private string _statusUpdateMessage = string.Empty;
+    private string _limitedAccessMessage = string.Empty;
+    private string _currentUserDisplay = "Current User";
+    private List<StatusHistoryRow> _statusHistory = new();
+
+    private bool ShowSoldInformation => _selectedStatusCode == SoldStatusCode;
+
+    private IReadOnlyList<StatusOption> NextStatuses
+    {
+        get
+        {
+            if (_selectedVehicle == null)
+            {
+                return Array.Empty<StatusOption>();
+            }
+
+            var list = _statusCatalog
+                .Where(s => s.Code != _selectedVehicle.vehicle_status_code)
+                .OrderBy(s => s.Description)
+                .ToList();
+
+            if (list.Count == 0)
+            {
+                var current = ResolveCurrentStatusOption();
+                if (current != null)
+                {
+                    list.Add(current);
+                }
+            }
+
+            return list;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        await ResolveCurrentUserAsync();
+        await LoadStatusCatalogAsync();
+
         if (VmfCode.HasValue && VmfCode.Value > 0)
         {
             await SelectVehicleAsync(VmfCode.Value);
         }
     }
 
+    private async Task ResolveCurrentUserAsync()
+    {
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+            if (user?.Identity?.IsAuthenticated == true)
+            {
+                var fullName = user.FindFirst(ClaimTypes.Name)?.Value;
+                var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+                _currentUserDisplay = !string.IsNullOrWhiteSpace(fullName)
+                    ? fullName
+                    : (!string.IsNullOrWhiteSpace(firstName) ? firstName : "Current User");
+            }
+        }
+        catch
+        {
+            _currentUserDisplay = "Current User";
+        }
+    }
+
+    private async Task LoadStatusCatalogAsync()
+    {
+        try
+        {
+            var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _statusCatalog = page.Data
+                .Where(v => v.vehicle_status_code > 0 && !string.IsNullOrWhiteSpace(v.status_description))
+                .GroupBy(v => v.vehicle_status_code)
+                .Select(group => new StatusOption(group.Key, group.First().status_description ?? $"Status {group.Key}"))
+                .OrderBy(s => s.Description)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading status catalog: {ex.Message}");
+            _statusCatalog = new List<StatusOption>();
+        }
+    }
+
     private async Task SearchVehiclesAsync()
     {
+        _statusValidationIssues = string.Empty;
+        _statusUpdateMessage = string.Empty;
         _loading = true;
         _hasSearched = true;
         _searchResults = new();
@@ -163,6 +362,8 @@
 
     private async Task SelectVehicleAsync(int vmfCode)
     {
+        _statusValidationIssues = string.Empty;
+        _statusUpdateMessage = string.Empty;
         _loading = true;
         try
         {
@@ -172,9 +373,15 @@
                 return;
             }
 
-            _statusDescription = _selectedVehicle.status_description ?? string.Empty;
-            _statusDate = _selectedVehicle.vehicle_status_date ?? DateTime.Today;
-            _statusCode = _selectedVehicle.vehicle_status_code;
+            _selectedStatusCode = null;
+            _effectiveDate = DateTime.Today;
+            _endOdometer = _selectedVehicle.current_odo;
+            _comments = string.Empty;
+            _soldAmount = null;
+            _soldDate = null;
+            _soldTo = string.Empty;
+
+            SeedStatusHistoryFromVehicle(_selectedVehicle);
         }
         catch (Exception ex)
         {
@@ -186,6 +393,31 @@
         }
     }
 
+    private void SeedStatusHistoryFromVehicle(VehicleDto vehicle)
+    {
+        _statusHistory = new List<StatusHistoryRow>
+        {
+            new(
+                vehicle.status_description ?? "Current Status",
+                vehicle.vehicle_status_date,
+                null,
+                vehicle.date_updated ?? vehicle.date_created,
+                vehicle.current_odo,
+                "System")
+        };
+    }
+
+    private void SelectStatus(short statusCode)
+    {
+        _selectedStatusCode = statusCode;
+        if (!ShowSoldInformation)
+        {
+            _soldAmount = null;
+            _soldDate = null;
+            _soldTo = string.Empty;
+        }
+    }
+
     private async Task SaveStatusAsync()
     {
         if (_selectedVehicle == null)
@@ -193,20 +425,59 @@
             return;
         }
 
+        _statusValidationIssues = ValidateForm();
+        _statusUpdateMessage = string.Empty;
+        if (!string.IsNullOrWhiteSpace(_statusValidationIssues))
+        {
+            return;
+        }
+
         _saving = true;
         try
         {
-            _selectedVehicle.status_description = _statusDescription;
-            _selectedVehicle.vehicle_status_date = _statusDate;
-            _selectedVehicle.vehicle_status_code = _statusCode;
+            var statusCode = _selectedStatusCode!.Value;
+            var selectedStatus = _statusCatalog.FirstOrDefault(s => s.Code == statusCode)
+                ?? new StatusOption(statusCode, $"Status {statusCode}");
+
+            _selectedVehicle.vehicle_status_code = statusCode;
+            _selectedVehicle.status_description = selectedStatus.Description;
+            _selectedVehicle.vehicle_status_date = _effectiveDate;
+            _selectedVehicle.current_odo = _endOdometer ?? _selectedVehicle.current_odo;
+
             var ok = await VehicleService.UpdateVehicleAsync(_selectedVehicle.vmf_code, _selectedVehicle);
             if (!ok)
             {
-                await JSRuntime.InvokeVoidAsync("console.error", "Failed to save vehicle status.");
+                _statusValidationIssues = "Failed to update status. Please try again.";
+                return;
             }
+
+            _statusHistory.Insert(0,
+                new StatusHistoryRow(
+                    selectedStatus.Description,
+                    _effectiveDate,
+                    null,
+                    DateTime.Now,
+                    _endOdometer,
+                    _currentUserDisplay));
+
+            var odoText = _endOdometer.HasValue ? $" and odometer {_endOdometer.Value:N0}" : string.Empty;
+            _statusUpdateMessage = $"Status set as [{selectedStatus.Description}] effective from {FormatDate(_effectiveDate)}{odoText}.";
+
+            var idx = _searchResults.FindIndex(v => v.vmf_code == _selectedVehicle.vmf_code);
+            if (idx >= 0)
+            {
+                _searchResults[idx] = _selectedVehicle;
+            }
+
+            _selectedStatusCode = null;
+            _comments = string.Empty;
+            _soldAmount = null;
+            _soldDate = null;
+            _soldTo = string.Empty;
         }
         catch (Exception ex)
         {
+            _statusValidationIssues = "An unexpected error occurred while updating the status.";
             await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
         finally
@@ -214,4 +485,89 @@
             _saving = false;
         }
     }
+
+    private string ValidateForm()
+    {
+        var errors = new List<string>();
+
+        if (!_selectedStatusCode.HasValue)
+        {
+            errors.Add("Please select the next status.");
+        }
+
+        if (!_effectiveDate.HasValue)
+        {
+            errors.Add("Effective From date is required.");
+        }
+        else if (_effectiveDate.Value.Date > DateTime.Today)
+        {
+            errors.Add("Effective From date cannot be in the future.");
+        }
+
+        if (ShowSoldInformation)
+        {
+            if (!_soldAmount.HasValue || _soldAmount.Value <= 0)
+            {
+                errors.Add("Sold Amount is required.");
+            }
+
+            if (!_soldDate.HasValue)
+            {
+                errors.Add("Sold Date is required.");
+            }
+            else if (_soldDate.Value.Date > DateTime.Today)
+            {
+                errors.Add("Sold Date cannot be in the future.");
+            }
+
+            if (string.IsNullOrWhiteSpace(_soldTo))
+            {
+                errors.Add("Sold To information is required.");
+            }
+        }
+
+        return string.Join(" ", errors);
+    }
+
+    private StatusOption? ResolveCurrentStatusOption()
+    {
+        if (_selectedVehicle == null)
+        {
+            return null;
+        }
+
+        var match = _statusCatalog.FirstOrDefault(s => s.Code == _selectedVehicle.vehicle_status_code);
+        if (match != null)
+        {
+            return match;
+        }
+
+        return new StatusOption(
+            _selectedVehicle.vehicle_status_code,
+            _selectedVehicle.status_description ?? $"Status {_selectedVehicle.vehicle_status_code}");
+    }
+
+    private void ReturnToMenu()
+    {
+        JSRuntime.InvokeVoidAsync("history.back");
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy/MM/dd") : "-";
+
+    private static string FormatDateTime(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy/MM/dd HH:mm") : "-";
+
+    private sealed record StatusOption(short Code, string Description);
+
+    private sealed record StatusHistoryRow(
+        string StatusDescription,
+        DateTime? StartDate,
+        DateTime? EndDate,
+        DateTime? CaptureDate,
+        int? Odometer,
+        string CapturedBy);
 }

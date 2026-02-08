@@ -2,6 +2,8 @@ namespace FIS.Web.Components.Pages.Users;
 
 public static class UserAdminRoleData
 {
+    public sealed record RoleAccessOption(string Role, long? PermissionBit);
+
     public static readonly string[] Roles =
     [
         "Accidents",
@@ -64,5 +66,31 @@ public static class UserAdminRoleData
         "Book Recurring Taxi",
         "Contract History Back Dating",
         "Driver and Authoriser Management"
+    ];
+
+    public static readonly RoleAccessOption[] AccessOptions =
+    [
+        new("Vehicle Master", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Asset Verification", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Accidents", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Call Centre", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Fines", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Licence", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Losses", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Tracking", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Towing", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Trip Authorities", FIS.Web.Services.LegacyPermissionBits.VehicleManagement),
+        new("Contracts", FIS.Web.Services.LegacyPermissionBits.ContractManagement),
+        new("Contract (Load and Manage)", FIS.Web.Services.LegacyPermissionBits.ContractManagement),
+        new("Contract (Cancel and Close)", FIS.Web.Services.LegacyPermissionBits.ContractManagement),
+        new("Contract (Approver)", FIS.Web.Services.LegacyPermissionBits.ContractManagement),
+        new("Back Dating Contract (Approver)", FIS.Web.Services.LegacyPermissionBits.ContractManagement),
+        new("User Administration", FIS.Web.Services.LegacyPermissionBits.UserAdministration),
+        new("Reports", FIS.Web.Services.LegacyPermissionBits.Reports),
+        new("Management Reports", FIS.Web.Services.LegacyPermissionBits.Reports),
+        new("Financial Data (All Departments)", FIS.Web.Services.LegacyPermissionBits.Financial),
+        new("Financial Data (Own Department)", FIS.Web.Services.LegacyPermissionBits.Financial),
+        new("Financial Reports", FIS.Web.Services.LegacyPermissionBits.Financial),
+        new("Workshop", FIS.Web.Services.LegacyPermissionBits.Workshop)
     ];
 }

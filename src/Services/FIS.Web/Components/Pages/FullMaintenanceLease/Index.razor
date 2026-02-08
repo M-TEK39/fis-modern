@@ -1,6 +1,5 @@
 @page "/full-maintenance-lease"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject LeaseContractTermsApiService LeaseService
@@ -19,10 +18,7 @@
 </div>
 
 <div class="page-content">
-    <span style="display:none">@_loading</span>
-    <span style="display:none">@_leases.Count</span>
-    <span style="display:none">@_searching</span>
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
+    <div class="menu-tiles fis-mb-15">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleLeaseInfo">
                 <span>Full Maintenance Lease Information / Help</span>
@@ -32,8 +28,7 @@
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <span class="menu-item-disabled">Full Maintenance Lease Information / Help</span>
-                        <span class="menu-item-badge">Coming soon</span>
+                        <span class="menu-item-link">Use Lease Vehicle Section below to capture and manage tariffs.</span>
                     </div>
                 </div>
             }
@@ -65,11 +60,24 @@
             }
         </div>
     </div>
-    @if (_loading)
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-row">
+                <label class="form-label">GG / GP Number</label>
+                <input class="form-input" @bind="_searchQuery" placeholder="Search lease records by vehicle" />
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" @onclick="SearchLeases" disabled="@_searching">Search</button>
+                <button class="btn btn-secondary" @onclick="ClearSearch" disabled="@_searching">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    @if (_loading || _searching)
     {
         <div class="loading-state">
             <div class="spinner"></div>
-            <p>Loading leases...</p>
+            <p>@(_loading ? "Loading leases..." : "Searching leases...")</p>
         </div>
     }
     else if (_leases.Count == 0)
@@ -113,6 +121,14 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_searchError))
+    {
+        <div class="alert alert-error fis-alert-tight">
+            <i class="bx bx-error-circle"></i>
+            <span>@_searchError</span>
         </div>
     }
 </div>
@@ -222,6 +238,13 @@
         {
             _searching = false;
         }
+    }
+
+    private void ClearSearch()
+    {
+        _searchQuery = string.Empty;
+        _searchError = null;
+        _leases = new List<FmlItem>(_allLeases);
     }
 
     private static string FormatDate(DateTime? value)

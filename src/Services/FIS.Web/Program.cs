@@ -374,7 +374,17 @@ builder.Services.AddHttpClient<LeaseContractTermsApiService>(client =>
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<JobCardApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<TrafficDeptApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<ValidationApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);

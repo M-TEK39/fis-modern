@@ -11,45 +11,47 @@
     {
         var expanded = IsGroupExpanded(group);
         var groupVisible = IsGroupVisible(group);
-        <div class="nav-group @(expanded ? "expanded" : "collapsed")"
-             style="display:@(groupVisible ? "block" : "none")">
-            <button class="nav-group-toggle"
-                    type="button"
-                    aria-expanded="@expanded"
-                    aria-controls="nav-group-@group.Id"
-                    @onclick="() => ToggleGroup(group.Id)">
-                <span class="nav-group-title">
-                    <i class="@group.Icon" aria-hidden="true"></i>
-                    <span>@group.Title</span>
-                </span>
-                <i class="bx bx-chevron-down nav-group-chevron @(expanded ? "expanded" : "")" aria-hidden="true"></i>
-            </button>
+        if (groupVisible)
+        {
+            <div class="nav-group @(expanded ? "expanded" : "collapsed")">
+                <button class="nav-group-toggle"
+                        type="button"
+                        aria-expanded="@expanded"
+                        aria-controls="nav-group-@group.Id"
+                        @onclick="() => ToggleGroup(group.Id)">
+                    <span class="nav-group-title">
+                        <i class="@group.Icon" aria-hidden="true"></i>
+                        <span>@group.Title</span>
+                    </span>
+                    <i class="bx bx-chevron-down nav-group-chevron @(expanded ? "expanded" : "")" aria-hidden="true"></i>
+                </button>
 
-            @if (expanded)
-            {
-                <ul id="nav-group-@group.Id" class="nav-list">
-                    @foreach (var item in group.Items)
-                    {
-                        <li class="@GetItemClasses(item)" style="@GetVisibilityStyle(item)">
-                            @if (item.Disabled)
-                            {
-                                <span class="legacy-link disabled" role="link" aria-disabled="true">
-                                    <i class="@item.Icon" aria-hidden="true"></i>
-                                    <span class="legacy-label">@item.Title</span>
-                                </span>
-                            }
-                            else
-                            {
-                                <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
-                                    <i class="@item.Icon" aria-hidden="true"></i>
-                                    <span class="legacy-label">@item.Title</span>
-                                </NavLink>
-                            }
-                        </li>
-                    }
-                </ul>
-            }
-        </div>
+                @if (expanded)
+                {
+                    <ul id="nav-group-@group.Id" class="nav-list">
+                        @foreach (var item in group.Items.Where(CanView))
+                        {
+                            <li class="@GetItemClasses(item)">
+                                @if (item.Disabled)
+                                {
+                                    <span class="legacy-link disabled" role="link" aria-disabled="true">
+                                        <i class="@item.Icon" aria-hidden="true"></i>
+                                        <span class="legacy-label">@item.Title</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
+                                        <i class="@item.Icon" aria-hidden="true"></i>
+                                        <span class="legacy-label">@item.Title</span>
+                                    </NavLink>
+                                }
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
     }
 </nav>
 
@@ -252,11 +254,6 @@
         }
 
         return string.Join(" ", classes);
-    }
-
-    private string GetVisibilityStyle(NavItem item)
-    {
-        return CanView(item) ? "display:block;" : "display:none;";
     }
 
     private bool CanView(NavItem item)

@@ -1,0 +1,191 @@
+.status-maintenance-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.status-search-panel {
+    background: var(--fis-surface);
+    border: 1px solid var(--fis-border);
+    border-radius: 0.75rem;
+    box-shadow: var(--fis-shadow);
+    padding: 1rem;
+}
+
+.status-search-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.status-search-row .form-input {
+    max-width: 360px;
+}
+
+.status-message {
+    border-radius: 0.25rem;
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+    border: 1px solid transparent;
+}
+
+.status-message-error {
+    background: var(--fis-error-bg);
+    border-color: var(--fis-error);
+    color: var(--fis-error);
+}
+
+.status-message-success {
+    background: hsl(142, 76%, 36%, 0.12);
+    border-color: hsl(142, 76%, 36%, 0.35);
+    color: hsl(142, 76%, 24%);
+}
+
+.status-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.status-column-left,
+.status-column-right {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.status-legacy-table {
+    border: 1px solid var(--fis-border);
+    background: var(--fis-surface);
+    border-radius: 0.75rem;
+    box-shadow: var(--fis-shadow);
+    overflow: hidden;
+}
+
+.status-legacy-header {
+    background: linear-gradient(135deg, var(--fis-accent), color-mix(in srgb, var(--fis-accent) 65%, #0b1d3b 35%));
+    color: #fff;
+    text-align: center;
+    font-weight: 700;
+    padding: 0.7rem;
+    letter-spacing: 0.02em;
+}
+
+.status-legacy-table table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.status-legacy-table th,
+.status-legacy-table td {
+    padding: 0.5rem 0.65rem;
+    border-bottom: 1px solid var(--fis-border);
+    font-size: 0.9rem;
+    color: var(--fis-text);
+}
+
+.status-legacy-table th {
+    width: 180px;
+    text-align: left;
+    color: var(--fis-muted-text);
+    white-space: nowrap;
+}
+
+.status-legacy-table tr:last-child th,
+.status-legacy-table tr:last-child td {
+    border-bottom: none;
+}
+
+.status-inline-note {
+    margin: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--fis-muted-text);
+}
+
+.status-radio-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem;
+}
+
+.status-radio-list label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.92rem;
+    color: var(--fis-text);
+}
+
+.status-field-row {
+    display: grid;
+    grid-template-columns: 120px minmax(0, 1fr);
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+}
+
+.status-field-row .form-label {
+    margin: 0;
+    color: var(--fis-muted-text);
+    font-weight: 600;
+}
+
+.status-field-row .form-input {
+    max-width: 100%;
+}
+
+.status-date-input {
+    max-width: 170px;
+}
+
+.status-comments-row {
+    align-items: start;
+}
+
+.status-actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+}
+
+.status-history-table th,
+.status-history-table td {
+    padding: 0.45rem 0.5rem;
+    font-size: 0.83rem;
+}
+
+.status-row-selected {
+    background: color-mix(in srgb, var(--fis-accent-soft) 60%, transparent 40%);
+}
+
+@media (max-width: 1100px) {
+    .status-workspace {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .status-search-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .status-search-row .form-input {
+        max-width: none;
+    }
+
+    .status-field-row {
+        grid-template-columns: 1fr;
+    }
+
+    .status-actions {
+        flex-direction: column-reverse;
+    }
+
+    .status-actions .btn {
+        width: 100%;
+    }
+}

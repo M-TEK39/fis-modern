@@ -1,10 +1,10 @@
 @page "/vehicle-verification"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using FIS.Web.Services
-@inject VehicleApiService VehicleService
-@inject AssetVerificationApiService AssetVerificationService
-@inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Vehicle Asset Verification - Fleet Information System</PageTitle>
 
@@ -19,150 +19,94 @@
 </div>
 
 <div class="page-content">
-    <span style="display:none">@_loading</span>
-    <span style="display:none">@_verifications.Count</span>
-    <span style="display:none">@_searching</span>
-    <div class="menu-tiles" style="margin-bottom: 1.5rem;">
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleVerificationInfo">
-                <span>Vehicle Asset Verification Information / Help</span>
-                <i class="bx @(_showVerificationInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showVerificationInfo)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicle-verification/help">Asset Verification Maintenance Information / Help</a>
-                    </div>
-                </div>
-            }
-        </div>
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleVerificationMaintenance">
-                <span>Vehicle Asset Verification Maintenance</span>
-                <i class="bx @(_showVerificationMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showVerificationMaintenance)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicle-verification/add">1) Add Asset Verification Details</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/vehicle-verification/edit">2) Edit Asset Verification Details</a>
-                    </div>
-                </div>
-            }
-        </div>
-    </div>
-    @if (_loading)
+    @if (!_authResolved)
     {
         <div class="loading-state">
             <div class="spinner"></div>
-            <p>Loading verification records...</p>
+            <p>Loading access profile...</p>
         </div>
     }
-    else if (_verifications.Count == 0)
+    else if (!_hasVehicleAccess)
     {
         <div class="empty-state">
-            <i class="bx bx-clipboard"></i>
-            <h3>No verification records</h3>
-            <p>No verification records are available.</p>
+            <i class="bx bx-lock-alt"></i>
+            <h3>Access restricted</h3>
+            <p>You do not have permission to access Vehicle Asset Verification.</p>
         </div>
     }
     else
     {
-        <div class="table-container">
-            <div class="table-header">
-                <span class="table-title">@_verifications.Count Verification record(s)</span>
+        <div class="menu-tiles fis-menu-tiles-bottom">
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleVerificationInfo">
+                    <span>Asset Verification Maintenance Information / Help</span>
+                    <i class="bx @(_showVerificationInfo ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showVerificationInfo)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/vehicle-verification/help">Asset Verification Maintenance Information / Help</a>
+                        </div>
+                    </div>
+                }
             </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Verification #</th>
-                            <th>Vehicle</th>
-                            <th>Status</th>
-                            <th>Date</th>
-                            <th>Verifier</th>
-                            <th>Notes</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var verification in _verifications)
-                        {
-                            <tr>
-                                <td>@verification.Number</td>
-                                <td>@verification.Vehicle</td>
-                                <td><span class="badge">@verification.Status</span></td>
-                                <td>@FormatDate(verification.Date)</td>
-                                <td>@ValueOrDash(verification.Verifier)</td>
-                                <td>@ValueOrDash(verification.Notes)</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleVerificationMaintenance">
+                    <span>Asset Verification Maintenance</span>
+                    <i class="bx @(_showVerificationMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showVerificationMaintenance)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/vehicle-verification/add">1) Add Asset Verification Details</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/vehicle-verification/edit">2) Edit Asset Verification Details</a>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }
 </div>
 
 @code {
-    private bool _loading = true;
-    private List<VerificationItem> _verifications = new();
-    private List<VerificationItem> _allVerifications = new();
-    private string _searchQuery = "";
-    private bool _searching;
-    private string? _searchError;
+    private bool _authResolved;
+    private bool _hasVehicleAccess;
     private bool _showVerificationInfo = true;
     private bool _showVerificationMaintenance = true;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadVerifications();
+        await ResolveAccessAsync();
     }
 
-    private async Task LoadVerifications()
+    private async Task ResolveAccessAsync()
     {
-        _loading = true;
-        try
-        {
-            var apiItems = await AssetVerificationService.GetAllAsync<AssetVerificationDto>();
-            _allVerifications = apiItems.Select(v => new VerificationItem(
-                VmfCode: v.vmf_code,
-                Number: v.asset_verification_code.ToString(),
-                Vehicle: v.vehicle_reg_no ?? v.vmf_code?.ToString() ?? "Unknown",
-                Status: v.asset_verification_complete ? "Closed" : "Open",
-                Date: v.verification_date,
-                Verifier: v.responsible_manager ?? "N/A",
-                Notes: v.verified_notes ?? v.site_name ?? string.Empty
-            )).ToList();
-            _verifications = new List<VerificationItem>(_allVerifications);
-        }
-        catch (Exception ex)
-        {
-            await JS.InvokeVoidAsync("console.error", $"Error loading asset verifications: {ex.Message}");
-            _verifications = new();
-            _allVerifications = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
 
-    private sealed record VerificationItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime? Date, string Verifier, string Notes);
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _authResolved = true;
+            return;
+        }
 
-    private sealed class AssetVerificationDto
-    {
-        public int asset_verification_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? vehicle_reg_no { get; set; }
-        public string? site_name { get; set; }
-        public string? responsible_manager { get; set; }
-        public string? verified_notes { get; set; }
-        public bool asset_verification_complete { get; set; }
-        public DateTime? verification_date { get; set; }
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        long accessLevel;
+        if (!long.TryParse(accessLevelClaim, out accessLevel))
+        {
+            var userAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(userAccessCode, firstName);
+        }
+
+        _hasVehicleAccess =
+            (accessLevel & LegacyPermissionBits.VehicleManagement) == LegacyPermissionBits.VehicleManagement;
+
+        _authResolved = true;
     }
 
     private void ToggleVerificationInfo()
@@ -175,50 +119,6 @@
         _showVerificationMaintenance = !_showVerificationMaintenance;
     }
 
-    private async Task SearchVerifications()
-    {
-        _searchError = null;
-        if (string.IsNullOrWhiteSpace(_searchQuery))
-        {
-            _verifications = new List<VerificationItem>(_allVerifications);
-            return;
-        }
-
-        _searching = true;
-        try
-        {
-            var query = _searchQuery.Trim();
-            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
-            var match = vehicles.Data.FirstOrDefault(v =>
-                string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
-
-            if (match == null)
-            {
-                _verifications = new List<VerificationItem>();
-                _searchError = "Vehicle not found.";
-                return;
-            }
-
-            _verifications = _allVerifications.Where(v => v.VmfCode == match.vmf_code).ToList();
-            if (_verifications.Count == 0)
-            {
-                _searchError = "No verification records found for this vehicle.";
-            }
-        }
-        catch (Exception ex)
-        {
-            _searchError = $"Search failed: {ex.Message}";
-        }
-        finally
-        {
-            _searching = false;
-        }
-    }
-
-    private static string FormatDate(DateTime? value)
-        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static int? TryParseInt(string? value)
+        => int.TryParse(value, out var parsed) ? parsed : null;
 }

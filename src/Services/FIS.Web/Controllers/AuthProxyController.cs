@@ -29,6 +29,11 @@ public class AuthProxyController : ControllerBase
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(request.Password))
+            {
+                return BadRequest(new { error = "Password is required." });
+            }
+
             // Create HttpClient with cookie container to capture Set-Cookie headers
             var handler = new HttpClientHandler
             {
@@ -44,12 +49,40 @@ public class AuthProxyController : ControllerBase
             {
                 loginIdentifier = request.Username;
             }
+            loginIdentifier = loginIdentifier?.Trim();
+
+            if (string.IsNullOrWhiteSpace(loginIdentifier))
+            {
+                return BadRequest(new { error = "First name is required." });
+            }
+
+            // Enforce real credential validation before token issuance.
+            var validateResponse = await client.PostAsJsonAsync(
+                "http://localhost:5010/api/userprofile/validate",
+                new
+                {
+                    firstName = loginIdentifier,
+                    password = request.Password
+                });
+
+            if (!validateResponse.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Credential validation endpoint failed with status {StatusCode}", validateResponse.StatusCode);
+                return StatusCode((int)validateResponse.StatusCode, new { error = "Credential validation failed." });
+            }
+
+            var validation = await validateResponse.Content.ReadFromJsonAsync<CredentialValidationResponse>();
+            if (validation?.IsValid != true || !validation.UserAccessCode.HasValue)
+            {
+                _logger.LogInformation("Invalid login attempt for FirstName {FirstName}", loginIdentifier);
+                return Unauthorized(new { error = "Invalid credentials." });
+            }
 
             // Forward login request to API
             var response = await client.PostAsJsonAsync(apiUrl, new
             {
                 firstName = loginIdentifier,
-                username = loginIdentifier,
+                username = validation.UserAccessCode.Value.ToString(),
                 password = request.Password
             });
 
@@ -168,4 +201,14 @@ public class LegacyLoginResponse
     public int UserAccessCode { get; set; }
     public string? Email { get; set; }
     public string? Message { get; set; }
+}
+
+public class CredentialValidationResponse
+{
+    public bool IsValid { get; set; }
+    public short? UserAccessCode { get; set; }
+    public string? FirstName { get; set; }
+    public string? LastName { get; set; }
+    public string? Email { get; set; }
+    public short? SiteCode { get; set; }
 }
