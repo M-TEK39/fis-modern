@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/log-books"
 @rendermode InteractiveServer
 
@@ -10,7 +9,7 @@
             <i class="bx bx-notepad"></i>
             Logbook Maintenance Menu
         </h1>
-        <p class="page-description">Legacy logbook maintenance menu.</p>
+        <p class="page-description">Logbook maintenance menu.</p>
     </div>
 </div>
 
@@ -23,7 +22,7 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/log-books/help">Logbook Maintenance Information / Help</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
@@ -35,25 +34,18 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/log-books/maintenance">1) Logbook Maintenance</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/log-books/collection">2) Collection for TWO or More Logbook's</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/log-books/delete">3) Delete a Logbook Handout</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logbook/MNTLogbk.aspx"
-        Endpoint="api/logbook/menu"
-        HttpMethod="GET"
-        ButtonText="Test Logbook Menu Endpoint"
-        ReportType="logbook-menu" />
 
 </div>

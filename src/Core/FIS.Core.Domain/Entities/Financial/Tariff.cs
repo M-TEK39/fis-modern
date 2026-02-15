@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using FIS.Core.Domain.Entities.Auth;
 
 namespace FIS.Core.Domain.Entities.Financial;
 
@@ -61,6 +62,23 @@ public class Tariff
     [Column("fuel_kilo_tariff")]
     public decimal? fuel_kilo_tariff { get; set; }
 
+    // Approval workflow
+    // Status: 0=Draft, 1=PendingApproval, 2=Approved, 3=Rejected
+    // Tariffs >R100,000/month require approval before becoming effective.
+    // Self-approval is blocked: the capturer cannot be the approver.
+    [Column("tariff_approval_status")]
+    public short tariff_approval_status { get; set; } = 0; // Default: Draft
+
+    [Column("approver_code")]
+    public int? approver_code { get; set; }
+
+    [Column("approval_date")]
+    public DateTime? approval_date { get; set; }
+
+    [Column("rejection_reason")]
+    [StringLength(500)]
+    public string? rejection_reason { get; set; }
+
     // Audit fields
     [Column("date_created")]
     public DateTime? date_created { get; set; }
@@ -89,10 +107,13 @@ public class Tariff
     [Column("is_deleted")]
     public bool is_deleted { get; set; } = false;
 
-    // Navigation properties for audit trail
+    // Navigation properties
     [ForeignKey("created_by_user_code")]
     public virtual User? CreatedByUser { get; set; }
 
     [ForeignKey("modified_by_user_code")]
     public virtual User? ModifiedByUser { get; set; }
+
+    [ForeignKey("approver_code")]
+    public virtual User? ApproverUser { get; set; }
 }

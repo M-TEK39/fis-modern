@@ -1,12 +1,173 @@
 @page "/reports/tariffs-class-2007"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject TariffApiService TariffService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Tariffs by Class groupings (2007 and earlier)"
-    Description="Legacy placeholder for Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs."
-    LegacyPath="Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="tariffs-class2007"
-    Icon="bx-file" />
+<PageTitle>Tariffs by Class Groupings (2007 and Earlier) - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-grid-alt"></i>
+            Tariffs by Class Groupings (2007 and Earlier)
+        </h1>
+        <p class="page-description">Vehicles year model 2007 and earlier with tariff preview values.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/reports/tariffs-fin-year">Tariffs Fin Year</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Max Vehicles To Evaluate</label>
+                    <input class="form-input" type="number" min="1" max="2000" @bind="_maxProbeCount" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Tariffs - Year Model 2007 and Earlier</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Year</th>
+                        <th>Class ID</th>
+                        <th>Monthly Fixed (R)</th>
+                        <th>Fuel/KM (R)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="7">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="7">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(row.Vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(row.Vehicle.registration_number)</td>
+                                <td>@GetVehicleLabel(row.Vehicle)</td>
+                                <td>@(row.Vehicle.year_manufactured?.ToString() ?? "-")</td>
+                                <td>@(row.Tariff.ClassCode?.ToString() ?? "-")</td>
+                                <td>@(row.Tariff.MonthlyFixedAmount?.ToString("N2") ?? "-")</td>
+                                <td>@(row.Tariff.FuelKiloTariff?.ToString("N2") ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private int _maxProbeCount = 300;
+    private List<TariffVehicleRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<TariffVehicleRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var vehicles = (await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000)).Data
+                .Where(v => v.year_manufactured.HasValue && v.year_manufactured.Value <= 2007)
+                .Take(Math.Clamp(_maxProbeCount, 1, 2000))
+                .ToList();
+
+            var rows = new List<TariffVehicleRow>();
+            foreach (var vehicle in vehicles)
+            {
+                var preview = await TariffService.GetPreviewForVehicleAsync(vehicle.vmf_code);
+                if (preview?.Tariff == null)
+                {
+                    continue;
+                }
+
+                rows.Add(new TariffVehicleRow(vehicle, preview.Tariff));
+            }
+
+            _rows = rows
+                .OrderBy(r => r.Vehicle.year_manufactured)
+                .ThenBy(r => r.Vehicle.fleet_number)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tariffs class 2007 report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record TariffVehicleRow(VehicleDto Vehicle, VehicleTariffPreviewDto Tariff);
+}

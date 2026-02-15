@@ -13,7 +13,7 @@
             <i class="bx bx-file"></i>
             Losses Reports
         </h1>
-        <p class="page-description">Legacy placeholder for losses/Losses.aspx.</p>
+        <p class="page-description">Losses reporting workflow and report launcher.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/losses/reports")'>Open Losses Reports</button>
@@ -23,22 +23,35 @@
 <div class="page-content">
     <div class="empty-state">
         <i class="bx bx-file"></i>
-        <h3>Losses Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
-        <button class="btn btn-primary btn-sm" @onclick="TestEndpoint">Ping Losses Report Endpoint</button>
+        <h3>Losses Reports</h3>
+        <p>Use this page to launch and validate losses report output.</p>
+        <button class="btn btn-primary btn-sm" @onclick="ValidateReportAccessAsync">Validate Report Access</button>
+        @if (!string.IsNullOrWhiteSpace(_statusMessage))
+        {
+            <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-10">
+                @_statusMessage
+            </div>
+        }
     </div>
 </div>
 
 @code {
-    private async Task TestEndpoint()
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    private async Task ValidateReportAccessAsync()
     {
         try
         {
             await ReportService.GetAllAsync<Dictionary<string, object>>(new { });
+            _statusError = false;
+            _statusMessage = "Request completed successfully.";
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("console.error", $"Error pinging losses report endpoint: {ex.Message}");
+            _statusError = true;
+            _statusMessage = "Unable to validate report access.";
+            await JS.InvokeVoidAsync("console.error", $"Error validating losses report access: {ex.Message}");
         }
     }
 }

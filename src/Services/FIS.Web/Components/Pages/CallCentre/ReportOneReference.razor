@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject CallCentreApiService CallCentreService
+@inject SiteApiService SiteService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
@@ -64,6 +65,7 @@
                         <tr><th>Call Time</th><td>@FormatTime(_result.Call_time)</td></tr>
                         <tr><th>Caller</th><td>@ValueOrDash(_result.Caller_name)</td></tr>
                         <tr><th>Driver</th><td>@ValueOrDash(_result.Driver_name)</td></tr>
+                        <tr><th>Driver Site</th><td>@GetSiteText(_result.Driver_Site)</td></tr>
                         <tr><th>GG Number</th><td>@ValueOrDash(_result.GG_number)</td></tr>
                         <tr><th>Captured By</th><td>@ValueOrDash(_result.Capture_name)</td></tr>
                     </tbody>
@@ -78,7 +80,13 @@
     private bool _messageIsError;
     private string _message = string.Empty;
     private string _referenceNumber = string.Empty;
+    private List<SiteResponseDto> _sites = new();
     private CallCentreDto? _result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
 
     private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
 
@@ -124,4 +132,14 @@
     private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
     private static string FormatTime(DateTime? date) => date.HasValue ? date.Value.ToString("HH:mm:ss") : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private string GetSiteText(short? siteCode)
+    {
+        if (!siteCode.HasValue)
+        {
+            return "-";
+        }
+
+        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
+        return site == null ? siteCode.Value.ToString() : $"{site.DepartmentNumber} - {site.Description}";
+    }
 }

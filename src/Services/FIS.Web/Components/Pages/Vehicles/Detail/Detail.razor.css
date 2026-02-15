@@ -109,6 +109,24 @@
     color: var(--fis-text);
 }
 
+.invoice-display-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.invoice-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.invoice-edit-row .form-input {
+    min-width: 240px;
+    max-width: 320px;
+}
+
 @media (max-width: 768px) {
     .detail-header {
         flex-direction: column;

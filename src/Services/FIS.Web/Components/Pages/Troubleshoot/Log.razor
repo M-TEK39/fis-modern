@@ -13,7 +13,7 @@
             <i class="bx bx-notepad"></i>
             Troubleshoot Log
         </h1>
-        <p class="page-description">Legacy flow for TS_Log/TS_Log.aspx.</p>
+        <p class="page-description">View and maintain troubleshoot log entries.</p>
     </div>
 </div>
 
@@ -27,12 +27,7 @@
                         <option value="0">Select user/site</option>
                         @foreach (var option in _siteUsers)
                         {
-                            <option value="@option.UserAccessCode">
-                                @option.Name @if (!string.IsNullOrWhiteSpace(option.SiteDescription))
-                                {
-                                    <text> - @option.SiteDescription</text>
-                                }
-                            </option>
+                            <option value="@option.UserAccessCode">@SiteUserLabel(option)</option>
                         }
                     </select>
                 </div>
@@ -54,8 +49,8 @@
     {
         <div class="empty-state">
             <i class="bx bx-notepad"></i>
-            <h3>No troubleshoot logs found</h3>
-            <p>Select a department/site to load troubleshoot logs.</p>
+            <h3>No logs found</h3>
+            <p>No logs match the selected user/site.</p>
         </div>
     }
     else
@@ -79,7 +74,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var log in _logs)
+                        @foreach (var log in PagedLogs)
                         {
                             <tr>
                                 <td>@(log.VehicleIdentifier ?? "-")</td>
@@ -91,6 +86,11 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -110,6 +110,11 @@
     private int _selectedUserAccessCode;
     private List<TroubleshootSiteUserDto> _siteUsers = new();
     private List<TroubleshootLogEntryDto> _logs = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<TroubleshootLogEntryDto> PagedLogs => _logs.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_logs.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -152,6 +157,7 @@
                 UserAccessCode = _selectedUserAccessCode
             };
             _logs = await TroubleshootService.SearchLogsAsync(request);
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -176,5 +182,31 @@
             _errorMessage = "Failed to update troubleshoot logs.";
             await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string SiteUserLabel(TroubleshootSiteUserDto option)
+    {
+        var name = string.IsNullOrWhiteSpace(option.Name) ? "Unknown User" : option.Name.Trim();
+        var site = string.IsNullOrWhiteSpace(option.SiteDescription)
+            ? "No Site"
+            : option.SiteDescription.Trim();
+        var siteCode = option.SiteCode.HasValue ? option.SiteCode.Value.ToString() : "-";
+        return $"{name} ({option.UserAccessCode}) - {site} ({siteCode})";
     }
 }

@@ -34,13 +34,13 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>VMF</th><th>GG Number</th><th>Registration</th><th>Status</th></tr>
+                        <tr><th>Vehicle</th><th>GG Number</th><th>Registration</th><th>Status</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _rows)
+                        @foreach (var row in PagedRows)
                         {
                             <tr>
-                                <td>@row.vmf_code</td>
+                                <td>@GetVehicleLabel(row)</td>
                                 <td>@ValueOrDash(row.fleet_number)</td>
                                 <td>@ValueOrDash(row.registration_number)</td>
                                 <td>@ValueOrDash(row.status_description)</td>
@@ -49,6 +49,11 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
 </div>
@@ -56,6 +61,10 @@
 @code {
     private bool _loading = true;
     private List<VehicleDto> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -65,10 +74,12 @@
             var leasedVmfCodes = leases.Select(x => x.vmf_Code).Where(x => x > 0).Distinct().ToHashSet();
             var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
             _rows = vehicles.Data.Where(v => !leasedVmfCodes.Contains(v.vmf_code)).ToList();
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             _rows = new List<VehicleDto>();
+            _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-no-contracts report: {ex.Message}");
         }
         finally
@@ -78,6 +89,24 @@
     }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static string GetVehicleLabel(VehicleDto row)
+        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private sealed class LeaseTermDto
     {

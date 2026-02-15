@@ -31,4 +31,9 @@ public class HireContractRequest
     public string? DriverId { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
+    /// <summary>
+    /// The user who is capturing/creating this contract.
+    /// Required for self-approval prevention — stored as created_by_user_code.
+    /// </summary>
+    public int? CreatedByUserId { get; set; }
 }

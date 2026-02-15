@@ -1,12 +1,216 @@
 @page "/reports/vehicle-status-range"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Vehicle Status in Date Range"
-    Description="Legacy placeholder for Vehicles/VehicleStatus.aspx."
-    LegacyPath="Vehicles/VehicleStatus.aspx"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="vehicle-status-range"
-    Icon="bx-file" />
+<PageTitle>Vehicle Status in Date Range - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-calendar-check"></i>
+            Vehicle Status in Date Range
+        </h1>
+        <p class="page-description">Filter vehicles by status and status date range.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/vehicles">Vehicle Master</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Vehicle Status</label>
+                    <select class="form-select" @bind="_selectedStatus">
+                        <option value="">All</option>
+                        @foreach (var status in _availableStatuses)
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Status Date From</label>
+                    <InputDate class="form-input" @bind-Value="_startDate" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Status Date To</label>
+                    <InputDate class="form-input" @bind-Value="_endDate" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Vehicle Status Range Report</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Status</th>
+                        <th>Status Date</th>
+                        <th>Site</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="6">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="6">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(row.fleet_number)</td>
+                                <td>@ValueOrDash(row.registration_number)</td>
+                                <td>@GetVehicleLabel(row)</td>
+                                <td>@ValueOrDash(row.status_description)</td>
+                                <td>@(row.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@GetSiteLabel(row.site_code)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private string _selectedStatus = string.Empty;
+    private DateTime? _startDate = DateTime.Today.AddMonths(-6);
+    private DateTime? _endDate = DateTime.Today;
+    private List<string> _availableStatuses = new();
+    private List<VehicleDto> _sourceVehicles = new();
+    private List<VehicleDto> _rows = new();
+    private List<SiteResponseDto> _sites = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBaseDataAsync();
+        await LoadReportAsync();
+    }
+
+    private async Task LoadBaseDataAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+        var vehiclesPage = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _sourceVehicles = vehiclesPage.Data;
+        _availableStatuses = _sourceVehicles
+            .Select(v => v.status_description?.Trim())
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s)
+            .Cast<string>()
+            .ToList();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var start = _startDate ?? DateTime.MinValue;
+            var end = _endDate ?? DateTime.MaxValue;
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            _rows = _sourceVehicles
+                .Where(v => string.IsNullOrWhiteSpace(_selectedStatus)
+                    || string.Equals(v.status_description?.Trim(), _selectedStatus, StringComparison.OrdinalIgnoreCase))
+                .Where(v => v.vehicle_status_date.HasValue)
+                .Where(v => v.vehicle_status_date!.Value.Date >= start.Date && v.vehicle_status_date.Value.Date <= end.Date)
+                .OrderByDescending(v => v.vehicle_status_date)
+                .ToList();
+
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicle status range report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _selectedStatus = string.Empty;
+        _startDate = DateTime.Today.AddMonths(-6);
+        _endDate = DateTime.Today;
+    }
+
+    private string GetSiteLabel(short? siteCode)
+    {
+        if (!siteCode.HasValue)
+        {
+            return "-";
+        }
+
+        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
+        return site == null ? siteCode.Value.ToString() : $"{ValueOrDash(site.Description)} ({site.SiteCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto row)
+        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

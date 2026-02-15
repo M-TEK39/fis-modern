@@ -1,7 +1,5 @@
 @page "/taxis/requests/{Mode}"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -18,21 +16,12 @@
 </div>
 
 <div class="page-content">
-    <LegacyEndpointActionPanel
-        LegacyPath="@GetLegacyPath()"
-        Endpoint="@GetEndpoint()"
-        HttpMethod="@GetHttpMethod()"
-        ButtonText="Run Taxi Requests API"
-        ReportType="taxis-requests" />
-</div>
-
-<div class="page-content">
     @if (_isPending || _isPendingJia)
     {
         <div class="form-card">
             <div class="form-card-body">
                 <div class="alert alert-info">
-                    Auto update in 11 minute(s). Use the Print button to open the legacy print view.
+                    Auto update in 11 minute(s). Use the Print button to open the print view.
                 </div>
                 <div class="form-actions" style="justify-content: space-between;">
                     <button class="btn btn-secondary btn-sm">Print</button>
@@ -122,43 +111,43 @@
                                 <tbody>
                                     <tr>
                                         <th>Service Provider</th>
-                                        <td>[Contractor Name] • Fax: [Fax] • Tel: [Tel]</td>
+                                        <td>Contractor details not loaded • Fax: Not loaded • Tel: Not loaded</td>
                                     </tr>
                                     <tr>
-                                        <th>Department Code</th>
-                                        <td>[Department Code]</td>
+                                        <th>Department</th>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
-                                        <th>Responsibility Code</th>
-                                        <td>[Responsibility Code]</td>
+                                        <th>Responsibility</th>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
-                                        <th>Objective Code</th>
-                                        <td>[Objective Code]</td>
+                                        <th>Objective</th>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
                                         <th>Date Required</th>
-                                        <td>[Date Required]</td>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
                                         <th>Time Required</th>
-                                        <td>[Time Required]</td>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
                                         <th>Official (Primary)</th>
-                                        <td>[Official Name]</td>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
                                         <th>Rank</th>
-                                        <td>[Rank]</td>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
                                         <th>Tel/Cell</th>
-                                        <td>[Tel/Cell]</td>
+                                        <td>Not loaded</td>
                                     </tr>
                                     <tr>
                                         <th>User Department</th>
-                                        <td>[Department Description]</td>
+                                        <td>Not loaded</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -416,14 +405,14 @@
                     @if (_showPrevBasBanner)
                     {
                         <div class="form-hint" style="margin-top: 1rem;">
-                            BAS Code list: name (legacy uses a pick-list table).
+                            BAS ID list: name (uses a pick-list table).
                         </div>
                         <div class="table-container" style="margin-top: 1rem;">
                             <div class="table-wrapper">
                                 <table class="data-table">
                                     <thead>
                                         <tr>
-                                            <th>FMS Code</th>
+                                            <th>FMS ID</th>
                                             <th>Responsibility</th>
                                             <th>Objective</th>
                                             <th>Project</th>
@@ -514,7 +503,7 @@
     public string? Mode { get; set; }
 
     private string _pageTitle = "Taxi Requisition";
-    private string _pageDescription = "Legacy taxi requisition workflow.";
+    private string _pageDescription = "Taxi requisition workflow.";
     private bool _isEnter;
     private bool _isEnterPrevBas;
     private bool _isEdit;
@@ -556,46 +545,7 @@
             "pending-jia" => "Pending JIA Pick-ups",
             "cancel" => "Cancel an existing taxi requisition.",
             "reprint" => "Reprint a previously captured requisition.",
-            _ => "Legacy taxi requisition workflow."
+            _ => "Taxi requisition workflow."
         };
     }
-
-    private string GetLegacyPath()
-        => Mode switch
-        {
-            "enter" => "Taxis/Request_GGVIP_11[2].aspx",
-            "enter-prev-bas" => "Taxis/Request_GGVIP_UsingPrevFinYearsBASCodes.aspx",
-            "edit" => "Taxis/Edit_GGVIP_1[1].aspx",
-            "edit-prev-bas" => "Taxis/Edit_GGVIP_UsingPrevFinYearsBASCodes.aspx",
-            "cancel" => "Taxis/Cancel.aspx",
-            "reprint" => "Taxis/Request_GGVIP_reprint_1_2.aspx",
-            "pending" => "Taxis/RPT_today_reqs.aspx",
-            "pending-jia" => "Taxis/RPT_JIA_pickups.aspx",
-            _ => "Taxis/Taxi_menu.aspx"
-        };
-
-    private string GetEndpoint()
-        => Mode switch
-        {
-            "enter" => "api/taxi",
-            "enter-prev-bas" => "api/taxi/legacy/previous-fin-year-bas",
-            "edit" => "api/taxi/1",
-            "edit-prev-bas" => "api/taxi/legacy/previous-fin-year-bas/1",
-            "cancel" => "api/taxi/cancel/1",
-            "reprint" => "api/taxi/reprint/1",
-            "pending" => "api/taxi/reports/pending",
-            "pending-jia" => "api/taxi/reports/pending-jia",
-            _ => "api/taxi"
-        };
-
-    private string GetHttpMethod()
-        => Mode switch
-        {
-            "enter" => "POST",
-            "enter-prev-bas" => "POST",
-            "edit" => "PUT",
-            "edit-prev-bas" => "PUT",
-            "cancel" => "POST",
-            _ => "GET"
-        };
 }

@@ -7,6 +7,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject UserApiService UserApiService
+@inject SiteApiService SiteApiService
 
 <div style="display: flex; flex-direction: column; gap: 1.25rem;">
     <div class="card">
@@ -25,9 +26,16 @@
                 <div class="search-input-wrapper">
                     <i class="bx bx-search"></i>
                     <input class="search-input" type="text" placeholder="Start typing for a list of valid users"
-                           @bind="_selectedUsername" />
+                           @bind="_selectedUsername"
+                           list="user-admin-user-list" />
                 </div>
             </div>
+            <datalist id="user-admin-user-list">
+                @foreach (var user in _userSummaries)
+                {
+                    <option value="@user.UserName">@user.Email</option>
+                }
+            </datalist>
             <div style="margin-top: 0.75rem;">
                 <button class="btn btn-primary btn-sm" type="button" @onclick="ShowEditProfile" disabled="@_loadingUser">
                     @(_loadingUser ? "Loading..." : "Edit")
@@ -57,11 +65,23 @@
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Site</label>
-                        <input class="form-input" type="number" @bind="_profile.SiteCode" />
+                        <select class="form-select" @bind="_profile.SiteCode" @bind:after="OnSiteChangedAsync">
+                            <option value="">Select site</option>
+                            @foreach (var site in _sites.OrderBy(s => s.Description))
+                            {
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                            }
+                        </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Position</label>
-                        <input class="form-input" type="number" @bind="_profile.PositionCode" />
+                        <select class="form-select" @bind="_profile.PositionCode">
+                            <option value="">Select position</option>
+                            @foreach (var positionCode in _positionCodes)
+                            {
+                                <option value="@positionCode">@($"Position ({positionCode})")</option>
+                            }
+                        </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Persal</label>
@@ -100,8 +120,12 @@
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Client Approver Name</label>
-                        <select class="form-select">
-                            <option>Select an Approver (after valid Site selection)</option>
+                        <select class="form-select" @bind="_selectedApproverUserAccessCode" disabled="@(!_profile.SiteCode.HasValue || _siteApprovers.Count == 0)">
+                            <option value="">@(_profile.SiteCode.HasValue ? "Select an Approver" : "Select site first")</option>
+                            @foreach (var approver in _siteApprovers)
+                            {
+                                <option value="@approver.UserAccessCode">@ApproverDisplay(approver)</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
@@ -168,12 +192,35 @@
     private string? _errorMessage;
     private string? _successMessage;
     private List<UserSummaryDto> _userSummaries = new();
+    private List<SiteResponseDto> _sites = new();
+    private List<byte> _positionCodes = new();
+    private List<UserProfileDto> _profiles = new();
+    private List<UserProfileDto> _siteApprovers = new();
+    private short? _selectedApproverUserAccessCode;
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         _displayName = ResolveDisplayName(authState.User);
-        _userSummaries = await UserApiService.GetAllSummariesAsync();
+        _profiles = await UserApiService.GetAllProfilesAsync();
+        _userSummaries = _profiles.Select(profile => new UserSummaryDto
+        {
+            UserAccessCode = profile.UserAccessCode,
+            UserName = profile.FirstName,
+            Email = profile.Email,
+            FirstName = profile.FirstName,
+            LastName = profile.LastName,
+            Telephone = profile.Telephone,
+            LastLoginDate = profile.LastLogOn?.ToString("yyyy-MM-dd HH:mm")
+        }).ToList();
+        _positionCodes = _profiles
+            .Where(profile => profile.PositionCode.HasValue)
+            .Select(profile => profile.PositionCode!.Value)
+            .Distinct()
+            .OrderBy(code => code)
+            .ToList();
+        _sites = await SiteApiService.GetAllAsync();
+        UpdateApproverOptions();
     }
 
     private async Task ShowEditProfile()
@@ -199,6 +246,7 @@
 
             _selectedUserAccessCode = match.UserAccessCode;
             await LoadSelectedProfileAsync(match.UserAccessCode);
+            UpdateApproverOptions();
             _showEditProfile = true;
         }
         finally
@@ -277,6 +325,8 @@
     {
         _profile = new UserProfileEditorModel();
         _selectedAccessLevel = 0;
+        _selectedApproverUserAccessCode = null;
+        _siteApprovers = new();
         _errorMessage = null;
         _successMessage = null;
     }
@@ -313,6 +363,24 @@
         };
 
         _selectedAccessLevel = profile.AccessLevel;
+        EnsureCurrentPositionCodeIsSelectable();
+        UpdateApproverOptions();
+    }
+
+    private void EnsureCurrentPositionCodeIsSelectable()
+    {
+        if (!_profile.PositionCode.HasValue)
+        {
+            return;
+        }
+
+        if (_positionCodes.Contains(_profile.PositionCode.Value))
+        {
+            return;
+        }
+
+        _positionCodes.Add(_profile.PositionCode.Value);
+        _positionCodes = _positionCodes.OrderBy(code => code).ToList();
     }
 
     private bool HasPermission(long? permissionBit)
@@ -323,6 +391,44 @@
         }
 
         return (_selectedAccessLevel & permissionBit.Value) == permissionBit.Value;
+    }
+
+    private Task OnSiteChangedAsync()
+    {
+        UpdateApproverOptions();
+        return Task.CompletedTask;
+    }
+
+    private void UpdateApproverOptions()
+    {
+        if (!_profile.SiteCode.HasValue)
+        {
+            _siteApprovers = new();
+            _selectedApproverUserAccessCode = null;
+            return;
+        }
+
+        _siteApprovers = _profiles
+            .Where(profile => profile.SiteCode == _profile.SiteCode)
+            .OrderBy(profile => profile.FirstName)
+            .ThenBy(profile => profile.LastName)
+            .ToList();
+
+        if (_siteApprovers.All(profile => profile.UserAccessCode != _selectedApproverUserAccessCode))
+        {
+            _selectedApproverUserAccessCode = null;
+        }
+    }
+
+    private static string ApproverDisplay(UserProfileDto approver)
+    {
+        var name = $"{approver.FirstName} {approver.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = approver.Email ?? "Unknown";
+        }
+
+        return $"{name} ({approver.UserAccessCode})";
     }
 
     private sealed class UserProfileEditorModel

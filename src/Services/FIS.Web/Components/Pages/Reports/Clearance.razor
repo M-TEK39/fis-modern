@@ -1,12 +1,157 @@
 @page "/reports/clearance"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject ClearanceApiService ClearanceService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Clearance Reports"
-    Description="Legacy placeholder for Clearance/RPTClearance.aspx."
-    LegacyPath="Clearance/RPTClearance.aspx"
-    Endpoint="api/clearance"
-    HttpMethod="GET"
-    ReportType="clearance-reports"
-    Icon="bx-file" />
+<PageTitle>Clearance Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-check-circle"></i>
+            Clearance Reports
+        </h1>
+        <p class="page-description">Clearance transactions by vehicle, amount and kilometer.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/clearance">Clearance Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Clearance Records</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Clearance ID</th>
+                        <th>Vehicle</th>
+                        <th>Clearance Number</th>
+                        <th>Date</th>
+                        <th>Amount (R)</th>
+                        <th>Kilometer</th>
+                        <th>Comment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="7">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="7">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.clearance_code</td>
+                                <td>@GetVehicleLabel(row.vmf_code)</td>
+                                <td>@(row.clearance_number?.ToString() ?? "-")</td>
+                                <td>@(row.Clearance_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@(row.Clearance_amount?.ToString("N2") ?? "-")</td>
+                                <td>@(row.clearance_kilo?.ToString("N0") ?? "-")</td>
+                                <td>@ValueOrDash(row.clearance_comment)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<ClearanceDto> _rows = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<ClearanceDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            if (_vehicleLabels.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabels = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
+            }
+
+            _rows = (await ClearanceService.GetAllAsync())
+                .OrderByDescending(c => c.Clearance_date)
+                .ThenByDescending(c => c.clearance_code)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading clearance report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabels.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

@@ -23,8 +23,21 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">GG / GP Number</label>
+                    <label class="form-label">@(_lookupType == "GP" ? "GP Number" : "GG Number")</label>
                     <InputText class="form-input" @bind-Value="_vehicleNumber" />
+                    <div class="form-actions" style="margin-top: 0.5rem;">
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync">Search vehicle</button>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Vehicle Match</label>
+                    <select class="form-select" @bind="_selectedVehicleVmfCode" @bind:after="ApplySelectedVehicle">
+                        <option value="">Select vehicle</option>
+                        @foreach (var vehicle in _vehicleMatches)
+                        {
+                            <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                        }
+                    </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Lookup Type</label>
@@ -93,7 +106,7 @@
                     }
                     else
                     {
-                        @foreach (var entry in _entries)
+                        @foreach (var entry in PagedEntries)
                         {
                             <tr>
                                 <td>@entry.VehicleNumber</td>
@@ -118,6 +131,15 @@
                 </tbody>
             </table>
         </div>
+        @if (_entries.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_entryPage <= 1)">Previous</button>
+                <div class="pagination-info">Page @_entryPage of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_entryPage >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_entries.Count | Page size: @_pageSize</div>
+        }
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="AddEntry">Add</button>
         </div>
@@ -131,8 +153,21 @@
 
     private readonly List<WorkshopEntryRow> _entries = new();
     private List<WorkshopEntryRow> _allEntries = new();
+    private List<FIS.Web.Models.VehicleDto> _vehicleMatches = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int? _selectedVehicleVmfCode;
     private bool _loading = true;
     private FIS.Web.Models.VehicleDto? _selectedVehicle;
+    private readonly int _pageSize = 12;
+    private int _entryPage = 1;
+
+    private IEnumerable<WorkshopEntryRow> PagedEntries
+        => _entries
+            .Skip((_entryPage - 1) * _pageSize)
+            .Take(_pageSize);
+
+    private int TotalPages
+        => Math.Max(1, (int)Math.Ceiling(_entries.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -144,18 +179,30 @@
         _loading = true;
         try
         {
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => GetVehicleLabel(g.First()));
+            }
+
             var items = await WorkshopService.GetAllAsync<WorkshopDto>();
             _allEntries = items.Select(item => new WorkshopEntryRow
             {
                 VmfCode = item.vmf_code,
-                VehicleNumber = item.vmf_code?.ToString() ?? "Unknown",
+                VehicleNumber = GetVehicleLabel(item.vmf_code),
                 DateReceived = FormatDate(item.receive_date),
+                DateReceivedSort = item.receive_date,
                 InquiryRefer = item.ww_code.ToString(),
                 WorkshopType = "Workshop",
                 JobClosed = item.complete_time.HasValue ? "Yes" : "No"
             }).ToList();
             _entries.Clear();
             _entries.AddRange(_allEntries);
+            ResetPagination();
         }
         catch (Exception ex)
         {
@@ -174,26 +221,18 @@
         if (string.IsNullOrWhiteSpace(_vehicleNumber))
         {
             _selectedVehicle = null;
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
             _entries.Clear();
             _entries.AddRange(OrderEntries(_allEntries));
+            ResetPagination();
             return;
         }
 
-        var query = _vehicleNumber.Trim();
         try
         {
-            var vehicles = await VehicleService.SearchVehiclesAsync(query);
-            var normalized = Normalize(query);
-            var match = _lookupType == "GP"
-                ? vehicles.FirstOrDefault(v => Normalize(v.registration_number) == normalized)
-                : vehicles.FirstOrDefault(v => Normalize(v.fleet_number) == normalized);
-
-            if (match == null)
-            {
-                match = _lookupType == "GP"
-                    ? vehicles.FirstOrDefault(v => Normalize(v.registration_number).Contains(normalized, StringComparison.OrdinalIgnoreCase))
-                    : vehicles.FirstOrDefault(v => Normalize(v.fleet_number).Contains(normalized, StringComparison.OrdinalIgnoreCase));
-            }
+            await SearchVehiclesAsync();
+            var match = _selectedVehicle;
 
             if (match == null)
             {
@@ -212,44 +251,79 @@
                 _entries.Add(new WorkshopEntryRow
                 {
                     VmfCode = match.vmf_code,
-                    VehicleNumber = _lookupType == "GP"
-                        ? ValueOrDash(match.registration_number)
-                        : ValueOrDash(match.fleet_number),
+                    VehicleNumber = GetVehicleLabel(match),
                     DepartmentCode = ValueOrDash(match.location_code.ToString()),
                     DepartmentName = ValueOrDash(match.location_description),
                     DateReceived = "-",
+                    DateReceivedSort = null,
                     InquiryRefer = "-",
                     WorkshopType = "Workshop",
                     JobClosed = "No entries yet"
                 });
+                ResetPagination();
             }
             else
             {
                 foreach (var row in filtered)
                 {
-                    row.VehicleNumber = _lookupType == "GP"
-                        ? ValueOrDash(match.registration_number)
-                        : ValueOrDash(match.fleet_number);
+                    row.VehicleNumber = GetVehicleLabel(match);
                     row.DepartmentCode = ValueOrDash(match.location_code.ToString());
                     row.DepartmentName = ValueOrDash(match.location_description);
                 }
 
                 _entries.AddRange(OrderEntries(filtered));
+                ResetPagination();
             }
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("console.error", $"Error searching vehicle: {ex.Message}");
             _entries.Clear();
+            ResetPagination();
         }
+    }
+
+    private async Task SearchVehiclesAsync()
+    {
+        var query = _vehicleNumber.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            _selectedVehicle = null;
+            return;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(query);
+        _vehicleMatches = FilterVehicleMatches(matches, query, _lookupType);
+
+        if (_vehicleMatches.All(vehicle => vehicle.vmf_code != _selectedVehicleVmfCode))
+        {
+            _selectedVehicleVmfCode = null;
+            _selectedVehicle = null;
+        }
+    }
+
+    private void ApplySelectedVehicle()
+    {
+        if (!_selectedVehicleVmfCode.HasValue)
+        {
+            _selectedVehicle = null;
+            return;
+        }
+
+        _selectedVehicle = _vehicleMatches.FirstOrDefault(vehicle => vehicle.vmf_code == _selectedVehicleVmfCode.Value);
     }
 
     private void SetLookupType(string value)
     {
         _lookupType = value;
+        _vehicleMatches = new();
+        _selectedVehicleVmfCode = null;
+        _selectedVehicle = null;
         if (!string.IsNullOrWhiteSpace(_vehicleNumber))
         {
-            _ = Submit();
+            _ = SearchVehiclesAsync();
         }
     }
 
@@ -261,6 +335,7 @@
             var current = _entries.ToList();
             _entries.Clear();
             _entries.AddRange(OrderEntries(current));
+            ResetPagination();
         }
     }
 
@@ -281,17 +356,76 @@
     {
         return _deptBy == "Name"
             ? source.OrderBy(x => x.DepartmentName)
-            : source.OrderByDescending(x => x.DateReceived);
+            : source.OrderByDescending(x => x.DateReceivedSort);
     }
 
     private static string Normalize(string? value)
         => (value ?? string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
 
+    private static List<FIS.Web.Models.VehicleDto> FilterVehicleMatches(List<FIS.Web.Models.VehicleDto> matches, string query, string lookupType)
+    {
+        var keyword = query.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return new List<FIS.Web.Models.VehicleDto>();
+        }
+
+        return (lookupType == "GP"
+            ? matches.Where(vehicle =>
+                !string.IsNullOrWhiteSpace(vehicle.registration_number) &&
+                vehicle.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            : matches.Where(vehicle =>
+                !string.IsNullOrWhiteSpace(vehicle.fleet_number) &&
+                vehicle.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(vehicle => lookupType == "GP"
+                ? string.Equals(vehicle.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(vehicle.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
+    private string GetVehicleLabel(FIS.Web.Models.VehicleDto? vehicle)
+        => vehicle == null
+            ? "-"
+            : $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "Unknown";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
     private string GetDepartmentDisplay(WorkshopEntryRow row)
         => _deptBy == "Name" ? row.DepartmentName : row.DepartmentCode;
+
+    private void PrevPage()
+    {
+        if (_entryPage > 1)
+        {
+            _entryPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_entryPage < TotalPages)
+        {
+            _entryPage++;
+        }
+    }
+
+    private void ResetPagination()
+    {
+        _entryPage = 1;
+    }
 
     private sealed class WorkshopEntryRow
     {
@@ -300,6 +434,7 @@
         public string DepartmentCode { get; set; } = "-";
         public string DepartmentName { get; set; } = "-";
         public string DateReceived { get; set; } = "";
+        public DateTime? DateReceivedSort { get; set; }
         public string InquiryRefer { get; set; } = "";
         public string WorkshopType { get; set; } = "";
         public string JobClosed { get; set; } = "";

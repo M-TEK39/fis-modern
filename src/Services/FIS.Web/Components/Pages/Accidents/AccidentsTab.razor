@@ -69,7 +69,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var accident in FilteredAccidents)
+                        @foreach (var accident in PagedAccidents)
                         {
                             <tr>
                                 <td class="ref-number">@accident.accident_reference</td>
@@ -109,6 +109,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (FilteredAccidents.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @FilteredAccidents.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -123,17 +132,51 @@
     [Parameter] public EventCallback<AccidentDto> OnView { get; set; }
     [Parameter] public EventCallback<AccidentDto> OnEdit { get; set; }
     [Parameter] public EventCallback<AccidentDto> OnDelete { get; set; }
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<AccidentDto> PagedAccidents
+        => FilteredAccidents.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages
+        => Math.Max(1, (int)Math.Ceiling(FilteredAccidents.Count / (double)_pageSize));
+
+    protected override void OnParametersSet()
+    {
+        if (_page > TotalPages)
+        {
+            _page = TotalPages;
+        }
+    }
 
     private async Task OnSearchInput(ChangeEventArgs e)
     {
         SearchTerm = e.Value?.ToString() ?? "";
+        _page = 1;
         await OnSearchChange.InvokeAsync(SearchTerm);
     }
 
     private async Task ClearSearch()
     {
         SearchTerm = "";
+        _page = 1;
         await OnSearchChange.InvokeAsync(SearchTerm);
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 
     private string GetSeverityClass(string severity)

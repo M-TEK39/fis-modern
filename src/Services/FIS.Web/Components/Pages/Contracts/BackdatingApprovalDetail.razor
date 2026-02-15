@@ -24,7 +24,7 @@
             <i class="bx bx-check-shield"></i>
             Vehicle Contract Management
         </h1>
-        <p class="page-description">Backdated contract approval details aligned to the legacy workflow.</p>
+        <p class="page-description">Backdated contract approval details aligned to the workflow.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/contracts/backdating-approval">Return to Search</a>
@@ -35,7 +35,7 @@
 <div class="page-content">
     <div class="contract-banner contract-banner-info">
         <i class="bx bx-info-circle"></i>
-            <span>Contract for <strong>@(ValueOrDash(_vehicle?.fleet_number) ?? GetQuery("ggnumber"))</strong> || <strong>@(ValueOrDash(_vehicle?.registration_number) ?? GetQuery("regnumber"))</strong></span>
+            <span>Contract for <strong>@GetVehicleContextLabel()</strong></span>
     </div>
 
     <div class="contract-section">
@@ -156,9 +156,9 @@
                             <tbody>
                                 <tr>
                                     <th>GG Number</th>
-                                    <td>@(ValueOrDash(_vehicle?.fleet_number) ?? GetQuery("ggnumber"))</td>
+                                    <td>@PreferVehicleValue(_vehicle?.fleet_number, "ggnumber")</td>
                                     <th>Registration Number</th>
-                                    <td>@(ValueOrDash(_vehicle?.registration_number) ?? GetQuery("regnumber"))</td>
+                                    <td>@PreferVehicleValue(_vehicle?.registration_number, "regnumber")</td>
                                     <th>Identification</th>
                                     <td rowspan="5" class="contract-photo-cell">
                                         <div class="contract-photo-box">Vehicle Photos</div>
@@ -220,7 +220,7 @@
                                     <th>Department</th>
                                     <td colspan="2">
                                         <select class="form-select">
-                                            <option value="">@(ValueOrDash(_department?.department_description) ?? "Select Department")</option>
+                                            <option value="">@ValueOrDash(_department?.department_description)</option>
                                         </select>
                                     </td>
                                     <td rowspan="4" class="contract-tariff-cell">
@@ -258,7 +258,7 @@
                                     <th>Site</th>
                                     <td colspan="2">
                                         <select class="form-select">
-                                            <option value="">@(ValueOrDash(_siteName) ?? "Select Site")</option>
+                                            <option value="">@ValueOrDash(_siteName)</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -273,7 +273,7 @@
                                 </tr>
                                 <tr>
                                     <td colspan="3">
-                                        <input type="checkbox" /> Active Fuelcard <span class="contract-muted">[Fuel Card #]</span>
+                                        <input type="checkbox" /> Active Fuelcard <span class="contract-muted">(Fuel Card Number)</span>
                                     </td>
                                 </tr>
                                 <tr>
@@ -365,7 +365,7 @@
                                     <th>Department</th>
                                     <td colspan="3">
                                         <select class="form-select">
-                                            <option value="">@(ValueOrDash(_department?.department_description) ?? "Select Department")</option>
+                                            <option value="">@ValueOrDash(_department?.department_description)</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -373,7 +373,7 @@
                                     <th>Site</th>
                                     <td colspan="3">
                                         <select class="form-select">
-                                            <option value="">@(ValueOrDash(_siteName) ?? "Select Site")</option>
+                                            <option value="">@ValueOrDash(_siteName)</option>
                                         </select>
                                     </td>
                                 </tr>
@@ -394,7 +394,7 @@
                                     <th>Driver Name</th>
                                     <td colspan="2">
                                         <select class="form-select">
-                                            <option value="">@(ValueOrDash(_driverName) ?? "Select Driver")</option>
+                                            <option value="">@ValueOrDash(_driverName)</option>
                                         </select>
                                     </td>
                                     <td colspan="2">
@@ -550,11 +550,11 @@
                                     <td><input type="date" class="form-input" value="@FormatDateForInput(_contract?.end_date)" readonly /></td>
                                 </tr>
                                 <tr>
-                                    <th>Back Dating Required</th>
+                                    <th>Backdating Required</th>
                                     <td><input type="checkbox" /></td>
-                                    <th>Back Dating Start Date</th>
+                                    <th>Backdating Start Date</th>
                                     <td><input type="date" class="form-input" /></td>
-                                    <th>Back Dating Status</th>
+                                    <th>Backdating Status</th>
                                     <td colspan="3">Requested / Declined / Approved</td>
                                 </tr>
                                 <tr>
@@ -583,7 +583,7 @@
                             <thead>
                                 <tr class="contract-legacy-heading">
                                     <th colspan="4">
-                                        Financial Impart of Back Dating Contract
+                                        Financial Impact of Backdating Contract
                                         <br />
                                         (These journals will be reversed and a new contract will be inserted for new period)
                                     </th>
@@ -605,7 +605,7 @@
                                                     </thead>
                                                     <tbody>
                                                         <tr>
-                                                            <td colspan="4">No journal Details where found that was already Billed</td>
+                                                            <td colspan="4">No billed journals found for this contract period.</td>
                                                         </tr>
                                                     </tbody>
                                                 </table>
@@ -745,10 +745,11 @@
 
     private async Task<VehicleDto?> FindVehicleFromQuery()
     {
-        var query = !string.IsNullOrWhiteSpace(GgNumber)
-            ? GgNumber.Trim()
+        var preferFleet = !string.IsNullOrWhiteSpace(GgNumber);
+        var query = preferFleet
+            ? GgNumber?.Trim() ?? string.Empty
             : !string.IsNullOrWhiteSpace(RegNumber)
-                ? RegNumber.Trim()
+                ? RegNumber?.Trim() ?? string.Empty
                 : string.Empty;
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -756,7 +757,40 @@
         }
 
         var results = await VehicleService.SearchVehiclesAsync(query);
-        return results.FirstOrDefault();
+        var ranked = RankVehicleMatches(results, query, preferFleet);
+        if (ranked.Count == 0)
+        {
+            return null;
+        }
+
+        var exactMatches = ranked.Where(v => preferFleet
+            ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (exactMatches.Count != 1)
+        {
+            return null;
+        }
+
+        return exactMatches.SingleOrDefault();
+    }
+
+    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, bool preferFleet)
+    {
+        return (preferFleet
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                preferFleet
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(v =>
+                preferFleet
+                    ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
     }
 
     private async Task<string?> ResolveDriverName(string? driverCodeText)
@@ -791,6 +825,25 @@
             "action" => Action ?? "-",
             _ => "-"
         };
+    }
+
+    private string GetVehicleContextLabel()
+    {
+        var gg = PreferVehicleValue(_vehicle?.fleet_number, "ggnumber");
+        var gp = PreferVehicleValue(_vehicle?.registration_number, "regnumber");
+        var vmf = _vehicle?.vmf_code.ToString() ?? "-";
+        return $"{gg} / {gp} ({vmf})";
+    }
+
+    private string PreferVehicleValue(string? value, string queryKey)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var queryValue = GetQuery(queryKey);
+        return ValueOrDash(queryValue);
     }
 
     private async Task RunBackdatingActionAsync(string action)
@@ -898,7 +951,7 @@
         return int.TryParse(ContractId, out var id) && id > 0 ? id : 0;
     }
 
-    private static string? ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private static string FormatDate(DateTime? date) => date?.ToString("yyyy/MM/dd") ?? "-";
 
@@ -920,9 +973,9 @@
 
     private string BuildApprovalSummary()
     {
-        var openedBy = ValueOrDash(_contract?.contractor_name) ?? "Unknown";
+        var openedBy = ValueOrDash(_contract?.contractor_name);
         var openedOn = _contract?.start_date.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy");
-        var status = ValueOrDash(_contract?.status) ?? "Awaiting Approval";
+        var status = ValueOrDash(_contract?.status);
 
         return $"CONTRACT OPENED BY {openedBy.ToUpperInvariant()} ON THE {openedOn} AND CURRENTLY IN STATUS: {status.ToUpperInvariant()}.";
     }

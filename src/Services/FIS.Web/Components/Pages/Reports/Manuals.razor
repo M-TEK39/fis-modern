@@ -1,12 +1,97 @@
 @page "/reports/manuals"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
-<LegacyReportEndpointPage
-    Title="Manuals"
-    Description="Legacy placeholder for manuals/RPTmanuals.aspx."
-    LegacyPath="manuals/RPTmanuals.aspx"
-    Endpoint="api/manuals/reports"
-    HttpMethod="GET"
-    ReportType="manuals-reports"
-    Icon="bx-file" />
+<PageTitle>Manuals Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-book"></i>
+            Manuals Reports
+        </h1>
+        <p class="page-description">Manual library and report guidance documents.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/manuals">Manuals Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">@_manuals.Count Manual(s)</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Description</th>
+                        <th>Link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var manual in PagedRows)
+                    {
+                        <tr>
+                            <td>@manual.Title</td>
+                            <td>@manual.Description</td>
+                            <td class="actions-column">
+                                <div class="table-actions">
+                                    <a class="btn-icon btn-icon-view" href="@manual.Path" target="_blank" rel="noopener noreferrer" title="Open manual">
+                                        <i class="bx bx-link-external"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_manuals.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_manuals.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private readonly List<ManualItem> _manuals =
+    [
+        new("Electronic Logsheet and Trip Authority Training Manual", "/Docs/Electronic Log Sheet and Trip Authority Training Manual.doc", "Step-by-step user training for the electronic logsheet workflow."),
+        new("Manual: Updating Trip Authorities", "/Docs/doc/Updating Trip Authorities Manual2.htm", "Procedural guide for updating existing trip authority records."),
+        new("Procedures Manual (Chauffeur Driven Service)", "/private_hire/Procedures_manual.htm", "Procedures governing the chauffeur driven service."),
+        new("Manuals Library", "/Manuals/Allmanuals.htm", "Consolidated library of system manuals and references."),
+        new("Manual for Changing Password", "/Docs/Implementation of User Admin on GGMT system.doc", "Guidance on rotating passwords inside the User Admin module.")
+    ];
+
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<ManualItem> PagedRows => _manuals.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_manuals.Count / (double)_pageSize));
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record ManualItem(string Title, string Path, string Description);
+}

@@ -1,6 +1,8 @@
 @page "/private-hire/reports/vehicles-per-company"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicles Per Hire Company - Fleet Information System</PageTitle>
 
@@ -24,22 +26,20 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Company</label>
-                    <select class="form-select">
-                        <option value="">Select...</option>
+                    <select class="form-select" @bind="_selectedContractorId">
+                        <option value="0">Select...</option>
+                        @foreach (var contractor in _contractors)
+                        {
+                            <option value="@contractor.contractor_id">@contractor.company_name</option>
+                        }
                     </select>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="ApplyFilter">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
-            <LegacyEndpointActionPanel
-                LegacyPath="Private_Hire/RPT_phv_vehicle_per_company1.aspx"
-                Endpoint="api/privatehire/reports/vehicles-per-company"
-                HttpMethod="GET"
-                ButtonText="Run Vehicles per Company API"
-                ReportType="private-hire-report-per-company" />
-            <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: [Legacy timestamp]</div>
+            <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: @DateTime.Now</div>
 
             <div class="form-section" style="margin-top: 2rem;">
                 <h3 class="form-section-title">
@@ -57,14 +57,115 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="3">No records found.</td>
-                                </tr>
+                                @if (_loading)
+                                {
+                                    <tr>
+                                        <td colspan="3">Loading records...</td>
+                                    </tr>
+                                }
+                                else if (_filtered.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    var idx = (_page - 1) * _pageSize;
+                                    @foreach (var row in PagedVehicles)
+                                    {
+                                        idx++;
+                                        <tr>
+                                            <td>@idx</td>
+                                            <td>@ValueOrDash(row.registration_number)</td>
+                                            <td>@ValueOrDash(row.contractor_name)</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
+                </div>
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading = true;
+    private int _selectedContractorId;
+    private List<PrivateHireContractorDto> _contractors = new();
+    private List<PrivateHireVehicleDto> _allVehicles = new();
+    private List<PrivateHireVehicleDto> _filtered = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<PrivateHireVehicleDto> PagedVehicles => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var contractorsTask = PrivateHireService.GetContractorsAsync();
+            var vehiclesTask = PrivateHireService.GetVehiclesAsync();
+            await Task.WhenAll(contractorsTask, vehiclesTask);
+
+            _contractors = contractorsTask.Result;
+            _allVehicles = vehiclesTask.Result;
+            _filtered = new();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            _contractors = new();
+            _allVehicles = new();
+            _filtered = new();
+            _page = 1;
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-per-company report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = _selectedContractorId > 0
+            ? _allVehicles.Where(v => v.contractor_id == _selectedContractorId).ToList()
+            : new();
+
+        _page = 1;
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

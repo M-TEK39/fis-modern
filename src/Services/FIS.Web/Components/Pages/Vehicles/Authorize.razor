@@ -18,7 +18,7 @@
             <i class="bx bx-check-shield"></i>
             Authorize Captured Vehicle Information
         </h1>
-        <p class="page-description">Legacy authorization queues for rejected, awaiting, and authorized vehicles.</p>
+        <p class="page-description">Authorization queues for rejected, awaiting, and authorized vehicles.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick="ToggleShowAllAuthorized">
@@ -77,7 +77,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var vehicle in _rejectedVehicles)
+                            @foreach (var vehicle in PagedRejectedVehicles)
                             {
                                 <tr>
                                     <td>@ValueOrDash(vehicle.ChassisNumber)</td>
@@ -95,6 +95,11 @@
                             }
                         </tbody>
                     </table>
+                </div>
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousRejectedPage" disabled="@(_rejectedPage <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_rejectedPage of @RejectedTotalPages</div>
+                    <button class="pagination-btn" @onclick="NextRejectedPage" disabled="@(_rejectedPage >= RejectedTotalPages)">Next</button>
                 </div>
             }
         </div>
@@ -128,7 +133,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var vehicle in _awaitingVehicles)
+                            @foreach (var vehicle in PagedAwaitingVehicles)
                             {
                                 <tr>
                                     <td>@ValueOrDash(vehicle.ChassisNumber)</td>
@@ -151,6 +156,11 @@
                             }
                         </tbody>
                     </table>
+                </div>
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousAwaitingPage" disabled="@(_awaitingPage <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_awaitingPage of @AwaitingTotalPages</div>
+                    <button class="pagination-btn" @onclick="NextAwaitingPage" disabled="@(_awaitingPage >= AwaitingTotalPages)">Next</button>
                 </div>
             }
         </div>
@@ -182,7 +192,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var vehicle in VisibleAuthorizedVehicles())
+                            @foreach (var vehicle in PagedAuthorizedVehicles)
                             {
                                 <tr>
                                     <td>@ValueOrDash(vehicle.ChassisNumber)</td>
@@ -202,6 +212,11 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousAuthorizedPage" disabled="@(_authorizedPage <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_authorizedPage of @AuthorizedTotalPages</div>
+                    <button class="pagination-btn" @onclick="NextAuthorizedPage" disabled="@(_authorizedPage >= AuthorizedTotalPages)">Next</button>
+                </div>
             }
         </div>
     }
@@ -216,6 +231,19 @@
            ShowCloseButton="true"
            OnCancel="CloseReviewModal">
         <ChildContent>
+            @if (CanApproveOrReject() && CanReviewSelectedVehicle())
+            {
+                <div class="alert alert-success">Reviewer mode: you can approve or reject this captured vehicle.</div>
+            }
+            else if (CanApproveOrReject() && !CanReviewSelectedVehicle())
+            {
+                <div class="alert alert-error">Capturer mode: you cannot review or approve your own captured vehicle.</div>
+            }
+            else
+            {
+                <div class="alert alert-info">View mode: this record is no longer awaiting authorization.</div>
+            }
+
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Current GG Number</label>
@@ -255,20 +283,12 @@
                 </div>
                 <div class="form-field form-group-full">
                     <label class="form-label">Authorizer's Comment</label>
-                    <textarea class="form-input" rows="3" @bind="_authorizerComment"></textarea>
+                    <textarea class="form-input" rows="3" @bind="_authorizerComment" disabled="@(!CanCommentSelectedVehicle())"></textarea>
                 </div>
                 <div class="form-field form-group-full">
                     <label class="form-label">Rejection Reason (required when rejecting)</label>
-                    <input class="form-input" @bind="_rejectionReason" />
+                    <input class="form-input" @bind="_rejectionReason" disabled="@(!CanCommentSelectedVehicle())" />
                 </div>
-                @if (_selectedVehicle != null
-                    && string.Equals(_selectedVehicle.AuthorityStatus, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase)
-                    && !CanReviewSelectedVehicle())
-                {
-                    <div class="form-field form-group-full">
-                        <div class="alert alert-error">You cannot review or approve your own captured vehicle.</div>
-                    </div>
-                }
                 @if (_selectedVehicle != null && !string.IsNullOrWhiteSpace(_selectedVehicle.RejectionReason))
                 {
                     <div class="form-field form-group-full">
@@ -276,10 +296,17 @@
                         <textarea class="form-input" rows="2" readonly>@_selectedVehicle.RejectionReason</textarea>
                     </div>
                 }
+                @if (_selectedVehicle != null && !string.IsNullOrWhiteSpace(_selectedVehicle.AuthorizationComment))
+                {
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Latest Reviewer Comment</label>
+                        <textarea class="form-input" rows="2" readonly>@_selectedVehicle.AuthorizationComment</textarea>
+                    </div>
+                }
             </div>
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" @onclick="CloseReviewModal" disabled="@_actionRunning">Close</button>
-                <button type="button" class="btn btn-secondary" @onclick="AddCommentAsync" disabled="@_actionRunning">
+                <button type="button" class="btn btn-secondary" @onclick="AddCommentAsync" disabled="@(_actionRunning || !CanCommentSelectedVehicle())">
                     @if (_actionRunning)
                     {
                         <span class="spinner-sm"></span>
@@ -290,12 +317,15 @@
                         <span>Add Comment</span>
                     }
                 </button>
-                <button type="button" class="btn btn-primary" @onclick="ApproveAsync" disabled="@(_actionRunning || !CanApproveOrReject() || !CanReviewSelectedVehicle())">
-                    Approve
-                </button>
-                <button type="button" class="btn btn-danger" @onclick="RejectAsync" disabled="@(_actionRunning || !CanApproveOrReject() || !CanReviewSelectedVehicle())">
-                    Reject
-                </button>
+                @if (CanApproveOrReject() && CanReviewSelectedVehicle())
+                {
+                    <button type="button" class="btn btn-primary" @onclick="ApproveAsync" disabled="@_actionRunning">
+                        Approve
+                    </button>
+                    <button type="button" class="btn btn-danger" @onclick="RejectAsync" disabled="@_actionRunning">
+                        Reject
+                    </button>
+                }
             </div>
         </ChildContent>
     </Modal>
@@ -314,6 +344,17 @@
     private List<VehicleAuthorizationDto> _rejectedVehicles = new();
     private List<VehicleAuthorizationDto> _awaitingVehicles = new();
     private List<VehicleAuthorizationDto> _authorizedVehicles = new();
+    private int _rejectedPage = 1;
+    private int _awaitingPage = 1;
+    private int _authorizedPage = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<VehicleAuthorizationDto> PagedRejectedVehicles => _rejectedVehicles.Skip((_rejectedPage - 1) * _pageSize).Take(_pageSize);
+    private int RejectedTotalPages => Math.Max(1, (int)Math.Ceiling(_rejectedVehicles.Count / (double)_pageSize));
+    private IEnumerable<VehicleAuthorizationDto> PagedAwaitingVehicles => _awaitingVehicles.Skip((_awaitingPage - 1) * _pageSize).Take(_pageSize);
+    private int AwaitingTotalPages => Math.Max(1, (int)Math.Ceiling(_awaitingVehicles.Count / (double)_pageSize));
+    private IEnumerable<VehicleAuthorizationDto> AuthorizedBaseVehicles => _showAllAuthorized ? _authorizedVehicles : _authorizedVehicles.Take(25);
+    private IEnumerable<VehicleAuthorizationDto> PagedAuthorizedVehicles => AuthorizedBaseVehicles.Skip((_authorizedPage - 1) * _pageSize).Take(_pageSize);
+    private int AuthorizedTotalPages => Math.Max(1, (int)Math.Ceiling(AuthorizedBaseVehicles.Count() / (double)_pageSize));
     private int? _currentUserAccessCode;
     private bool _canAuthorizeInception;
     private long _currentAccessLevel;
@@ -344,6 +385,9 @@
             _awaitingVehicles = pendingTask.Result.OrderBy(v => v.ChassisNumber).ToList();
             _rejectedVehicles = rejectedTask.Result.OrderByDescending(v => v.AuthorizationDate).ToList();
             _authorizedVehicles = authorizedTask.Result.OrderByDescending(v => v.AuthorizationDate).ToList();
+            _rejectedPage = 1;
+            _awaitingPage = 1;
+            _authorizedPage = 1;
         }
         catch (Exception ex)
         {
@@ -357,19 +401,10 @@
         }
     }
 
-    private IEnumerable<VehicleAuthorizationDto> VisibleAuthorizedVehicles()
-    {
-        if (_showAllAuthorized)
-        {
-            return _authorizedVehicles;
-        }
-
-        return _authorizedVehicles.Take(25);
-    }
-
     private void ToggleShowAllAuthorized()
     {
         _showAllAuthorized = !_showAllAuthorized;
+        _authorizedPage = 1;
     }
 
     private void OpenReviewModal(VehicleAuthorizationDto vehicle)
@@ -399,6 +434,13 @@
         return _selectedVehicle != null && CanReviewVehicle(_selectedVehicle);
     }
 
+    private bool CanCommentSelectedVehicle()
+    {
+        return _selectedVehicle != null
+            && string.Equals(_selectedVehicle.AuthorityStatus, "Awaiting Authorization", StringComparison.OrdinalIgnoreCase)
+            && CanReviewSelectedVehicle();
+    }
+
     private bool CanReviewVehicle(VehicleAuthorizationDto vehicle)
     {
         return _canAuthorizeInception && !IsCurrentUserVehicleCapturer(vehicle);
@@ -415,6 +457,13 @@
     {
         if (_selectedVehicle == null)
         {
+            return;
+        }
+
+        if (!CanCommentSelectedVehicle())
+        {
+            _statusError = true;
+            _statusMessage = "Only reviewers can comment while record is awaiting authorization.";
             return;
         }
 
@@ -612,5 +661,53 @@
         return roleClaims.Any(value =>
             value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void PreviousRejectedPage()
+    {
+        if (_rejectedPage > 1)
+        {
+            _rejectedPage--;
+        }
+    }
+
+    private void NextRejectedPage()
+    {
+        if (_rejectedPage < RejectedTotalPages)
+        {
+            _rejectedPage++;
+        }
+    }
+
+    private void PreviousAwaitingPage()
+    {
+        if (_awaitingPage > 1)
+        {
+            _awaitingPage--;
+        }
+    }
+
+    private void NextAwaitingPage()
+    {
+        if (_awaitingPage < AwaitingTotalPages)
+        {
+            _awaitingPage++;
+        }
+    }
+
+    private void PreviousAuthorizedPage()
+    {
+        if (_authorizedPage > 1)
+        {
+            _authorizedPage--;
+        }
+    }
+
+    private void NextAuthorizedPage()
+    {
+        if (_authorizedPage < AuthorizedTotalPages)
+        {
+            _authorizedPage++;
+        }
     }
 }

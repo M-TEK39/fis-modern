@@ -1,6 +1,5 @@
 @page "/taxis"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using FIS.Web.Services
 @inject TaxiApiService TaxiService
 @inject IJSRuntime JS
@@ -13,7 +12,7 @@
             <i class="bx bx-taxi"></i>
             Taxi Maintenance Menu
         </h1>
-        <p class="page-description">Legacy taxi requisitions, logs, maintenance, and reports.</p>
+        <p class="page-description">Taxi requisitions, logs, maintenance, and reports.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick="LoadTaxis">
@@ -181,7 +180,7 @@
                 <div class="empty-state">
                     <i class="bx bx-taxi"></i>
                     <h3>No taxi records</h3>
-                    <p>No taxi records are available.</p>
+                    <p>No taxi records match the current filter selection.</p>
                 </div>
             }
             else
@@ -203,7 +202,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach (var taxi in _taxis)
+                                @foreach (var taxi in PagedTaxis)
                                 {
                                     <tr>
                                     <td>@ValueOrDash(taxi.Number)</td>
@@ -217,6 +216,14 @@
                         </tbody>
                         </table>
                     </div>
+                    @if (TotalPages > 1)
+                    {
+                        <div class="pagination-controls">
+                            <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                            <span>Page @_page of @TotalPages</span>
+                            <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                        </div>
+                    }
                 </div>
             }
         </div>
@@ -225,7 +232,11 @@
 
 @code {
     private bool _loading = true;
+    private int _page = 1;
+    private const int _pageSize = 12;
     private List<TaxiItem> _taxis = new();
+    private IEnumerable<TaxiItem> PagedTaxis => _taxis.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_taxis.Count / (double)_pageSize));
 
     private bool _showHelp = true;
     private bool _showRequisitions = true;
@@ -253,6 +264,7 @@
                 Date: t.date_required,
                 Notes: t.address_1 ?? string.Empty
             )).ToList();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -271,6 +283,22 @@
     private void ToggleMaintenance() => _showMaintenance = !_showMaintenance;
     private void ToggleReports() => _showReports = !_showReports;
     private void ToggleOther() => _showOther = !_showOther;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private sealed record TaxiItem(string Number, string Driver, string Vehicle, string Status, DateTime? Date, string Notes);
 

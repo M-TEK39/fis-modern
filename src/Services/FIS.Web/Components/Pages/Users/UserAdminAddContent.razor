@@ -2,9 +2,11 @@
 @using System.Security.Claims
 @using FIS.Web.Components.Pages.Users
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject UserApiService UserApiService
+@inject SiteApiService SiteApiService
 
 <div style="display: flex; flex-direction: column; gap: 1.25rem;">
     <div class="card">
@@ -36,47 +38,55 @@
         <div class="card-header">
             <div>
                 <h3>User Profile</h3>
-                <p class="text-muted">Capture profile details exactly as required in the legacy flow.</p>
+                <p class="text-muted">Capture profile details exactly as required in the workflow.</p>
             </div>
         </div>
         <div class="card-body">
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">First Name</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="text" @bind="_firstName" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Last Name</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="text" @bind="_lastName" />
                 </div>
                 <div class="form-field form-group-full">
                     <label class="form-label">Site</label>
-                    <select class="form-select">
-                        <option>Select a Site</option>
+                    <select class="form-select" @bind="_selectedSiteCode" @bind:after="OnSiteChangedAsync">
+                        <option value="">Select site</option>
+                        @foreach (var site in _sites.OrderBy(s => s.Description))
+                        {
+                            <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Position</label>
-                    <select class="form-select">
-                        <option>Select Position</option>
+                    <select class="form-select" @bind="_selectedPositionCode">
+                        <option value="">Select Position</option>
+                        @foreach (var positionCode in _positionCodes)
+                        {
+                            <option value="@positionCode">@($"Position ({positionCode})")</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Persal</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="number" @bind="_persalNumber" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Contract Number</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="number" @bind="_contractNumber" />
                     <span class="text-muted">(if No PersalNo is available)</span>
                 </div>
                 <div class="form-field">
                     <label class="form-label">ID</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="number" @bind="_saIdNumber" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Passport Number</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="number" @bind="_passportNumber" />
                     <span class="text-muted">(if No SA ID is available)</span>
                 </div>
                 <div class="form-field">
@@ -85,17 +95,21 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Fax</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="number" @bind="_faxNumber" />
                     <span class="text-muted">(optional)</span>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Cell</label>
-                    <input class="form-input" type="text" />
+                    <input class="form-input" type="number" @bind="_cellphoneNumber" />
                 </div>
                 <div class="form-field form-group-full">
                     <label class="form-label">Client Approver Name</label>
-                    <select class="form-select">
-                        <option>Select an Approver (after valid Site selection)</option>
+                    <select class="form-select" @bind="_selectedApproverUserAccessCode" disabled="@(!_selectedSiteCode.HasValue || _siteApprovers.Count == 0)">
+                        <option value="">@(_selectedSiteCode.HasValue ? "Select an Approver" : "Select site first")</option>
+                        @foreach (var approver in _siteApprovers)
+                        {
+                            <option value="@approver.UserAccessCode">@ApproverDisplay(approver)</option>
+                        }
                     </select>
                 </div>
                 <div class="form-field">
@@ -150,16 +164,40 @@
 @code {
     private string _displayName = "Authenticated User";
     private string _userName = string.Empty;
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
     private string _email = string.Empty;
     private string _telephone = string.Empty;
+    private short? _selectedSiteCode;
+    private byte? _selectedPositionCode;
+    private int? _persalNumber;
+    private int? _contractNumber;
+    private int? _saIdNumber;
+    private int? _passportNumber;
+    private int? _faxNumber;
+    private int? _cellphoneNumber;
+    private short? _selectedApproverUserAccessCode;
     private string? _errorMessage;
     private string? _successMessage;
     private bool _submitting;
+    private List<SiteResponseDto> _sites = new();
+    private List<byte> _positionCodes = new();
+    private List<UserProfileDto> _profiles = new();
+    private List<UserProfileDto> _siteApprovers = new();
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         _displayName = ResolveDisplayName(authState.User);
+        _sites = await SiteApiService.GetAllAsync();
+        _profiles = await UserApiService.GetAllProfilesAsync();
+        _positionCodes = _profiles
+            .Where(profile => profile.PositionCode.HasValue)
+            .Select(profile => profile.PositionCode!.Value)
+            .Distinct()
+            .OrderBy(code => code)
+            .ToList();
+        UpdateApproverOptions();
     }
 
     private static string ResolveDisplayName(ClaimsPrincipal user)
@@ -186,6 +224,12 @@
     {
         _errorMessage = null;
         _successMessage = null;
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _errorMessage = "First Name and Last Name are required.";
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(_email))
         {
             _errorMessage = "Email is required.";
@@ -195,8 +239,32 @@
         _submitting = true;
         try
         {
-            await UserApiService.CreateAsync(_email, _telephone);
+            var created = await UserApiService.CreateAsync(_email, _telephone, _firstName, _lastName);
+            if (created is null || created.UserAccessCode <= 0)
+            {
+                _errorMessage = "User creation failed.";
+                return;
+            }
+
+            await UserApiService.UpdateProfileAsync(created.UserAccessCode, new UpdateUserProfileRequest
+            {
+                FirstName = _firstName,
+                LastName = _lastName,
+                Email = _email,
+                Telephone = _telephone,
+                SiteCode = _selectedSiteCode,
+                PositionCode = _selectedPositionCode,
+                PersalNumber = _persalNumber,
+                ContractNumber = _contractNumber,
+                SaIdNumber = _saIdNumber,
+                PassportNumber = _passportNumber,
+                CellphoneNumber = _cellphoneNumber,
+                FaxNumber = _faxNumber
+            });
+
             _successMessage = "User created successfully.";
+            _profiles = await UserApiService.GetAllProfilesAsync();
+            UpdateApproverOptions();
         }
         catch (Exception ex)
         {
@@ -210,10 +278,60 @@
 
     private void ClearValues()
     {
+        _firstName = string.Empty;
+        _lastName = string.Empty;
         _userName = string.Empty;
         _email = string.Empty;
         _telephone = string.Empty;
+        _selectedSiteCode = null;
+        _selectedPositionCode = null;
+        _persalNumber = null;
+        _contractNumber = null;
+        _saIdNumber = null;
+        _passportNumber = null;
+        _faxNumber = null;
+        _cellphoneNumber = null;
+        _selectedApproverUserAccessCode = null;
+        _siteApprovers = new();
         _errorMessage = null;
         _successMessage = null;
+    }
+
+    private Task OnSiteChangedAsync()
+    {
+        UpdateApproverOptions();
+        return Task.CompletedTask;
+    }
+
+    private void UpdateApproverOptions()
+    {
+        if (!_selectedSiteCode.HasValue)
+        {
+            _siteApprovers = new();
+            _selectedApproverUserAccessCode = null;
+            return;
+        }
+
+        _siteApprovers = _profiles
+            .Where(profile => profile.SiteCode == _selectedSiteCode)
+            .OrderBy(profile => profile.FirstName)
+            .ThenBy(profile => profile.LastName)
+            .ToList();
+
+        if (_siteApprovers.All(profile => profile.UserAccessCode != _selectedApproverUserAccessCode))
+        {
+            _selectedApproverUserAccessCode = null;
+        }
+    }
+
+    private static string ApproverDisplay(UserProfileDto approver)
+    {
+        var name = $"{approver.FirstName} {approver.LastName}".Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = approver.Email ?? "Unknown";
+        }
+
+        return $"{name} ({approver.UserAccessCode})";
     }
 }

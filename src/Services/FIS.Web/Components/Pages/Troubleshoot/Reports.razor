@@ -13,7 +13,7 @@
             <i class="bx bx-file"></i>
             Troubleshoot General Reports
         </h1>
-        <p class="page-description">Legacy flow for TS_Log/RPT_type_select.aspx.</p>
+        <p class="page-description">Troubleshoot reporting workflow.</p>
     </div>
 </div>
 
@@ -31,16 +31,7 @@
                         <option value="">ALL USERS</option>
                         @foreach (var user in _users)
                         {
-                            <option value="@user.UserAccessCode">
-                                @if (!string.IsNullOrWhiteSpace(user.LastName) || !string.IsNullOrWhiteSpace(user.FirstName))
-                                {
-                                    <text>@user.LastName @user.FirstName</text>
-                                }
-                                else
-                                {
-                                    <text>@user.Name</text>
-                                }
-                            </option>
+                            <option value="@user.UserAccessCode">@UserLabel(user)</option>
                         }
                     </select>
                 </div>
@@ -76,8 +67,8 @@
     {
         <div class="empty-state">
             <i class="bx bx-file"></i>
-            <h3>No report data</h3>
-            <p>Submit a report request to load results.</p>
+            <h3>No records found</h3>
+            <p>Adjust filters and submit again to load results.</p>
         </div>
     }
     else
@@ -98,7 +89,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _results)
+                        @foreach (var row in PagedResults)
                         {
                             <tr>
                                 <td>@(row.VehicleIdentifier ?? "-")</td>
@@ -110,6 +101,11 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -129,6 +125,10 @@
     private List<TroubleshootUserDto> _users = new();
     private List<TroubleshootLogEntryDto> _results = new();
     private TroubleshootReportFilter _filter = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<TroubleshootLogEntryDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -161,15 +161,45 @@
         try
         {
             _results = await TroubleshootService.GetGeneralReportsAsync(_filter);
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             _errorMessage = "Failed to load troubleshoot report.";
             await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+            _results = new();
+            _page = 1;
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string UserLabel(TroubleshootUserDto user)
+    {
+        var fullName = $"{user.LastName} {user.FirstName}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            fullName = string.IsNullOrWhiteSpace(user.Name) ? "Unknown User" : user.Name.Trim();
+        }
+
+        return $"{fullName} ({user.UserAccessCode})";
     }
 }

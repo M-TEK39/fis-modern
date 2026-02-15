@@ -9,6 +9,7 @@
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
+@inject TariffApiService TariffService
 @inject DepartmentApiService DepartmentService
 @inject SiteApiService SiteService
 @inject IJSRuntime JSRuntime
@@ -23,20 +24,28 @@
             <i class="bx bx-clipboard"></i>
             Vehicle Contract Management
         </h1>
-        <p class="page-description">Vehicle contract detail management aligned to the legacy workflow.</p>
+        <p class="page-description">Vehicle contract detail management.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/contracts">Return to Search</a>
         <a class="btn btn-secondary btn-sm" href="/contracts">Active Contract Overview</a>
-        <button class="btn btn-secondary btn-sm" type="button" onclick="window.print()">Print</button>
+        <a class="btn btn-secondary btn-sm" href="/contracts/print-menu">Print Menu</a>
+        <a class="btn btn-secondary btn-sm" href="@GetPrintoutUrl()" target="_blank">Print</a>
     </div>
 </div>
 
 <div class="page-content">
     <div class="contract-banner contract-banner-info">
         <i class="bx bx-info-circle"></i>
-        <span>Contract for <strong>@GetQuery("ggnumber")</strong> || <strong>@GetQuery("regnumber")</strong></span>
+        <span>Contract for <strong>@GetVehicleContextLabel()</strong></span>
     </div>
+    @if (_showTariffWarning && ShowContractForm())
+    {
+        <div class="contract-banner contract-banner-warning">
+            <i class="bx bx-error"></i>
+            <span>No current tariff found for this vehicle class. Contract can still be created.</span>
+        </div>
+    }
 
     <div class="contract-section">
         <table class="contract-legacy-table">
@@ -58,7 +67,14 @@
                         else if (IsPendingAwaitingReview())
                         {
                             <div class="contract-action-group">
-                                <span class="contract-muted">Pending contract submitted and awaiting reviewer action.</span>
+                                @if (IsCurrentUserContractCapturer())
+                                {
+                                    <button class="btn btn-warning btn-sm" type="button" @onclick='() => RunContractActionAsync("recall")' disabled="@_actionRunning">Recall to Draft</button>
+                                }
+                                else
+                                {
+                                    <span class="contract-muted">Pending contract submitted and awaiting reviewer action.</span>
+                                }
                             </div>
                         }
                         else if (IsPendingInReview())
@@ -207,9 +223,9 @@
                             <tbody>
                                 <tr>
                                         <th>GG Number</th>
-                                        <td>@(ValueOrDash(_vehicle?.fleet_number) ?? GetQuery("ggnumber"))</td>
+                                        <td>@PreferVehicleValue(_vehicle?.fleet_number, "ggnumber")</td>
                                         <th>Registration Number</th>
-                                        <td>@(ValueOrDash(_vehicle?.registration_number) ?? GetQuery("regnumber"))</td>
+                                        <td>@PreferVehicleValue(_vehicle?.registration_number, "regnumber")</td>
                                     <th>Identification</th>
                                     <td rowspan="5" class="contract-photo-cell">
                                         <div class="contract-photo-box">Vehicle Photos</div>
@@ -270,8 +286,12 @@
                                     <th rowspan="3">Contract Client<br /><span class="contract-muted">* Intended or current active contract</span></th>
                                         <th>Department</th>
                                         <td colspan="2">
-                                            <select class="form-select">
-                                                <option value="">@(ValueOrDash(_department?.department_description) ?? "Select Department")</option>
+                                            <select class="form-select" @bind="_selectedDepartmentCode" @bind:after="OnDepartmentChanged">
+                                                <option value="0">Select Department</option>
+                                                @foreach (var department in _departments)
+                                                {
+                                                    <option value="@department.department_code">@DepartmentDisplay(department)</option>
+                                                }
                                             </select>
                                         </td>
                                     <td rowspan="4" class="contract-tariff-cell">
@@ -284,9 +304,9 @@
                                             <tbody>
                                                 <tr>
                                                     <th>Tariff Type</th>
-                                                    <td>-</td>
+                                                    <td>@ValueOrDash(_tariffPreview?.Tariff == null ? "-" : "Class Tariff")</td>
                                                     <td colspan="2">
-                                                        <input type="checkbox" /> Active / Valid Tariff
+                                                        <input type="checkbox" checked="@(_tariffPreview?.Tariff != null)" disabled /> Active / Valid Tariff
                                                     </td>
                                                 </tr>
                                                 <tr>
@@ -296,10 +316,10 @@
                                                     <th>Excess KM Rate</th>
                                                 </tr>
                                                 <tr>
-                                                    <td>R -</td>
-                                                    <td>R -</td>
-                                                    <td>R -</td>
-                                                    <td>R -</td>
+                                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.MonthlyFixedAmount)</td>
+                                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.DailyFixedAmount)</td>
+                                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.MonthlyOdoAmount)</td>
+                                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.FuelKiloTariff)</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -308,8 +328,12 @@
                                 <tr>
                                         <th>Site</th>
                                         <td colspan="2">
-                                            <select class="form-select">
-                                                <option value="">@(ValueOrDash(_site?.Description) ?? "Select Site")</option>
+                                            <select class="form-select" @bind="_selectedSiteCode" @bind:after="OnSiteChanged">
+                                                <option value="0">Select Site</option>
+                                                @foreach (var site in FilteredSites)
+                                                {
+                                                    <option value="@site.SiteCode">@SiteDisplay(site)</option>
+                                                }
                                             </select>
                                         </td>
                                 </tr>
@@ -324,7 +348,7 @@
                                 </tr>
                                 <tr>
                                     <td colspan="3">
-                                        <input type="checkbox" /> Active Fuelcard <span class="contract-muted">[Fuel Card #]</span>
+                                        <input type="checkbox" /> Active Fuelcard <span class="contract-muted">(Fuel Card Number)</span>
                                     </td>
                                 </tr>
                                 <tr>
@@ -596,11 +620,11 @@
                                     <td><input type="date" class="form-input" value="@FormatDateForInput(_contract?.end_date)" readonly /></td>
                                 </tr>
                                 <tr>
-                                    <th>Back Dating Required</th>
+                                    <th>Backdating Required</th>
                                     <td><input type="checkbox" /></td>
-                                    <th>Back Dating Start Date</th>
+                                    <th>Backdating Start Date</th>
                                     <td><input type="date" class="form-input" /></td>
-                                    <th>Back Dating Status</th>
+                                    <th>Backdating Status</th>
                                     <td colspan="3">Requested / Declined / Approved</td>
                                 </tr>
                                 <tr>
@@ -641,22 +665,22 @@
                             <tbody>
                                 <tr>
                                     <th>Monthly Tariff (p/m) / Daily Tariff (p/d)</th>
-                                    <td>R -</td>
+                                    <td>@FormatCombinedMonthlyDaily()</td>
                                     <th>KM Tariff (p/km)</th>
-                                    <td>R -</td>
+                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.MonthlyOdoAmount)</td>
                                     <th>Excess KM Tariff (p/km)</th>
-                                    <td>R -</td>
+                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.FuelKiloTariff)</td>
                                 </tr>
                                 <tr>
                                     <td colspan="6"><em>* Estimated Total of Tariff Charges Over the Contract Period (excluding fuel, oil, tolls, fines, losses, damages, excess charges)</em></td>
                                 </tr>
                                 <tr>
                                     <th>Total Fixed Tariff Charges</th>
-                                    <td>R -</td>
+                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.MonthlyFixedAmount)</td>
                                     <th>Total KM Charges</th>
-                                    <td>R -</td>
+                                    <td>@FormatCurrency(_tariffPreview?.Tariff?.MonthlyOdoAmount)</td>
                                     <th>Sub-Total (All Charges)</th>
-                                    <td>R -</td>
+                                    <td>@FormatCurrency(CalculateTariffSubTotal())</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -678,6 +702,10 @@
     private VehicleDto? _vehicle;
     private SiteResponseDto? _site;
     private DepartmentDto? _department;
+    private List<DepartmentDto> _departments = new();
+    private List<SiteResponseDto> _sites = new();
+    private int _selectedDepartmentCode;
+    private short _selectedSiteCode;
     private bool _actionRunning;
     private bool _actionStatusError;
     private string _actionStatusMessage = string.Empty;
@@ -692,12 +720,15 @@
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
+    private VehicleTariffPreviewResponseDto? _tariffPreview;
+    private bool _showTariffWarning;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             await ResolveCurrentUserContextAsync();
+            await LoadLookupDataAsync();
 
             if (int.TryParse(ContractId, out var contractId))
             {
@@ -728,8 +759,11 @@
                 }
             }
 
+            SyncContractSelection();
+
         _approvalNotes = string.Empty;
             await EvaluateContractStateAsync();
+            await LoadTariffPreviewAsync();
         }
         catch
         {
@@ -753,10 +787,11 @@
 
     private async Task<VehicleDto?> FindVehicleFromQuery()
     {
-        var query = !string.IsNullOrWhiteSpace(GgNumber)
-            ? GgNumber.Trim()
+        var preferFleet = !string.IsNullOrWhiteSpace(GgNumber);
+        var query = preferFleet
+            ? GgNumber?.Trim() ?? string.Empty
             : !string.IsNullOrWhiteSpace(RegNumber)
-                ? RegNumber.Trim()
+                ? RegNumber?.Trim() ?? string.Empty
                 : string.Empty;
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -764,7 +799,40 @@
         }
 
         var results = await VehicleService.SearchVehiclesAsync(query);
-        return results.FirstOrDefault();
+        var ranked = RankVehicleMatches(results, query, preferFleet);
+        if (ranked.Count == 0)
+        {
+            return null;
+        }
+
+        var exactMatches = ranked.Where(v => preferFleet
+            ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+            : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (exactMatches.Count != 1)
+        {
+            return null;
+        }
+
+        return exactMatches.SingleOrDefault();
+    }
+
+    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, bool preferFleet)
+    {
+        return (preferFleet
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                preferFleet
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(v =>
+                preferFleet
+                    ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
     }
 
     private string GetQuery(string key)
@@ -777,6 +845,31 @@
             "action" => Action ?? "-",
             _ => "-"
         };
+    }
+
+    private string GetVehicleContextLabel()
+    {
+        var gg = PreferVehicleValue(_vehicle?.fleet_number, "ggnumber");
+        var gp = PreferVehicleValue(_vehicle?.registration_number, "regnumber");
+        var vmf = _vehicle?.vmf_code.ToString() ?? "-";
+        return $"{gg} / {gp} ({vmf})";
+    }
+
+    private string PreferVehicleValue(string? value, string queryKey)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var queryValue = GetQuery(queryKey);
+        return ValueOrDash(queryValue);
+    }
+
+    private string GetPrintoutUrl()
+    {
+        var id = ResolveContractId();
+        return id > 0 ? $"/contracts/printout?contractId={id}" : "/contracts";
     }
 
     private async Task RunContractActionAsync(string action)
@@ -862,6 +955,7 @@
             "reassign" => $"api/contracts/{actionContractId}/reassign",
             "close" => $"api/contracts/{actionContractId}/close",
             "relief" => $"api/contracts/{actionContractId}/relief",
+            "recall" => $"api/contracts/{actionContractId}/recall",
             "submit" => $"api/contracts/{actionContractId}/submit",
             "cancel" => $"api/contracts/{actionContractId}/cancel",
             "approve" => $"api/contracts/{actionContractId}/approve",
@@ -973,6 +1067,18 @@
                 CancellationReason = _declineReason
             });
         }
+        else if (action == "recall")
+        {
+            if (!IsCurrentUserContractCapturer())
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Only the original capturer can recall this contract.";
+                _actionRunning = false;
+                return;
+            }
+
+            result = await ContractService.PostActionAsync(endpoint, new { });
+        }
         else if (action == "approve" || action == "approve-activate")
         {
             result = await ContractService.PostActionAsync(endpoint, new
@@ -998,6 +1104,12 @@
 
         if (result.Success)
         {
+            if (action == "recall")
+            {
+                _openContractMode = true;
+                _reviewPendingMode = false;
+            }
+
             if (action == "submit")
             {
                 _submittedByCurrentUserInSession = true;
@@ -1020,7 +1132,100 @@
         return int.TryParse(ContractId, out var id) && id > 0 ? id : 0;
     }
 
-    private static string? ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private IEnumerable<SiteResponseDto> FilteredSites
+    {
+        get
+        {
+            if (_selectedDepartmentCode <= 0)
+            {
+                return _sites;
+            }
+
+            return _sites.Where(s => s.DepartmentCode == _selectedDepartmentCode);
+        }
+    }
+
+    private async Task LoadLookupDataAsync()
+    {
+        _departments = await DepartmentService.GetDepartmentsAsync();
+        _sites = await SiteService.GetAllAsync();
+    }
+
+    private void SyncContractSelection()
+    {
+        if (_contract?.site_code is > 0)
+        {
+            _selectedSiteCode = _contract.site_code.Value;
+        }
+
+        if (_selectedSiteCode > 0)
+        {
+            var selectedSite = _sites.FirstOrDefault(s => s.SiteCode == _selectedSiteCode);
+            if (selectedSite?.DepartmentCode is > 0)
+            {
+                _selectedDepartmentCode = selectedSite.DepartmentCode.Value;
+            }
+        }
+
+        if (_selectedDepartmentCode <= 0 && _contract?.department_code > 0)
+        {
+            _selectedDepartmentCode = _contract.department_code;
+        }
+
+        ApplySelectionToContract();
+    }
+
+    private Task OnDepartmentChanged()
+    {
+        if (_selectedDepartmentCode > 0 && _selectedSiteCode > 0)
+        {
+            var selectedSite = _sites.FirstOrDefault(s => s.SiteCode == _selectedSiteCode);
+            if (selectedSite?.DepartmentCode != _selectedDepartmentCode)
+            {
+                _selectedSiteCode = 0;
+            }
+        }
+
+        ApplySelectionToContract();
+        return Task.CompletedTask;
+    }
+
+    private Task OnSiteChanged()
+    {
+        var selectedSite = _sites.FirstOrDefault(s => s.SiteCode == _selectedSiteCode);
+        if (selectedSite?.DepartmentCode is > 0)
+        {
+            _selectedDepartmentCode = selectedSite.DepartmentCode.Value;
+        }
+
+        ApplySelectionToContract();
+        return Task.CompletedTask;
+    }
+
+    private void ApplySelectionToContract()
+    {
+        _contract ??= new ContractDto();
+
+        _contract.department_code = _selectedDepartmentCode;
+        _contract.site_code = _selectedSiteCode > 0 ? _selectedSiteCode : null;
+
+        _department = _departments.FirstOrDefault(d => d.department_code == _selectedDepartmentCode);
+        _site = _sites.FirstOrDefault(s => s.SiteCode == _selectedSiteCode);
+    }
+
+    private static string DepartmentDisplay(DepartmentDto department)
+    {
+        var number = string.IsNullOrWhiteSpace(department.department_number) ? string.Empty : $"{department.department_number} - ";
+        return $"{number}{department.department_description}".Trim();
+    }
+
+    private static string SiteDisplay(SiteResponseDto site)
+    {
+        var number = string.IsNullOrWhiteSpace(site.DepartmentNumber) ? string.Empty : $"{site.DepartmentNumber} - ";
+        return $"{number}{site.Description}".Trim();
+    }
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private static string FormatDate(DateTime? date) => date?.ToString("yyyy/MM/dd") ?? "-";
 
@@ -1042,9 +1247,9 @@
 
     private string BuildApprovalSummary()
     {
-        var openedBy = ValueOrDash(_contract?.contractor_name) ?? "Unknown";
+        var openedBy = ValueOrDash(_contract?.contractor_name);
         var openedOn = _contract?.start_date.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy");
-        var status = ValueOrDash(_contract?.status) ?? "Awaiting Approval";
+        var status = ValueOrDash(_contract?.status);
 
         return $"CONTRACT OPENED BY {openedBy.ToUpperInvariant()} ON THE {openedOn} AND CURRENTLY IN STATUS: {status.ToUpperInvariant()}.";
     }
@@ -1090,7 +1295,8 @@
         }
         else if (!_isContractActive)
         {
-            _openContractMode = action is "open";
+            var isDraft = (_contract?.contract_status_code ?? -1) == 0;
+            _openContractMode = action is "open" || (isDraft && ResolveContractId() > 0 && IsCurrentUserContractCapturer());
             _reviewPendingMode = false;
         }
         else
@@ -1201,6 +1407,9 @@
         {
             _vehicle = await VehicleService.GetVehicleAsync(_contract.vmf_code.Value);
         }
+
+        SyncContractSelection();
+        await LoadTariffPreviewAsync();
     }
 
     private async Task<int> ResolveActionContractIdAsync(string action, int fallbackContractId)
@@ -1279,6 +1488,45 @@
         {
             return (false, null);
         }
+    }
+
+    private async Task LoadTariffPreviewAsync()
+    {
+        _tariffPreview = null;
+        _showTariffWarning = false;
+
+        var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code;
+        if (vmfCode is not > 0)
+        {
+            return;
+        }
+
+        _tariffPreview = await TariffService.GetPreviewForVehicleAsync(vmfCode.Value);
+        _showTariffWarning = ShowContractForm() && _tariffPreview != null && _tariffPreview.Tariff == null;
+    }
+
+    private static string FormatCurrency(decimal? amount)
+    {
+        return amount.HasValue ? $"R {amount.Value:N2}" : "R -";
+    }
+
+    private string FormatCombinedMonthlyDaily()
+    {
+        var monthly = FormatCurrency(_tariffPreview?.Tariff?.MonthlyFixedAmount);
+        var daily = FormatCurrency(_tariffPreview?.Tariff?.DailyFixedAmount);
+        return $"{monthly} / {daily}";
+    }
+
+    private decimal? CalculateTariffSubTotal()
+    {
+        if (_tariffPreview?.Tariff == null)
+        {
+            return null;
+        }
+
+        var fixedAmount = _tariffPreview.Tariff.MonthlyFixedAmount ?? 0m;
+        var kmAmount = _tariffPreview.Tariff.MonthlyOdoAmount ?? 0m;
+        return fixedAmount + kmAmount;
     }
 
     private static int TryExtractContractId(string? responseBody)

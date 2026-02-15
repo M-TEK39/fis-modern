@@ -1,12 +1,238 @@
 @page "/reports/tariffs"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TariffApiService TariffService
+@inject ClassApiService ClassService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Tariffs"
-    Description="Legacy placeholder for Validation/RPTtariffs.aspx."
-    LegacyPath="Validation/RPTtariffs.aspx"
-    Endpoint="api/tariff"
-    HttpMethod="GET"
-    ReportType="tariff-reports"
-    Icon="bx-file" />
+<PageTitle>Tariffs Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-calculator"></i>
+            Tariffs Reports
+        </h1>
+        <p class="page-description">Tariff reporting hub with quick links and live snapshot.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/reports/tariffs-fin-year">Tariffs Fin Year</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Tariff Reports</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item"><a class="menu-item-link" href="/reports/tariffs-fin-year">11) Published Tariffs in Financial Year</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/reports/tariffs-class-2007">12) Tariffs by Class (2007 and Earlier)</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/reports/tariffs-per-vehicle">13) Tariffs per Vehicle (2008 and Later)</a></div>
+                <div class="menu-item"><a class="menu-item-link" href="/reports/vehicles-no-tariff">9.7) Vehicles with Expired or No Tariff</a></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-card fis-mt-15">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Class</label>
+                    <select class="form-select" @bind="_classCode" @bind:after="LoadReportAsync">
+                        <option value="">All classes</option>
+                        @foreach (var item in _classes.OrderBy(c => c.class_description))
+                        {
+                            <option value="@item.class_code">@($"{ValueOrDash(item.class_description)} ({item.class_code})")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Year Manufactured</label>
+                    <input class="form-input" type="number" min="1900" max="2100" @bind="_yearManufactured" @bind:after="LoadReportAsync" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Approval Status</label>
+                    <select class="form-select" @bind="_tariffApprovalStatus" @bind:after="LoadReportAsync">
+                        <option value="">All statuses</option>
+                        <option value="0">Draft</option>
+                        <option value="1">Pending Approval</option>
+                        <option value="2">Approved</option>
+                        <option value="3">Rejected</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Effective On</label>
+                    <input class="form-input" type="date" @bind="_effectiveOn" @bind:after="LoadReportAsync" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-secondary btn-sm" @onclick="ClearFilters" disabled="@_loading">Clear Filters</button>
+                <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Tariff Snapshot</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Tariff ID</th>
+                        <th>Class</th>
+                        <th>Year</th>
+                        <th>Status</th>
+                        <th>Monthly Fixed (R)</th>
+                        <th>Monthly ODO (R)</th>
+                        <th>Daily Fixed (R)</th>
+                        <th>Hourly Fixed (R)</th>
+                        <th>Fuel/KM (R)</th>
+                        <th>Effective Start</th>
+                        <th>Effective End</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="11">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="11">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.tariff_code</td>
+                                <td>@GetClassLabel(row.class_code)</td>
+                                <td>@row.year_manufactured</td>
+                                <td>@ValueOrDash(row.approval_status_text)</td>
+                                <td>@FormatCurrency(row.monthly_fixed_amount)</td>
+                                <td>@FormatCurrency(row.monthly_odo_amount)</td>
+                                <td>@FormatCurrency(row.daily_fixed_amount)</td>
+                                <td>@FormatCurrency(row.hourly_fixed_amount)</td>
+                                <td>@FormatCurrency(row.fuel_kilo_tariff)</td>
+                                <td>@FormatDate(row.effective_start_date)</td>
+                                <td>@FormatDate(row.effective_end_date)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        }
+        <div class="pagination-meta">Showing @_totalCount tariff(s) | Page size: @_pageSize</div>
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private short? _classCode;
+    private short? _yearManufactured;
+    private short? _tariffApprovalStatus;
+    private DateTime? _effectiveOn;
+
+    private int _totalCount;
+    private List<ClassDto> _classes = new();
+    private List<TariffManagementItemDto> _rows = new();
+
+    private List<TariffManagementItemDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _classes = await ClassService.GetClassesAsync();
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await TariffService.GetTariffManagementAsync(new TariffManagementFilter
+            {
+                class_code = _classCode,
+                year_manufactured = _yearManufactured,
+                tariff_approval_status = _tariffApprovalStatus,
+                effective_on = _effectiveOn
+            });
+
+            _rows = result.tariffs
+                .OrderBy(r => r.class_code)
+                .ThenByDescending(r => r.year_manufactured)
+                .ThenBy(r => r.tariff_code)
+                .ToList();
+            _totalCount = result.total_count > 0 ? result.total_count : _rows.Count;
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tariffs report: {ex.Message}");
+            _rows = new();
+            _totalCount = 0;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ClearFilters()
+    {
+        _classCode = null;
+        _yearManufactured = null;
+        _tariffApprovalStatus = null;
+        _effectiveOn = null;
+        await LoadReportAsync();
+    }
+
+    private string GetClassLabel(short classCode)
+    {
+        var item = _classes.FirstOrDefault(c => c.class_code == classCode);
+        return item == null ? classCode.ToString() : $"{ValueOrDash(item.class_description)} ({item.class_code})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string FormatCurrency(decimal? value)
+        => value.HasValue ? value.Value.ToString("N2") : "-";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

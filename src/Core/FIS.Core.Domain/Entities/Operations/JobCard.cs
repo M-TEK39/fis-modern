@@ -58,6 +58,35 @@ public class JobCard
     [StringLength(1)]
     public string? reviewed { get; set; } // 'Y' or 'N'
 
+    // ── Repair cost fields (captured at close time by Maintenance unit) ──────
+    // Assumption: costs captured when job card is closed.
+    // QUESTIONS.md MX-1/MX-2 — confirm breakdown and amendment rules with users.
+
+    [Column("labour_cost", TypeName = "decimal(10,2)")]
+    public decimal? labour_cost { get; set; }
+
+    [Column("parts_cost", TypeName = "decimal(10,2)")]
+    public decimal? parts_cost { get; set; }
+
+    [Column("other_cost", TypeName = "decimal(10,2)")]
+    public decimal? other_cost { get; set; }
+
+    /// <summary>Auto-calculated: labour_cost + parts_cost + other_cost. Stored for fast reporting.</summary>
+    [Column("total_cost", TypeName = "decimal(10,2)")]
+    public decimal? total_cost { get; set; }
+
+    [Column("invoice_number")]
+    [StringLength(50)]
+    public string? invoice_number { get; set; }
+
+    [Column("invoice_date")]
+    public DateTime? invoice_date { get; set; }
+
+    /// <summary>Internal workshop name or external service provider / merchant name.</summary>
+    [Column("service_provider")]
+    [StringLength(200)]
+    public string? service_provider { get; set; }
+
     // Global audit fields
     [Column("date_created")]
     public DateTime date_created { get; set; }

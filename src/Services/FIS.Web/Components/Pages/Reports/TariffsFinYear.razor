@@ -1,12 +1,208 @@
 @page "/reports/tariffs-fin-year"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject TariffApiService TariffService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Published Tariffs in a Financial Year"
-    Description="Legacy placeholder for Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs."
-    LegacyPath="Finance/SelectFinancialYear.aspx?FollowPage=/FISReports/ShowReport.aspx?Item=Tariffs"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="tariffs-fin-year"
-    Icon="bx-file" />
+<PageTitle>Published Tariffs in a Financial Year - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-spreadsheet"></i>
+            Published Tariffs in a Financial Year
+        </h1>
+        <p class="page-description">Vehicle tariff preview snapshot filtered by financial year.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/contracts">Contracts Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Financial Year Start</label>
+                    <InputDate class="form-input" @bind-Value="_fyStart" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Financial Year End</label>
+                    <InputDate class="form-input" @bind-Value="_fyEnd" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Max Vehicles To Evaluate</label>
+                    <input class="form-input" type="number" min="1" max="2000" @bind="_maxProbeCount" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Tariffs in Financial Year</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Tariff ID</th>
+                        <th>Monthly Fixed (R)</th>
+                        <th>Effective Start</th>
+                        <th>Effective End</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="7">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="7">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(row.Vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(row.Vehicle.registration_number)</td>
+                                <td>@GetVehicleLabel(row.Vehicle)</td>
+                                <td>@(row.Tariff.TariffCode?.ToString() ?? "-")</td>
+                                <td>@(row.Tariff.MonthlyFixedAmount?.ToString("N2") ?? "-")</td>
+                                <td>@ValueOrDash(row.Tariff.EffectiveStartDate)</td>
+                                <td>@ValueOrDash(row.Tariff.EffectiveEndDate)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private DateTime? _fyStart = new DateTime(DateTime.Today.Month >= 4 ? DateTime.Today.Year : DateTime.Today.Year - 1, 4, 1);
+    private DateTime? _fyEnd = new DateTime(DateTime.Today.Month >= 4 ? DateTime.Today.Year + 1 : DateTime.Today.Year, 3, 31);
+    private int _maxProbeCount = 300;
+    private List<TariffFinYearRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<TariffFinYearRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var start = _fyStart ?? DateTime.Today;
+            var end = _fyEnd ?? DateTime.Today;
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            var vehicles = (await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000)).Data
+                .Take(Math.Clamp(_maxProbeCount, 1, 2000))
+                .ToList();
+
+            var rows = new List<TariffFinYearRow>();
+            foreach (var vehicle in vehicles)
+            {
+                var preview = await TariffService.GetPreviewForVehicleAsync(vehicle.vmf_code);
+                if (preview?.Tariff == null)
+                {
+                    continue;
+                }
+
+                var tariff = preview.Tariff;
+                if (!DateTime.TryParse(tariff.EffectiveStartDate, out var effectiveStart))
+                {
+                    continue;
+                }
+
+                DateTime? effectiveEnd = null;
+                if (DateTime.TryParse(tariff.EffectiveEndDate, out var parsedEnd))
+                {
+                    effectiveEnd = parsedEnd;
+                }
+
+                var overlapsFinYear = effectiveStart.Date <= end.Date
+                    && (!effectiveEnd.HasValue || effectiveEnd.Value.Date >= start.Date);
+                if (!overlapsFinYear)
+                {
+                    continue;
+                }
+
+                rows.Add(new TariffFinYearRow(vehicle, tariff));
+            }
+
+            _rows = rows
+                .OrderBy(r => r.Vehicle.fleet_number)
+                .ThenBy(r => r.Vehicle.registration_number)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tariffs financial year report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record TariffFinYearRow(VehicleDto Vehicle, VehicleTariffPreviewDto Tariff);
+}

@@ -42,7 +42,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var make in _makes)
+                    @foreach (var make in PagedMakes)
                     {
                         <tr>
                             <td>@make.make_name</td>
@@ -62,6 +62,11 @@ else
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     </div>
 }
@@ -89,6 +94,11 @@ else
     private bool _showDeleteConfirm = false;
     private bool _isEdit = false;
     private bool _saving = false;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<MakeDto> PagedMakes => _makes.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_makes.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,6 +110,7 @@ else
         _loading = true;
         _makes = await RefDataService.GetMakesAsync();
         _loading = false;
+        _page = Math.Min(_page, TotalPages);
         StateHasChanged();
     }
 
@@ -165,6 +176,22 @@ else
         {
             HideDeleteDialog();
             await LoadMakes();
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

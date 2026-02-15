@@ -99,6 +99,38 @@
             CRITICAL: This table needs unique constraint on (vmf_code, still_current) where still_current = 'Y'
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Contracts.ContractAuditLog">
+            <summary>
+            Append-only audit log for contract state changes and field edits.
+            One row per event — never updated, never deleted.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.action">
+            <summary>
+            Action performed: Created, Submitted, Recalled, Approved, ApprovedAndActivated,
+            DeclinedForCorrection, Declined, Edited, Closed, Cancelled, Extended, Reassigned
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.old_status_code">
+            <summary>Status code before this action (null for Created events)</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.new_status_code">
+            <summary>Status code after this action</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.field_changed">
+            <summary>
+            For field-level edits: the field that changed (e.g. "site_code", "target_return_date")
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.old_value">
+            <summary>Previous value (serialised as string for simplicity)</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.new_value">
+            <summary>New value</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Contracts.ContractAuditLog.notes">
+            <summary>Free-text note (approval comment, decline reason, recall reason, etc.)</summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Driver">
             <summary>
             Driver Entity - Legacy compatibility for site_drivers table
@@ -827,6 +859,12 @@
             Represents a job card (work order) for vehicle maintenance/repairs
             Legacy: Managed via DEV_INS_NewJobCards, DEV_UPD_Jobcards stored procedures
             </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.JobCard.total_cost">
+            <summary>Auto-calculated: labour_cost + parts_cost + other_cost. Stored for fast reporting.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Operations.JobCard.service_provider">
+            <summary>Internal workshop name or external service provider / merchant name.</summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.Operations.Supplier">
             <summary>
@@ -1893,6 +1931,57 @@
             <summary>
             Vehicle Entity - EXACT legacy schema match for vehicle_master table
             Uses exact field names from Database.cs - NO modernization
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.VehicleLicenceHistory">
+             <summary>
+             Preserves a point-in-time snapshot of a vehicle's licence record each time
+             a new licence is captured.  The vehicle_master fields are updated in place
+             (legacy behaviour) but the previous values are written here first so that
+             the full renewal history is never lost.
+            
+             Table: vehicle_licence_history  (new — no legacy equivalent)
+             </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleLicenceHistory.vmf_code">
+            <summary>FK to vehicle_master</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleLicenceHistory.captured_at">
+            <summary>
+            When this snapshot was saved (i.e. the moment the old licence was superseded).
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleLicenceHistory.captured_by_user_code">
+            <summary>
+            User who performed the new licence capture (triggering this snapshot).
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleLicenceHistory.update_notes">
+            <summary>
+            Optional free-text note recorded at the time of the update.
+            </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.VehicleRemark">
+            <summary>
+            Records operational remarks against a vehicle — e.g. "missing", "under investigation".
+            Multiple remarks can be open simultaneously; each can be resolved independently.
+            Table: vehicle_remarks (new — no legacy equivalent)
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleRemark.remark_category">
+            <summary>
+            Category of the remark.
+            Known values: General | Missing | UnderInvestigation | AccidentHold | Other
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleRemark.remark_text">
+            <summary>
+            Free-text description of the remark.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.VehicleRemark.is_resolved">
+            <summary>
+            True while the remark is active; false once resolved/cleared.
             </summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.WorkshopEntities.WwMerchant">

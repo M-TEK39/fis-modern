@@ -9,13 +9,13 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
-<PageTitle>Total Km per Class Code - Fleet Information System</PageTitle>
+<PageTitle>Total Km per Class - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-bar-chart-alt-2"></i>
-            Report: Total Km per Class Code
+            Report: Total Km per Class
         </h1>
         <p class="page-description">Report class codes total distance traveled.</p>
     </div>
@@ -92,13 +92,13 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Class Code</th>
+                            <th>Class ID</th>
                             <th>Class Description</th>
                             <th>Total Distance</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _rows)
+                        @foreach (var row in PagedRows)
                         {
                             <tr>
                                 <td>@row.ClassCode</td>
@@ -109,6 +109,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_rows.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -126,6 +135,11 @@
     private string _endMonth = string.Empty;
 
     private List<ClassDistanceRow> _rows = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<ClassDistanceRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     private void GoTop() => Navigation.NavigateTo("/log-sheets/reports/total-km#PageTop");
     private void GoBottom() => Navigation.NavigateTo("/log-sheets/reports/total-km#PageBottom");
@@ -217,6 +231,7 @@
                 .ToList();
 
             _rows = grouped;
+            _page = 1;
             _message = _rows.Count == 0
                 ? "No class totals found for the selected period."
                 : $"Loaded total distance for {_rows.Count} class code(s).";
@@ -256,5 +271,21 @@
         public int ClassCode { get; set; }
         public string ClassDescription { get; set; } = string.Empty;
         public double TotalDistance { get; set; }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

@@ -1,6 +1,5 @@
 @page "/call-centre/bookings/notifications"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
 <PageTitle>Notification e-mail Addresses - Fleet Information System</PageTitle>
 
@@ -10,21 +9,15 @@
             <i class="bx bx-envelope"></i>
             Notification e-mail Addresses
         </h1>
-        <p class="page-description">Legacy placeholder for CallCentre/Bookings/Reg_email.aspx.</p>
+        <p class="page-description">Booking notification recipient management.</p>
     </div>
 </div>
 
 <div class="page-content">
     <div class="empty-state">
         <i class="bx bx-envelope"></i>
-        <h3>Booking notifications pending</h3>
-        <p>This page will mirror the legacy booking notification list.</p>
+        <h3>Booking Notifications</h3>
+        <p>Use this page to manage booking notification recipients.</p>
     </div>
 
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/Bookings/Reg_email.aspx"
-        Endpoint="api/booking/notifications"
-        HttpMethod="GET"
-        ButtonText="Test Booking Notification Endpoint"
-        ReportType="booking-notification-list" />
 </div>

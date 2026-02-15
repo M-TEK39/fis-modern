@@ -25,6 +25,17 @@ public interface IJobCardRepository
     Task<JobCard> AuthorizeAsync(int jobCardId, int authorizerUserId, string? comment);
     Task<JobCard> DeclineAsync(int jobCardId, int authorizerUserId, string declineReason);
     Task<JobCard> CancelAsync(int jobCardId, int currentUserId, string? cancelReason);
-    Task<JobCard> CloseAsync(int jobCardId, int currentUserId, string? closeNotes);
+    Task<JobCard> CloseAsync(int jobCardId, int currentUserId, string? closeNotes,
+        decimal? labourCost = null, decimal? partsCost = null, decimal? otherCost = null,
+        string? invoiceNumber = null, DateTime? invoiceDate = null, string? serviceProvider = null);
     Task<JobCard> UpdateStatusAsync(int jobCardId, int newStatusCode, int currentUserId);
+
+    // Cost operations
+    /// <summary>
+    /// Amend costs on an already-closed job card (e.g. when invoice arrives late).
+    /// Assumption: allowed post-close — confirm with users (QUESTIONS.md MX-1).
+    /// </summary>
+    Task<JobCard> UpdateCostsAsync(int jobCardId, int currentUserId,
+        decimal? labourCost, decimal? partsCost, decimal? otherCost,
+        string? invoiceNumber, DateTime? invoiceDate, string? serviceProvider);
 }

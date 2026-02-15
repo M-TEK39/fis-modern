@@ -1,6 +1,5 @@
 @page "/fines"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
 <PageTitle>Fines - Fleet Information System</PageTitle>
 
@@ -10,7 +9,7 @@
             <i class="bx bx-receipt"></i>
             Fines Maintenance Menu
         </h1>
-        <p class="page-description">Legacy maintenance and report workflows.</p>
+        <p class="page-description">Maintenance and report workflows.</p>
     </div>
 </div>
 
@@ -39,10 +38,4 @@
             </div>
         </div>
     </div>
-    <LegacyEndpointActionPanel
-        LegacyPath="Fines/MNTFines.aspx"
-        Endpoint="api/fine"
-        HttpMethod="GET"
-        ButtonText="Run Fines Menu API"
-        ReportType="fines-menu" />
 </div>

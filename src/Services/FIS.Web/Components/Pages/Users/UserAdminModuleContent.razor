@@ -81,7 +81,7 @@ else if (_activeView == ViewAdd)
             <div class="card-header">
                 <div>
                     <h3>User Profile</h3>
-                    <p class="text-muted">Capture profile details exactly as required in the legacy flow.</p>
+                    <p class="text-muted">Capture profile details exactly as required in the workflow.</p>
                 </div>
             </div>
             <div class="card-body">
@@ -376,11 +376,11 @@ else if (_activeView == ViewViewUsers)
                     <button class="btn btn-secondary btn-sm" type="button" @onclick="() => SetAlphabet(letter)">@letter</button>
                 }
             </div>
-            <span class="text-muted">View users by clicking on a character -- Selected character is [@_selectedAlphabet]</span>
-        </div>
+                <span class="text-muted">View users by clicking on a character -- Selected character is @_selectedAlphabet</span>
+            </div>
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@_userRows.Count User(s)</span>
+                <span class="table-title">@FilteredUserRows.Count() User(s)</span>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
@@ -400,7 +400,7 @@ else if (_activeView == ViewViewUsers)
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _userRows)
+                        @foreach (var row in PagedUserRows)
                         {
                             <tr>
                                 <td class="actions-column">
@@ -434,6 +434,11 @@ else if (_activeView == ViewViewUsers)
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
         <div class="card-footer">
@@ -593,7 +598,7 @@ else if (_activeView == ViewForgotPassword)
         <div class="card-header">
             <div>
                 <h3>Forgot Your Password?</h3>
-                <p class="text-muted">Legacy password recovery flow.</p>
+                <p class="text-muted">Password recovery flow.</p>
             </div>
             <button class="btn btn-secondary btn-sm" type="button" @onclick="() => GoTo(ViewMenu)">Back to Menu</button>
         </div>
@@ -677,6 +682,8 @@ else if (_activeView == ViewForgotPassword)
     private bool _showEditProfile;
     private string _selectedUsername = "";
     private string _selectedAlphabet = "A";
+    private int _page = 1;
+    private const int _pageSize = 12;
     private int _forgotStep = 1;
     private string _displayName = "Authenticated User";
     private string _changeUsername = "authenticated@local";
@@ -783,6 +790,10 @@ else if (_activeView == ViewForgotPassword)
         new("Nkosi", "Thandi", "tnkosi", "Pretoria", "Dispatcher", "012-555-0199", "2025-10-27"),
         new("Naidoo", "Ravi", "rnaidoo", "Cape Town", "Supervisor", "021-555-0148", "2025-10-15")
     ];
+    private IEnumerable<UserRow> FilteredUserRows =>
+        _userRows.Where(row => row.LastName.StartsWith(_selectedAlphabet, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<UserRow> PagedUserRows => FilteredUserRows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredUserRows.Count() / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -815,6 +826,7 @@ else if (_activeView == ViewForgotPassword)
     private void SetAlphabet(string letter)
     {
         _selectedAlphabet = letter;
+        _page = 1;
     }
 
     private void ShowEditProfile()
@@ -1089,6 +1101,22 @@ else if (_activeView == ViewForgotPassword)
             ?? user.FindFirst("preferred_username")?.Value;
 
         return string.IsNullOrWhiteSpace(email) ? string.Empty : email;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 
     private sealed record UserRow(string LastName, string FirstName, string UserName, string SiteName, string Position, string Telephone, string LastLoginDate);

@@ -15,7 +15,7 @@
             <i class="bx bx-buildings"></i>
             Call Centre Report for a Dept (Site)
         </h1>
-        <p class="page-description">Legacy-aligned report criteria for site and period.</p>
+        <p class="page-description">Report criteria for site and period.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/call-centre/reports">Report Menu</a>
@@ -46,7 +46,7 @@
                             <option value="">Select site</option>
                             @foreach (var site in SortedSites)
                             {
-                                <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                             }
                         </select>
                     </td>
@@ -113,7 +113,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.Call_centre_code</td>
@@ -128,6 +128,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -143,6 +152,11 @@
     private string _toDateText = string.Empty;
     private List<SiteResponseDto> _sites = new();
     private List<CallCentreDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<CallCentreDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -198,9 +212,12 @@
                 .OrderByDescending(c => c.Call_date)
                 .ThenByDescending(c => c.Call_time)
                 .ToList();
+            _page = 1;
 
             _reportLoaded = true;
-            _message = $"Report generated for site {_siteCode}.";
+            _message = _siteCode.HasValue
+                ? $"Report generated for {GetSiteText(_siteCode)}."
+                : "Report generated.";
         }
         catch (Exception ex)
         {
@@ -240,4 +257,20 @@
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy/MM/dd") : "-";
     private static string FormatTime(DateTime? value) => value.HasValue ? value.Value.ToString("hh:mm:ss tt") : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

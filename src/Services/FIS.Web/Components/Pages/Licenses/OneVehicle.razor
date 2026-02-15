@@ -3,6 +3,7 @@
 @using FIS.Web.Services
 @using FIS.Web.Models
 @inject LicenseMaintenanceApiService LicenseMaintenanceService
+@inject VehicleApiService VehicleService
 @inject SiteApiService SiteService
 @inject IJSRuntime JS
 
@@ -14,7 +15,7 @@
             <i class="bx bxs-user-badge"></i>
             Licence Maintenance for ONE Vehicle
         </h1>
-        <p class="page-description">Legacy workflow for licence maintenance on a single vehicle.</p>
+        <p class="page-description">Workflow for licence maintenance on a single vehicle.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/licenses">Back to Licence Menu</a>
@@ -56,8 +57,8 @@
                         </label>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Number</label>
-                        <input class="form-input" @bind="_vehicleNumber" />
+                        <label class="form-label">@(_numberType == "GG" ? "GG Number" : "GP Number")</label>
+                        <input class="form-input" @bind="_vehicleNumber" placeholder="@(_numberType == "GG" ? "Enter GG number" : "Enter GP number")" />
                     </div>
                 </div>
                 <div class="form-actions">
@@ -105,7 +106,7 @@
                             <option value="">Select Site</option>
                             @foreach (var site in _sites)
                             {
-                                <option value="@site.SiteCode">@site.Description</option>
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                             }
                         </select>
                     </div>
@@ -133,6 +134,71 @@
                     <a class="btn btn-secondary btn-sm" href="/licenses">Menu</a>
                 </div>
             </div>
+
+            <div class="form-section">
+                <h2 class="form-section-title">Licence History</h2>
+
+                @if (_selectedVmfCode is null)
+                {
+                    <p class="page-description">Search a vehicle first to view historical licence captures.</p>
+                }
+                else if (_licenceHistory.Count == 0)
+                {
+                    <p class="page-description">No licence history found for this vehicle yet.</p>
+                }
+                else
+                {
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Captured At</th>
+                                    <th>Due Date</th>
+                                    <th>Register Number</th>
+                                    <th>Reg Doc</th>
+                                    <th>COF Date</th>
+                                    <th>Receiver</th>
+                                    <th>Receiver ID</th>
+                                    <th>Receiver Tel</th>
+                                    <th>Captured By</th>
+                                    <th>Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in PagedHistory)
+                                {
+                                    <tr>
+                                        <td>@FormatDateTime(row.captured_at)</td>
+                                        <td>@FormatDate(row.licence_due_date)</td>
+                                        <td>@(row.lic_register_number ?? "-")</td>
+                                        <td>@(row.lic_registration_doc ?? "-")</td>
+                                        <td>@FormatDate(row.cof_last_done)</td>
+                                        <td>@(row.Licence_receiver ?? "-")</td>
+                                        <td>@(row.Licence_receiver_id ?? "-")</td>
+                                        <td>@(row.Licence_receiver_tel ?? "-")</td>
+                                        <td>@(row.captured_by_user_email ?? "-")</td>
+                                        <td>@(row.update_notes ?? row.licence_comments ?? "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination">
+                        <button class="pagination-btn"
+                                @onclick="PreviousHistoryPage"
+                                disabled="@(_historyPage <= 1)">
+                            Previous
+                        </button>
+                        <span class="pagination-info">Page @_historyPage of @TotalHistoryPages</span>
+                        <button class="pagination-btn"
+                                @onclick="NextHistoryPage"
+                                disabled="@(_historyPage >= TotalHistoryPages)">
+                            Next
+                        </button>
+                    </div>
+                }
+            </div>
         </div>
     </div>
 </div>
@@ -146,6 +212,14 @@
     private bool _saving;
     private LicenseDetailsModel _details = new();
     private List<SiteResponseDto> _sites = new();
+    private int? _selectedVmfCode;
+    private List<VehicleLicenceHistoryEntryDto> _licenceHistory = new();
+    private int _historyPage = 1;
+    private const int _historyPageSize = 12;
+    private IEnumerable<VehicleLicenceHistoryEntryDto> PagedHistory => _licenceHistory
+        .Skip((_historyPage - 1) * _historyPageSize)
+        .Take(_historyPageSize);
+    private int TotalHistoryPages => Math.Max(1, (int)Math.Ceiling(_licenceHistory.Count / (double)_historyPageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -183,6 +257,8 @@
                 "api/license/one-vehicle/lookup",
                 payload);
             _details = response ?? new LicenseDetailsModel();
+            _selectedVmfCode = await ResolveVehicleVmfCodeAsync();
+            await LoadLicenceHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -200,6 +276,7 @@
         try
         {
             await LicenseMaintenanceService.SubmitAsync<object>("api/license/one-vehicle/save", _details);
+            await LoadLicenceHistoryAsync();
         }
         catch (Exception ex)
         {
@@ -214,7 +291,68 @@
     private void OnNumberTypeChanged(ChangeEventArgs args)
     {
         _numberType = args.Value?.ToString() ?? "GG";
+        _vehicleNumber = string.Empty;
+        _details = new();
+        _selectedVmfCode = null;
+        _licenceHistory = new();
+        _historyPage = 1;
     }
+
+    private async Task<int?> ResolveVehicleVmfCodeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleNumber))
+        {
+            return null;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(_vehicleNumber.Trim());
+        if (_numberType == "GG")
+        {
+            return matches.FirstOrDefault(v =>
+                string.Equals(v.fleet_number?.Trim(), _vehicleNumber.Trim(), StringComparison.OrdinalIgnoreCase))?.vmf_code;
+        }
+
+        return matches.FirstOrDefault(v =>
+            string.Equals(v.registration_number?.Trim(), _vehicleNumber.Trim(), StringComparison.OrdinalIgnoreCase))?.vmf_code;
+    }
+
+    private async Task LoadLicenceHistoryAsync()
+    {
+        if (_selectedVmfCode is null)
+        {
+            _licenceHistory = new();
+            _historyPage = 1;
+            return;
+        }
+
+        var result = await VehicleService.GetVehicleLicenceHistoryAsync(_selectedVmfCode.Value);
+        _licenceHistory = result.history
+            .OrderByDescending(h => h.captured_at)
+            .ToList();
+        _historyPage = 1;
+    }
+
+    private void NextHistoryPage()
+    {
+        if (_historyPage < TotalHistoryPages)
+        {
+            _historyPage++;
+        }
+    }
+
+    private void PreviousHistoryPage()
+    {
+        if (_historyPage > 1)
+        {
+            _historyPage--;
+        }
+    }
+
+    private static string FormatDate(DateTime? value) =>
+        value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string FormatDateTime(DateTime value) =>
+        value.ToString("yyyy-MM-dd HH:mm");
 
     private sealed class LicenseDetailsModel
     {

@@ -5,12 +5,9 @@
 
 <div class="form-section" style="margin-top: 1rem;">
     <h3 class="form-section-title">
-        <i class="bx bx-link-external"></i>
-        API Wiring
+        <i class="bx bx-play-circle"></i>
+        Execute Action
     </h3>
-    <p class="form-hint">
-        Legacy source: @LegacyPath
-    </p>
     <div class="contract-action-group">
         <button class="btn btn-primary btn-sm" @onclick="RunAsync" disabled="@_running">
             @(_running ? "Running..." : ButtonText)
@@ -86,13 +83,15 @@
 
     private static string NormalizeForDisplay(string value)
     {
-        if (string.IsNullOrEmpty(value))
+        if (string.IsNullOrWhiteSpace(value))
         {
             return string.Empty;
         }
 
-        var builder = new StringBuilder(value.Length);
-        foreach (var ch in value)
+        var endpointIndex = value.IndexOf("Endpoint:", StringComparison.OrdinalIgnoreCase);
+        var sanitized = endpointIndex >= 0 ? value[..endpointIndex].TrimEnd(' ', '.', '|', '-') : value;
+        var builder = new StringBuilder(sanitized.Length);
+        foreach (var ch in sanitized)
         {
             if (char.IsControl(ch) && ch != '\r' && ch != '\n' && ch != '\t')
             {
@@ -102,6 +101,6 @@
             builder.Append(ch);
         }
 
-        return builder.ToString();
+        return builder.ToString().Trim();
     }
 }

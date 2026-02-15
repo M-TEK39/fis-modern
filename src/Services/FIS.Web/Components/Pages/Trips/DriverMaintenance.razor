@@ -1,6 +1,10 @@
 @page "/trips/driver-maintenance"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@using FIS.Web.Models
+@inject SiteApiService SiteService
+@inject DriverApiService DriverService
+@inject DriverLicenceApiService DriverLicenceService
 
 <PageTitle>Maintain Driver Information - Fleet Information System</PageTitle>
 
@@ -10,7 +14,7 @@
             <i class="bx bx-user-detail"></i>
             Maintain Driver Information
         </h1>
-        <p class="page-description">Legacy driver maintenance workflow.</p>
+        <p class="page-description">Driver maintenance workflow.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/trips">Back to Trips</a>
@@ -35,11 +39,37 @@
                 <div class="form-grid" style="margin-top: 1rem;">
                     <div class="form-field form-group-full">
                         <label class="form-label">Driver(s):</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedViewDriverCode" @bind:after="LoadSelectedDriverForViewAsync">
                             <option value="">- Choose a Driver -</option>
+                            @foreach (var driver in _drivers.OrderBy(d => d.driver_surname).ThenBy(d => d.driver_firstname))
+                            {
+                                <option value="@driver.site_driver_code">@($"{DriverDisplay(driver)} ({driver.site_driver_code})")</option>
+                            }
                         </select>
                     </div>
                 </div>
+
+                @if (_viewDriver is not null)
+                {
+                    <div class="form-grid" style="margin-top: 1rem;">
+                        <div class="form-field">
+                            <label class="form-label">SA ID Number</label>
+                            <input class="form-input" value="@_viewDriver.driver_SA_id" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Site</label>
+                            <input class="form-input" value="@GetSiteDisplay(_viewDriver.site_code)" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Licence Type</label>
+                            <input class="form-input" value="@GetLicenceTypeDisplay(_viewDriver.driver_licence_type_id)" readonly />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Active</label>
+                            <input class="form-input" value="@(_viewDriver.driver_active ? "Yes" : "No")" readonly />
+                        </div>
+                    </div>
+                }
             }
             else if (_activeTab == "add")
             {
@@ -53,71 +83,79 @@
                 <div class="form-grid" style="margin-top: 1rem;">
                     <div class="form-field">
                         <label class="form-label">Surname:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_surname" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Firstname:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_firstname" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">SA ID Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_SA_id" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Passport Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_passportnumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Site:</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_addDriver.site_code">
                             <option value="">- Choose a Site -</option>
+                            @foreach (var site in _sites.OrderBy(s => s.Description))
+                            {
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Persal Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_persalnumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Contract Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_contractnumber" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Licence Type Code:</label>
-                        <select class="form-select">
+                        <label class="form-label">Licence Type:</label>
+                        <select class="form-select" @bind="_addDriver.driver_licence_type_id">
                             <option value="">- Not Applicable (Does not have licence) -</option>
+                            @foreach (var licence in _driverLicences.OrderBy(l => l.description))
+                            {
+                                <option value="@licence.licence_code">@($"{licence.description} ({licence.licence_code})")</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">PDP Expiry Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_addDriver.driver_PDP_ExpiryDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_addDriver.driver_licence_number" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Issue Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_addDriver.driver_licence_issuedate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Last Verified Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_addDriver.driver_licence_lastVerifiedDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Expiry Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_addDriver.driver_licence_ExpiryDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Active:</label>
                         <label class="form-label form-checkbox">
-                            <input type="checkbox" />
+                            <input type="checkbox" @bind="_addDriver.driver_active" />
                             Active
                         </label>
                     </div>
                 </div>
 
                 <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Save</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveAddDriverAsync">Save</button>
                 </div>
             }
             else
@@ -132,8 +170,12 @@
                 <div class="form-grid" style="margin-top: 1rem;">
                     <div class="form-field form-group-full">
                         <label class="form-label">Driver(s):</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedEditDriverCode" @bind:after="LoadSelectedDriverForEditAsync">
                             <option value="">- Choose a Driver -</option>
+                            @foreach (var driver in _drivers.OrderBy(d => d.driver_surname).ThenBy(d => d.driver_firstname))
+                            {
+                                <option value="@driver.site_driver_code">@($"{DriverDisplay(driver)} ({driver.site_driver_code})")</option>
+                            }
                         </select>
                     </div>
                 </div>
@@ -141,72 +183,85 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Surname:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_surname" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Firstname:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_firstname" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">SA ID Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_SA_id" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Passport Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_passportnumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Site:</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_editDriver.site_code">
                             <option value="">- Choose a Site -</option>
+                            @foreach (var site in _sites.OrderBy(s => s.Description))
+                            {
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Persal Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_persalnumber" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Contract Number:</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_contractnumber" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Licence Type Code:</label>
-                        <select class="form-select">
+                        <label class="form-label">Licence Type:</label>
+                        <select class="form-select" @bind="_editDriver.driver_licence_type_id">
                             <option value="">- Not Applicable (Does not have licence) -</option>
+                            @foreach (var licence in _driverLicences.OrderBy(l => l.description))
+                            {
+                                <option value="@licence.licence_code">@($"{licence.description} ({licence.licence_code})")</option>
+                            }
                         </select>
                     </div>
                     <div class="form-field">
                         <label class="form-label">PDP Expiry Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_editDriver.driver_PDP_ExpiryDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Number</label>
-                        <input class="form-input" />
+                        <input class="form-input" @bind="_editDriver.driver_licence_number" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Issue Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_editDriver.driver_licence_issuedate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Last Verified Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_editDriver.driver_licence_lastVerifiedDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Licence Expiry Date:</label>
-                        <input class="form-input" placeholder="Select date" />
+                        <InputDate class="form-input" @bind-Value="_editDriver.driver_licence_ExpiryDate" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Active:</label>
                         <label class="form-label form-checkbox">
-                            <input type="checkbox" />
+                            <input type="checkbox" @bind="_editDriver.driver_active" />
                             Active
                         </label>
                     </div>
                 </div>
 
                 <div class="contract-action-group">
-                    <button class="btn btn-primary btn-sm">Save</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SaveUpdateDriverAsync">Save</button>
                 </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_message))
+            {
+                <div class="alert @(_isError ? "alert-error" : "alert-success") fis-mt-1">@_message</div>
             }
         </div>
     </div>
@@ -214,10 +269,137 @@
 
 @code {
     private string _activeTab = "view";
+    private List<SiteResponseDto> _sites = new();
+    private List<DriverDto> _drivers = new();
+    private List<DriverLicenceDto> _driverLicences = new();
+    private DriverDto _addDriver = NewDriver();
+    private DriverDto _editDriver = NewDriver();
+    private DriverDto? _viewDriver;
+    private int? _selectedViewDriverCode;
+    private int? _selectedEditDriverCode;
+    private bool _isError;
+    private string _message = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+        _drivers = await DriverService.GetDriversAsync();
+        _driverLicences = await DriverLicenceService.GetAllAsync();
+        _addDriver.driver_active = true;
+    }
 
     private void SetActiveTab(string tab)
     {
         _activeTab = tab;
+        _isError = false;
+        _message = string.Empty;
     }
 
+    private static string DriverDisplay(DriverDto driver)
+    {
+        var name = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+        return string.IsNullOrWhiteSpace(name) ? "Unnamed Driver" : name;
+    }
+
+    private async Task SaveAddDriverAsync()
+    {
+        _isError = false;
+        _message = string.Empty;
+        if (!ValidateDriver(_addDriver))
+        {
+            _isError = true;
+            _message = "Surname, first name, site, and licence type are required.";
+            return;
+        }
+
+        var success = await DriverService.CreateDriverAsync(_addDriver);
+        _isError = !success;
+        _message = success ? "Request completed successfully." : "Unable to save driver.";
+        if (success)
+        {
+            _addDriver = NewDriver();
+            _addDriver.driver_active = true;
+            _drivers = await DriverService.GetDriversAsync();
+        }
+    }
+
+    private async Task LoadSelectedDriverForEditAsync()
+    {
+        _message = string.Empty;
+        _isError = false;
+        if (!_selectedEditDriverCode.HasValue || _selectedEditDriverCode.Value <= 0)
+        {
+            _editDriver = NewDriver();
+            return;
+        }
+
+        var selected = await DriverService.GetDriverAsync(_selectedEditDriverCode.Value);
+        if (selected == null)
+        {
+            _isError = true;
+            _message = "Unable to load selected driver.";
+            return;
+        }
+
+        _editDriver = selected;
+    }
+
+    private Task LoadSelectedDriverForViewAsync()
+    {
+        _viewDriver = _drivers.FirstOrDefault(driver => driver.site_driver_code == _selectedViewDriverCode);
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveUpdateDriverAsync()
+    {
+        _isError = false;
+        _message = string.Empty;
+        if (!_selectedEditDriverCode.HasValue || _selectedEditDriverCode.Value <= 0)
+        {
+            _isError = true;
+            _message = "Select a driver before saving updates.";
+            return;
+        }
+
+        if (!ValidateDriver(_editDriver))
+        {
+            _isError = true;
+            _message = "Surname, first name, site, and licence type are required.";
+            return;
+        }
+
+        var success = await DriverService.UpdateDriverAsync(_selectedEditDriverCode.Value, _editDriver);
+        _isError = !success;
+        _message = success ? "Request completed successfully." : "Unable to update driver.";
+        if (success)
+        {
+            _drivers = await DriverService.GetDriversAsync();
+        }
+    }
+
+    private static bool ValidateDriver(DriverDto driver)
+        => !string.IsNullOrWhiteSpace(driver.driver_surname)
+           && !string.IsNullOrWhiteSpace(driver.driver_firstname)
+           && driver.site_code > 0
+           && driver.driver_licence_type_id > 0;
+
+    private static DriverDto NewDriver()
+        => new()
+        {
+            driver_active = true,
+            driver_licence_issuedate = DateTime.Today,
+            driver_licence_lastVerifiedDate = DateTime.Today
+        };
+
+    private string GetSiteDisplay(int siteCode)
+    {
+        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode);
+        return site is null ? siteCode.ToString() : $"{site.Description} ({siteCode})";
+    }
+
+    private string GetLicenceTypeDisplay(int licenceCode)
+    {
+        var licence = _driverLicences.FirstOrDefault(l => l.licence_code == licenceCode);
+        return licence is null ? licenceCode.ToString() : $"{licence.description} ({licenceCode})";
+    }
 }

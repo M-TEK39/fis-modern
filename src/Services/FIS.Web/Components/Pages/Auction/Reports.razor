@@ -1,6 +1,5 @@
 @page "/auction/reports"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
 <PageTitle>Auction Reports - Fleet Information System</PageTitle>
 
@@ -10,7 +9,7 @@
             <i class="bx bx-file"></i>
             Auction Reports
         </h1>
-        <p class="page-description">Auction reports menu aligned to the legacy workflow.</p>
+        <p class="page-description">Auction reports menu.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/auction">Auction Menu</a>
@@ -65,10 +64,4 @@
         </div>
     </div>
 
-    <LegacyEndpointActionPanel
-        LegacyPath="Auction/RPTAuction.aspx"
-        Endpoint="api/auction/reports/menu"
-        HttpMethod="GET"
-        ButtonText="Test Auction Reports Menu Endpoint"
-        ReportType="auction-reports-menu" />
 </div>

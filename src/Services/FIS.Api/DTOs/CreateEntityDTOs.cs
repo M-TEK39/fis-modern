@@ -314,11 +314,132 @@ namespace FIS.Api.DTOs
     }
 
     /// <summary>
-    /// DTO for closing a job card
+    /// DTO for closing a job card.
+    /// All cost fields are optional — can be captured now or amended later via PATCH /costs.
     /// </summary>
     public class JobCardCloseDto
     {
         [MaxLength(2000)]
         public string? close_notes { get; set; }
+
+        // Repair cost capture (optional at close time)
+        public decimal? labour_cost { get; set; }
+        public decimal? parts_cost { get; set; }
+        public decimal? other_cost { get; set; }
+
+        [MaxLength(50)]
+        public string? invoice_number { get; set; }
+
+        public DateTime? invoice_date { get; set; }
+
+        [MaxLength(200)]
+        public string? service_provider { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for amending repair costs on a job card (including post-close).
+    /// All fields optional — only provided fields are updated.
+    /// </summary>
+    public class JobCardCostDto
+    {
+        public decimal? labour_cost { get; set; }
+        public decimal? parts_cost { get; set; }
+        public decimal? other_cost { get; set; }
+
+        [MaxLength(50)]
+        public string? invoice_number { get; set; }
+
+        public DateTime? invoice_date { get; set; }
+
+        [MaxLength(200)]
+        public string? service_provider { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for capturing a new vehicle licence.
+    /// The previous licence values are automatically snapshotted to history before the update.
+    /// </summary>
+    public class CaptureLicenceDto
+    {
+        /// <summary>New licence renewal due date</summary>
+        [Required]
+        public DateTime licence_due_date { get; set; }
+
+        /// <summary>Disc/register number printed on the licence disc</summary>
+        [MaxLength(50)]
+        public string? lic_register_number { get; set; }
+
+        /// <summary>Reference number of the registration document</summary>
+        [MaxLength(100)]
+        public string? lic_registration_doc { get; set; }
+
+        /// <summary>Comments about this licence renewal</summary>
+        [MaxLength(2000)]
+        public string? licence_comments { get; set; }
+
+        /// <summary>Certificate of Fitness — date last done</summary>
+        public DateTime? cof_last_done { get; set; }
+
+        /// <summary>Is COF required? Y/N</summary>
+        [MaxLength(1)]
+        public string? cof_required { get; set; }
+
+        /// <summary>Vehicle tare weight (kg)</summary>
+        public int? tare { get; set; }
+
+        /// <summary>Name of the person who received/collected the licence</summary>
+        [MaxLength(100)]
+        public string? Licence_receiver { get; set; }
+
+        /// <summary>ID number of the licence receiver</summary>
+        [MaxLength(50)]
+        public string? Licence_receiver_id { get; set; }
+
+        /// <summary>Telephone of the licence receiver</summary>
+        [MaxLength(30)]
+        public string? Licence_receiver_tel { get; set; }
+
+        /// <summary>Site code of the licence receiver</summary>
+        public short? Licence_receiver_site { get; set; }
+
+        /// <summary>Date the licence was taken/collected</summary>
+        public DateTime? Licence_date_taken { get; set; }
+
+        /// <summary>Optional notes to store with the history snapshot</summary>
+        [MaxLength(2000)]
+        public string? update_notes { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for creating a vehicle remark.
+    /// Known categories: General | Missing | UnderInvestigation | AccidentHold | Other
+    /// </summary>
+    public class CreateVehicleRemarkDto
+    {
+        /// <summary>
+        /// Category of the remark (General, Missing, UnderInvestigation, AccidentHold, Other)
+        /// </summary>
+        [Required]
+        [MaxLength(50)]
+        public string remark_category { get; set; } = "General";
+
+        /// <summary>
+        /// Description of the remark
+        /// </summary>
+        [Required]
+        [MaxLength(2000)]
+        public string remark_text { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// DTO for resolving (closing) a vehicle remark.
+    /// </summary>
+    public class ResolveVehicleRemarkDto
+    {
+        /// <summary>
+        /// Optional notes explaining how the matter was resolved
+        /// </summary>
+        [MaxLength(2000)]
+        public string? resolution_notes { get; set; }
     }
 }

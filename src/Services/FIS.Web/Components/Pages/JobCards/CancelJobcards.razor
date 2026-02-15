@@ -1,7 +1,9 @@
 @page "/job-cards/cancel"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Services
 @inject JobCardApiService JobCardService
+@inject UserApiService UserService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Cancel Job Cards</PageTitle>
@@ -29,8 +31,18 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">GG Number</label>
-                    <input class="form-input" @bind="_searchGg" />
+                    <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                    <input class="form-input" @bind="_searchTerm" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
                 </div>
             </div>
             <div class="form-actions">
@@ -67,6 +79,7 @@
                         <tr>
                             <th>Job Card #</th>
                             <th>GG Number</th>
+                            <th>Registration</th>
                             <th>Description</th>
                             <th>Assigned To</th>
                             <th>Assigned Date</th>
@@ -76,13 +89,14 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _filtered)
+                        @foreach (var item in PagedItems)
                         {
                             <tr>
                                 <td>@item.JobCardId</td>
                                 <td>@ValueOrDash(item.GGNumber)</td>
+                                <td>@ValueOrDash(item.RegistrationNumber)</td>
                                 <td>@ValueOrDash(item.JobDescription)</td>
-                                <td>@ValueOrDash(item.AssignedToName)</td>
+                                <td>@FormatUser(item.AssignedTo, item.AssignedToName)</td>
                                 <td>@FormatDate(item.AssignedDate)</td>
                                 <td>@ValueOrDash(item.Status)</td>
                                 <td>
@@ -100,6 +114,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_filtered.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_filtered.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -108,11 +131,17 @@
     private bool _loading = true;
     private bool _actionRunning;
     private bool _isError;
-    private string _searchGg = string.Empty;
+    private string _searchMode = "GG";
+    private string _searchTerm = string.Empty;
     private string _message = string.Empty;
     private List<JobCardDto> _all = new();
     private List<JobCardDto> _filtered = new();
+    private Dictionary<short, UserProfileDto> _userProfilesByCode = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
     private readonly Dictionary<int, string> _cancelReasons = new();
+    private IEnumerable<JobCardDto> PagedItems => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -124,11 +153,17 @@
         _loading = true;
         try
         {
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(x => x.UserAccessCode > 0)
+                .GroupBy(x => x.UserAccessCode)
+                .ToDictionary(g => g.Key, g => g.First());
+
             _all = await JobCardService.GetAllAsync();
-            var gg = _searchGg.Trim();
-            _filtered = string.IsNullOrWhiteSpace(gg)
+            var query = _searchTerm.Trim();
+            _filtered = string.IsNullOrWhiteSpace(query)
                 ? new(_all)
-                : _all.Where(x => string.Equals(x.GGNumber, gg, StringComparison.OrdinalIgnoreCase)).ToList();
+                : FilterItems(_all, query, _searchMode);
 
             foreach (var item in _filtered)
             {
@@ -137,6 +172,7 @@
                     _cancelReasons[item.JobCardId] = string.Empty;
                 }
             }
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -152,8 +188,17 @@
 
     private void Clear()
     {
-        _searchGg = string.Empty;
+        _searchTerm = string.Empty;
         _filtered = new(_all);
+        _page = 1;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchTerm = string.Empty;
+        _filtered = new(_all);
+        _page = 1;
     }
 
     private async Task RequestCancellation(JobCardDto item)
@@ -183,4 +228,58 @@
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static List<JobCardDto> FilterItems(List<JobCardDto> items, string query, string searchMode)
+    {
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+        return items
+            .Where(x => isGp
+                ? !string.IsNullOrWhiteSpace(x.RegistrationNumber) && x.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(x.GGNumber) && x.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => isGp
+                ? string.Equals(x.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(x.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(x => x.JobCardId)
+            .ToList();
+    }
+
+    private string FormatUser(int? userCode, string? fallback)
+    {
+        if (!userCode.HasValue || userCode.Value <= 0)
+        {
+            return ValueOrDash(fallback);
+        }
+
+        if (_userProfilesByCode.TryGetValue((short)userCode.Value, out var user))
+        {
+            var fullName = $"{user.FirstName} {user.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return fullName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                return user.Email;
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(fallback) ? fallback : $"User {userCode.Value}";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

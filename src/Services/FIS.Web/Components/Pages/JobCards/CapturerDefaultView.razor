@@ -44,6 +44,7 @@
                     <div class="menu-item"><a class="menu-item-link" href="/job-cards/print">Print Job Cards</a></div>
                     <div class="menu-item"><a class="menu-item-link" href="/job-cards/cancel">Cancel Job Cards</a></div>
                     <div class="menu-item"><a class="menu-item-link" href="/job-cards/close">Close Job Cards</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/job-cards/repair-cost-report">Repair Cost Report</a></div>
                 </div>
             </div>
         </div>
@@ -53,7 +54,7 @@
         }
         else if (_items.Count == 0)
         {
-            <div class="empty-state"><i class="bx bx-info-circle"></i><h3>No priority unassigned job cards</h3><p>No records returned by the API.</p></div>
+            <div class="empty-state"><i class="bx bx-info-circle"></i><h3>No priority unassigned job cards</h3><p>No unassigned priority job cards were found.</p></div>
         }
         else
         {
@@ -62,14 +63,15 @@
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
-                            <tr><th>Job Card ID</th><th>GG Number</th><th>Description</th><th>Status</th><th>Priority</th><th>Captured By</th></tr>
+                            <tr><th>Job Card ID</th><th>GG Number</th><th>Registration</th><th>Description</th><th>Status</th><th>Priority</th><th>Captured By</th></tr>
                         </thead>
                         <tbody>
-                            @foreach (var item in _items)
+                            @foreach (var item in PagedItems)
                             {
                                 <tr>
                                     <td>@item.JobCardId</td>
                                     <td>@ValueOrDash(item.GGNumber)</td>
+                                    <td>@ValueOrDash(item.RegistrationNumber)</td>
                                     <td>@ValueOrDash(item.JobDescription)</td>
                                     <td>@ValueOrDash(item.Status)</td>
                                     <td>@ValueOrDash(item.Priority)</td>
@@ -79,6 +81,15 @@
                         </tbody>
                     </table>
                 </div>
+                @if (_items.Count > _pageSize)
+                {
+                    <div class="pagination">
+                        <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_page of @TotalPages</div>
+                        <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                    </div>
+                    <div class="pagination-meta">Total records: @_items.Count | Page size: @_pageSize</div>
+                }
             </div>
         }
     }
@@ -89,6 +100,11 @@
     private bool _canCapturer;
     private bool _loading = true;
     private List<JobCardDto> _items = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<JobCardDto> PagedItems => _items.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_items.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -102,6 +118,7 @@
         try
         {
             _items = await JobCardService.GetPriorityUnassignedAsync();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -162,6 +179,22 @@
 
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

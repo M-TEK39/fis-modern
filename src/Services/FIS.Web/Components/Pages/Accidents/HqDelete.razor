@@ -26,19 +26,19 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">
-                        <input type="radio" name="HqDeleteType" checked="@(_searchType == "GG")" @onchange='() => _searchType = "GG"' />
+                        <input type="radio" name="HqDeleteType" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
                         GG
                     </label>
                 </div>
                 <div class="form-field">
                     <label class="form-label">
-                        <input type="radio" name="HqDeleteType" checked="@(_searchType == "GP")" @onchange='() => _searchType = "GP"' />
+                        <input type="radio" name="HqDeleteType" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
                         GP
                     </label>
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Number</label>
-                    <input class="form-input" maxlength="8" @bind="_searchQuery" @bind:event="oninput" />
+                    <label class="form-label">@(_searchType == "GG" ? "GG Number" : "GP Number")</label>
+                    <input class="form-input" maxlength="8" @bind="_searchQuery" @bind:event="oninput" placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")" />
                 </div>
             </div>
             <div class="form-actions">
@@ -72,7 +72,7 @@
                             }
                             else
                             {
-                                @foreach (var item in _accidents)
+                                @foreach (var item in PagedAccidents)
                                 {
                                     <tr>
                                         <td>@ValueOrDash(item.VehicleNumber)</td>
@@ -87,6 +87,15 @@
                         </tbody>
                     </table>
                 </div>
+                @if (_accidents.Count > _pageSize)
+                {
+                    <div class="pagination">
+                        <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_page of @TotalPages</div>
+                        <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                    </div>
+                    <div class="pagination-meta">Total records: @_accidents.Count | Page size: @_pageSize</div>
+                }
             </div>
         </div>
     </div>
@@ -98,6 +107,11 @@
     private bool _loading;
     private List<AccidentRow> _accidents = new();
     private List<AccidentRow> _allAccidents = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<AccidentRow> PagedAccidents => _accidents.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_accidents.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -117,7 +131,10 @@
                 HireType: string.IsNullOrWhiteSpace(a.severity) ? a.status : a.severity,
                 AccidentDate: a.accident_date
             )).ToList();
+
+            await HydrateVehicleLabelsAsync(_allAccidents);
             _accidents = new List<AccidentRow>(_allAccidents);
+            _page = 1;
         }
         finally
         {
@@ -130,18 +147,52 @@
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
             _accidents = new List<AccidentRow>(_allAccidents);
+            _page = 1;
             return;
         }
 
-        var matches = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+        var searchTerm = _searchQuery.Trim();
+        var matches = await VehicleService.SearchVehiclesAsync(searchTerm);
+        matches = FilterVehicleMatchesByNumberType(matches, searchTerm, _searchType);
         if (matches.Count == 0)
         {
             _accidents = new();
+            _page = 1;
             return;
         }
 
         var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
         _accidents = _allAccidents.Where(a => a.VehicleId.HasValue && vmfCodes.Contains(a.VehicleId.Value)).ToList();
+        _page = 1;
+    }
+
+    private void SetSearchType(string value)
+    {
+        if (_searchType == value)
+        {
+            return;
+        }
+
+        _searchType = value;
+        _searchQuery = string.Empty;
+        _accidents = new List<AccidentRow>(_allAccidents);
+        _page = 1;
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 
     private static string FormatDate(DateTime? value)
@@ -150,11 +201,47 @@
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
+    private static List<VehicleDto> FilterVehicleMatchesByNumberType(List<VehicleDto> matches, string term, string searchType)
+    {
+        return searchType == "GG"
+            ? matches
+                .Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(v => string.Equals(v.fleet_number?.Trim(), term, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(v => v.vmf_code)
+                .ToList()
+            : matches
+                .Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(v => string.Equals(v.registration_number?.Trim(), term, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(v => v.vmf_code)
+                .ToList();
+    }
+
     private sealed record AccidentRow(
         int AccidentId,
         int? VehicleId,
-        string? VehicleNumber,
+        string VehicleNumber,
         string? HireType,
         DateTime? AccidentDate
     );
+
+    private async Task HydrateVehicleLabelsAsync(List<AccidentRow> rows)
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        var vehicleMap = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            if (row.VehicleId.HasValue && vehicleMap.TryGetValue(row.VehicleId.Value, out var vehicle))
+            {
+                rows[i] = row with { VehicleNumber = $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})" };
+            }
+            else
+            {
+                rows[i] = row with { VehicleNumber = ValueOrDash(row.VehicleNumber) };
+            }
+        }
+    }
 }

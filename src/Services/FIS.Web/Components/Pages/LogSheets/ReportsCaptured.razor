@@ -3,6 +3,8 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject LogsheetApiService LogsheetService
+@inject SiteApiService SiteService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Logsheets Captured Report - Fleet Information System</PageTitle>
@@ -13,7 +15,7 @@
             <i class="bx bx-line-chart"></i>
             Report: Logsheets Captured
         </h1>
-        <p class="page-description">Legacy-aligned report criteria for captured logs.</p>
+        <p class="page-description">Report criteria for captured logs.</p>
     </div>
 </div>
 
@@ -109,7 +111,7 @@
         <div class="empty-state">
             <i class="bx bx-info-circle"></i>
             <h3>No records found</h3>
-            <p>The selected report criteria did not return results.</p>
+            <p>No records match the selected report criteria.</p>
         </div>
     }
     else if (_results.Count > 0)
@@ -122,7 +124,7 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Log Code</th>
+                            <th>Log ID</th>
                             <th>GG Number</th>
                             <th>Month</th>
                             <th>Start ODO</th>
@@ -132,21 +134,30 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.log_code</td>
-                                <td>@item.vmf_code</td>
+                                <td>@GetVehicleLabel(item.vmf_code)</td>
                                 <td>@item.month.ToString("yyyy/MM/dd")</td>
                                 <td>@item.start_odo</td>
                                 <td>@item.end_odo</td>
-                                <td>@item.site_code</td>
+                                <td>@GetSiteDisplay(item.site_code)</td>
                                 <td>@(string.IsNullOrWhiteSpace(item.rek_num) ? "-" : item.rek_num)</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -168,6 +179,13 @@
     private string _toDateText = string.Empty;
 
     private List<LogsheetDto> _results = new();
+    private Dictionary<short, SiteResponseDto> _sitesByCode = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<LogsheetDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private async Task RunDateTimeReport()
     {
@@ -233,8 +251,28 @@
 
         try
         {
+            if (_sitesByCode.Count == 0)
+            {
+                var sites = await SiteService.GetAllAsync();
+                _sitesByCode = sites
+                    .Where(s => s.SiteCode > 0)
+                    .GroupBy(s => s.SiteCode)
+                    .ToDictionary(g => g.Key, g => g.First());
+            }
+
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => FormatVehicleLabel(g.First()));
+            }
+
             var all = await LogsheetService.GetAllAsync<LogsheetDto>();
             _results = filter(all).OrderByDescending(l => l.month).ThenByDescending(l => l.log_code).ToList();
+            _page = 1;
             _message = successMessage;
             _reportLoaded = true;
         }
@@ -279,4 +317,53 @@
 
         return date.Date.Add(fallback);
     }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private string GetSiteDisplay(short? siteCode)
+    {
+        if (!siteCode.HasValue || siteCode.Value <= 0)
+        {
+            return "-";
+        }
+
+        if (_sitesByCode.TryGetValue(siteCode.Value, out var site))
+        {
+            return $"{site.Description} ({siteCode.Value})";
+        }
+
+        return siteCode.Value.ToString();
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

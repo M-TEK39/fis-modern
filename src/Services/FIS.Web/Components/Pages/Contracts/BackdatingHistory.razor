@@ -69,6 +69,15 @@
                             </button>
                             <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
                         </div>
+                        <div class="contract-search-inputs fis-mt-05">
+                            <select class="form-select" style="min-width: 22rem;" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChangedAsync" disabled="@(_vehicleSearchMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _vehicleSearchMatches)
+                                {
+                                    <option value="@vehicle.vmf_code">@GetVehicleContextLabel(vehicle)</option>
+                                }
+                            </select>
+                        </div>
                         @if (!string.IsNullOrWhiteSpace(_searchError))
                         {
                             <div class="form-error contract-search-error">@_searchError</div>
@@ -84,12 +93,12 @@
             <tbody>
                 <tr>
                     <th>GG Number / R:</th>
-                    <td>@(_selectedVehicle?.fleet_number ?? "-")</td>
+                    <td>@ValueOrDash(_selectedVehicle?.fleet_number)</td>
                     <td>&nbsp;</td>
                 </tr>
                 <tr>
                     <th>Registration Number:</th>
-                    <td>@(_selectedVehicle?.registration_number ?? "-")</td>
+                    <td>@ValueOrDash(_selectedVehicle?.registration_number)</td>
                     <td>&nbsp;</td>
                 </tr>
                 <tr>
@@ -105,7 +114,7 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Contract Code</th>
+                            <th>Contract ID</th>
                             <th>Start Date</th>
                             <th>End Date</th>
                             <th>Start Odometer</th>
@@ -130,7 +139,7 @@
                         }
                         else
                         {
-                            @foreach (var contract in _historyContracts)
+                            @foreach (var contract in PagedHistoryContracts)
                             {
                                 <tr class="@GetHistoryRowClass(contract)">
                                     <td>@contract.contract_id</td>
@@ -155,6 +164,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_historyContracts.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_historyContracts.Count | Page size: @_pageSize</div>
+            }
         </div>
     </div>
 
@@ -162,7 +180,7 @@
         <table class="contract-legacy-table">
             <tbody>
                 <tr>
-                    <td>Contract Code:</td>
+                    <td>Contract ID:</td>
                     <td><input class="form-input" value="@(_selectedHistoryContract?.contract_id.ToString() ?? string.Empty)" readonly /></td>
                 </tr>
                 <tr>
@@ -211,6 +229,8 @@
     private string _searchQuery = "";
     private bool _searching;
     private string? _searchError;
+    private List<VehicleDto> _vehicleSearchMatches = new();
+    private int? _selectedVehicleVmfCode;
     private VehicleDto? _selectedVehicle;
     private List<ContractDto> _historyContracts = new();
     private ContractDto? _selectedHistoryContract;
@@ -221,6 +241,14 @@
     private bool _submitting;
     private Dictionary<short, string> _siteNames = new();
     private List<DriverDto> _drivers = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<ContractDto> PagedHistoryContracts
+        => _historyContracts.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages
+        => Math.Max(1, (int)Math.Ceiling(_historyContracts.Count / (double)_pageSize));
 
     private void GoTop() => Navigation.NavigateTo("/contracts/backdating-history#PageTop");
     private void GoBottom() => Navigation.NavigateTo("/contracts/backdating-history#PageBottom");
@@ -235,9 +263,12 @@
     {
         _searchError = null;
         _selectedVehicle = null;
+        _selectedVehicleVmfCode = null;
+        _vehicleSearchMatches = new();
         _feedbackMessage = "";
         _historyContracts = new();
         _selectedHistoryContract = null;
+        _page = 1;
 
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
@@ -248,15 +279,16 @@
         _searching = true;
         try
         {
-            var results = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
-            _selectedVehicle = results.FirstOrDefault();
-            if (_selectedVehicle == null)
+            var query = _searchQuery.Trim();
+            var results = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleSearchMatches = RankVehicleMatchesBySearchType(results, query, _searchType);
+            if (_vehicleSearchMatches.Count == 0)
             {
                 _searchError = "No vehicles matched the search criteria.";
                 return;
             }
 
-            await LoadContractHistory();
+            _searchError = "Select a vehicle from the list to load contract history.";
         }
         finally
         {
@@ -268,10 +300,29 @@
     {
         _searchQuery = "";
         _searchError = null;
+        _vehicleSearchMatches = new();
+        _selectedVehicleVmfCode = null;
         _selectedVehicle = null;
         _feedbackMessage = "";
         _historyContracts = new();
         _selectedHistoryContract = null;
+        _page = 1;
+    }
+
+    private async Task OnSelectedVehicleChangedAsync()
+    {
+        _selectedVehicle = _selectedVehicleVmfCode.HasValue
+            ? _vehicleSearchMatches.FirstOrDefault(v => v.vmf_code == _selectedVehicleVmfCode.Value)
+            : null;
+        _feedbackMessage = "";
+        _historyContracts = new();
+        _selectedHistoryContract = null;
+        _page = 1;
+
+        if (_selectedVehicle != null)
+        {
+            await LoadContractHistory();
+        }
     }
 
     private async Task LoadContractHistory()
@@ -288,16 +339,18 @@
             .Where(c => c.vmf_code == _selectedVehicle.vmf_code)
             .OrderByDescending(c => c.start_date)
             .ToList();
+        _page = 1;
 
         await HydrateHistoryContractsAsync();
 
-        if (_historyContracts.Count > 0)
+        if (_historyContracts.Count == 0)
         {
-            SelectContractForEdit(_historyContracts[0]);
+            _feedbackMessage = "No Contract History Found";
+            _selectedHistoryContract = null;
         }
         else
         {
-            _feedbackMessage = "No Contract History Found";
+            _feedbackMessage = "Select a contract from history to load details.";
             _selectedHistoryContract = null;
         }
     }
@@ -451,6 +504,22 @@
         return _selectedHistoryContract?.contract_id == contract.contract_id ? "contract-selected-row" : string.Empty;
     }
 
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
     private string GetOdometerDisplay(int? editedValue, ContractDto contract)
     {
         if (_selectedHistoryContract?.contract_id == contract.contract_id && editedValue.HasValue)
@@ -461,5 +530,25 @@
         return "-";
     }
 
+    private static List<VehicleDto> RankVehicleMatchesBySearchType(List<VehicleDto> matches, string query, string searchType)
+    {
+        return (searchType == "GG"
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                searchType == "GG"
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(v =>
+                searchType == "GG"
+                    ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleContextLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
 }

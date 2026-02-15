@@ -46,10 +46,10 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Code</th><th>Name</th><th>Actions</th></tr>
+                        <tr><th>Merchant ID</th><th>Name</th><th>Actions</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _filtered)
+                        @foreach (var item in PagedItems)
                         {
                             <tr>
                                 <td>@item.Merchant_code</td>
@@ -65,6 +65,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_filtered.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_filtered.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -74,6 +83,11 @@
     private string _search = string.Empty;
     private List<MerchantDto> _all = new();
     private List<MerchantDto> _filtered = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<MerchantDto> PagedItems => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,5 +114,22 @@
         _filtered = string.IsNullOrWhiteSpace(query)
             ? new List<MerchantDto>(_all)
             : _all.Where(x => (x.Merchant_Name ?? string.Empty).Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+        _page = 1;
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

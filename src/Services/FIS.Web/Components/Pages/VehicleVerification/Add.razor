@@ -1,5 +1,8 @@
 @page "/vehicle-verification/add"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleLookupApiService VehicleLookupService
 @inject NavigationManager Navigation
 
 <PageTitle>Add Asset Verification - Fleet Information System</PageTitle>
@@ -10,7 +13,7 @@
             <i class="bx bx-clipboard"></i>
             Add Asset Verification
         </h1>
-        <p class="page-description">Enter GG/GP number to proceed.</p>
+        <p class="page-description">Search and select a vehicle to proceed.</p>
     </div>
 </div>
 
@@ -23,8 +26,34 @@
 
                 <div class="form-grid">
                     <div class="form-field">
-                        <label class="form-label">GG / Reg Number <span class="required">*</span></label>
-                        <InputText class="form-input" @bind-Value="_ggNumber" maxlength="8" />
+                        <label class="form-label">Lookup Type</label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="verificationAddSearchType" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="verificationAddSearchType" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                Reg Number
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Vehicle Number <span class="required">*</span></label>
+                        <div class="fis-input-group-compact">
+                            <InputText class="form-input" @bind-Value="_searchTerm" maxlength="16" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehicleAsync">Find</button>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Vehicle Match <span class="required">*</span></label>
+                        <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                            <option value="">Select vehicle...</option>
+                            @foreach (var vehicle in _vehicleMatches)
+                            {
+                                <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                            }
+                        </select>
                     </div>
                 </div>
 
@@ -46,21 +75,104 @@
 </div>
 
 @code {
-    private string _ggNumber = "";
+    private string _searchTerm = "";
+    private string _searchMode = "GG";
+    private List<VehicleLookupDto> _vehicleMatches = new();
+    private int? _selectedVmfCode;
     private string? _errorMessage;
 
-    private void HandleSubmit()
+    private async Task HandleSubmit()
     {
-        var query = (_ggNumber ?? string.Empty).Trim();
-        if (query.Length < 7 || query.Length > 8)
+        if (!_selectedVmfCode.HasValue)
         {
-            _errorMessage = "Please enter a valid GG/GP number.";
+            await SearchVehicleAsync();
+        }
+
+        if (!_selectedVmfCode.HasValue)
+        {
+            _errorMessage = "Select a vehicle before continuing.";
+            return;
+        }
+
+        var selected = _vehicleMatches.FirstOrDefault(v => v.VmfCode == _selectedVmfCode.Value);
+        if (selected == null)
+        {
+            _errorMessage = "Selected vehicle is no longer available. Search again.";
+            return;
+        }
+
+        var query = _searchMode == "GG"
+            ? selected.GGNumber
+            : selected.RegistrationNumber;
+        query = string.IsNullOrWhiteSpace(query)
+            ? (_searchMode == "GG" ? selected.RegistrationNumber : selected.GGNumber)
+            : query;
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _errorMessage = "Selected vehicle has no valid GG/GP identifier.";
             return;
         }
 
         _errorMessage = null;
         Navigation.NavigateTo($"/vehicle-verification/add/details?gg={Uri.EscapeDataString(query)}");
     }
+
+    private async Task SearchVehicleAsync()
+    {
+        _errorMessage = null;
+        _selectedVmfCode = null;
+        _vehicleMatches = new();
+
+        var query = (_searchTerm ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _errorMessage = _searchMode == "GG" ? "Enter a GG number to search." : "Enter a GP number to search.";
+            return;
+        }
+
+        var matches = await VehicleLookupService.SearchAsync(query);
+        _vehicleMatches = FilterVehicleMatches(matches, query, _searchMode);
+        if (_vehicleMatches.Count == 0)
+        {
+            _errorMessage = "No vehicles matched your search.";
+        }
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchTerm = string.Empty;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _errorMessage = null;
+    }
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
+    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.VmfCode)
+            .ToList();
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private void GoMenu()
     {

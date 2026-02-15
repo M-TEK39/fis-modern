@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Components.Pages.Users
-@using FIS.Web.Components.Shared
 
 <PageTitle>User Administration - Fleet Information System</PageTitle>
 
@@ -12,21 +11,13 @@
             <i class="bx bx-user-circle"></i>
             User Administration
         </h1>
-        <p class="page-description">Legacy user administration menu and tools.</p>
+        <p class="page-description">User administration menu and tools.</p>
     </div>
 </div>
 
 <div class="page-content">
     <UserAdminRouteContent RouteKey="_routeKey" />
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="UserAdmin/UserAdminMenu.aspx"
-        Endpoint="api/useradmin/menu"
-        HttpMethod="GET"
-        ButtonText="Test User Admin Menu Endpoint"
-        ReportType="useradmin-menu" />
 
 @code {
     [SupplyParameterFromQuery(Name = "settings")]

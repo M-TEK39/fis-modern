@@ -21,12 +21,27 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <div class="form-row">
-                <label class="form-label">GG / GP Number</label>
-                <input class="form-input" @bind="_searchTerm" />
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Lookup Type</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="demoDeleteSearchType" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="demoDeleteSearchType" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                    <input class="form-input" @bind="_searchTerm" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
+                </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary" @onclick="SearchAsync">Submit</button>
+                <button class="btn btn-primary" @onclick="SearchAsync">Find</button>
             </div>
         </div>
     </div>
@@ -34,6 +49,9 @@
     @if (_matches.Count > 0)
     {
         <div class="table-container fis-mt-1">
+            <div class="table-header">
+                <span class="table-title">@_matches.Count match(es)</span>
+            </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
@@ -45,7 +63,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _matches)
+                        @foreach (var item in PagedMatches)
                         {
                             <tr>
                                 <td>@item.gg_number</td>
@@ -63,13 +81,26 @@
                     </tbody>
                 </table>
             </div>
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <span>Page @_page of @TotalPages</span>
+                    <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+            }
         </div>
     }
 </div>
 
 @code {
     private string _searchTerm = string.Empty;
+    private string _searchMode = "GG";
+    private int _page = 1;
+    private const int _pageSize = 12;
     private List<DemoVehicleDto> _matches = new();
+    private IEnumerable<DemoVehicleDto> PagedMatches => _matches.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_matches.Count / (double)_pageSize));
 
     private async Task SearchAsync()
     {
@@ -78,10 +109,8 @@
             AddAuthHeader();
             var all = await Http.GetFromJsonAsync<List<DemoVehicleDto>>("api/demo-vehicles") ?? new List<DemoVehicleDto>();
             var term = _searchTerm.Trim();
-            _matches = all.Where(x =>
-                string.Equals(x.gg_number, term, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(x.reg_number, term, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            _matches = FilterDemoVehicleMatches(all, term, _searchMode);
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -103,6 +132,10 @@
             if (response.IsSuccessStatusCode)
             {
                 _matches = _matches.Where(x => x.demo_vehicle_code != id).ToList();
+                if (_page > TotalPages)
+                {
+                    _page = TotalPages;
+                }
             }
             else
             {
@@ -121,6 +154,51 @@
         {
             Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
         }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchTerm = string.Empty;
+        _matches = new();
+        _page = 1;
+    }
+
+    private static List<DemoVehicleDto> FilterDemoVehicleMatches(List<DemoVehicleDto> all, string keyword, string searchMode)
+    {
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return new();
+        }
+
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return all
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.reg_number) && v.reg_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.gg_number) && v.gg_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.reg_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.gg_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.demo_vehicle_code)
+            .ToList();
     }
 
     private sealed class DemoVehicleDto

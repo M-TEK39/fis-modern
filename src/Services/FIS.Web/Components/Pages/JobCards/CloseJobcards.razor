@@ -12,7 +12,7 @@
             <i class="bx bx-check-circle"></i>
             Close Job Cards
         </h1>
-        <p class="page-description">Search by job card number, then select completion or failed status.</p>
+        <p class="page-description">Capture final repair costs when closing each job card.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/job-cards/capturer-default">Main Menu</a>
@@ -29,8 +29,18 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">Job Card Number</label>
-                    <input class="form-input" @bind="_searchJobCardNumber" />
+                    <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                    <input class="form-input" @bind="_searchTerm" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
                 </div>
             </div>
             <div class="form-actions">
@@ -67,19 +77,28 @@
                         <tr>
                             <th>Job Card #</th>
                             <th>GG Number</th>
+                            <th>Registration</th>
                             <th>Description</th>
                             <th>Status</th>
                             <th>Close As</th>
-                            <th>Comments</th>
+                            <th>Close Notes</th>
+                            <th>Labour Cost</th>
+                            <th>Parts Cost</th>
+                            <th>Other Cost</th>
+                            <th>Total</th>
+                            <th>Invoice #</th>
+                            <th>Invoice Date</th>
+                            <th>Service Provider</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _filtered)
+                        @foreach (var item in PagedItems)
                         {
                             <tr>
                                 <td>@item.JobCardId</td>
                                 <td>@ValueOrDash(item.GGNumber)</td>
+                                <td>@ValueOrDash(item.RegistrationNumber)</td>
                                 <td>@ValueOrDash(item.JobDescription)</td>
                                 <td>@ValueOrDash(item.Status)</td>
                                 <td>
@@ -90,6 +109,39 @@
                                 </td>
                                 <td>
                                     <input class="form-input" @bind="_selectedComments[item.JobCardId]" />
+                                </td>
+                                <td>
+                                    <input class="form-input"
+                                           type="number"
+                                           min="0"
+                                           step="0.01"
+                                           @bind="_labourCosts[item.JobCardId]" />
+                                </td>
+                                <td>
+                                    <input class="form-input"
+                                           type="number"
+                                           min="0"
+                                           step="0.01"
+                                           @bind="_partsCosts[item.JobCardId]" />
+                                </td>
+                                <td>
+                                    <input class="form-input"
+                                           type="number"
+                                           min="0"
+                                           step="0.01"
+                                           @bind="_otherCosts[item.JobCardId]" />
+                                </td>
+                                <td>@FormatCurrency(GetTotal(item.JobCardId))</td>
+                                <td>
+                                    <input class="form-input" @bind="_invoiceNumbers[item.JobCardId]" />
+                                </td>
+                                <td>
+                                    <input class="form-input"
+                                           type="date"
+                                           @bind="_invoiceDates[item.JobCardId]" />
+                                </td>
+                                <td>
+                                    <input class="form-input" @bind="_serviceProviders[item.JobCardId]" />
                                 </td>
                                 <td class="actions-column">
                                     <button class="btn btn-primary btn-sm"
@@ -103,6 +155,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_filtered.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_filtered.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -111,12 +172,23 @@
     private bool _loading = true;
     private bool _actionRunning;
     private bool _isError;
-    private string _searchJobCardNumber = string.Empty;
+    private string _searchMode = "GG";
+    private string _searchTerm = string.Empty;
     private string _message = string.Empty;
     private List<JobCardDto> _all = new();
     private List<JobCardDto> _filtered = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
     private readonly Dictionary<int, string> _selectedCloseStatus = new();
     private readonly Dictionary<int, string> _selectedComments = new();
+    private readonly Dictionary<int, decimal> _labourCosts = new();
+    private readonly Dictionary<int, decimal> _partsCosts = new();
+    private readonly Dictionary<int, decimal> _otherCosts = new();
+    private readonly Dictionary<int, string> _invoiceNumbers = new();
+    private readonly Dictionary<int, DateTime?> _invoiceDates = new();
+    private readonly Dictionary<int, string> _serviceProviders = new();
+    private IEnumerable<JobCardDto> PagedItems => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -129,10 +201,10 @@
         try
         {
             _all = await JobCardService.GetAllAsync();
-            var number = _searchJobCardNumber.Trim();
-            _filtered = string.IsNullOrWhiteSpace(number)
+            var query = _searchTerm.Trim();
+            _filtered = string.IsNullOrWhiteSpace(query)
                 ? new(_all)
-                : _all.Where(x => x.JobCardId.ToString().Contains(number, StringComparison.OrdinalIgnoreCase)).ToList();
+                : FilterItems(_all, query, _searchMode);
 
             foreach (var item in _filtered)
             {
@@ -145,7 +217,38 @@
                 {
                     _selectedComments[item.JobCardId] = string.Empty;
                 }
+
+                if (!_labourCosts.ContainsKey(item.JobCardId))
+                {
+                    _labourCosts[item.JobCardId] = item.LabourCost ?? 0m;
+                }
+
+                if (!_partsCosts.ContainsKey(item.JobCardId))
+                {
+                    _partsCosts[item.JobCardId] = item.PartsCost ?? 0m;
+                }
+
+                if (!_otherCosts.ContainsKey(item.JobCardId))
+                {
+                    _otherCosts[item.JobCardId] = item.OtherCost ?? 0m;
+                }
+
+                if (!_invoiceNumbers.ContainsKey(item.JobCardId))
+                {
+                    _invoiceNumbers[item.JobCardId] = item.InvoiceNumber ?? string.Empty;
+                }
+
+                if (!_invoiceDates.ContainsKey(item.JobCardId))
+                {
+                    _invoiceDates[item.JobCardId] = item.InvoiceDate;
+                }
+
+                if (!_serviceProviders.ContainsKey(item.JobCardId))
+                {
+                    _serviceProviders[item.JobCardId] = item.ServiceProvider ?? string.Empty;
+                }
             }
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -161,8 +264,17 @@
 
     private void Clear()
     {
-        _searchJobCardNumber = string.Empty;
+        _searchTerm = string.Empty;
         _filtered = new(_all);
+        _page = 1;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchTerm = string.Empty;
+        _filtered = new(_all);
+        _page = 1;
     }
 
     private async Task CloseItem(JobCardDto item)
@@ -176,7 +288,16 @@
         try
         {
             var notes = string.IsNullOrWhiteSpace(comment) ? closeStatus : $"{closeStatus}: {comment}";
-            var result = await JobCardService.CloseAsync(item.JobCardId, notes);
+            var result = await JobCardService.CloseAsync(item.JobCardId, new JobCardCloseRequest
+            {
+                close_notes = notes,
+                labour_cost = _labourCosts.GetValueOrDefault(item.JobCardId, 0m),
+                parts_cost = _partsCosts.GetValueOrDefault(item.JobCardId, 0m),
+                other_cost = _otherCosts.GetValueOrDefault(item.JobCardId, 0m),
+                invoice_number = NullIfWhiteSpace(_invoiceNumbers.GetValueOrDefault(item.JobCardId)),
+                invoice_date = _invoiceDates.GetValueOrDefault(item.JobCardId),
+                service_provider = NullIfWhiteSpace(_serviceProviders.GetValueOrDefault(item.JobCardId))
+            });
             if (!result.Success)
             {
                 _isError = true;
@@ -193,5 +314,45 @@
         }
     }
 
+    private decimal GetTotal(int jobCardId)
+        => _labourCosts.GetValueOrDefault(jobCardId, 0m)
+         + _partsCosts.GetValueOrDefault(jobCardId, 0m)
+         + _otherCosts.GetValueOrDefault(jobCardId, 0m);
+
+    private static string? NullIfWhiteSpace(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static string FormatCurrency(decimal amount) => amount.ToString("C2");
+
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<JobCardDto> FilterItems(List<JobCardDto> items, string query, string searchMode)
+    {
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+        return items
+            .Where(x => isGp
+                ? !string.IsNullOrWhiteSpace(x.RegistrationNumber) && x.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(x.GGNumber) && x.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => isGp
+                ? string.Equals(x.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(x.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(x => x.JobCardId)
+            .ToList();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject TrackingApiService TrackingService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Tracking Report for ALL Tracking Device - Fleet Information System</PageTitle>
@@ -13,7 +14,7 @@
             <i class="bx bx-chip"></i>
             Tracking Report for ALL Tracking Device
         </h1>
-        <p class="page-description">Legacy Tracking/RPT_all_trnum_main_track.aspx workflow.</p>
+        <p class="page-description">View tracker activity across all tracking devices.</p>
     </div>
 </div>
 
@@ -70,11 +71,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.track_num</td>
-                                <td>@item.vmf_code</td>
+                                <td>@GetVehicleLabel(item.vmf_code)</td>
                                 <td>@item.track_status</td>
                             </tr>
                         }
@@ -82,6 +83,14 @@
                 </table>
             </div>
         </div>
+        @if (_results.Count > 0)
+        {
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        }
     }
 </div>
 
@@ -90,6 +99,17 @@
     private bool _hasSearched;
     private string _trackerType = "All";
     private List<TrackingDto> _results = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<TrackingDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicleLookupAsync();
+    }
 
     private async Task LoadReport()
     {
@@ -105,6 +125,7 @@
                 "Reused" => all.Where(t => string.Equals(t.track_type, "Reused", StringComparison.OrdinalIgnoreCase)).ToList(),
                 _ => all
             };
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -115,4 +136,48 @@
             _loading = false;
         }
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private async Task LoadVehicleLookupAsync()
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _vehicleLabelByVmf = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(
+                g => g.Key,
+                g => FormatVehicleLabel(g.First()));
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
 }

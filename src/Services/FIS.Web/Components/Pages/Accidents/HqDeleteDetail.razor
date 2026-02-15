@@ -53,7 +53,7 @@
                         <option value="">Select site...</option>
                         @foreach (var site in _sites)
                         {
-                            <option value="@site.SiteCode">@site.Description</option>
+                            <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                         }
                     </select>
                 </div>

@@ -60,7 +60,8 @@ public class VehicleLookupController : BaseApiController
                     ModelCode = v.model_code,
                     CurrentOdometer = v.current_odo,
                     VehicleStatusCode = v.vehicle_status_code,
-                    IsAvailable = !v.is_deleted && v.vehicle_status_code == 1, // Active status
+                    IsAvailable = !v.is_deleted && v.vehicle_status_code == 1,
+                    InvoiceNumber = v.invoice_number,
                     DisplayText = $"{v.fleet_number} - {v.registration_number}"
                 })
                 .ToList();
@@ -105,6 +106,7 @@ public class VehicleLookupController : BaseApiController
                 CurrentOdometer = vehicle.current_odo,
                 VehicleStatusCode = vehicle.vehicle_status_code,
                 IsAvailable = !vehicle.is_deleted && vehicle.vehicle_status_code == 1,
+                InvoiceNumber = vehicle.invoice_number,
                 DisplayText = $"{vehicle.fleet_number} - {vehicle.registration_number}"
             };
 
@@ -132,5 +134,6 @@ public class VehicleSearchResultDto
     public int? CurrentOdometer { get; set; }
     public short? VehicleStatusCode { get; set; }
     public bool IsAvailable { get; set; }
+    public string? InvoiceNumber { get; set; }
     public string DisplayText { get; set; } = string.Empty;
 }

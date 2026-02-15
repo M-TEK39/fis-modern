@@ -1,12 +1,159 @@
 @page "/reports/request"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Request Additional Reports"
-    Description="Legacy placeholder for mailto developer request."
-    LegacyPath="mailto developer request"
-    Endpoint="api/report/request-additional"
-    HttpMethod="POST"
-    ReportType="request-additional-report"
-    Icon="bx-file" />
+<PageTitle>Request Additional Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-envelope"></i>
+            Request Additional Reports
+        </h1>
+        <p class="page-description">Capture a report change request for implementation follow-up.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Report Request Form</h2>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Request Category</label>
+                    <select class="form-select" @bind="_request.Category">
+                        <option value="New Report">New Report</option>
+                        <option value="Change Existing Report">Change Existing Report</option>
+                        <option value="Access/Permission">Access/Permission</option>
+                        <option value="Data Correction">Data Correction</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Priority</label>
+                    <select class="form-select" @bind="_request.Priority">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Requested By</label>
+                    <input class="form-input" @bind="_request.RequestedBy" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Contact Email</label>
+                    <input class="form-input" @bind="_request.Email" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Subject</label>
+                    <input class="form-input" @bind="_request.Subject" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Module</label>
+                    <input class="form-input" @bind="_request.Module" placeholder="Reports / Contracts / Vehicles / etc" />
+                </div>
+                <div class="form-field" style="grid-column: 1 / -1;">
+                    <label class="form-label">Detailed Request</label>
+                    <textarea class="form-textarea" rows="6" @bind="_request.Details"></textarea>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="SubmitRequestAsync" disabled="@_submitting">Submit Request</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetForm">Reset</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top: 1rem;">
+                    @_statusMessage
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly ReportRequestForm _request = new();
+    private bool _submitting;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    private async Task SubmitRequestAsync()
+    {
+        _submitting = true;
+        _statusMessage = string.Empty;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_request.Subject) || string.IsNullOrWhiteSpace(_request.Details))
+            {
+                _statusError = true;
+                _statusMessage = "Subject and detailed request are required.";
+                return;
+            }
+
+            var result = await FinanceService.PostActionAsync("api/report/request-additional", new
+            {
+                category = _request.Category,
+                priority = _request.Priority,
+                requestedBy = _request.RequestedBy,
+                email = _request.Email,
+                subject = _request.Subject,
+                module = _request.Module,
+                details = _request.Details,
+                requestedAt = DateTime.UtcNow
+            });
+
+            _statusError = !result.Success;
+            _statusMessage = result.Success
+                ? "Request completed successfully."
+                : result.Message;
+
+            if (result.Success)
+            {
+                ResetForm();
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusError = true;
+            _statusMessage = "Failed to submit request.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error submitting report request: {ex.Message}");
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        _request.Category = "New Report";
+        _request.Priority = "Medium";
+        _request.RequestedBy = string.Empty;
+        _request.Email = string.Empty;
+        _request.Subject = string.Empty;
+        _request.Module = string.Empty;
+        _request.Details = string.Empty;
+    }
+
+    private sealed class ReportRequestForm
+    {
+        public string Category { get; set; } = "New Report";
+        public string Priority { get; set; } = "Medium";
+        public string RequestedBy { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Subject { get; set; } = string.Empty;
+        public string Module { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+    }
+}

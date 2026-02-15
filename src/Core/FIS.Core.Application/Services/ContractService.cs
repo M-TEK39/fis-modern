@@ -63,6 +63,9 @@ public class ContractService : IContractService
             contract.start_time = contract.start_date;
             contract.end_odometer = 0;
             contract.locked_for_transfer = false;
+            // Initialise Charged_Until to start_date so the monthly billing job
+            // knows the correct starting point for this contract's first billing run.
+            contract.Charged_Until = contract.start_date;
 
             // Create contract
             var createdContract = await _contractRepository.CreateAsync(contract, 1);
@@ -130,7 +133,7 @@ public class ContractService : IContractService
     /// Close an active contract (Legacy: CloseContract method)
     /// Sets end date, end odometer, and still_current to 'N'
     /// </summary>
-    public async Task<ContractOperationResult> CloseContractAsync(int contractCode, DateTime endDate, int endOdometer, string? notes = null)
+    public async Task<ContractOperationResult> CloseContractAsync(int contractCode, DateTime endDate, int endOdometer, string? notes = null, int currentUserId = 0)
     {
         try
         {
@@ -162,7 +165,7 @@ public class ContractService : IContractService
             }
 
             // Close contract
-            await _contractRepository.EndContractAsync(contractCode, endDate, endOdometer, notes);
+            await _contractRepository.EndContractAsync(contractCode, endDate, currentUserId, endOdometer, notes);
 
             _logger.LogInformation("Contract closed successfully: {ContractCode}", contractCode);
 
@@ -489,7 +492,10 @@ public class ContractService : IContractService
                 target_return_date = request.TargetReturnDate,
                 contract_type = "H", // H = Hire
                 end_odometer = 0,
-                locked_for_transfer = false
+                locked_for_transfer = false,
+                contract_status_code = 0, // 0 = Draft (not yet submitted for approval)
+                created_by_user_code = request.CreatedByUserId,
+                date_created = DateTime.Now
             };
 
             var result = await AddContractAsync(contract);

@@ -1,7 +1,5 @@
 @page "/accidents/reports"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>Accident Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -10,7 +8,7 @@
             <i class="bx bx-file"></i>
             Accident Reports Menu
         </h1>
-        <p class="page-description">Legacy accident reports grouped by category.</p>
+        <p class="page-description">Accident reports grouped by category.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/accidents">Back to Accident Menu</a>
@@ -64,10 +62,4 @@
             </div>
         </div>
     </div>
-    <LegacyEndpointActionPanel
-        LegacyPath="Accident/RPTAccident.aspx"
-        Endpoint="api/report/accidents/menu"
-        HttpMethod="GET"
-        ButtonText="Run Accident Reports API"
-        ReportType="accidents-reports-menu" />
 </div>

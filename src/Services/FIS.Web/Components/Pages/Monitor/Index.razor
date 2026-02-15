@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/monitor"
 @rendermode InteractiveServer
 
@@ -10,7 +9,7 @@
             <i class="bx bx-line-chart"></i>
             Monitor Maintenance Menu
         </h1>
-        <p class="page-description">Legacy monitor inquiry menu.</p>
+        <p class="page-description">Monitor inquiry menu.</p>
     </div>
 </div>
 
@@ -23,25 +22,18 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/capture">1) Capture a New Inquiry</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/edit">2) Edit / Update an Existing Inquiry</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports">3) Reports</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/MNTMonitor.aspx"
-        Endpoint="api/monitor/menu"
-        HttpMethod="GET"
-        ButtonText="Test Monitor Menu Endpoint"
-        ReportType="monitor-menu" />
 
 </div>

@@ -1,6 +1,10 @@
 @page "/fines/reports/{Mode}"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject SiteApiService SiteService
+@inject VehicleLookupApiService VehicleLookupService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -10,7 +14,7 @@
             <i class="bx bx-file"></i>
             @_pageTitle
         </h1>
-        <p class="page-description">Legacy fines report parameters and output.</p>
+        <p class="page-description">Fines report parameters and output.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/fines/reports">Back to Fines Reports</a>
@@ -27,19 +31,29 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="oneVehicleType" checked />
+                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gp")" @onchange='() => SetOneVehicleSearchMode("gp")' />
                                 GP
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="oneVehicleType" />
+                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gg")" @onchange='() => SetOneVehicleSearchMode("gg")' />
                                 GG
                             </label>
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Number</label>
-                            <input class="form-input" />
+                            <label class="form-label">@(_oneVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_oneVehicleSearchTerm" placeholder="@(_oneVehicleSearchMode == "gg" ? "GG number" : "Registration number")" />
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchOneVehicleAsync">Find</button>
+                            </div>
+                            <select class="form-select fis-mt-05" @bind="_oneVehicleSelectedVmfCode" disabled="@(_oneVehicleMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _oneVehicleMatches)
+                                {
+                                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -86,7 +100,13 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Dept/Site</label>
-                            <input class="form-input" />
+                            <select class="form-select" @bind="_deptPeriodSiteCode">
+                                <option value="">Select site...</option>
+                                @foreach (var site in _sites)
+                                {
+                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
+                                }
+                            </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Begin Date</label>
@@ -179,19 +199,29 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="letterType" />
+                                <input type="radio" name="letterType" checked="@(_letterSearchMode == "gg")" @onchange='() => SetLetterSearchMode("gg")' />
                                 GG
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="letterType" checked />
+                                <input type="radio" name="letterType" checked="@(_letterSearchMode == "gp")" @onchange='() => SetLetterSearchMode("gp")' />
                                 GP
                             </label>
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Number</label>
-                            <input class="form-input" />
+                            <label class="form-label">@(_letterSearchMode == "gg" ? "GG Number" : "GP Number")</label>
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_letterSearchTerm" placeholder="@(_letterSearchMode == "gg" ? "GG number" : "Registration number")" />
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchLetterVehicleAsync">Find</button>
+                            </div>
+                            <select class="form-select fis-mt-05" @bind="_letterSelectedVmfCode" disabled="@(_letterMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _letterMatches)
+                                {
+                                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -346,8 +376,28 @@
                     <h2 class="form-section-title">Fines per Vehicle</h2>
                     <div class="form-grid">
                         <div class="form-field">
-                            <label class="form-label">Registration Number</label>
-                            <input class="form-input" />
+                            <label class="form-label">
+                                <input type="radio" name="vehicleType" checked="@(_vehicleSearchMode == "gg")" @onchange='() => SetVehicleSearchMode("gg")' />
+                                GG
+                            </label>
+                            <label class="form-label">
+                                <input type="radio" name="vehicleType" checked="@(_vehicleSearchMode == "gp")" @onchange='() => SetVehicleSearchMode("gp")' />
+                                GP
+                            </label>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">@(_vehicleSearchMode == "gg" ? "GG Number" : "Registration Number")</label>
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_vehicleModeSearchTerm" placeholder="@(_vehicleSearchMode == "gg" ? "GG number" : "Registration number")" />
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchVehicleModeAsync">Find</button>
+                            </div>
+                            <select class="form-select fis-mt-05" @bind="_vehicleModeSelectedVmfCode" disabled="@(_vehicleModeMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _vehicleModeMatches)
+                                {
+                                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                                }
+                            </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Begin Date</label>
@@ -430,19 +480,10 @@
             }
             else
             {
-                <p class="form-hint">This report screen will be aligned to the legacy report parameters and output tables.</p>
+                <p class="form-hint">Use the filters above to run and review fines report output.</p>
             }
         </div>
     </div>
-</div>
-
-<div class="page-content">
-    <LegacyEndpointActionPanel
-        LegacyPath="@GetLegacyPath()"
-        Endpoint="@GetEndpoint()"
-        HttpMethod="GET"
-        ButtonText="Run Fines Report API"
-        ReportType="fines-report-viewer" />
 </div>
 
 @code {
@@ -450,6 +491,25 @@
     public string? Mode { get; set; }
 
     private string _pageTitle = "Fines Report";
+    private List<SiteResponseDto> _sites = new();
+    private short? _deptPeriodSiteCode;
+    private string _oneVehicleSearchMode = "gp";
+    private string _oneVehicleSearchTerm = string.Empty;
+    private List<VehicleLookupDto> _oneVehicleMatches = new();
+    private int? _oneVehicleSelectedVmfCode;
+    private string _letterSearchMode = "gp";
+    private string _letterSearchTerm = string.Empty;
+    private List<VehicleLookupDto> _letterMatches = new();
+    private int? _letterSelectedVmfCode;
+    private string _vehicleSearchMode = "gp";
+    private string _vehicleModeSearchTerm = string.Empty;
+    private List<VehicleLookupDto> _vehicleModeMatches = new();
+    private int? _vehicleModeSelectedVmfCode;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
 
     protected override void OnParametersSet()
     {
@@ -552,33 +612,150 @@
             _ => "-"
         };
 
-    private string GetLegacyPath()
-        => Mode switch
+    private async Task SearchOneVehicleAsync()
+    {
+        var keyword = _oneVehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
         {
-            "one-vehicle" => "Fines/RPT_one_num_main_Fines.htm",
-            "dept-period" => "Fines/RPT_dept_period_main_Fines.aspx",
-            "appear-date" => "Fines/RPT_app_date_main_Fines.htm",
-            "letter" => "Fines/RPT_letter_main_Fines.aspx",
-            "traffic-dept" => "Fines/RPT_traffic_all_report.aspx",
-            "metro" => "Fines/RPT_FINESPERMETRO1.aspx",
-            "metro-period" => "Fines/RPT_FINESPERMETRO1B.aspx",
-            "vehicle" => "Fines/RPT_finepervehicle_report.aspx",
-            "all" => "Fines/RPT_FinesAll.aspx",
-            _ => "Fines/RPTFines.aspx"
-        };
+            _oneVehicleMatches = new();
+            _oneVehicleSelectedVmfCode = null;
+            return;
+        }
 
-    private string GetEndpoint()
-        => Mode switch
+        try
         {
-            "one-vehicle" => "api/report/fines/one-vehicle",
-            "dept-period" => "api/report/fines/dept-period",
-            "appear-date" => "api/report/fines/appear-date",
-            "letter" => "api/report/fines/letter",
-            "traffic-dept" => "api/report/fines/traffic-dept",
-            "metro" => "api/report/fines/metro",
-            "metro-period" => "api/report/fines/metro-period",
-            "vehicle" => "api/report/fines/per-vehicle",
-            "all" => "api/report/fines/all",
-            _ => "api/report/fines"
-        };
+            var matches = await VehicleLookupService.SearchAsync(keyword);
+            _oneVehicleMatches = RankVehicleMatches(matches, keyword, _oneVehicleSearchMode == "gg");
+            if (_oneVehicleMatches.All(vehicle => vehicle.VmfCode != _oneVehicleSelectedVmfCode))
+            {
+                _oneVehicleSelectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _oneVehicleMatches = new();
+            _oneVehicleSelectedVmfCode = null;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task SearchLetterVehicleAsync()
+    {
+        var keyword = _letterSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            _letterMatches = new();
+            _letterSelectedVmfCode = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(keyword);
+            _letterMatches = RankVehicleMatches(matches, keyword, _letterSearchMode == "gg");
+            if (_letterMatches.All(vehicle => vehicle.VmfCode != _letterSelectedVmfCode))
+            {
+                _letterSelectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _letterMatches = new();
+            _letterSelectedVmfCode = null;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task SearchVehicleModeAsync()
+    {
+        var keyword = _vehicleModeSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            _vehicleModeMatches = new();
+            _vehicleModeSelectedVmfCode = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(keyword);
+            _vehicleModeMatches = RankVehicleMatches(matches, keyword, _vehicleSearchMode == "gg");
+            if (_vehicleModeMatches.All(vehicle => vehicle.VmfCode != _vehicleModeSelectedVmfCode))
+            {
+                _vehicleModeSelectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleModeMatches = new();
+            _vehicleModeSelectedVmfCode = null;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void SetOneVehicleSearchMode(string mode)
+    {
+        if (_oneVehicleSearchMode == mode)
+        {
+            return;
+        }
+
+        _oneVehicleSearchMode = mode;
+        _oneVehicleSearchTerm = string.Empty;
+        _oneVehicleMatches = new();
+        _oneVehicleSelectedVmfCode = null;
+    }
+
+    private void SetLetterSearchMode(string mode)
+    {
+        if (_letterSearchMode == mode)
+        {
+            return;
+        }
+
+        _letterSearchMode = mode;
+        _letterSearchTerm = string.Empty;
+        _letterMatches = new();
+        _letterSelectedVmfCode = null;
+    }
+
+    private void SetVehicleSearchMode(string mode)
+    {
+        if (_vehicleSearchMode == mode)
+        {
+            return;
+        }
+
+        _vehicleSearchMode = mode;
+        _vehicleModeSearchTerm = string.Empty;
+        _vehicleModeMatches = new();
+        _vehicleModeSelectedVmfCode = null;
+    }
+
+    private static string SiteOptionLabel(SiteResponseDto site)
+        => $"{site.Description} ({site.SiteCode})";
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleLookupDto> RankVehicleMatches(List<VehicleLookupDto> matches, string query, bool preferGg)
+    {
+        return (preferGg
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                preferGg
+                    ? string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => preferGg ? v.GGNumber : v.RegistrationNumber)
+            .ToList();
+    }
+
 }

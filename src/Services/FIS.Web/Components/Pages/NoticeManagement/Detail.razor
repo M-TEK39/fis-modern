@@ -3,7 +3,6 @@
 @using System.Globalization
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject NoticeApiService NoticeService
 @inject IJSRuntime JSRuntime
 
@@ -15,7 +14,7 @@
             <i class="bx bx-edit-alt"></i>
             Notice Detail Management
         </h1>
-        <p class="page-description">Legacy flow for Admin/NoticeDetailManagement.aspx.</p>
+        <p class="page-description">Notice detail management workflow.</p>
     </div>
 </div>
 
@@ -97,22 +96,6 @@
         </div>
     }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Admin/NoticeDetailManagement.aspx"
-        Endpoint="api/notices"
-        HttpMethod="POST"
-        ButtonText="Test Notice Detail Save Endpoint"
-        ReportType="notice-detail" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Admin/NoticeDetailManagement.aspx"
-        Endpoint="api/notice-schedules"
-        HttpMethod="POST"
-        ButtonText="Test Notice Schedule Save Endpoint"
-        ReportType="notice-schedule" />
-
 @code {
     [SupplyParameterFromQuery(Name = "noticeid")]
     public int NoticeId { get; set; }

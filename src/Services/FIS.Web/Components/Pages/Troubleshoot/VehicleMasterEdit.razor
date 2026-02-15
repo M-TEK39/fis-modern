@@ -13,7 +13,7 @@
             <i class="bx bx-car"></i>
             Vehicle Master Edit
         </h1>
-        <p class="page-description">Legacy flow for TS_Log/MNT_V_Master_GetGG.aspx.</p>
+        <p class="page-description">Search vehicles and review vehicle master records for edit operations.</p>
     </div>
 </div>
 
@@ -57,22 +57,27 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>VMF Code</th>
+                            <th>Vehicle (GG / GP / VMF)</th>
                             <th>Registration</th>
                             <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var vehicle in _vehicles)
+                        @foreach (var vehicle in PagedVehicles)
                         {
                             <tr>
-                                <td>@vehicle.vmf_code</td>
-                                <td>@vehicle.registration_number</td>
+                                <td>@GetVehicleLabel(vehicle)</td>
+                                <td>@ValueOrDash(vehicle.registration_number)</td>
                                 <td>@vehicle.status_description</td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -91,6 +96,11 @@
     private string? _errorMessage;
     private VehicleMasterEditRequest _request = new();
     private List<VehicleDto> _vehicles = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<VehicleDto> PagedVehicles => _vehicles.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_vehicles.Count / (double)_pageSize));
 
     private async Task SearchVehicle()
     {
@@ -105,6 +115,7 @@
         try
         {
             _vehicles = await TroubleshootService.GetVehicleMasterEditAsync(_request);
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -116,4 +127,26 @@
             _loading = false;
         }
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

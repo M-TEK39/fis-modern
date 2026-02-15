@@ -2,6 +2,8 @@ using System.Text;
 using System.Text.Json;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Data.SqlServer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace FIS.Core.Infrastructure.Services;
@@ -17,6 +19,7 @@ public class ReportingService : IReportingService
     private readonly IContractRepository _contractRepository;
     private readonly ITripRepository _tripRepository;
     private readonly IMaintenanceRecordRepository _maintenanceRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<ReportingService> _logger;
 
     // Legacy report definitions mapping
@@ -255,6 +258,7 @@ public class ReportingService : IReportingService
         IContractRepository contractRepository,
         ITripRepository tripRepository,
         IMaintenanceRecordRepository maintenanceRepository,
+        FisDbContext context,
         ILogger<ReportingService> logger
     )
     {
@@ -262,8 +266,54 @@ public class ReportingService : IReportingService
         _contractRepository = contractRepository;
         _tripRepository = tripRepository;
         _maintenanceRepository = maintenanceRepository;
+        _context = context;
         _logger = logger;
     }
+
+    // ─── Lookup helpers ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Loads all reference lookup dictionaries in a single batch.
+    /// Used by report methods that handle multiple vehicles/contracts/trips.
+    /// </summary>
+    private async Task<ReportLookups> LoadLookupsAsync()
+    {
+        var sites = await _context.Sites
+            .Where(s => !s.is_deleted)
+            .ToDictionaryAsync(s => s.Site_code, s => s.description ?? string.Empty);
+
+        var statuses = await _context.VehicleStatuses
+            .ToDictionaryAsync(s => s.vehicle_status_code, s => s.status_description ?? string.Empty);
+
+        var types = await _context.VehicleTypes
+            .Where(t => !t.is_deleted)
+            .ToDictionaryAsync(t => t.type_code, t => t.type_description);
+
+        // Model code → "{make_description} {model_description}"
+        var models = await _context.Models
+            .Include(m => m.Make)
+            .Where(m => !m.is_deleted)
+            .ToDictionaryAsync(
+                m => m.model_code,
+                m => new ModelInfo(
+                    m.Make?.make_description ?? string.Empty,
+                    m.model_description));
+
+        // vmf_code → registration_number
+        var vehicleRegs = await _context.Vehicles
+            .Where(v => !v.is_deleted)
+            .ToDictionaryAsync(v => v.vmf_code, v => v.registration_number ?? string.Empty);
+
+        return new ReportLookups(sites, statuses, types, models, vehicleRegs);
+    }
+
+    private record ModelInfo(string Make, string Model);
+    private record ReportLookups(
+        Dictionary<short, string> Sites,
+        Dictionary<short, string> Statuses,
+        Dictionary<short, string> Types,
+        Dictionary<short, ModelInfo> Models,
+        Dictionary<int, string> VehicleRegistrations);
 
     #region Vehicle Reports
 
@@ -294,25 +344,32 @@ public class ReportingService : IReportingService
         // TODO: Add maintenance due checking
         // TODO: Add COF due checking
 
+        // Resolve reference lookups for this single vehicle
+        var lookups = await LoadLookupsAsync();
+        lookups.Models.TryGetValue(vehicle.model_code, out var modelInfo);
+        lookups.Statuses.TryGetValue(vehicle.vehicle_status_code, out var statusDesc);
+        lookups.Types.TryGetValue(vehicle.type_code, out var typeDesc);
+        lookups.Sites.TryGetValue(vehicle.location_code, out var locationName);
+
         return new VehicleReport
         {
             VmfCode = vehicle.vmf_code,
             RegistrationNumber = vehicle.registration_number ?? string.Empty,
             FleetNumber = vehicle.fleet_number ?? string.Empty,
-            Make = string.Empty, // TODO: Join with Make table
-            Model = string.Empty, // TODO: Join with Model table
-            Type = string.Empty, // TODO: Join with Type table
+            Make = modelInfo?.Make ?? string.Empty,
+            Model = modelInfo?.Model ?? string.Empty,
+            Type = typeDesc ?? string.Empty,
             YearManufactured = vehicle.year_manufactured ?? 0,
-            Status = string.Empty, // TODO: Join with Status table
-            Department = string.Empty, // TODO: Join with Department table
-            Location = string.Empty, // TODO: Join with Location table
+            Status = statusDesc ?? string.Empty,
+            Department = locationName ?? string.Empty,
+            Location = locationName ?? string.Empty,
             TakeOnDate = vehicle.take_on_date,
             CurrentOdometer = vehicle.current_odo,
             TotalCosts = totalCosts,
             MonthlyOverhead = vehicle.monthly_overhead ?? 0,
-            NextServiceDate = null, // TODO: Calculate from maintenance records
+            NextServiceDate = null, // TODO: Calculate from service interval + last service date
             LicenceDueDate = vehicle.licence_due_date,
-            CofDueDate = vehicle.cof_last_done, // TODO: Calculate COF due date
+            CofDueDate = vehicle.cof_last_done,
             Alerts = alerts,
         };
     }
@@ -352,13 +409,47 @@ public class ReportingService : IReportingService
             vehicles = (await _vehicleRepository.GetAllAsync()).ToList();
         }
 
+        // Load lookups once for the whole batch (not per-vehicle)
+        var lookups = await LoadLookupsAsync();
+
         var vehicleReports = new List<VehicleReport>();
         var vehiclesByStatus = new Dictionary<string, int>();
         var vehiclesByDepartment = new Dictionary<string, int>();
 
         foreach (var vehicle in vehicles.Where(v => v != null))
         {
-            var report = await GenerateVehicleReportAsync(vehicle.vmf_code);
+            var maintenance = await _maintenanceRepository.GetByVehicleAsync(vehicle.vmf_code);
+            var totalCosts = maintenance.Sum(m => m.TotalCost);
+            var alerts = new List<string>();
+            if (vehicle.licence_due_date.HasValue && vehicle.licence_due_date < DateTime.Now.AddDays(30))
+                alerts.Add("Licence expiring within 30 days");
+
+            lookups.Models.TryGetValue(vehicle.model_code, out var modelInfo);
+            lookups.Statuses.TryGetValue(vehicle.vehicle_status_code, out var statusDesc);
+            lookups.Types.TryGetValue(vehicle.type_code, out var typeDesc);
+            lookups.Sites.TryGetValue(vehicle.location_code, out var locationName);
+
+            var report = new VehicleReport
+            {
+                VmfCode = vehicle.vmf_code,
+                RegistrationNumber = vehicle.registration_number ?? string.Empty,
+                FleetNumber = vehicle.fleet_number ?? string.Empty,
+                Make = modelInfo?.Make ?? string.Empty,
+                Model = modelInfo?.Model ?? string.Empty,
+                Type = typeDesc ?? string.Empty,
+                YearManufactured = vehicle.year_manufactured ?? 0,
+                Status = statusDesc ?? string.Empty,
+                Department = locationName ?? string.Empty,
+                Location = locationName ?? string.Empty,
+                TakeOnDate = vehicle.take_on_date,
+                CurrentOdometer = vehicle.current_odo,
+                TotalCosts = totalCosts,
+                MonthlyOverhead = vehicle.monthly_overhead ?? 0,
+                NextServiceDate = null,
+                LicenceDueDate = vehicle.licence_due_date,
+                CofDueDate = vehicle.cof_last_done,
+                Alerts = alerts,
+            };
             vehicleReports.Add(report);
 
             // Count by status
@@ -657,11 +748,13 @@ public class ReportingService : IReportingService
             .Where(m => m.MaintenanceDate >= startDate && m.MaintenanceDate <= endDate)
             .ToList();
 
+        var lookups = await LoadLookupsAsync();
+
         var costLines = filteredRecords
             .Select(m => new MaintenanceCostLine
             {
                 VmfCode = m.VmfCode,
-                RegistrationNumber = string.Empty, // TODO: Join with vehicle
+                RegistrationNumber = lookups.VehicleRegistrations.GetValueOrDefault(m.VmfCode, string.Empty),
                 ServiceDate = m.MaintenanceDate,
                 MaintenanceType = m.MaintenanceType,
                 ServiceProvider = m.ServiceProvider ?? string.Empty,
@@ -716,18 +809,33 @@ public class ReportingService : IReportingService
             .Where(t => t.issue_date >= startDate && t.issue_date <= endDate)
             .ToList();
 
+        var lookups = await LoadLookupsAsync();
+
+        // Build contract → site lookup for trip department resolution
+        var contractIds = filteredTrips.Select(t => t.contract_code).Distinct().ToList();
+        var contractSites = await _context.Contracts
+            .Where(c => contractIds.Contains(c.contract_code))
+            .ToDictionaryAsync(c => c.contract_code, c => c.site_code);
+
         var tripSummaries = filteredTrips
-            .GroupBy(t => t.contract_code) // Group by contract instead of vmf_code
-            .Select(g => new TripSummaryLine
+            .GroupBy(t => t.contract_code)
+            .Select(g =>
             {
-                VmfCode = g.Key, // Using contract_code as placeholder
-                RegistrationNumber = string.Empty, // TODO: Join with vehicle
-                TripCount = g.Count(),
-                TotalKilometers = 0, // TODO: Calculate from actual trip records
-                TotalRevenue = 0, // TODO: Calculate revenue
-                Department = string.Empty, // TODO: Join with vehicle/department
-                FirstTrip = g.Min(t => t.issue_date),
-                LastTrip = g.Max(t => t.issue_date),
+                contractSites.TryGetValue(g.Key, out var siteCode);
+                var siteName = siteCode != 0
+                    ? lookups.Sites.GetValueOrDefault(siteCode, string.Empty)
+                    : string.Empty;
+                return new TripSummaryLine
+                {
+                    VmfCode = g.Key,
+                    RegistrationNumber = string.Empty, // trips don't carry vmf_code directly
+                    TripCount = g.Count(),
+                    TotalKilometers = g.Sum(t => t.end_odo_meter ?? 0),
+                    TotalRevenue = 0,
+                    Department = siteName,
+                    FirstTrip = g.Min(t => t.issue_date),
+                    LastTrip = g.Max(t => t.issue_date),
+                };
             })
             .ToList();
 
@@ -792,18 +900,20 @@ public class ReportingService : IReportingService
         // TODO: Get related trips for this contract
         var relatedTrips = new List<Trip>();
 
+        var lookups = await LoadLookupsAsync();
+
         return new AuthorityReport
         {
-            ContractId = contract.contract_code, // Use correct property name
+            ContractId = contract.contract_code,
             ContractCode = contract.contract_code,
-            AuthorityNumber = contract.Authorisation ?? string.Empty, // Use available property
+            AuthorityNumber = contract.Authorisation ?? string.Empty,
             IssueDate = contract.start_date,
             ExpiryDate = contract.end_date ?? DateTime.MinValue,
-            Purpose = contract.Notes ?? string.Empty, // Use Notes for purpose
-            VmfCode = contract.vmf_code, // Remove null check - it's not nullable
+            Purpose = contract.Notes ?? string.Empty,
+            VmfCode = contract.vmf_code,
             DriverName = contract.Driver_name ?? string.Empty,
-            RegistrationNumber = string.Empty, // TODO: Join with vehicle
-            Department = string.Empty, // TODO: Join with department
+            RegistrationNumber = lookups.VehicleRegistrations.GetValueOrDefault(contract.vmf_code, string.Empty),
+            Department = lookups.Sites.GetValueOrDefault(contract.site_code, string.Empty),
             AuthorizedKilometers = contract.monthly_km ?? 0, // Using monthly_km instead of allocated_km
             UsedKilometers = 0, // TODO: Calculate from trips
             RemainingKilometers = (contract.monthly_km ?? 0) - 0,
@@ -848,20 +958,26 @@ public class ReportingService : IReportingService
             contracts = (await _contractRepository.GetAllAsync()).ToList();
         }
 
+        var lookups = await LoadLookupsAsync();
+
         var contractSummaries = contracts
             .Where(c => c != null)
             .Select(c => new ContractSummaryLine
             {
-                ContractId = c.contract_code, // Using contract_code as ID
-                ContractNumber = c.Authorisation ?? string.Empty, // Using Authorisation as contract number
-                Department = string.Empty, // TODO: Join with department
+                ContractId = c.contract_code,
+                ContractNumber = c.Authorisation ?? string.Empty,
+                Department = lookups.Sites.GetValueOrDefault(c.site_code, string.Empty),
                 StartDate = c.start_date,
                 EndDate = c.end_date ?? DateTime.MinValue,
-                ContractValue = 0, // TODO: Contract value not available in current schema
-                VehicleCount = 1, // TODO: Count vehicles for contract
-                Status = "Active", // Default status as schema doesn't contain status field
-                UsedKilometers = 0, // TODO: Calculate from trips
-                AuthorizedKilometers = c.monthly_km ?? 0, // Using monthly_km instead of allocated_km
+                ContractValue = 0,
+                VehicleCount = 1,
+                Status = c.still_current == "Y"
+                    ? "Active"
+                    : (c.contract_status_code == 7 ? "Closed"
+                        : c.contract_status_code == 6 ? "Cancelled"
+                        : "Inactive"),
+                UsedKilometers = 0,
+                AuthorizedKilometers = c.monthly_km ?? 0,
             })
             .ToList();
 

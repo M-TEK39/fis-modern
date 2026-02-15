@@ -1,7 +1,6 @@
 @page "/users/view"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Pages.Users
-@using FIS.Web.Components.Shared
 
 <PageTitle>View User Details - Fleet Information System</PageTitle>
 
@@ -17,12 +16,4 @@
 
 <div class="page-content">
     <UserAdminViewUsersContent />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="UserAdmin/UserAdmin.aspx"
-        Endpoint="api/user"
-        HttpMethod="GET"
-        ButtonText="Test View Users Endpoint"
-        ReportType="useradmin-view-users" />
-
 </div>

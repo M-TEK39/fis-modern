@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +13,7 @@
             <i class="bx bx-printer"></i>
             Reprint an Inquiry Report
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/RPT_Mon_request_main.aspx.</p>
+        <p class="page-description">Find and reprint a captured inquiry using its reference number.</p>
     </div>
 </div>
 
@@ -36,7 +35,7 @@
             <p>Loading...</p>
         </div>
     }
-    else if (_result == null)
+    else if (_hasSearched && _result == null)
     {
         <div class="empty-state">
             <i class="bx bx-printer"></i>
@@ -44,7 +43,7 @@
             <p>Enter a reference number to reprint.</p>
         </div>
     }
-    else
+    else if (_result is not null)
     {
         <div class="table-container">
             <div class="table-wrapper">
@@ -58,24 +57,26 @@
             </div>
         </div>
     }
+    else
+    {
+        <div class="empty-state">
+            <i class="bx bx-printer"></i>
+            <h3>Enter reference number</h3>
+            <p>Submit a reference number to reprint an inquiry.</p>
+        </div>
+    }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/RPT_Mon_request_main.aspx"
-        Endpoint="api/monitor/reports/reprint/1"
-        HttpMethod="GET"
-        ButtonText="Test Monitor Reprint Endpoint"
-        ReportType="monitor-report-reprint" />
 
 @code {
     private bool _loading;
+    private bool _hasSearched;
     private string _referenceNumber = string.Empty;
     private MonitorDto? _result;
 
     private async Task LoadInquiry()
     {
         _loading = true;
+        _hasSearched = true;
         _result = null;
         try
         {

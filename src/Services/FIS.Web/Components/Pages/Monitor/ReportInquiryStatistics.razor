@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +13,7 @@
             <i class="bx bx-bar-chart-alt-2"></i>
             Inquiry Statistics
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/RPT_mon_stat_captur_main.aspx.</p>
+        <p class="page-description">Inquiry statistics reporting workflow.</p>
     </div>
 </div>
 
@@ -50,7 +49,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _stats)
+                        @foreach (var item in PagedStats)
                         {
                             <tr>
                                 <td>@item.Key</td>
@@ -60,21 +59,29 @@
                     </tbody>
                 </table>
             </div>
+            @if (_stats.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_stats.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/RPT_Mon_stat_captur_main.aspx"
-        Endpoint="api/monitor/reports/inquiry-statistics"
-        HttpMethod="POST"
-        ButtonText="Test Monitor Inquiry Statistics Endpoint"
-        ReportType="monitor-report-statistics" />
-
 @code {
     private bool _loading;
     private Dictionary<string, int> _stats = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<KeyValuePair<string, int>> PagedStats
+        => _stats.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_stats.Count / (double)_pageSize));
 
     private async Task LoadStats()
     {
@@ -85,6 +92,7 @@
             var all = await MonitorService.GetAllAsync<MonitorDto>();
             _stats = all.GroupBy(m => string.IsNullOrWhiteSpace(m.Inquiry_type) ? "(Unknown)" : m.Inquiry_type)
                 .ToDictionary(g => g.Key, g => g.Count());
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -93,6 +101,22 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

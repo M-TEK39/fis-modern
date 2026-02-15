@@ -1,7 +1,5 @@
 @page "/private-hire/demo-vehicles"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>Demo Vehicles - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -10,7 +8,7 @@
             <i class="bx bx-car"></i>
             Maintain Demo Vehicle Information
         </h1>
-        <p class="page-description">Legacy demo vehicle maintenance screen.</p>
+        <p class="page-description">Demo vehicle maintenance screen.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/private-hire">Back to Private Hire Menu</a>
@@ -20,13 +18,7 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <p class="form-hint">Demo vehicle maintenance screen to be aligned with legacy workflow.</p>
-            <LegacyEndpointActionPanel
-                LegacyPath="demo_vehicles/Demo_menu.aspx"
-                Endpoint="api/demo-vehicles"
-                HttpMethod="GET"
-                ButtonText="Run Demo Vehicles API"
-                ReportType="private-hire-demo-vehicles" />
+            <p class="form-hint">Use this screen to manage demo vehicle information.</p>
         </div>
     </div>
 </div>

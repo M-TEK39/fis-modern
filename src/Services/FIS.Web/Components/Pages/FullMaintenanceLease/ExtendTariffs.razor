@@ -1,7 +1,9 @@
 @page "/full-maintenance-lease/extend"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Extend Latest Lease Tariff Period</PageTitle>
@@ -29,7 +31,7 @@
                     @foreach (var item in _items.OrderByDescending(x => x.EndDate ?? DateTime.MinValue))
                     {
                         <option value="@item.VehicleContractTermID">
-                            @($"ID {item.VehicleContractTermID} | VMF {item.vmf_Code} | End {FormatDate(item.EndDate)}")
+                            @($"ID {item.VehicleContractTermID} | {GetVehicleLabel(item.vmf_Code)} | End {FormatDate(item.EndDate)}")
                         </option>
                     }
                 </select>
@@ -60,6 +62,7 @@
     private int _selectedId;
     private DateTime? _newEndDate = DateTime.Today.AddMonths(1);
     private List<LeaseTermDto> _items = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -71,6 +74,15 @@
         try
         {
             _items = await LeaseService.GetAllAsync<LeaseTermDto>();
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => FormatVehicleLabel(g.First()));
+            }
         }
         catch (Exception ex)
         {
@@ -125,6 +137,14 @@
 
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private string GetVehicleLabel(int vmfCode)
+        => _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : vmfCode.ToString();
 
     private sealed class LeaseTermDto
     {

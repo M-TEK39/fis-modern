@@ -1,5 +1,6 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using System.Text
 @inject FinanceApiService FinanceService
 
 <PageTitle>@($"{Title} - Fleet Information System")</PageTitle>
@@ -20,11 +21,9 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-header">
-            <h2>Legacy API Wiring</h2>
+            <h2>Report Action</h2>
         </div>
         <div class="form-card-body">
-            <p><strong>Legacy source:</strong> @LegacyPath</p>
-
             <div class="contract-action-group">
                 <button class="btn btn-primary btn-sm" @onclick="RunAsync" disabled="@_running">
                     @(_running ? "Running..." : ActionText)
@@ -89,12 +88,12 @@
         }
 
         _error = !result.Success;
-        _status = result.Message;
+        _status = NormalizeForDisplay(result.Message);
         _responseBody = string.IsNullOrWhiteSpace(result.ResponseBody)
             ? string.Empty
-            : result.ResponseBody.Length > 4000
+            : NormalizeForDisplay(result.ResponseBody.Length > 4000
                 ? result.ResponseBody[..4000]
-                : result.ResponseBody;
+                : result.ResponseBody);
         _running = false;
     }
 
@@ -119,5 +118,28 @@
             legacyPath = LegacyPath,
             sourcePage = Title
         };
+    }
+
+    private static string NormalizeForDisplay(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var endpointIndex = value.IndexOf("Endpoint:", StringComparison.OrdinalIgnoreCase);
+        var sanitized = endpointIndex >= 0 ? value[..endpointIndex].TrimEnd(' ', '.', '|', '-') : value;
+        var builder = new StringBuilder(sanitized.Length);
+        foreach (var ch in sanitized)
+        {
+            if (char.IsControl(ch) && ch != '\r' && ch != '\n' && ch != '\t')
+            {
+                continue;
+            }
+
+            builder.Append(ch);
+        }
+
+        return builder.ToString().Trim();
     }
 }

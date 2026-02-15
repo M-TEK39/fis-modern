@@ -1,6 +1,10 @@
 @page "/fuel-cards/report/latest"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FleetManagementApiService FleetService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Latest Fuelcard Report for a GG Vehicle</PageTitle>
 
@@ -22,38 +26,206 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">GG Number</label>
-                    <input class="form-input" placeholder="Enter GG number" />
+                    <label class="form-label">Number Type</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                    <div class="fis-input-group-compact">
+                        <input class="form-input" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" @bind="_vehicleSearchTerm" />
+                        <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchVehiclesAsync" disabled="@_loading">Find</button>
+                    </div>
+                    <select class="form-select fis-mt-05" @bind="_selectedVehicleVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                        <option value="">Select vehicle...</option>
+                        @foreach (var vehicle in _vehicleMatches)
+                        {
+                            <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                        }
+                    </select>
                 </div>
             </div>
-            <button class="btn btn-primary btn-sm">Generate</button>
+            <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">
+                @(_loading ? "Generating..." : "Generate")
+            </button>
+            @if (!string.IsNullOrWhiteSpace(_message))
+            {
+                <div class="alert alert-info" style="margin-top: 1rem;">@_message</div>
+            }
             <div class="table-container" style="margin-top: 1rem;">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <th>Date</th>
                                 <th>Vehicle</th>
                                 <th>Card Number</th>
-                                <th>Status</th>
-                                <th>Issued</th>
-                                <th>Returned</th>
+                                <th>Action</th>
+                                <th>Receiver</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="5">No report data available.</td>
-                            </tr>
+                            @if (PagedActivity.Any())
+                            {
+                                @foreach (var item in PagedActivity)
+                                {
+                                    <tr>
+                                        <td>@item.Date.ToString("yyyy-MM-dd HH:mm")</td>
+                                        <td>@item.VmfCode</td>
+                                        <td>@item.CardNumber</td>
+                                        <td>@item.Action</td>
+                                        <td>@item.Receiver</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5">No report rows found for the current filters.</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
+            @if (_activity.Count > 0)
+            {
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+            }
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="fuelcard/RPT_all_vehicle_main.aspx"
-        Endpoint="api/fuelcard/reports/latest"
-        HttpMethod="POST"
-        ButtonText="Test Latest Fuelcard Report Endpoint"
-        ReportType="fuelcard-report-latest" />
 </div>
+
+@code {
+    private string _searchMode = "GG";
+    private string _vehicleSearchTerm = string.Empty;
+    private int? _selectedVehicleVmfCode;
+    private List<VehicleDto> _vehicleMatches = new();
+    private List<FuelCardActivityDto> _activity = new();
+    private bool _loading;
+    private string _message = string.Empty;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<FuelCardActivityDto> PagedActivity => _activity.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_activity.Count / (double)_pageSize));
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        _message = string.Empty;
+        try
+        {
+            var response = await FleetService.GetFuelCardAllocationAsync();
+            if (response is null || !response.Success || response.Report is null)
+            {
+                _activity = new();
+                _message = response?.Message ?? "No report rows found for the current filters.";
+                return;
+            }
+
+            _activity = response.Report.RecentActivity
+                .Where(a => !_selectedVehicleVmfCode.HasValue || a.VmfCode == _selectedVehicleVmfCode.Value)
+                .OrderByDescending(a => a.Date)
+                .ToList();
+
+            _page = 1;
+            _message = "Request completed successfully.";
+        }
+        catch (Exception ex)
+        {
+            _activity = new();
+            _message = "Failed to load report.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private async Task SearchVehiclesAsync()
+    {
+        var query = _vehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleMatches = FilterVehicleMatches(matches, query, _searchMode);
+            if (_vehicleMatches.All(v => v.vmf_code != _selectedVehicleVmfCode))
+            {
+                _selectedVehicleVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleSearchTerm = string.Empty;
+        _vehicleMatches = new();
+        _selectedVehicleVmfCode = null;
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+}

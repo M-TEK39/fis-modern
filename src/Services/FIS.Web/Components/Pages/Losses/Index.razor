@@ -1,6 +1,5 @@
 @page "/losses"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
 <PageTitle>Losses - Fleet Information System</PageTitle>
 
@@ -45,12 +44,6 @@
             }
         </div>
     </div>
-    <LegacyEndpointActionPanel
-        LegacyPath="Losses/MNTLosses.aspx"
-        Endpoint="api/loss"
-        HttpMethod="GET"
-        ButtonText="Run Losses Menu API"
-        ReportType="losses-menu" />
 </div>
 
 @code {

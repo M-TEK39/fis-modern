@@ -1,6 +1,5 @@
 @page "/call-centre"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
 <PageTitle>Call Centre Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -10,7 +9,7 @@
             <i class="bx bx-phone-call"></i>
             Call Centre Maintenance Menu
         </h1>
-        <p class="page-description">Legacy call centre maintenance menu.</p>
+        <p class="page-description">Call centre maintenance menu.</p>
     </div>
 </div>
 
@@ -18,12 +17,12 @@
     <div class="menu-tiles">
         <div class="menu-tile">
             <div class="menu-tile-header">
-                <span>Call Centre Maitenance Menu :</span>
+                <span>Call Centre Maintenance Menu:</span>
             </div>
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/help">Call Centre Maintenance Information / Help</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
@@ -35,19 +34,19 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/incident/capture">1) Capture a New Incident</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/incident/edit">2) Edit / Update an Existing Incident</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/notifications">3) Notification List for eMail Addresses</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/reports">4) Reports</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
@@ -59,20 +58,14 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/bookings/notifications">1) Notification e-mail Addresses</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/call-centre/bookings/help">Booking information/help</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/MNT_Call_Centre.aspx"
-        Endpoint="api/callcentre/menu"
-        HttpMethod="GET"
-        ButtonText="Test Call Centre Menu Endpoint"
-        ReportType="call-centre-menu" />
 </div>

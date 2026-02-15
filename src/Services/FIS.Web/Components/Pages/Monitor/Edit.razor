@@ -2,9 +2,9 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject SiteApiService SiteService
+@inject DriverApiService DriverService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Edit / Update an Existing Inquiry - Fleet Information System</PageTitle>
@@ -15,7 +15,7 @@
             <i class="bx bx-edit-alt"></i>
             Edit / Update an Existing Inquiry
         </h1>
-        <p class="page-description">Legacy Monitor/MNT_mon_upg_getnum.aspx workflow.</p>
+        <p class="page-description">Monitor inquiry edit workflow.</p>
     </div>
 </div>
 
@@ -48,11 +48,26 @@
             </div>
             <div class="form-row">
                 <label class="form-label">Inquiry Type</label>
-                <input class="form-input" @bind="_editing.Inquiry_type" />
+                <select class="form-select" @bind="_editing.Inquiry_type">
+                    @foreach (var option in _inquiryTypes)
+                    {
+                        <option value="@option">@option</option>
+                    }
+                </select>
             </div>
             <div class="form-row">
                 <label class="form-label">Inquiry Description</label>
                 <input class="form-input" @bind="_editing.Inquiry_Desc" />
+            </div>
+            <div class="form-row">
+                <label class="form-label">Driver</label>
+                <select class="form-select" @bind="_selectedDriverCode" @bind:after="OnDriverChangedAsync">
+                    <option value="">Select driver...</option>
+                    @foreach (var driver in _drivers)
+                    {
+                        <option value="@driver.site_driver_code">@DriverOptionLabel(driver)</option>
+                    }
+                </select>
             </div>
             <div class="form-row">
                 <label class="form-label">Driver Name</label>
@@ -68,7 +83,7 @@
                     <option value="">Select site</option>
                     @foreach (var site in _sites)
                     {
-                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                        <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                     }
                 </select>
             </div>
@@ -79,24 +94,29 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/MNT_mon_upg_getnum.aspx"
-        Endpoint="api/monitor/edit/1"
-        HttpMethod="PUT"
-        ButtonText="Test Monitor Edit Endpoint"
-        ReportType="monitor-edit" />
-
 @code {
     private bool _loading;
     private bool _showForm;
     private string _referenceNumber = string.Empty;
     private MonitorDto? _editing;
     private List<SiteResponseDto> _sites = new();
+    private List<DriverDto> _drivers = new();
+    private int? _selectedDriverCode;
+    private readonly List<string> _inquiryTypes = new()
+    {
+        "Fuel_Consumption",
+        "Fuel_overfill",
+        "NoFuel_6months",
+        "Oil_Consumption",
+        "Tyre_Usage",
+        "Card_Dormant",
+        "NoMaintain_2000lt"
+    };
 
     protected override async Task OnInitializedAsync()
     {
         _sites = await SiteService.GetAllAsync();
+        _drivers = await DriverService.GetDriversAsync();
     }
 
     private async Task LoadInquiry()
@@ -107,7 +127,16 @@
             if (short.TryParse(_referenceNumber, out var code))
             {
                 _editing = await MonitorService.GetByIdAsync<MonitorDto>(code);
+                if (_editing != null && !_inquiryTypes.Contains(_editing.Inquiry_type ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                {
+                    _editing.Inquiry_type = _inquiryTypes.FirstOrDefault() ?? string.Empty;
+                }
                 _showForm = _editing != null;
+                if (_editing?.Driver_persalno != null)
+                {
+                    var matched = _drivers.FirstOrDefault(d => d.driver_persalnumber == _editing.Driver_persalno);
+                    _selectedDriverCode = matched?.site_driver_code;
+                }
             }
         }
         catch (Exception ex)
@@ -140,5 +169,35 @@
         {
             _loading = false;
         }
+    }
+
+    private Task OnDriverChangedAsync()
+    {
+        if (_editing == null || !_selectedDriverCode.HasValue)
+        {
+            return Task.CompletedTask;
+        }
+
+        var selected = _drivers.FirstOrDefault(d => d.site_driver_code == _selectedDriverCode.Value);
+        if (selected == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _editing.Driver_name = $"{selected.driver_firstname} {selected.driver_surname}".Trim();
+        _editing.Driver_persalno = selected.driver_persalnumber;
+        _editing.Driver_Site = (short?)selected.site_code;
+        return Task.CompletedTask;
+    }
+
+    private static string DriverOptionLabel(DriverDto driver)
+    {
+        var fullName = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            fullName = "Unknown Driver";
+        }
+
+        return $"{fullName} ({driver.site_driver_code})";
     }
 }

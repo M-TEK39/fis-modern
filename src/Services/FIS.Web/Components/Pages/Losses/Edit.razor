@@ -1,6 +1,5 @@
 @page "/losses/edit"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @using FIS.Web.Models
 @using FIS.Web.Services
@@ -41,10 +40,26 @@
                     <InputText class="form-input" @bind-Value="_searchVehicle" />
                 </div>
                 <div class="form-field">
+                    <label class="form-label">Loss Match</label>
+                    <select class="form-select" @bind="_selectedLossCode" disabled="@(_vehicleLossMatches.Count == 0)">
+                        <option value="">Select loss...</option>
+                        @foreach (var item in _vehicleLossMatches)
+                        {
+                            <option value="@item.loss_code">@GetLossOptionLabel(item)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
                     <label class="form-label">&nbsp;</label>
                     <button class="btn btn-primary btn-sm" @onclick="LoadLoss" disabled="@_loading">
                         <i class="bx bx-search"></i>
                         @(_loading ? "Loading..." : "Find")
+                    </button>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">&nbsp;</label>
+                    <button class="btn btn-secondary btn-sm" @onclick="LoadSelectedLoss" disabled="@(!_selectedLossCode.HasValue || _loading)">
+                        Load Selected
                     </button>
                 </div>
             </div>
@@ -74,7 +89,7 @@
                             <select class="form-select" @bind="_form.LossTypeCode">
                                 @foreach (var type in _lossTypes)
                                 {
-                                    <option value="@type.loss_code">@type.loss_description</option>
+                                    <option value="@type.loss_code">@($"{type.loss_description} ({type.loss_code})")</option>
                                 }
                             </select>
                             </div>
@@ -110,6 +125,8 @@
     private bool _loaded;
     private bool _loading;
     private bool _saving;
+    private int? _selectedLossCode;
+    private List<LossDto> _vehicleLossMatches = new();
     private readonly LossFormModel _form = new();
     private List<LossTypeDto> _lossTypes = new();
 
@@ -152,6 +169,9 @@
         _loading = true;
         try
         {
+            _loaded = false;
+            _vehicleLossMatches = new();
+            _selectedLossCode = null;
             LossDto? loss = null;
             if (int.TryParse(_searchReference, out var referenceId))
             {
@@ -161,12 +181,13 @@
             if (loss == null && !string.IsNullOrWhiteSpace(_searchVehicle))
             {
                 var matches = await LossService.GetByVehicleAsync<LossDto>(_searchVehicle.Trim());
-                loss = matches.FirstOrDefault();
+                _vehicleLossMatches = matches
+                    .OrderByDescending(x => x.loss_code)
+                    .ToList();
             }
 
             if (loss == null)
             {
-                _loaded = false;
                 return;
             }
 
@@ -182,6 +203,32 @@
         {
             _loading = false;
         }
+    }
+
+    private async Task LoadSelectedLoss()
+    {
+        if (!_selectedLossCode.HasValue)
+        {
+            return;
+        }
+
+        var selected = _vehicleLossMatches.FirstOrDefault(x => x.loss_code == _selectedLossCode.Value)
+            ?? await LossService.GetByIdAsync<LossDto>(_selectedLossCode.Value);
+        if (selected == null)
+        {
+            _loaded = false;
+            return;
+        }
+
+        _form.LoadFrom(selected);
+        _loaded = true;
+    }
+
+    private static string GetLossOptionLabel(LossDto loss)
+    {
+        var reference = string.IsNullOrWhiteSpace(loss.loss_reference) ? "-" : loss.loss_reference.Trim();
+        var status = string.IsNullOrWhiteSpace(loss.loss_status) ? "-" : loss.loss_status.Trim();
+        return $"#{loss.loss_code} | {reference} | {status}";
     }
 
     private sealed class LossFormModel

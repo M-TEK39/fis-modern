@@ -201,6 +201,46 @@ public class ReferenceDataApiService
         }
     }
 
+    public async Task<List<ModelDto>> GetModelsByMakeAsync(int makeCode)
+    {
+        try
+        {
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiModelResponse>>($"api/model/make/{makeCode}");
+            if (apiResponse == null) return new List<ModelDto>();
+
+            return apiResponse.Select(model => new ModelDto
+            {
+                model_code = model.model_code,
+                make_code = model.make_code,
+                model_name = model.model_description,
+                make_name = model.make_description,
+                unit_of_measure_code = model.unit_of_measure_code,
+                fuel_type_code = model.fuel_type_code,
+                licence_code = model.licence_code,
+                class_code = model.class_code,
+                type_code = model.type_code,
+                maint_trigger_code = model.maint_trigger_code,
+                engine_type = model.engine_type,
+                engine_capacity = model.engine_capacity,
+                rated_power = model.rated_power,
+                fuel_tank_capacity = model.fuel_tank_capacity,
+                target_consumption = model.target_consumption,
+                target_tyre_life = model.target_tyre_life,
+                service_interval = model.service_interval,
+                vemm_code = model.vemm_code,
+                licence_fee_code = model.licence_fee_code,
+                gvm = model.gvm,
+                transmission = model.transmission,
+                wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching models for make {MakeCode}", makeCode);
+            return new List<ModelDto>();
+        }
+    }
+
     public async Task<ModelDto?> GetModelAsync(int modelCode)
     {
         try

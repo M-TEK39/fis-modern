@@ -48,9 +48,18 @@
                     <div class="form-card-body">
                         <div class="form-grid">
                             <div class="form-field">
-                                <label class="form-label">VIN / Engine / GG No</label>
-                                <InputText @bind-Value="_quickSearch" class="form-input" placeholder="Enter VIN / Engine / GG No" />
-                                <span class="form-hint">Searches existing vehicles by VIN, engine number, or GG/GP.</span>
+                                <label class="form-label">Search By</label>
+                                <select class="form-select" @bind="_quickSearchMode">
+                                    <option value="AUTO">Auto (GG/GP, VIN, Engine, Invoice)</option>
+                                    <option value="GG">GG/GP Number</option>
+                                    <option value="VIN">VIN / Chassis</option>
+                                    <option value="INVOICE">Invoice Number</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">VIN / Engine / GG / Invoice No</label>
+                                <InputText @bind-Value="_quickSearch" class="form-input" placeholder="Enter VIN / Engine / GG / Invoice No" />
+                                <span class="form-hint">Searches existing vehicles by VIN, engine number, GG/GP, or invoice number.</span>
                             </div>
                         </div>
                         <div class="form-actions">
@@ -97,10 +106,20 @@
                                 <InputNumber @bind-Value="_vehicle.year_manufactured" class="form-input" />
                                 <ValidationMessage For="() => _vehicle.year_manufactured" />
                             </div>
-                            <div class="form-field form-group-full">
-                                <label class="form-label">Make & Model <span class="required">*</span></label>
-                                <select class="form-select" @bind="_vehicle.model_code" @bind:after="OnModelChanged">
-                                    <option value="0">Select One...</option>
+                            <div class="form-field">
+                                <label class="form-label">Make <span class="required">*</span></label>
+                                <select class="form-select" @bind="_selectedMakeCode" @bind:after="OnMakeChanged">
+                                    <option value="0">Select Make...</option>
+                                    @foreach (var make in _makes)
+                                    {
+                                        <option value="@make.make_code">@($"{make.make_name} ({make.make_code})")</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Model <span class="required">*</span></label>
+                                <select class="form-select" @bind="_vehicle.model_code" @bind:after="OnModelChanged" disabled="@(_selectedMakeCode <= 0)">
+                                    <option value="0">@(_selectedMakeCode <= 0 ? "Select Make First..." : "Select Model...")</option>
                                     @foreach (var model in _models)
                                     {
                                         <option value="@model.model_code">@ModelDisplayName(model)</option>
@@ -157,6 +176,14 @@
                                 <InputText @bind-Value="_vehicle.invoice_number" class="form-input" />
                             </div>
                             <div class="form-field">
+                                <label class="form-label">IFMS Vehicle Register Number</label>
+                                <InputText @bind-Value="_vehicle.ifms_vehicle_register_number" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">NATIS Model Number</label>
+                                <InputText @bind-Value="_vehicle.natis_model_number" class="form-input" />
+                            </div>
+                            <div class="form-field">
                                 <label class="form-label">Purchase Amount (R) <span class="required">*</span></label>
                                 <InputNumber @bind-Value="_vehicle.purchase_amount" class="form-input" />
                                 <ValidationMessage For="() => _vehicle.purchase_amount" />
@@ -174,7 +201,7 @@
                                     <option value="0">Select Site...</option>
                                     @foreach (var site in _sites)
                                     {
-                                        <option value="@site.SiteCode">@site.Description</option>
+                                        <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                                     }
                                 </select>
                             </div>
@@ -427,9 +454,19 @@
                     <div class="form-card-body">
                         <div class="form-grid">
                             <div class="form-field">
-                                <label class="form-label">Make & Model</label>
-                                <select class="form-select" @bind="_vehicle.model_code" @bind:after="OnModelChanged">
-                                    <option value="0">Select One...</option>
+                                <label class="form-label">Make</label>
+                                <select class="form-select" @bind="_selectedMakeCode" @bind:after="OnMakeChanged">
+                                    <option value="0">Select Make...</option>
+                                    @foreach (var make in _makes)
+                                    {
+                                        <option value="@make.make_code">@($"{make.make_name} ({make.make_code})")</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Model</label>
+                                <select class="form-select" @bind="_vehicle.model_code" @bind:after="OnModelChanged" disabled="@(_selectedMakeCode <= 0)">
+                                    <option value="0">@(_selectedMakeCode <= 0 ? "Select Make First..." : "Select Model...")</option>
                                     @foreach (var model in _models)
                                     {
                                         <option value="@model.model_code">@ModelDisplayName(model)</option>
@@ -491,8 +528,13 @@
                                 </select>
                             </div>
                             <div class="form-field">
-                                <label class="form-label">Status Code</label>
-                                <InputNumber @bind-Value="_vehicle.vehicle_status_code" class="form-input" />
+                                <label class="form-label">Status</label>
+                                <select class="form-select" @bind="_vehicle.vehicle_status_code">
+                                    @foreach (var status in _statusCodes)
+                                    {
+                                        <option value="@status.Code">@status.Label</option>
+                                    }
+                                </select>
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Status Date</label>
@@ -577,6 +619,14 @@
                             <div class="form-field">
                                 <label class="form-label">Invoice Number</label>
                                 <InputText @bind-Value="_vehicle.invoice_number" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">IFMS Vehicle Register Number</label>
+                                <InputText @bind-Value="_vehicle.ifms_vehicle_register_number" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">NATIS Model Number</label>
+                                <InputText @bind-Value="_vehicle.natis_model_number" class="form-input" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Purchase Amount</label>
@@ -712,11 +762,13 @@
     private bool _quickSearchLoading = false;
     private string? _errorMessage;
 
+    private List<MakeDto> _makes = new();
     private List<ModelDto> _models = new();
     private List<LocationViewDto> _locations = new();
     private List<SiteResponseDto> _sites = new();
     private List<MaintenanceTriggerDto> _maintenanceTriggers = new();
     private List<ExtraCodeDto> _extras = new();
+    private List<VehicleStatusOption> _statusCodes = new();
     private readonly List<string> _colorOptions = new() { "Other", "Black", "Blue", "Green", "Red", "Yellow", "White" };
     private string _colorSelection = "Other";
     private string _otherColor = "";
@@ -724,12 +776,14 @@
     private string _hiredFrom = "";
     private string _hireType = "";
     private string _quickSearch = "";
+    private string _quickSearchMode = "AUTO";
     private string _statusText = "";
     private bool _hasDamages;
     private string _damagesDescription = "";
     private string _fleetNotes = "";
     private string _capturerComment = "";
     private short _siteCode;
+    private int _selectedMakeCode;
     private string _previousRegistrationNumber = "";
     private bool _extendedService;
 
@@ -760,6 +814,13 @@
                 _statusText = _vehicle.status_description ?? string.Empty;
                 _hiredFrom = _vehicle.purchased_from ?? string.Empty;
                 _hireType = _vehicle.type_name ?? string.Empty;
+                if (_vehicle.vehicle_status_code > 0 && _statusCodes.All(option => option.Code != _vehicle.vehicle_status_code))
+                {
+                    _statusCodes.Add(new VehicleStatusOption(_vehicle.vehicle_status_code, $"{_vehicle.vehicle_status_code} - Current"));
+                    _statusCodes = _statusCodes.OrderBy(option => option.Code).ToList();
+                }
+                await ResolveSelectedMakeAsync();
+                await LoadModelsForSelectedMakeAsync();
             }
             else
             {
@@ -780,19 +841,22 @@
         _loadingReferenceData = true;
         try
         {
-            var modelsTask = ReferenceDataService.GetModelsAsync();
+            var makesTask = ReferenceDataService.GetMakesAsync();
             var locationsTask = LocationService.GetAllAsync();
             var sitesTask = SiteService.GetAllAsync();
             var maintenanceTask = MaintenanceTriggerService.GetAllAsync();
             var extrasTask = ExtraCodeService.GetAllAsync();
+            var vehiclesTask = VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
 
-            await Task.WhenAll(modelsTask, locationsTask, sitesTask, maintenanceTask, extrasTask);
+            await Task.WhenAll(makesTask, locationsTask, sitesTask, maintenanceTask, extrasTask, vehiclesTask);
 
-            _models = modelsTask.Result ?? new List<ModelDto>();
+            _makes = makesTask.Result ?? new List<MakeDto>();
+            _models = new List<ModelDto>();
             _locations = locationsTask.Result ?? new List<LocationViewDto>();
             _sites = sitesTask.Result ?? new List<SiteResponseDto>();
             _maintenanceTriggers = maintenanceTask.Result ?? new List<MaintenanceTriggerDto>();
             _extras = extrasTask.Result ?? new List<ExtraCodeDto>();
+            BuildStatusOptions(vehiclesTask.Result?.Data ?? new List<VehicleDto>());
         }
         catch (Exception ex)
         {
@@ -801,6 +865,38 @@
         finally
         {
             _loadingReferenceData = false;
+        }
+    }
+
+    private void BuildStatusOptions(List<VehicleDto> vehicles)
+    {
+        _statusCodes = vehicles
+            .Where(v => v.vehicle_status_code > 0)
+            .GroupBy(v => v.vehicle_status_code)
+            .Select(group =>
+            {
+                var description = group
+                    .Select(v => v.status_description)
+                    .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))
+                    ?.Trim();
+                var label = string.IsNullOrWhiteSpace(description)
+                    ? $"Status {group.Key}"
+                    : $"{group.Key} - {description}";
+                return new VehicleStatusOption(group.Key, label);
+            })
+            .OrderBy(option => option.Code)
+            .ToList();
+
+        if (_statusCodes.Count == 0)
+        {
+            _statusCodes.Add(new VehicleStatusOption(1, "1 - In Service"));
+            _statusCodes.Add(new VehicleStatusOption(2, "2 - Out of Service"));
+        }
+
+        if (_vehicle.vehicle_status_code > 0 && _statusCodes.All(option => option.Code != _vehicle.vehicle_status_code))
+        {
+            _statusCodes.Add(new VehicleStatusOption(_vehicle.vehicle_status_code, $"{_vehicle.vehicle_status_code} - Current"));
+            _statusCodes = _statusCodes.OrderBy(option => option.Code).ToList();
         }
     }
 
@@ -896,6 +992,8 @@
         _vehicle.engine_number_1 = _vehicle.engine_number_1?.Trim().ToUpperInvariant();
         _vehicle.chassis_number = _vehicle.chassis_number?.Trim().ToUpperInvariant();
         _vehicle.invoice_number = _vehicle.invoice_number?.Trim().ToUpperInvariant();
+        _vehicle.ifms_vehicle_register_number = _vehicle.ifms_vehicle_register_number?.Trim().ToUpperInvariant();
+        _vehicle.natis_model_number = _vehicle.natis_model_number?.Trim().ToUpperInvariant();
     }
 
     private void SyncCurrentOdo()
@@ -908,12 +1006,15 @@
 
     private string ModelDisplayName(ModelDto model)
     {
+        var modelName = string.IsNullOrWhiteSpace(model.model_name) ? "Model" : model.model_name;
+        var modelCodeSuffix = model.model_code > 0 ? $" ({model.model_code})" : string.Empty;
+
         if (!string.IsNullOrWhiteSpace(model.make_name))
         {
-            return $"{model.make_name} - {model.model_name}";
+            return $"{model.make_name} - {modelName}{modelCodeSuffix}";
         }
 
-        return model.model_name ?? "Model";
+        return $"{modelName}{modelCodeSuffix}";
     }
 
     private void OnModelChanged()
@@ -923,6 +1024,54 @@
         {
             _vehicle.type_code = ToShort(selectedModel.type_code.Value);
         }
+
+        if (selectedModel?.make_code is > 0)
+        {
+            _selectedMakeCode = selectedModel.make_code.Value;
+        }
+    }
+
+    private async Task OnMakeChanged()
+    {
+        await LoadModelsForSelectedMakeAsync();
+
+        if (_models.All(m => m.model_code != _vehicle.model_code))
+        {
+            _vehicle.model_code = 0;
+            _vehicle.type_code = 0;
+        }
+    }
+
+    private async Task ResolveSelectedMakeAsync()
+    {
+        if (_vehicle.model_code <= 0)
+        {
+            return;
+        }
+
+        var selectedModel = await ReferenceDataService.GetModelAsync(_vehicle.model_code);
+        if (selectedModel?.make_code is > 0)
+        {
+            _selectedMakeCode = selectedModel.make_code.Value;
+        }
+    }
+
+    private async Task LoadModelsForSelectedMakeAsync()
+    {
+        if (_selectedMakeCode <= 0)
+        {
+            _models = new List<ModelDto>();
+            return;
+        }
+
+        var byMake = await ReferenceDataService.GetModelsByMakeAsync(_selectedMakeCode);
+        if (byMake.Count > 0)
+        {
+            _models = byMake;
+            return;
+        }
+
+        _models = new List<ModelDto>();
     }
 
     private short ToShort(int value)
@@ -980,7 +1129,7 @@
         var query = (_quickSearch ?? string.Empty).Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
-            _errorMessage = "Enter a VIN, engine number, or GG/GP number to search.";
+            _errorMessage = "Enter a VIN, engine number, GG/GP number, or invoice number to search.";
             return;
         }
 
@@ -989,7 +1138,7 @@
 
         try
         {
-            var matches = await VehicleService.SearchVehiclesAsync(query);
+            var matches = RankQuickSearchMatches(await VehicleService.SearchVehiclesAsync(query), query, _quickSearchMode);
             if (matches.Count == 0)
             {
                 _errorMessage = "No vehicles matched the search term.";
@@ -1002,7 +1151,14 @@
                 return;
             }
 
-            Navigation.NavigateTo($"/vehicles/{matches[0].vmf_code}/edit");
+            var matchedVehicle = matches.SingleOrDefault();
+            if (matchedVehicle == null)
+            {
+                _errorMessage = "Unable to resolve a single vehicle. Use Edit Vehicle search to select the correct record.";
+                return;
+            }
+
+            Navigation.NavigateTo($"/vehicles/{matchedVehicle.vmf_code}/edit");
         }
         catch (Exception ex)
         {
@@ -1013,6 +1169,48 @@
             _quickSearchLoading = false;
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private static List<VehicleDto> RankQuickSearchMatches(List<VehicleDto> matches, string query, string searchMode)
+    {
+        var mode = searchMode?.Trim().ToUpperInvariant() ?? "AUTO";
+        return matches
+            .Where(v =>
+                mode switch
+                {
+                    "GG" =>
+                        (!string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)),
+                    "VIN" =>
+                        !string.IsNullOrWhiteSpace(v.chassis_number) && v.chassis_number.Contains(query, StringComparison.OrdinalIgnoreCase),
+                    "INVOICE" =>
+                        !string.IsNullOrWhiteSpace(v.invoice_number) && v.invoice_number.Contains(query, StringComparison.OrdinalIgnoreCase),
+                    _ =>
+                        (!string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrWhiteSpace(v.chassis_number) && v.chassis_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrWhiteSpace(v.engine_number_1) && v.engine_number_1.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        || (!string.IsNullOrWhiteSpace(v.invoice_number) && v.invoice_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                })
+            .OrderByDescending(v =>
+                mode switch
+                {
+                    "GG" =>
+                        string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase),
+                    "VIN" =>
+                        string.Equals(v.chassis_number?.Trim(), query, StringComparison.OrdinalIgnoreCase),
+                    "INVOICE" =>
+                        string.Equals(v.invoice_number?.Trim(), query, StringComparison.OrdinalIgnoreCase),
+                    _ =>
+                        string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(v.chassis_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(v.engine_number_1?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(v.invoice_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                })
+            .ThenBy(v => v.vmf_code)
+            .ToList();
     }
 
     private void ClearFleetNotes()
@@ -1097,4 +1295,6 @@
         _selectedExtraCodes.Clear();
         _selectedExtras = new List<ExtraCodeDto>();
     }
+
+    private sealed record VehicleStatusOption(short Code, string Label);
 }

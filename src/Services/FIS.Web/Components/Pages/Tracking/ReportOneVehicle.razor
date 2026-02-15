@@ -14,7 +14,7 @@
             <i class="bx bx-car"></i>
             Tracking Report for ONE Vehicle
         </h1>
-        <p class="page-description">Legacy Tracking/RPT_one_gg_main_track.aspx workflow.</p>
+        <p class="page-description">View tracking history for a single vehicle.</p>
     </div>
 </div>
 
@@ -24,11 +24,11 @@
             <label class="form-label">Number Type</label>
             <div class="contract-search-radio">
                 <label class="form-radio-label">
-                    <input type="radio" name="searchMode" checked="@(_searchMode == "gg")" @onchange='() => _searchMode = "gg"' />
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
                     GG
                 </label>
                 <label class="form-radio-label">
-                    <input type="radio" name="searchMode" checked="@(_searchMode == "gp")" @onchange='() => _searchMode = "gp"' />
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
                     GP
                 </label>
             </div>
@@ -37,8 +37,19 @@
             <label class="form-label">@(_searchMode == "gg" ? "GG Number" : "GP Number")</label>
             <input class="form-input" @bind="_searchTerm" />
         </div>
+        <div class="form-row">
+            <label class="form-label">Vehicle Match</label>
+            <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                <option value="">Select vehicle...</option>
+                @foreach (var vehicle in _vehicleMatches)
+                {
+                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                }
+            </select>
+        </div>
         <div class="form-actions">
-            <button class="btn btn-primary" @onclick="LoadReport">Submit</button>
+            <button class="btn btn-secondary" @onclick="SearchVehiclesAsync">Find</button>
+            <button class="btn btn-primary" @onclick="LoadReport" disabled="@(!_selectedVmfCode.HasValue)">Submit</button>
             <a class="btn btn-secondary" href="/tracking/reports">Menu</a>
         </div>
     </div>
@@ -71,7 +82,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.track_num</td>
@@ -83,6 +94,14 @@
                 </table>
             </div>
         </div>
+        @if (_results.Count > 0)
+        {
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        }
     }
 </div>
 
@@ -91,22 +110,67 @@
     private bool _hasSearched;
     private string _searchTerm = string.Empty;
     private string _searchMode = "gp";
+    private List<VehicleLookupDto> _vehicleMatches = new();
+    private int? _selectedVmfCode;
     private List<TrackingDto> _results = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<TrackingDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
+
+    private async Task SearchVehiclesAsync()
+    {
+        _loading = true;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_searchTerm))
+            {
+                _vehicleMatches = new();
+                _selectedVmfCode = null;
+                _results = new();
+                _hasSearched = false;
+                _page = 1;
+                return;
+            }
+
+            var searchTerm = _searchTerm.Trim();
+            var matches = await VehicleLookupService.SearchAsync(searchTerm);
+            _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _searchMode);
+            _results = new();
+            _hasSearched = false;
+            if (_vehicleMatches.All(vehicle => vehicle.VmfCode != _selectedVmfCode))
+            {
+                _selectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
 
     private async Task LoadReport()
     {
+        if (!_selectedVmfCode.HasValue)
+        {
+            _results = new();
+            _hasSearched = false;
+            return;
+        }
+
         _loading = true;
         _hasSearched = true;
         _results = new List<TrackingDto>();
         try
         {
-            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
-            var vmfCode = matches.FirstOrDefault()?.VmfCode;
-            if (vmfCode.HasValue)
-            {
-                var all = await TrackingService.GetAllAsync<TrackingDto>();
-                _results = all.Where(t => t.vmf_code == vmfCode.Value).ToList();
-            }
+            var all = await TrackingService.GetAllAsync<TrackingDto>();
+            _results = all.Where(t => t.vmf_code == _selectedVmfCode.Value).ToList();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -120,4 +184,56 @@
 
     private static string FormatDate(DateTime? date) =>
         date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "gp", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.VmfCode)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _results = new();
+        _hasSearched = false;
+        _page = 1;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

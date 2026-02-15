@@ -59,7 +59,7 @@
                 <table class="data-table">
                     <tbody>
                         <tr><th>Reference Number</th><td>@_result.Call_centre_code</td></tr>
-                        <tr><th>User Access Code</th><td>@(_result.User_access_code?.ToString() ?? "-")</td></tr>
+                        <tr><th>User Access ID</th><td>@(_result.User_access_code?.ToString() ?? "-")</td></tr>
                         <tr><th>Capture Name</th><td>@ValueOrDash(_result.Capture_name)</td></tr>
                         <tr><th>Date Created</th><td>@_result.date_created.ToString("yyyy/MM/dd HH:mm")</td></tr>
                         <tr><th>Date Updated</th><td>@FormatDateTime(_result.date_updated)</td></tr>

@@ -1,7 +1,5 @@
 @page "/licenses/scan-certificate"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>Scan Licence Certificate</PageTitle>
 
 <div class="page-header">
@@ -10,7 +8,7 @@
             <i class="bx bx-scan"></i>
             Scan Licence Certificate
         </h1>
-        <p class="page-description">Legacy scan certificate menu.</p>
+        <p class="page-description">Scan certificate menu.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/licenses">Back to Licence Menu</a>
@@ -20,13 +18,7 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <p class="form-hint">Scan licence certificate workflow will be aligned to legacy ScanDocs screens.</p>
-            <LegacyEndpointActionPanel
-                LegacyPath="ScanDocs/LicCert_Menu.aspx"
-                Endpoint="api/license/scan-certificate"
-                HttpMethod="POST"
-                ButtonText="Run Scan Licence API"
-                ReportType="licenses-scan-certificate" />
+            <p class="form-hint">Use this screen to scan and attach licence certificate documents.</p>
         </div>
     </div>
 </div>

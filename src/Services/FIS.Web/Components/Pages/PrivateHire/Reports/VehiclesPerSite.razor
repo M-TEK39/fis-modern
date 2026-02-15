@@ -1,6 +1,10 @@
 @page "/private-hire/reports/vehicles-per-site"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Private Hire Vehicles Per Site - Fleet Information System</PageTitle>
 
@@ -24,29 +28,27 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Site</label>
-                    <select class="form-select">
+                    <select class="form-select" @bind="_selectedSiteCode">
                         <option value="0">Select...</option>
+                        @foreach (var siteCode in _siteCodes)
+                        {
+                            <option value="@siteCode">@GetSiteLabel(siteCode)</option>
+                        }
                     </select>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="ApplyFilter">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
-            <LegacyEndpointActionPanel
-                LegacyPath="Private_Hire/RPT_phv_vehicle_per_site1.aspx"
-                Endpoint="api/privatehire/reports/vehicles-per-site"
-                HttpMethod="GET"
-                ButtonText="Run Vehicles per Site API"
-                ReportType="private-hire-report-per-site" />
-            <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: [Legacy timestamp]</div>
+            <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: @DateTime.Now</div>
 
             <div class="form-section" style="margin-top: 2rem;">
                 <h3 class="form-section-title">
                     <i class="bx bx-buildings"></i>
-                    Department / Site Results
+                    Site Results
                 </h3>
-                <p class="form-hint">Department: [Code] [Description] • Site: [Number] [Description]</p>
+                <p class="form-hint">Site: @(_selectedSiteCode > 0 ? GetSiteLabel(_selectedSiteCode) : "-")</p>
                 <div class="table-container">
                     <div class="table-wrapper">
                         <table class="data-table">
@@ -65,17 +67,150 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="10">No records found.</td>
-                                </tr>
+                                @if (_loading)
+                                {
+                                    <tr>
+                                        <td colspan="10">Loading records...</td>
+                                    </tr>
+                                }
+                                else if (_filtered.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="10">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in PagedVehicles)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(row.registration_number)</td>
+                                            <td>@ValueOrDash(row.make_model)</td>
+                                            <td>-</td>
+                                            <td>-</td>
+                                            <td>-</td>
+                                            <td>@ValueOrDash(row.contractor_name)</td>
+                                            <td>@FormatDate(row.hire_start_date)</td>
+                                            <td>-</td>
+                                            <td>@FormatDate(row.hire_end_date)</td>
+                                            <td>-</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
                 </div>
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
                 <div class="form-hint" style="margin-top: 1rem; color: var(--fis-danger);">
-                    Total Number of Vehicles: 0
+                    Total Number of Vehicles: @_filtered.Count
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading = true;
+    private int _selectedSiteCode;
+    private List<int> _siteCodes = new();
+    private Dictionary<short, SiteResponseDto> _sitesByCode = new();
+    private List<PrivateHireVehicleDto> _allVehicles = new();
+    private List<PrivateHireVehicleDto> _filtered = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<PrivateHireVehicleDto> PagedVehicles => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _allVehicles = await PrivateHireService.GetVehiclesAsync();
+            var sites = await SiteService.GetAllAsync();
+            _sitesByCode = sites
+                .Where(s => s.SiteCode > 0)
+                .GroupBy(s => s.SiteCode)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            _siteCodes = _allVehicles
+                .Where(v => EffectiveSiteCode(v) > 0)
+                .Select(EffectiveSiteCode)
+                .Distinct()
+                .OrderBy(code => code)
+                .ToList();
+
+            _filtered = new();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            _allVehicles = new();
+            _filtered = new();
+            _siteCodes = new();
+            _sitesByCode = new();
+            _page = 1;
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-per-site report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = _selectedSiteCode > 0
+            ? _allVehicles.Where(v => EffectiveSiteCode(v) == _selectedSiteCode).ToList()
+            : new();
+
+        _page = 1;
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    // Keep backward compatibility with payloads that still expose department_code only.
+    private static int EffectiveSiteCode(PrivateHireVehicleDto vehicle)
+        => vehicle.site_code > 0 ? vehicle.site_code : vehicle.department_code;
+
+    private string GetSiteLabel(int siteCode)
+    {
+        if (_sitesByCode.TryGetValue((short)siteCode, out var site))
+        {
+            return $"{site.Description} ({siteCode})";
+        }
+
+        return $"Site {siteCode}";
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

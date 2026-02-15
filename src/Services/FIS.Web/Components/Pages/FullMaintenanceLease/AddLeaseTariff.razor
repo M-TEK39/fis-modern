@@ -1,7 +1,9 @@
 @page "/full-maintenance-lease/add-lease"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Add Lease Tariff for In Service Vehicles</PageTitle>
@@ -24,8 +26,31 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">VMF Code</label>
-                    <InputNumber @bind-Value="_item.vmf_Code" class="form-input" />
+                    <label class="form-label">Vehicle Search</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                    <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                    <div class="form-actions" style="margin-top: 0.5rem;">
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadVehicleMatchesAsync" disabled="@_saving">Search vehicle</button>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Vehicle Match</label>
+                    <select class="form-select" @bind="_item.vmf_Code" disabled="@(_vehicleMatches.Count == 0)">
+                        <option value="">Select vehicle</option>
+                        @foreach (var vehicle in _vehicleMatches)
+                        {
+                            <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                        }
+                    </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Start Date</label>
@@ -79,7 +104,10 @@
 @code {
     private bool _saving;
     private bool _error;
+    private string _searchMode = "GG";
     private string _message = string.Empty;
+    private string _vehicleSearchTerm = string.Empty;
+    private List<VehicleDto> _vehicleMatches = new();
     private LeaseTermDto _item = NewItem();
 
     private async Task CreateAsync()
@@ -114,6 +142,8 @@
     private void ClearForm()
     {
         _item = NewItem();
+        _vehicleSearchTerm = string.Empty;
+        _vehicleMatches = new();
         _message = string.Empty;
         _error = false;
     }
@@ -126,6 +156,33 @@
             AuthorityStatus = 1
         };
 
+    private async Task LoadVehicleMatchesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleSearchTerm))
+        {
+            _vehicleMatches = new();
+            _item.vmf_Code = 0;
+            return;
+        }
+
+        try
+        {
+            var keyword = _vehicleSearchTerm.Trim();
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+
+            if (_vehicleMatches.All(v => v.vmf_code != _item.vmf_Code))
+            {
+                _item.vmf_Code = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error searching vehicles: {ex.Message}");
+        }
+    }
+
     private sealed class LeaseTermDto
     {
         public int VehicleContractTermID { get; set; }
@@ -137,5 +194,34 @@
         public int? AuthorityStatus { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _item.vmf_Code = 0;
     }
 }

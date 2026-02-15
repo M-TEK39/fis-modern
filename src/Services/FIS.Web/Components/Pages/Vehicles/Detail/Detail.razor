@@ -35,6 +35,13 @@ else
             <span>@_actionError</span>
         </div>
     }
+    @if (!string.IsNullOrWhiteSpace(_actionSuccess))
+    {
+        <div class="alert alert-success fis-alert-bottom">
+            <i class="bx bx-check-circle"></i>
+            <span>@_actionSuccess</span>
+        </div>
+    }
 
     <div class="detail-header">
         <div class="breadcrumb">
@@ -43,7 +50,7 @@ else
                 Vehicles
             </button>
             <span class="breadcrumb-separator">/</span>
-            <span class="breadcrumb-current">@_vehicle.registration_number</span>
+            <span class="breadcrumb-current">@ValueOrDash(_vehicle.registration_number)</span>
         </div>
         
         <div class="detail-actions">
@@ -62,11 +69,11 @@ else
         <div class="detail-card primary-card">
             <div class="card-header">
                 <div class="vehicle-title">
-                    <h1 class="vehicle-reg">@_vehicle.registration_number</h1>
+                    <h1 class="vehicle-reg">@ValueOrDash(_vehicle.registration_number)</h1>
                     <span class="vehicle-badge">@_vehicle.status_description</span>
                 </div>
                 <div class="vehicle-subtitle">
-                    VMF Code: @_vehicle.vmf_code | Fleet Number: @_vehicle.fleet_number
+                    Vehicle ID: @_vehicle.vmf_code | Fleet Number: @ValueOrDash(_vehicle.fleet_number)
                 </div>
             </div>
             
@@ -80,11 +87,11 @@ else
                         <div class="detail-fields">
                             <div class="detail-field">
                                 <span class="field-label">Fleet Number (GG)</span>
-                                <span class="field-value">@(_vehicle.fleet_number ?? "N/A")</span>
+                                <span class="field-value">@ValueOrDash(_vehicle.fleet_number)</span>
                             </div>
                             <div class="detail-field">
                                 <span class="field-label">Registration (GP)</span>
-                                <span class="field-value">@(_vehicle.registration_number ?? "N/A")</span>
+                                <span class="field-value">@ValueOrDash(_vehicle.registration_number)</span>
                             </div>
                             <div class="detail-field">
                                 <span class="field-label">Asset Number</span>
@@ -219,6 +226,47 @@ else
                                 <span class="field-value">@(_vehicle.purchased_from ?? "N/A")</span>
                             </div>
                             <div class="detail-field">
+                                <span class="field-label">Invoice Number</span>
+                                @if (_editingInvoice)
+                                {
+                                    <div class="invoice-edit-row">
+                                        <input class="form-input"
+                                               @bind="_invoiceDraft"
+                                               maxlength="60"
+                                               placeholder="Enter invoice number" />
+                                        <button class="btn btn-primary btn-sm"
+                                                @onclick="SaveInvoiceNumberAsync"
+                                                disabled="@_savingInvoice">
+                                            @(_savingInvoice ? "Saving..." : "Save")
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm"
+                                                @onclick="CancelInvoiceEdit"
+                                                disabled="@_savingInvoice">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="invoice-display-row">
+                                        <span class="field-value">@ValueOrDash(_vehicle.invoice_number)</span>
+                                        <button class="btn-icon btn-icon-edit"
+                                                @onclick="StartInvoiceEdit"
+                                                title="Edit invoice number">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">IFMS Vehicle Register Number</span>
+                                <span class="field-value">@ValueOrDash(_vehicle.ifms_vehicle_register_number)</span>
+                            </div>
+                            <div class="detail-field">
+                                <span class="field-label">NATIS Model Number</span>
+                                <span class="field-value">@ValueOrDash(_vehicle.natis_model_number)</span>
+                            </div>
+                            <div class="detail-field">
                                 <span class="field-label">Book Value</span>
                                 <span class="field-value">@(_vehicle.book_value?.ToString("C") ?? "N/A")</span>
                             </div>
@@ -269,7 +317,7 @@ else
                     </button>
                 </div>
                 <div class="modal-body">
-                    <p>Are you sure you want to delete vehicle <strong>@_vehicle.registration_number</strong>?</p>
+                    <p>Are you sure you want to delete vehicle <strong>@ValueOrDash(_vehicle.registration_number)</strong>?</p>
                     <p class="warning-text">This action cannot be undone.</p>
                 </div>
                 <div class="modal-footer">
@@ -300,7 +348,14 @@ else
     private bool _loading = true;
     private bool _showDeleteDialog = false;
     private bool _deleting = false;
+    private bool _savingInvoice;
+    private bool _editingInvoice;
+    private string _invoiceDraft = string.Empty;
     private string? _actionError;
+    private string? _actionSuccess;
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     protected override async Task OnInitializedAsync()
     {
@@ -315,7 +370,11 @@ else
     private async Task LoadVehicle()
     {
         _loading = true;
+        _actionError = null;
+        _actionSuccess = null;
         _vehicle = await VehicleService.GetVehicleAsync(VmfCode);
+        _editingInvoice = false;
+        _invoiceDraft = _vehicle?.invoice_number ?? string.Empty;
         _loading = false;
         StateHasChanged();
     }
@@ -356,6 +415,56 @@ else
         {
             _actionError = "Unable to delete vehicle. Please try again.";
             _showDeleteDialog = false;
+        }
+    }
+
+    private void StartInvoiceEdit()
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        _actionError = null;
+        _actionSuccess = null;
+        _invoiceDraft = _vehicle.invoice_number ?? string.Empty;
+        _editingInvoice = true;
+    }
+
+    private void CancelInvoiceEdit()
+    {
+        _editingInvoice = false;
+        _invoiceDraft = _vehicle?.invoice_number ?? string.Empty;
+    }
+
+    private async Task SaveInvoiceNumberAsync()
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        _savingInvoice = true;
+        _actionError = null;
+        _actionSuccess = null;
+        try
+        {
+            var result = await VehicleService.UpdateInvoiceNumberAsync(_vehicle.vmf_code, _invoiceDraft);
+            if (!result.Success)
+            {
+                _actionError = result.Message;
+                return;
+            }
+
+            _vehicle.invoice_number = string.IsNullOrWhiteSpace(_invoiceDraft)
+                ? null
+                : _invoiceDraft.Trim();
+            _editingInvoice = false;
+            _actionSuccess = "Request completed successfully.";
+        }
+        finally
+        {
+            _savingInvoice = false;
         }
     }
 }

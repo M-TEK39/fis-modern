@@ -1,12 +1,252 @@
 @page "/reports/workshop"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject JobCardApiService JobCardService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Workshop Reports"
-    Description="Legacy placeholder for Workshop/RPTWorkshop.aspx."
-    LegacyPath="Workshop/RPTWorkshop.aspx"
-    Endpoint="api/workshop"
-    HttpMethod="GET"
-    ReportType="workshop-reports"
-    Icon="bx-file" />
+<PageTitle>Workshop Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-wrench"></i>
+            Workshop Reports
+        </h1>
+        <p class="page-description">Repair costs captured by maintenance unit across workshop job cards.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/workshop">Workshop Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Search</label>
+                    <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Job Card, GG, GP, VMF, provider" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">From Date</label>
+                    <InputDate class="form-input" @bind-Value="_fromDate" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">To Date</label>
+                    <InputDate class="form-input" @bind-Value="_toDate" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Workshop Repair Cost Report</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Job Card</th>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Service Provider</th>
+                        <th>Invoice Number</th>
+                        <th>Invoice Date</th>
+                        <th>Labour (R)</th>
+                        <th>Parts (R)</th>
+                        <th>Other (R)</th>
+                        <th>Total (R)</th>
+                        <th>Date Closed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="12">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="12">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.JobCardId</td>
+                                <td>@ValueOrDash(row.GGNumber)</td>
+                                <td>@ValueOrDash(row.RegistrationNumber)</td>
+                                <td>@GetVehicleLabel(row)</td>
+                                <td>@ValueOrDash(row.ServiceProvider)</td>
+                                <td>@ValueOrDash(row.InvoiceNumber)</td>
+                                <td>@FormatDate(row.InvoiceDate)</td>
+                                <td>@row.LabourCost.ToString("N2")</td>
+                                <td>@row.PartsCost.ToString("N2")</td>
+                                <td>@row.OtherCost.ToString("N2")</td>
+                                <td>@row.TotalCost.ToString("N2")</td>
+                                <td>@FormatDate(row.DateClosed)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination-meta">
+            Total records: @_rows.Count | Labour: @FilteredLabourTotal.ToString("N2") | Parts: @FilteredPartsTotal.ToString("N2") | Other: @FilteredOtherTotal.ToString("N2") | Grand total: @FilteredGrandTotal.ToString("N2")
+        </div>
+
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private DateTime? _fromDate = DateTime.Today.AddMonths(-3);
+    private DateTime? _toDate = DateTime.Today;
+    private string _searchTerm = string.Empty;
+    private List<JobCardRepairCostLineDto> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<JobCardRepairCostLineDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    private decimal FilteredLabourTotal => _rows.Sum(r => r.LabourCost);
+    private decimal FilteredPartsTotal => _rows.Sum(r => r.PartsCost);
+    private decimal FilteredOtherTotal => _rows.Sum(r => r.OtherCost);
+    private decimal FilteredGrandTotal => _rows.Sum(r => r.TotalCost);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var report = await JobCardService.GetRepairCostReportAsync(fromDate: _fromDate, toDate: _toDate);
+            var sourceRows = report.Items ?? new List<JobCardRepairCostLineDto>();
+
+            if (sourceRows.Count == 0)
+            {
+                var fallback = await JobCardService.GetAllAsync();
+                sourceRows = fallback
+                    .Select(card => new JobCardRepairCostLineDto
+                    {
+                        JobCardId = card.JobCardId,
+                        VmfCode = card.VmfCode,
+                        GGNumber = card.GGNumber,
+                        RegistrationNumber = card.RegistrationNumber,
+                        ServiceProvider = card.ServiceProvider,
+                        InvoiceNumber = card.InvoiceNumber,
+                        InvoiceDate = card.InvoiceDate,
+                        LabourCost = card.LabourCost ?? 0m,
+                        PartsCost = card.PartsCost ?? 0m,
+                        OtherCost = card.OtherCost ?? 0m,
+                        TotalCost = card.TotalCost ?? ((card.LabourCost ?? 0m) + (card.PartsCost ?? 0m) + (card.OtherCost ?? 0m)),
+                        DateClosed = card.AssignedDate
+                    })
+                    .ToList();
+            }
+
+            var from = _fromDate?.Date;
+            var to = _toDate?.Date;
+            if (from.HasValue && to.HasValue && to.Value < from.Value)
+            {
+                (from, to) = (to, from);
+            }
+
+            var filtered = sourceRows.AsEnumerable();
+            if (from.HasValue)
+            {
+                filtered = filtered.Where(r => (r.InvoiceDate ?? r.DateClosed)?.Date >= from.Value);
+            }
+            if (to.HasValue)
+            {
+                filtered = filtered.Where(r => (r.InvoiceDate ?? r.DateClosed)?.Date <= to.Value);
+            }
+
+            var q = _searchTerm.Trim();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                filtered = filtered.Where(r =>
+                    r.JobCardId.ToString().Contains(q, StringComparison.OrdinalIgnoreCase)
+                    || (r.VmfCode?.ToString().Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                    || Contains(r.GGNumber, q)
+                    || Contains(r.RegistrationNumber, q)
+                    || Contains(r.ServiceProvider, q)
+                    || Contains(r.InvoiceNumber, q));
+            }
+
+            _rows = filtered
+                .OrderByDescending(r => r.InvoiceDate ?? r.DateClosed)
+                .ThenByDescending(r => r.JobCardId)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading workshop report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _fromDate = DateTime.Today.AddMonths(-3);
+        _toDate = DateTime.Today;
+        _searchTerm = string.Empty;
+    }
+
+    private static bool Contains(string? value, string term)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(JobCardRepairCostLineDto row)
+    {
+        var vmf = row.VmfCode?.ToString() ?? "-";
+        return $"{ValueOrDash(row.GGNumber)} / {ValueOrDash(row.RegistrationNumber)} ({vmf})";
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value?.ToString("yyyy-MM-dd") ?? "-";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

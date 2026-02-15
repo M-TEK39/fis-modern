@@ -1,7 +1,9 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 
 namespace FIS.Api.Controllers;
@@ -19,17 +21,26 @@ public class ContractsController : BaseApiController
     private readonly IContractRepository _contractRepository;
     private readonly IContractService _contractService;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly IContractAuditLogRepository _auditLog;
+    private readonly IEmailNotificationService _emailNotification;
+    private readonly FisDbContext _context;
     private readonly ILogger<ContractsController> _logger;
 
     public ContractsController(
         IContractRepository contractRepository,
         IContractService contractService,
         IVehicleRepository vehicleRepository,
+        IContractAuditLogRepository auditLog,
+        IEmailNotificationService emailNotification,
+        FisDbContext context,
         ILogger<ContractsController> logger)
     {
         _contractRepository = contractRepository;
         _contractService = contractService;
         _vehicleRepository = vehicleRepository;
+        _auditLog = auditLog;
+        _emailNotification = emailNotification;
+        _context = context;
         _logger = logger;
     }
 
@@ -39,10 +50,8 @@ public class ContractsController : BaseApiController
     /// <returns>Null if validation passes, or ForbidResult with error message if validation fails</returns>
     private ActionResult? ValidateSelfApprovalPrevention(Contract contract, int currentUserId)
     {
-        // Determine contract owner: use user_code, fallback to created_by_user_code
-        int? contractOwnerCode = contract.user_code ?? contract.created_by_user_code;
-
-        if (contractOwnerCode.HasValue && contractOwnerCode.Value == currentUserId)
+        if (contract.created_by_user_code.HasValue &&
+            contract.created_by_user_code.Value == currentUserId)
         {
             _logger.LogWarning(
                 "Self-approval blocked: User {UserId} attempted to approve their own contract {ContractId}",
@@ -83,7 +92,8 @@ public class ContractsController : BaseApiController
                 StartOdometer = request.StartOdometer,
                 DriverId = request.DriverId,
                 Notes = request.Notes,
-                TargetReturnDate = request.TargetReturnDate
+                TargetReturnDate = request.TargetReturnDate,
+                CreatedByUserId = currentUserId
             };
 
             var contract = await _contractService.HireVehicleAsync(hireRequest);
@@ -126,6 +136,70 @@ public class ContractsController : BaseApiController
     }
 
     /// <summary>
+    /// Get a paginated, filterable list of contracts.
+    /// Used by the frontend contracts table.
+    /// Supports filtering by status, site, date range, and still_current flag.
+    /// </summary>
+    [HttpGet]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 25,
+        [FromQuery] short? status = null,
+        [FromQuery] short? siteCode = null,
+        [FromQuery] string? stillCurrent = null,
+        [FromQuery] DateTime? startDateFrom = null,
+        [FromQuery] DateTime? startDateTo = null,
+        [FromQuery] int? vmfCode = null)
+    {
+        try
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 25;
+
+            var query = _context.Contracts
+                .Where(c => !c.is_deleted)
+                .AsQueryable();
+
+            if (status.HasValue)
+                query = query.Where(c => c.contract_status_code == status.Value);
+            if (siteCode.HasValue)
+                query = query.Where(c => c.site_code == siteCode.Value);
+            if (!string.IsNullOrEmpty(stillCurrent))
+                query = query.Where(c => c.still_current == stillCurrent);
+            if (startDateFrom.HasValue)
+                query = query.Where(c => c.start_date >= startDateFrom.Value);
+            if (startDateTo.HasValue)
+                query = query.Where(c => c.start_date <= startDateTo.Value);
+            if (vmfCode.HasValue)
+                query = query.Where(c => c.vmf_code == vmfCode.Value);
+
+            var total = await query.CountAsync();
+            var items = await query
+                .OrderByDescending(c => c.date_created)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Include(c => c.Vehicle)
+                .Include(c => c.Site)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                page,
+                page_size = pageSize,
+                total_records = total,
+                total_pages = (int)Math.Ceiling(total / (double)pageSize),
+                data = items.Select(MapToDto)
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving contracts list");
+            return StatusCode(500, new { error = "Failed to retrieve contracts", message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Get all active contracts
     /// </summary>
     [HttpGet("active")]
@@ -148,6 +222,115 @@ public class ContractsController : BaseApiController
         var contract = await _contractRepository.GetByIdAsync(id);
         if (contract == null) return NotFound();
         return Ok(MapToDto(contract));
+    }
+
+    /// <summary>
+    /// Returns a rich, print-ready JSON payload for a contract.
+    /// Frontend renders this as a printable contract document using window.print().
+    /// Includes vehicle, site, driver, tariff reference, audit trail, and all contract terms.
+    /// </summary>
+    [HttpGet("{id}/printout")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetPrintout(int id)
+    {
+        try
+        {
+            var contract = await _context.Contracts
+                .Include(c => c.Vehicle)
+                .Include(c => c.Site)
+                .FirstOrDefaultAsync(c => c.contract_code == id && !c.is_deleted);
+
+            if (contract == null)
+                return NotFound(new { error = "Contract not found" });
+
+            // Capturer and approver user info (names for print document)
+            var capturer = contract.created_by_user_code.HasValue
+                ? await _context.Users.FindAsync(contract.created_by_user_code.Value)
+                : null;
+            var approver = contract.approver_code.HasValue
+                ? await _context.Users.FindAsync(contract.approver_code.Value)
+                : null;
+
+            // Audit trail
+            var auditEntries = await _context.ContractAuditLogs
+                .Where(a => a.contract_code == id)
+                .OrderBy(a => a.performed_at)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                printed_at = DateTime.Now,
+                document_title = $"Contract #{contract.contract_code} — Fleet Management",
+
+                contract = new
+                {
+                    contract_code = contract.contract_code,
+                    status_code = contract.contract_status_code,
+                    status_text = contract.contract_status_code.HasValue
+                        ? GetStatusText(contract.contract_status_code.Value) : "Unknown",
+                    still_current = contract.still_current,
+                    start_date = contract.start_date.ToString("yyyy-MM-dd"),
+                    start_time = contract.start_time.ToString("HH:mm"),
+                    end_date = contract.end_date?.ToString("yyyy-MM-dd"),
+                    target_return_date = contract.target_return_date?.ToString("yyyy-MM-dd"),
+                    start_odometer = contract.start_odometer,
+                    end_odometer = contract.end_odometer,
+                    contract_type = contract.contract_type,
+                    driver_id = contract.Driver_id,
+                    notes = contract.Notes,
+                    authorisation = contract.Authorisation,
+                },
+
+                vehicle = contract.Vehicle == null ? null : new
+                {
+                    vmf_code = contract.Vehicle.vmf_code,
+                    fleet_number = contract.Vehicle.fleet_number,
+                    registration_number = contract.Vehicle.registration_number,
+                    year_manufactured = contract.Vehicle.year_manufactured,
+                    model_code = contract.Vehicle.model_code,
+                    current_odo = contract.Vehicle.current_odo,
+                },
+
+                site = contract.Site == null ? null : new
+                {
+                    site_code = contract.Site.Site_code,
+                    description = contract.Site.description,
+                    res_person = contract.Site.res_person,
+                    net_address = contract.Site.net_address,
+                    telephone = contract.Site.telephone,
+                },
+
+                parties = new
+                {
+                    capturer = capturer == null ? null : new
+                    {
+                        user_code = capturer.user_access_code,
+                        email = capturer.email
+                    },
+                    approver = approver == null ? null : new
+                    {
+                        user_code = approver.user_access_code,
+                        email = approver.email
+                    }
+                },
+
+                audit_trail = auditEntries.Select(a => new
+                {
+                    a.action,
+                    a.performed_by_user_code,
+                    performed_at = a.performed_at.ToString("yyyy-MM-dd HH:mm"),
+                    old_status = a.old_status_code.HasValue ? GetStatusText(a.old_status_code.Value) : null,
+                    new_status = a.new_status_code.HasValue ? GetStatusText(a.new_status_code.Value) : null,
+                    a.notes
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating printout for contract {Id}", id);
+            return StatusCode(500, new { error = "Failed to generate printout", message = ex.Message });
+        }
     }
 
     #region Mapping
@@ -230,11 +413,21 @@ public class ContractsController : BaseApiController
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
 
+            var prevStatus = contract.contract_status_code;
+
             await _contractRepository.EndContractAsync(
                 contractCode,
                 request.EndDate,
+                currentUserId,
                 request.EndOdometer,
                 request.Notes);
+
+            await _auditLog.LogAsync(contractCode, "Closed", currentUserId,
+                oldStatus: prevStatus, newStatus: 7,
+                notes: request.Notes);
+
+            _ = _emailNotification.SendContractClosedNotificationAsync(
+                contractCode, currentUserId, closureReason: "Closed");
 
             return Ok(new { message = "Contract closed successfully", contractCode });
         }
@@ -295,12 +488,21 @@ public class ContractsController : BaseApiController
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
 
-            // Mark as cancelled
+            var prevStatus = contract.contract_status_code;
             contract.still_current = "N";
             contract.end_date = DateTime.Now;
+            contract.contract_status_code = 6; // Cancelled
+            contract.contract_status_date = DateTime.Now;
             contract.Notes = request?.CancellationReason ?? "Cancelled";
 
             await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractCode, "Cancelled", currentUserId,
+                oldStatus: prevStatus, newStatus: 6,
+                notes: request?.CancellationReason);
+
+            _ = _emailNotification.SendContractClosedNotificationAsync(
+                contractCode, currentUserId,
+                closureReason: request?.CancellationReason ?? "Cancelled");
 
             return Ok(new { message = "Contract cancelled successfully", contractCode });
         }
@@ -459,11 +661,32 @@ public class ContractsController : BaseApiController
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
 
-            // Update contract status to pending approval (status code 1 = Pending)
-            contract.contract_status_code = 1; // Pending approval
+            // Only allow submit/resubmit from Draft (0/null) or Declined for Correction (4)
+            var status = contract.contract_status_code;
+            if (status != null && status != 0 && status != 4)
+                return BadRequest(new
+                {
+                    error = "Contract cannot be submitted in its current state.",
+                    current_status = status,
+                    hint = "Only Draft (0) or Declined-for-Correction (4) contracts can be submitted."
+                });
+
+            // Verify the submitter is the original capturer
+            if (contract.created_by_user_code.HasValue &&
+                contract.created_by_user_code.Value != currentUserId)
+                return StatusCode(403, new
+                {
+                    error = "Only the original capturer can submit this contract.",
+                    contractId
+                });
+
+            var prevStatus = contract.contract_status_code;
+            contract.contract_status_code = 1; // Pending Review
             contract.contract_status_date = DateTime.Now;
 
             await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "Submitted", currentUserId,
+                oldStatus: prevStatus, newStatus: 1);
 
             return Ok(new { message = "Contract submitted for approval", contractId });
         }
@@ -507,6 +730,8 @@ public class ContractsController : BaseApiController
                 contract.Notes = $"{contract.Notes}\nApproval: {request.ApprovalNotes}";
 
             await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "Approved", currentUserId,
+                oldStatus: 1, newStatus: 2, notes: request?.ApprovalNotes);
 
             return Ok(new { message = "Contract approved", contractId });
         }
@@ -551,6 +776,14 @@ public class ContractsController : BaseApiController
                 contract.Notes = $"{contract.Notes}\nApproved & Activated: {request.ApprovalNotes}";
 
             await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "ApprovedAndActivated", currentUserId,
+                oldStatus: 1, newStatus: 3, notes: request?.ApprovalNotes);
+
+            // Fire-and-forget notification — don't fail the request if email fails
+            _ = _emailNotification.SendContractOpenedNotificationAsync(
+                contractId,
+                capturerUserId: contract.created_by_user_code ?? currentUserId,
+                approverUserId: currentUserId);
 
             return Ok(new { message = "Contract approved and activated", contractId });
         }
@@ -592,6 +825,8 @@ public class ContractsController : BaseApiController
             contract.Notes = $"{contract.Notes}\nCorrection Required: {request.DeclineReason}";
 
             await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "DeclinedForCorrection", currentUserId,
+                oldStatus: 1, newStatus: 4, notes: request.DeclineReason);
 
             return Ok(new { message = "Contract declined with correction request", contractId });
         }
@@ -634,6 +869,8 @@ public class ContractsController : BaseApiController
             contract.Notes = $"{contract.Notes}\nDeclined: {request.DeclineReason}";
 
             await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "Declined", currentUserId,
+                oldStatus: 1, newStatus: 5, notes: request.DeclineReason);
 
             return Ok(new { message = "Contract declined", contractId });
         }
@@ -641,6 +878,136 @@ public class ContractsController : BaseApiController
         {
             _logger.LogError(ex, "Error declining contract {ContractId}", contractId);
             return StatusCode(500, new { error = "Failed to decline contract", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Recall a contract from Pending Review back to Draft.
+    /// Only the original capturer can recall, and only when status is Pending Review (1).
+    /// Use this to fix mistakes before the approver sees the contract.
+    /// </summary>
+    [HttpPost("{contractId}/recall")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> RecallContract(int contractId)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+                return NotFound(new { error = "Contract not found" });
+
+            // Only the original capturer can recall
+            if (!contract.created_by_user_code.HasValue ||
+                contract.created_by_user_code.Value != currentUserId)
+                return StatusCode(403, new
+                {
+                    error = "Only the original capturer can recall this contract.",
+                    contractId
+                });
+
+            // Can only recall from Pending Review (1)
+            if (contract.contract_status_code != 1)
+                return BadRequest(new
+                {
+                    error = "Contract can only be recalled when it is in Pending Review status.",
+                    current_status = contract.contract_status_code
+                });
+
+            contract.contract_status_code = 0; // Back to Draft
+            contract.contract_status_date = DateTime.Now;
+
+            await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "Recalled", currentUserId,
+                oldStatus: 1, newStatus: 0);
+
+            _logger.LogInformation(
+                "Contract {ContractId} recalled to Draft by user {UserId}", contractId, currentUserId);
+
+            return Ok(new { message = "Contract recalled to draft. You may now edit and resubmit.", contractId });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error recalling contract {ContractId}", contractId);
+            return StatusCode(500, new { error = "Failed to recall contract", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Edit a contract's details.
+    /// Only allowed when the contract is in Draft (0) or Declined for Correction (4) status.
+    /// After editing a Declined-for-Correction contract, call /submit to resubmit for approval.
+    /// </summary>
+    [HttpPut("{contractId}/edit")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult> EditContract(
+        int contractId,
+        [FromBody] EditContractDto request)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+                return NotFound(new { error = "Contract not found" });
+
+            // Only original capturer can edit
+            if (!contract.created_by_user_code.HasValue ||
+                contract.created_by_user_code.Value != currentUserId)
+                return StatusCode(403, new
+                {
+                    error = "Only the original capturer can edit this contract.",
+                    contractId
+                });
+
+            // Only editable when Draft (0/null) or Declined for Correction (4)
+            var status = contract.contract_status_code;
+            if (status != null && status != 0 && status != 4)
+                return BadRequest(new
+                {
+                    error = "Contract cannot be edited in its current state.",
+                    current_status = status,
+                    hint = "Recall the contract first (if Pending Review), or contact an admin."
+                });
+
+            // Apply updates — only overwrite fields that were provided
+            if (request.SiteCode.HasValue) contract.site_code = request.SiteCode.Value;
+            if (request.DriverId != null) contract.Driver_id = request.DriverId;
+            if (request.Notes != null) contract.Notes = request.Notes;
+            if (request.TargetReturnDate.HasValue) contract.target_return_date = request.TargetReturnDate;
+            if (request.StartOdometer.HasValue) contract.start_odometer = request.StartOdometer.Value;
+
+            contract.date_updated = DateTime.Now;
+            contract.modified_by_user_code = currentUserId;
+
+            await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(contractId, "Edited", currentUserId,
+                oldStatus: status, newStatus: status,
+                notes: "Contract fields updated");
+
+            _logger.LogInformation(
+                "Contract {ContractId} edited by user {UserId} (status={Status})",
+                contractId, currentUserId, status);
+
+            return Ok(new
+            {
+                message = status == 4
+                    ? "Contract updated. Call /submit to resubmit for approval."
+                    : "Contract updated.",
+                contractId,
+                contract_status_code = contract.contract_status_code
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error editing contract {ContractId}", contractId);
+            return StatusCode(500, new { error = "Failed to edit contract", message = ex.Message });
         }
     }
 
@@ -680,6 +1047,62 @@ public class ContractsController : BaseApiController
     }
 
     /// <summary>
+    /// Get the full audit trail for a contract — every state change and edit, in chronological order.
+    /// </summary>
+    [HttpGet("{contractId}/audit-log")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> GetAuditLog(int contractId)
+    {
+        try
+        {
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+                return NotFound(new { error = "Contract not found" });
+
+            var entries = await _auditLog.GetByContractAsync(contractId);
+            return Ok(new
+            {
+                contract_code = contractId,
+                total_entries = entries.Count(),
+                audit_trail = entries.Select(e => new
+                {
+                    e.id,
+                    e.action,
+                    e.performed_by_user_code,
+                    e.performed_at,
+                    e.old_status_code,
+                    old_status_text = e.old_status_code.HasValue ? GetStatusText(e.old_status_code.Value) : null,
+                    e.new_status_code,
+                    new_status_text = e.new_status_code.HasValue ? GetStatusText(e.new_status_code.Value) : null,
+                    e.field_changed,
+                    e.old_value,
+                    e.new_value,
+                    e.notes
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving audit log for contract {ContractId}", contractId);
+            return StatusCode(500, new { error = "Failed to retrieve audit log", message = ex.Message });
+        }
+    }
+
+    private static string GetStatusText(short status) => status switch
+    {
+        0 => "Draft",
+        1 => "Pending Review",
+        2 => "Approved",
+        3 => "Active",
+        4 => "Declined for Correction",
+        5 => "Declined",
+        6 => "Cancelled",
+        7 => "Closed",
+        _ => $"Unknown ({status})"
+    };
+
+    /// <summary>
     /// Search for available relief vehicles
     /// </summary>
     [HttpGet("relief/search")]
@@ -713,6 +1136,175 @@ public class ContractsController : BaseApiController
         {
             _logger.LogError(ex, "Error searching relief vehicles");
             return StatusCode(500, new { error = "Failed to search relief vehicles", message = ex.Message });
+        }
+    }
+
+    #endregion
+
+    #region Data Repair Endpoints
+
+    /// <summary>
+    /// Dry-run preview of the contract status data repair.
+    /// Shows exactly how many contracts would be updated, broken down by category.
+    /// No data is changed — safe to call multiple times.
+    ///
+    /// Repair logic (mirrors legacy migration script 12):
+    ///   still_current='Y' + status NULL  → set status 3 (Active)
+    ///   still_current='N' + status NULL  → set status 7 (Closed)
+    ///   still_current='N' + status NULL + end_date NULL → flagged as data quality issue
+    /// </summary>
+    [HttpGet("data-repair/preview")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> DataRepairPreview()
+    {
+        try
+        {
+            var affected = await _context.Contracts
+                .Where(c => !c.is_deleted && c.contract_status_code == null)
+                .Select(c => new
+                {
+                    c.contract_code,
+                    c.still_current,
+                    c.end_date,
+                    c.vmf_code
+                })
+                .ToListAsync();
+
+            var activeRepairs = affected
+                .Where(c => c.still_current == "Y")
+                .ToList();
+
+            var closedWithEndDate = affected
+                .Where(c => c.still_current == "N" && c.end_date.HasValue)
+                .ToList();
+
+            var closedMissingEndDate = affected
+                .Where(c => c.still_current == "N" && !c.end_date.HasValue)
+                .ToList();
+
+            return Ok(new
+            {
+                summary = new
+                {
+                    total_affected = affected.Count,
+                    will_set_active = activeRepairs.Count,
+                    will_set_closed_normal = closedWithEndDate.Count,
+                    will_set_closed_data_quality_flag = closedMissingEndDate.Count
+                },
+                details = new
+                {
+                    active_contracts = activeRepairs.Select(c => new { c.contract_code, c.vmf_code, proposed_status = 3, proposed_status_text = "Active" }),
+                    closed_contracts = closedWithEndDate.Select(c => new { c.contract_code, c.vmf_code, c.end_date, proposed_status = 7, proposed_status_text = "Closed" }),
+                    data_quality_issues = closedMissingEndDate.Select(c => new
+                    {
+                        c.contract_code,
+                        c.vmf_code,
+                        proposed_status = 7,
+                        proposed_status_text = "Closed",
+                        warning = "end_date is NULL — contract closed without a recorded end date"
+                    })
+                },
+                note = "Call POST /data-repair/run to apply these changes."
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating data repair preview");
+            return StatusCode(500, new { error = "Failed to generate preview", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Execute the contract status data repair.
+    /// Sets contract_status_code on all contracts where it is currently NULL,
+    /// using still_current as the authoritative source of truth.
+    ///
+    /// All changes are individually audit-logged under action "DataRepair".
+    /// This endpoint is idempotent — running it twice is safe (NULL check prevents re-processing).
+    /// </summary>
+    [HttpPost("data-repair/run")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> DataRepairRun()
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var nullStatusContracts = await _context.Contracts
+                .Where(c => !c.is_deleted && c.contract_status_code == null)
+                .ToListAsync();
+
+            if (nullStatusContracts.Count == 0)
+                return Ok(new { message = "No contracts require repair. All contracts already have a status code.", repaired = 0 });
+
+            int repairedActive = 0;
+            int repairedClosed = 0;
+            int dataQualityFlags = 0;
+
+            var auditTasks = new List<Task>();
+
+            foreach (var contract in nullStatusContracts)
+            {
+                short newStatus;
+                string? note = null;
+
+                if (contract.still_current == "Y")
+                {
+                    newStatus = 3; // Active
+                    repairedActive++;
+                }
+                else
+                {
+                    newStatus = 7; // Closed
+                    repairedClosed++;
+
+                    if (!contract.end_date.HasValue)
+                    {
+                        note = "Data quality: end_date was NULL at time of repair";
+                        dataQualityFlags++;
+                    }
+                }
+
+                contract.contract_status_code = newStatus;
+                contract.contract_status_date = DateTime.Now;
+                contract.modified_by_user_code = currentUserId;
+                contract.date_updated = DateTime.Now;
+
+                auditTasks.Add(_auditLog.LogAsync(
+                    contract.contract_code,
+                    "DataRepair",
+                    currentUserId,
+                    oldStatus: null,
+                    newStatus: newStatus,
+                    notes: note ?? $"Status backfilled from still_current='{contract.still_current}' (legacy v2.1.05 migration)"));
+            }
+
+            await _context.SaveChangesAsync();
+            await Task.WhenAll(auditTasks);
+
+            _logger.LogInformation(
+                "Data repair completed by user {UserId}: {Active} active, {Closed} closed ({DQ} data quality flags)",
+                currentUserId, repairedActive, repairedClosed, dataQualityFlags);
+
+            return Ok(new
+            {
+                message = "Data repair completed successfully.",
+                repaired = nullStatusContracts.Count,
+                breakdown = new
+                {
+                    set_to_active = repairedActive,
+                    set_to_closed = repairedClosed,
+                    data_quality_flags = dataQualityFlags,
+                    data_quality_note = dataQualityFlags > 0
+                        ? $"{dataQualityFlags} contracts were closed (still_current='N') but had no end_date recorded. Status set to Closed; audit log notes the discrepancy."
+                        : null
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error executing data repair");
+            return StatusCode(500, new { error = "Failed to execute data repair", message = ex.Message });
         }
     }
 
@@ -757,6 +1349,19 @@ public class ExtendContractRequest
 public class CancelContractRequest
 {
     public string? CancellationReason { get; set; }
+}
+
+/// <summary>
+/// DTO for editing a Draft or Declined-for-Correction contract.
+/// All fields are optional — only provided fields are updated.
+/// </summary>
+public class EditContractDto
+{
+    public short? SiteCode { get; set; }
+    public string? DriverId { get; set; }
+    public string? Notes { get; set; }
+    public DateTime? TargetReturnDate { get; set; }
+    public int? StartOdometer { get; set; }
 }
 
 // New DTOs for Phase 1 endpoints

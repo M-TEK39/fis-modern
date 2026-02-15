@@ -15,7 +15,7 @@
             <i class="bx bx-buildings"></i>
             Third Party Rental Suppliers
         </h1>
-        <p class="page-description">Legacy supplier, project, and allocation maintenance.</p>
+        <p class="page-description">Supplier, project, and allocation maintenance.</p>
     </div>
 </div>
 
@@ -240,7 +240,7 @@
                                             <option value="">Select...</option>
                                             @foreach (var department in _departments)
                                             {
-                                                <option value="@department.department_code">@department.department_number @department.department_description</option>
+                                                <option value="@department.department_code">@($"{department.department_description} ({department.department_code})")</option>
                                             }
                                         </select>
                                     </div>
@@ -250,7 +250,7 @@
                                             <option value="">Select...</option>
                                             @foreach (var site in _sites)
                                             {
-                                                <option value="@site.SiteCode">@site.Description</option>
+                                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                                             }
                                         </select>
                                     </div>
@@ -319,7 +319,7 @@
                                             <option value="">Select...</option>
                                             @foreach (var department in _departments)
                                             {
-                                                <option value="@department.department_code">@department.department_number @department.department_description</option>
+                                                <option value="@department.department_code">@($"{department.department_description} ({department.department_code})")</option>
                                             }
                                         </select>
                                     </div>
@@ -399,7 +399,7 @@
                                 <option value="">Select...</option>
                                 @foreach (var department in _departments)
                                 {
-                                    <option value="@department.department_code">@department.department_number @department.department_description</option>
+                                    <option value="@department.department_code">@($"{department.department_description} ({department.department_code})")</option>
                                 }
                             </select>
                         </div>
@@ -457,14 +457,14 @@
                                     }
                                     else
                                     {
-                                        @foreach (var vehicle in _supplierVehicles)
+                                        @foreach (var vehicle in PagedSupplierVehicles)
                                         {
                                             <tr>
                                                 <td>@vehicle.vehicle_id</td>
-                                                <td>@vehicle.registration_number</td>
-                                                <td>@vehicle.model_description</td>
+                                                <td>@ValueOrDash(vehicle.registration_number)</td>
+                                                <td>@ValueOrDash(vehicle.model_description)</td>
                                                 <td>@vehicle.model_year</td>
-                                                <td>@vehicle.chassis_number</td>
+                                                <td>@ValueOrDash(vehicle.chassis_number)</td>
                                                 <td>
                                                     <button class="btn btn-secondary btn-sm" @onclick="() => SelectAllocationVehicle(vehicle)">Select</button>
                                                 </td>
@@ -473,6 +473,11 @@
                                     }
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="pagination-controls" style="margin-top: 1rem;">
+                            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                            <div class="pagination-info">Page @_page of @TotalPages</div>
+                            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
                         </div>
                     </div>
 
@@ -488,11 +493,11 @@
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Registration Number</label>
-                                <InputText class="form-input" Value="@(_selectedVehicle?.registration_number ?? string.Empty)" disabled />
+                                <InputText class="form-input" Value="@(ValueOrDash(_selectedVehicle?.registration_number))" disabled />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Model Description</label>
-                                <InputText class="form-input" Value="@(_selectedVehicle?.model_description ?? string.Empty)" disabled />
+                                <InputText class="form-input" Value="@(ValueOrDash(_selectedVehicle?.model_description))" disabled />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Model Year</label>
@@ -500,7 +505,7 @@
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Chassis Number</label>
-                                <InputText class="form-input" Value="@(_selectedVehicle?.chassis_number ?? string.Empty)" disabled />
+                                <InputText class="form-input" Value="@(ValueOrDash(_selectedVehicle?.chassis_number))" disabled />
                             </div>
                         </div>
                     </div>
@@ -553,6 +558,10 @@
     private List<ThirdPartyVehicleDto> _supplierVehicles = new();
     private List<ThirdPartyClassRequirementDto> _classRequirements = new();
     private ThirdPartyVehicleDto? _selectedVehicle;
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<ThirdPartyVehicleDto> PagedSupplierVehicles => _supplierVehicles.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_supplierVehicles.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -795,6 +804,7 @@
 
         _allocationSupplierId = supplierId;
         _supplierVehicles = await ThirdPartyService.GetVehiclesBySupplierAsync(supplierId);
+        _page = 1;
     }
 
     private void SelectAllocationVehicle(ThirdPartyVehicleDto vehicle)
@@ -839,6 +849,25 @@
             await JS.InvokeVoidAsync("console.error", ex.Message);
         }
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private sealed class SupplierForm
     {

@@ -2,10 +2,10 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject VehicleLookupApiService VehicleLookupService
 @inject SiteApiService SiteService
+@inject DriverApiService DriverService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Capture a New Inquiry - Fleet Information System</PageTitle>
@@ -16,7 +16,7 @@
             <i class="bx bx-edit"></i>
             Capture a New Inquiry
         </h1>
-        <p class="page-description">Legacy Monitor/MNT_monitor_getgg.aspx workflow.</p>
+        <p class="page-description">Monitor inquiry capture workflow.</p>
     </div>
 </div>
 
@@ -32,8 +32,31 @@
             </select>
         </div>
         <div class="form-row">
-            <label class="form-label">GG / Reg Number</label>
+            <label class="form-label">Lookup Type</label>
+            <div class="form-grid">
+                <label class="form-label">
+                    <input type="radio" name="lookupType" checked="@(_lookupType == "GG")" @onchange='() => SetLookupType("GG")' />
+                    GG
+                </label>
+                <label class="form-label">
+                    <input type="radio" name="lookupType" checked="@(_lookupType == "GP")" @onchange='() => SetLookupType("GP")' />
+                    Reg Number
+                </label>
+            </div>
+        </div>
+        <div class="form-row">
+            <label class="form-label">@(_lookupType == "GP" ? "Reg Number" : "GG Number")</label>
             <input class="form-input" @bind="_searchTerm" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">Vehicle Match</label>
+            <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                <option value="">Select vehicle...</option>
+                @foreach (var vehicle in _vehicleMatches)
+                {
+                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                }
+            </select>
         </div>
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="LoadVehicle">Submit</button>
@@ -61,6 +84,16 @@
                 <input class="form-input" @bind="_form.Inquiry_Desc" />
             </div>
             <div class="form-row">
+                <label class="form-label">Driver</label>
+                <select class="form-select" @bind="_selectedDriverCode" @bind:after="OnDriverChangedAsync">
+                    <option value="">Select driver...</option>
+                    @foreach (var driver in _drivers)
+                    {
+                        <option value="@driver.site_driver_code">@DriverOptionLabel(driver)</option>
+                    }
+                </select>
+            </div>
+            <div class="form-row">
                 <label class="form-label">Driver Name</label>
                 <input class="form-input" @bind="_form.Driver_name" />
             </div>
@@ -74,7 +107,7 @@
                     <option value="">Select site</option>
                     @foreach (var site in _sites)
                     {
-                        <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                        <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                     }
                 </select>
             </div>
@@ -85,18 +118,11 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/MNT_monitor_getgg.aspx"
-        Endpoint="api/monitor/capture"
-        HttpMethod="POST"
-        ButtonText="Test Monitor Capture Endpoint"
-        ReportType="monitor-capture" />
-
 @code {
     private bool _loading;
     private bool _showForm;
     private string _searchTerm = string.Empty;
+    private string _lookupType = "GG";
     private string _inquiryType = "Fuel_Consumption";
     private readonly List<string> _inquiryTypes = new()
     {
@@ -110,10 +136,15 @@
     };
     private MonitorDto _form = new();
     private List<SiteResponseDto> _sites = new();
+    private List<DriverDto> _drivers = new();
+    private List<VehicleLookupDto> _vehicleMatches = new();
+    private int? _selectedVmfCode;
+    private int? _selectedDriverCode;
 
     protected override async Task OnInitializedAsync()
     {
         _sites = await SiteService.GetAllAsync();
+        _drivers = await DriverService.GetDriversAsync();
     }
 
     private async Task LoadVehicle()
@@ -121,18 +152,35 @@
         _loading = true;
         try
         {
-            var matches = await VehicleLookupService.SearchAsync(_searchTerm);
-            var match = matches.FirstOrDefault();
-            if (match != null)
+            if (string.IsNullOrWhiteSpace(_searchTerm))
             {
-                _form = new MonitorDto
-                {
-                    vmf_code = match.VmfCode,
-                    Capture_dat = DateTime.Today,
-                    Inquiry_type = _inquiryType
-                };
-                _showForm = true;
+                _vehicleMatches = new();
+                _selectedVmfCode = null;
+                _showForm = false;
+                return;
             }
+
+            var searchTerm = _searchTerm.Trim();
+            var matches = await VehicleLookupService.SearchAsync(searchTerm);
+            _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _lookupType);
+            if (_vehicleMatches.All(vehicle => vehicle.VmfCode != _selectedVmfCode))
+            {
+                _selectedVmfCode = null;
+            }
+
+            if (!_selectedVmfCode.HasValue)
+            {
+                _showForm = false;
+                return;
+            }
+
+            _form = new MonitorDto
+            {
+                vmf_code = _selectedVmfCode.Value,
+                Capture_dat = DateTime.Today,
+                Inquiry_type = _inquiryType
+            };
+            _showForm = true;
         }
         catch (Exception ex)
         {
@@ -151,9 +199,12 @@
         {
             _form.Inquiry_type = _inquiryType;
             await MonitorService.CreateAsync(_form);
-            _form = new MonitorDto();
-            _searchTerm = string.Empty;
-            _showForm = false;
+        _form = new MonitorDto();
+        _searchTerm = string.Empty;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _showForm = false;
+        _selectedDriverCode = null;
         }
         catch (Exception ex)
         {
@@ -163,5 +214,72 @@
         {
             _loading = false;
         }
+    }
+
+    private Task OnDriverChangedAsync()
+    {
+        if (!_selectedDriverCode.HasValue)
+        {
+            _form.Driver_name = null;
+            _form.Driver_persalno = null;
+            _form.Driver_Site = null;
+            return Task.CompletedTask;
+        }
+
+        var selected = _drivers.FirstOrDefault(d => d.site_driver_code == _selectedDriverCode.Value);
+        if (selected == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _form.Driver_name = $"{selected.driver_firstname} {selected.driver_surname}".Trim();
+        _form.Driver_persalno = selected.driver_persalnumber;
+        _form.Driver_Site = (short?)selected.site_code;
+        return Task.CompletedTask;
+    }
+
+    private static string DriverOptionLabel(DriverDto driver)
+    {
+        var fullName = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            fullName = "Unknown Driver";
+        }
+
+        return $"{fullName} ({driver.site_driver_code})";
+    }
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string lookupType)
+    {
+        var query = keyword.Trim();
+        var isGpLookup = string.Equals(lookupType, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGpLookup
+                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGpLookup
+                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.VmfCode)
+            .ToList();
+    }
+
+    private void SetLookupType(string lookupType)
+    {
+        _lookupType = lookupType;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _showForm = false;
     }
 }

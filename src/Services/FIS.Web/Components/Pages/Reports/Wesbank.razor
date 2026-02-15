@@ -1,12 +1,245 @@
 @page "/reports/wesbank"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Text.Json
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Wesbank First Auto Reports"
-    Description="Legacy placeholder for Transaction/RPTTransaction.aspx."
-    LegacyPath="Transaction/RPTTransaction.aspx"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="wesbank"
-    Icon="bx-file" />
+<PageTitle>Wesbank First Auto Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-receipt"></i>
+            Wesbank First Auto Reports
+        </h1>
+        <p class="page-description">Wesbank expenses report runner with summary and detailed modes.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/finance">Finance Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Report Mode</label>
+                    <select class="form-select" @bind="_mode">
+                        <option value="summary-all">Summary (All Inclusive)</option>
+                        <option value="summary-selection">Summary (Selection)</option>
+                        <option value="detailed-all">Detailed (All Inclusive)</option>
+                        <option value="detailed-selection">Detailed (Selection)</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Start Date</label>
+                    <InputDate class="form-input" @bind-Value="_startDate" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">End Date</label>
+                    <InputDate class="form-input" @bind-Value="_endDate" />
+                </div>
+                @if (RequiresProvince)
+                {
+                    <div class="form-field">
+                        <label class="form-label">Province</label>
+                        <select class="form-select" @bind="_selectedProvince">
+                            <option value="">Select Province</option>
+                            @foreach (var province in _provinces)
+                            {
+                                <option value="@province.Value">@province.Label</option>
+                            }
+                        </select>
+                    </div>
+                }
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top: 1rem;">
+                    @_statusMessage
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Wesbank Report Result</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="2">Running report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="2">No records found for the selected parameters.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Key</td>
+                                <td>@row.Value</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+    private string _mode = "summary-all";
+    private DateTime? _startDate = DateTime.Today.AddMonths(-1);
+    private DateTime? _endDate = DateTime.Today;
+    private string _selectedProvince = string.Empty;
+    private List<FinanceOptionDto> _provinces = new();
+    private List<KeyValuePair<string, string>> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<KeyValuePair<string, string>> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    private bool RequiresProvince => _mode is "summary-selection" or "detailed-selection";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _provinces = await FinanceService.GetProvincesAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        _statusMessage = string.Empty;
+
+        try
+        {
+            var result = await FinanceService.PostActionAsync("api/Report/universal", new
+            {
+                reportType = "financial",
+                parameters = new Dictionary<string, object?>
+                {
+                    ["mode"] = _mode,
+                    ["provinceCode"] = _selectedProvince
+                },
+                startDate = _startDate,
+                endDate = _endDate
+            });
+
+            _statusError = !result.Success;
+            _statusMessage = result.Success
+                ? "Request completed successfully."
+                : result.Message;
+
+            _rows = ParseResultBody(result.ResponseBody);
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            _statusError = true;
+            _statusMessage = "Failed to run report.";
+            _rows = new();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading Wesbank report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _mode = "summary-all";
+        _startDate = DateTime.Today.AddMonths(-1);
+        _endDate = DateTime.Today;
+        _selectedProvince = string.Empty;
+    }
+
+    private static List<KeyValuePair<string, string>> ParseResultBody(string? body)
+    {
+        var rows = new List<KeyValuePair<string, string>>();
+
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return rows;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in root.EnumerateObject())
+                {
+                    rows.Add(new KeyValuePair<string, string>(property.Name, property.Value.ToString()));
+                }
+                return rows;
+            }
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                var index = 1;
+                foreach (var item in root.EnumerateArray())
+                {
+                    rows.Add(new KeyValuePair<string, string>($"Row {index}", item.ToString()));
+                    index++;
+                }
+            }
+        }
+        catch
+        {
+            rows.Add(new KeyValuePair<string, string>("Response", body));
+        }
+
+        return rows;
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

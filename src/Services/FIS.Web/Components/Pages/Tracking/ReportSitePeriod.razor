@@ -15,7 +15,7 @@
             <i class="bx bx-map"></i>
             Tracking Report for a Site / ALL Site's
         </h1>
-        <p class="page-description">Legacy Tracking/RPT_site_period_main_track.aspx workflow.</p>
+        <p class="page-description">View tracking records by site and period.</p>
     </div>
 </div>
 
@@ -40,7 +40,7 @@
                 <option value="">Select site</option>
                 @foreach (var site in _sites)
                 {
-                    <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                 }
             </select>
         </div>
@@ -86,11 +86,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.track_num</td>
-                                <td>@item.vmf_code</td>
+                                <td>@GetVehicleLabel(item.vmf_code)</td>
                                 <td>@item.track_status</td>
                             </tr>
                         }
@@ -98,6 +98,14 @@
                 </table>
             </div>
         </div>
+        @if (_results.Count > 0)
+        {
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+        }
     }
 </div>
 
@@ -110,10 +118,17 @@
     private DateTime? _toDate;
     private List<TrackingDto> _results = new();
     private List<SiteResponseDto> _sites = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<TrackingDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
         _sites = await SiteService.GetAllAsync();
+        await LoadVehicleLookupAsync();
     }
 
     private async Task LoadReport()
@@ -139,6 +154,7 @@
                     .Where(t => t.vmf_code.HasValue && vmfForSite.Contains(t.vmf_code.Value))
                     .ToList();
             }
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -149,4 +165,48 @@
             _loading = false;
         }
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private async Task LoadVehicleLookupAsync()
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _vehicleLabelByVmf = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(
+                g => g.Key,
+                g => FormatVehicleLabel(g.First()));
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

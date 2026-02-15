@@ -1,7 +1,9 @@
 @page "/full-maintenance-lease/reports/contracts-expiring"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>FML Contracts Expire In Next Three Months Report</PageTitle>
@@ -32,14 +34,14 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Lease ID</th><th>VMF</th><th>Start Date</th><th>End Date</th><th>Status</th></tr>
+                        <tr><th>Lease ID</th><th>Vehicle</th><th>Start Date</th><th>End Date</th><th>Status</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _rows)
+                        @foreach (var row in PagedRows)
                         {
                             <tr>
                                 <td>@row.VehicleContractTermID</td>
-                                <td>@row.vmf_Code</td>
+                                <td>@GetVehicleLabel(row.vmf_Code)</td>
                                 <td>@FormatDate(row.StartDate)</td>
                                 <td>@FormatDate(row.EndDate)</td>
                                 <td>@MapStatus(row.AuthorityStatus)</td>
@@ -48,6 +50,11 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
 </div>
@@ -55,22 +62,35 @@
 @code {
     private bool _loading = true;
     private List<LeaseTermDto> _rows = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<LeaseTermDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             var all = await LeaseService.GetAllAsync<LeaseTermDto>();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _vehicleLabelByVmf = vehicles.Data
+                .GroupBy(v => v.vmf_code)
+                .ToDictionary(
+                    g => g.Key,
+                    g => FormatVehicleLabel(g.First()));
             var today = DateTime.Today;
             var end = today.AddMonths(3);
             _rows = all
                 .Where(x => x.EndDate.HasValue && x.EndDate.Value.Date >= today && x.EndDate.Value.Date <= end)
                 .OrderBy(x => x.EndDate)
                 .ToList();
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             _rows = new List<LeaseTermDto>();
+            _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading contracts-expiring report: {ex.Message}");
         }
         finally
@@ -88,6 +108,28 @@
     };
 
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+    private string GetVehicleLabel(int vmfCode) =>
+        _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : $"- / - ({vmfCode})";
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private sealed class LeaseTermDto
     {

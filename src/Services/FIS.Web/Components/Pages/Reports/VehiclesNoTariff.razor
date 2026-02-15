@@ -1,12 +1,194 @@
 @page "/reports/vehicles-no-tariff"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject TariffApiService TariffService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Vehicles with Expired or No Tariff Loaded"
-    Description="Legacy placeholder for FISReports/ShowReport.aspx?Item=GetAllVehicleWithNoTariffs."
-    LegacyPath="FISReports/ShowReport.aspx?Item=GetAllVehicleWithNoTariffs"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="vehicles-no-tariff"
-    Icon="bx-file" />
+<PageTitle>Vehicles with Expired or No Tariff - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-receipt"></i>
+            Vehicles with Expired or No Tariff Loaded
+        </h1>
+        <p class="page-description">Tariff preview exceptions for New and In Service vehicles.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/vehicles">Vehicle Master</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Max Vehicles To Evaluate</label>
+                    <input class="form-input" type="number" min="1" max="2000" @bind="_maxProbeCount" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">No Tariff / Expired Tariff</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Status</th>
+                        <th>Tariff End Date</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="6">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="6">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(row.Vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(row.Vehicle.registration_number)</td>
+                                <td>@GetVehicleLabel(row.Vehicle)</td>
+                                <td>@ValueOrDash(row.Vehicle.status_description)</td>
+                                <td>@(string.IsNullOrWhiteSpace(row.EffectiveEndDate) ? "-" : row.EffectiveEndDate)</td>
+                                <td>@row.Reason</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private int _maxProbeCount = 300;
+    private List<TariffIssueRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<TariffIssueRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var vehicles = (await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000)).Data
+                .Where(v => IsNewOrInService(v.status_description))
+                .Take(Math.Clamp(_maxProbeCount, 1, 2000))
+                .ToList();
+
+            var findings = new List<TariffIssueRow>();
+            foreach (var vehicle in vehicles)
+            {
+                var preview = await TariffService.GetPreviewForVehicleAsync(vehicle.vmf_code);
+                var tariff = preview?.Tariff;
+
+                if (tariff == null)
+                {
+                    findings.Add(new TariffIssueRow(vehicle, "No tariff loaded.", null));
+                    continue;
+                }
+
+                if (!DateTime.TryParse(tariff.EffectiveEndDate, out var endDate))
+                {
+                    findings.Add(new TariffIssueRow(vehicle, "Tariff end date missing/invalid.", tariff.EffectiveEndDate));
+                    continue;
+                }
+
+                if (endDate.Date < DateTime.Today)
+                {
+                    findings.Add(new TariffIssueRow(vehicle, "Tariff expired.", tariff.EffectiveEndDate));
+                }
+            }
+
+            _rows = findings
+                .OrderBy(r => r.Vehicle.fleet_number)
+                .ThenBy(r => r.Vehicle.registration_number)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-no-tariff report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static bool IsNewOrInService(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return false;
+        }
+
+        return status.Contains("new", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("in service", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record TariffIssueRow(VehicleDto Vehicle, string Reason, string? EffectiveEndDate);
+}

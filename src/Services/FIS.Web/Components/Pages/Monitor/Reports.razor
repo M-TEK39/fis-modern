@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/monitor/reports"
 @rendermode InteractiveServer
 
@@ -10,7 +9,7 @@
             <i class="bx bx-file"></i>
             Monitor Inquiry Reports Menu
         </h1>
-        <p class="page-description">Legacy reports menu for monitor inquiries.</p>
+        <p class="page-description">Reports menu for monitor inquiries.</p>
     </div>
 </div>
 
@@ -23,15 +22,15 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports/one-reference-number">1) Inquiry Report on ONE Reference Number</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports/one-vehicle">2) Inquiry Report on ONE Vehicle</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports/reprint">3) Reprint an Inquiry Report</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
@@ -43,29 +42,22 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports/dept-site-period">4) Inquiry Info, for a Dept / Site, for a period</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports/clo-inquiry">5) Client Liaison Officer (CLO) Inquiry Report</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor/reports/inquiry-statistics">6) Inquiry Statistics</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/monitor">Return To Main Page</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/RPTMonitor.aspx"
-        Endpoint="api/monitor/reports/menu"
-        HttpMethod="GET"
-        ButtonText="Test Monitor Reports Menu Endpoint"
-        ReportType="monitor-reports-menu" />
 
 </div>

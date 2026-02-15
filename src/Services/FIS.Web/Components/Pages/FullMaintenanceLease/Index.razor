@@ -1,5 +1,6 @@
 @page "/full-maintenance-lease"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
 @inject LeaseContractTermsApiService LeaseService
@@ -63,8 +64,25 @@
     <div class="form-card">
         <div class="form-card-body">
             <div class="form-row">
-                <label class="form-label">GG / GP Number</label>
-                <input class="form-input" @bind="_searchQuery" placeholder="Search lease records by vehicle" />
+                <label class="form-label">Number Type</label>
+                <div class="contract-search-radio">
+                    <label class="form-radio-label">
+                        <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                        GG
+                    </label>
+                    <label class="form-radio-label">
+                        <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                        GP
+                    </label>
+                </div>
+                <input class="form-input" @bind="_searchQuery" placeholder="@(_searchMode == "GG" ? "Search by GG number" : "Search by GP number")" />
+                <select class="form-select fis-mt-05" @bind="_selectedVmfCode" @bind:after="ApplySelectedVehicleFilterAsync" disabled="@(_vehicleMatches.Count == 0)">
+                    <option value="">Select vehicle...</option>
+                    @foreach (var vehicle in _vehicleMatches)
+                    {
+                        <option value="@vehicle.vmf_code">@FormatVehicleLabel(vehicle)</option>
+                    }
+                </select>
             </div>
             <div class="form-actions">
                 <button class="btn btn-primary" @onclick="SearchLeases" disabled="@_searching">Search</button>
@@ -85,7 +103,7 @@
         <div class="empty-state">
             <i class="bx bx-cog"></i>
             <h3>No lease records</h3>
-            <p>No lease records are available.</p>
+            <p>No lease records match the current filter selection.</p>
         </div>
     }
     else
@@ -107,7 +125,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var lease in _leases)
+                        @foreach (var lease in PagedLeases)
                         {
                             <tr>
                                 <td>@lease.Number</td>
@@ -120,6 +138,11 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -137,11 +160,19 @@
     private bool _loading = true;
     private List<FmlItem> _leases = new();
     private List<FmlItem> _allLeases = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private List<VehicleDto> _vehicleMatches = new();
+    private int? _selectedVmfCode;
+    private string _searchMode = "GG";
     private string _searchQuery = "";
     private bool _searching;
     private string? _searchError;
     private bool _showLeaseInfo = true;
     private bool _showLeaseMaintenance = true;
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<FmlItem> PagedLeases => _leases.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_leases.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -153,23 +184,35 @@
         _loading = true;
         try
         {
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => FormatVehicleLabel(g.First()));
+            }
+
             var leases = await LeaseService.GetAllAsync<LeaseContractTermsDto>();
             _allLeases = leases.Select(l => new FmlItem(
                 VmfCode: l.vmf_code,
                 Number: l.leasecontract_code.ToString(),
-                Vehicle: l.vmf_code?.ToString() ?? "Unknown",
+                Vehicle: GetVehicleLabel(l.vmf_code),
                 Status: l.lease_status ?? "Unknown",
                 Start: l.lease_startdate,
                 End: l.lease_enddate,
                 Notes: l.lease_notes ?? string.Empty
             )).ToList();
             _leases = new List<FmlItem>(_allLeases);
+            _page = 1;
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("console.error", $"Error loading leases: {ex.Message}");
             _leases = new();
             _allLeases = new();
+            _page = 1;
         }
         finally
         {
@@ -205,6 +248,7 @@
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
             _leases = new List<FmlItem>(_allLeases);
+            _page = 1;
             return;
         }
 
@@ -212,23 +256,26 @@
         try
         {
             var query = _searchQuery.Trim();
-            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 200, search: query);
-            var match = vehicles.Data.FirstOrDefault(v =>
-                string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase));
+            var matches = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleMatches = RankVehicleMatches(matches, query, _searchMode);
 
-            if (match == null)
+            if (_vehicleMatches.Count == 0)
             {
                 _leases = new List<FmlItem>();
                 _searchError = "Vehicle not found.";
+                _selectedVmfCode = null;
+                _page = 1;
                 return;
             }
 
-            _leases = _allLeases.Where(l => l.VmfCode == match.vmf_code).ToList();
-            if (_leases.Count == 0)
+            if (_vehicleMatches.All(v => v.vmf_code != _selectedVmfCode))
             {
-                _searchError = "No lease records found for this vehicle.";
+                _selectedVmfCode = null;
             }
+
+            _leases = new List<FmlItem>();
+            _searchError = "Select a vehicle from the list, then click Apply to load contracts.";
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -244,7 +291,40 @@
     {
         _searchQuery = string.Empty;
         _searchError = null;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
         _leases = new List<FmlItem>(_allLeases);
+        _page = 1;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchError = null;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _leases = new List<FmlItem>(_allLeases);
+        _page = 1;
+    }
+
+    private Task ApplySelectedVehicleFilterAsync()
+    {
+        _searchError = null;
+        if (!_selectedVmfCode.HasValue)
+        {
+            _leases = new();
+            _page = 1;
+            return Task.CompletedTask;
+        }
+
+        _leases = _allLeases.Where(l => l.VmfCode == _selectedVmfCode.Value).ToList();
+        _page = 1;
+        if (_leases.Count == 0)
+        {
+            _searchError = "No lease records found for this vehicle.";
+        }
+
+        return Task.CompletedTask;
     }
 
     private static string FormatDate(DateTime? value)
@@ -252,4 +332,50 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, string searchMode)
+    {
+        var keyword = query.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "Unknown";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

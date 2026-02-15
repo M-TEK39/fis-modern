@@ -196,6 +196,7 @@ public class PrivateHireApiService
             contractor_id = source.contractor_id ?? 0,
             contractor_name = source.contractor_name ?? string.Empty,
             department_code = source.department_code ?? 0,
+            site_code = source.site_code ?? source.department_code ?? 0,
             department_name = source.department_name ?? string.Empty,
             hire_start_date = source.date_hired ?? source.hire_start_date,
             hire_end_date = source.date_retired ?? source.hire_end_date,
@@ -211,6 +212,7 @@ public class PrivateHireApiService
             registration_number = source.registration_number,
             contractor_id = source.contractor_id == 0 ? (int?)null : source.contractor_id,
             department_code = source.department_code == 0 ? (int?)null : source.department_code,
+            site_code = source.site_code == 0 ? (int?)null : source.site_code,
             date_hired = source.hire_start_date,
             date_retired = source.hire_end_date,
             notes = source.notes
@@ -227,6 +229,7 @@ internal sealed class PrivateHireVehicleResponseDto
     public int? contractor_id { get; set; }
     public string? contractor_name { get; set; }
     public int? department_code { get; set; }
+    public int? site_code { get; set; }
     public string? department_name { get; set; }
     public DateTime? date_hired { get; set; }
     public DateTime? date_retired { get; set; }
@@ -250,6 +253,7 @@ public class PrivateHireVehicleDto
     public string contractor_name { get; set; } = "";
     [Range(1, int.MaxValue, ErrorMessage = "Department is required.")]
     public int department_code { get; set; }
+    public int site_code { get; set; }
     public string department_name { get; set; } = "";
     [Required]
     public DateTime? hire_start_date { get; set; }

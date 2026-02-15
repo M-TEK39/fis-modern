@@ -1,12 +1,187 @@
 @page "/reports/incorrect-quantities"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Report to show incorrect calculated quantities"
-    Description="Legacy placeholder for Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities."
-    LegacyPath="Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="incorrect-quantities"
-    Icon="bx-file" />
+<PageTitle>Incorrect Calculated Quantities - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-error-circle"></i>
+            Report to Show Incorrect Calculated Quantities
+        </h1>
+        <p class="page-description">Exception list for invalid or suspicious calculated vehicle quantities.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/vehicles">Vehicle Master</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Incorrect Quantities</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Take-on ODO</th>
+                        <th>Current ODO</th>
+                        <th>Avg Consumption</th>
+                        <th>Reason</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="7">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="7">No anomaly records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(row.Vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(row.Vehicle.registration_number)</td>
+                                <td>@GetVehicleLabel(row.Vehicle)</td>
+                                <td>@(row.Vehicle.take_on_odo?.ToString("N0") ?? "-")</td>
+                                <td>@(row.Vehicle.current_odo?.ToString("N0") ?? "-")</td>
+                                <td>@(row.Vehicle.average_consumption?.ToString("0.##") ?? "-")</td>
+                                <td>@row.Reason</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<AnomalyRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<AnomalyRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var vehicles = (await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000)).Data;
+            var anomalies = new List<AnomalyRow>();
+
+            foreach (var vehicle in vehicles)
+            {
+                var reasons = GetReasons(vehicle);
+                foreach (var reason in reasons)
+                {
+                    anomalies.Add(new AnomalyRow(vehicle, reason));
+                }
+            }
+
+            _rows = anomalies
+                .OrderBy(r => r.Vehicle.fleet_number)
+                .ThenBy(r => r.Vehicle.registration_number)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading incorrect quantities report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static List<string> GetReasons(VehicleDto vehicle)
+    {
+        var reasons = new List<string>();
+        var takeOn = vehicle.take_on_odo;
+        var current = vehicle.current_odo;
+        var avg = vehicle.average_consumption;
+
+        if (takeOn.HasValue && takeOn.Value < 0)
+        {
+            reasons.Add("Take-on odometer is negative.");
+        }
+
+        if (current.HasValue && current.Value < 0)
+        {
+            reasons.Add("Current odometer is negative.");
+        }
+
+        if (takeOn.HasValue && current.HasValue && current.Value < takeOn.Value)
+        {
+            reasons.Add("Current odometer is less than take-on odometer.");
+        }
+
+        if (avg.HasValue && avg.Value < 0)
+        {
+            reasons.Add("Average consumption is negative.");
+        }
+
+        if (!takeOn.HasValue || !current.HasValue)
+        {
+            reasons.Add("Missing odometer value(s).");
+        }
+
+        return reasons;
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto row)
+        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record AnomalyRow(VehicleDto Vehicle, string Reason);
+}

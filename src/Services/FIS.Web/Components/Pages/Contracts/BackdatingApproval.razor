@@ -73,6 +73,15 @@
                             </button>
                             <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
                         </div>
+                        <div class="contract-search-inputs fis-mt-05">
+                            <select class="form-select" style="min-width: 22rem;" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChanged" disabled="@(_vehicleSearchMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _vehicleSearchMatches)
+                                {
+                                    <option value="@vehicle.vmf_code">@GetVehicleContextLabel(vehicle)</option>
+                                }
+                            </select>
+                        </div>
                         @if (!string.IsNullOrWhiteSpace(_searchError))
                         {
                             <div class="form-error contract-search-error">@_searchError</div>
@@ -80,7 +89,7 @@
                         @if (_selectedVehicle != null)
                         {
                             <div class="contract-search-result">
-                                <div><strong>Selected Vehicle:</strong> @_selectedVehicle.fleet_number (@_selectedVehicle.registration_number)</div>
+                                <div><strong>Selected Vehicle:</strong> @GetVehicleContextLabel(_selectedVehicle)</div>
                                 <div>Make/Model: @_selectedVehicle.model_name | Status: @_selectedVehicle.status_description</div>
                                 <button class="btn btn-primary btn-sm" type="button" @onclick="OpenSelectedVehicle">Open Backdating Review</button>
                             </div>
@@ -113,12 +122,12 @@
                             <div class="empty-state">
                                 <i class="bx bx-file"></i>
                                 <h3>No pending backdating requests</h3>
-                                <p>Requests will appear here once submitted.</p>
+                                <p>No pending backdating requests match the current filters.</p>
                             </div>
                         }
                         else
                         {
-                            @foreach (var contract in _pendingContracts)
+                            @foreach (var contract in PagedPendingContracts)
                             {
                                 <table class="contract-subtable">
                                     <tbody>
@@ -184,6 +193,15 @@
                 </tr>
             </tbody>
         </table>
+        @if (_pendingContracts.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_pendingContracts.Count | Page size: @_pageSize</div>
+        }
     </div>
 </div>
 
@@ -195,6 +213,8 @@
     private string _searchQuery = "";
     private bool _searching;
     private string? _searchError;
+    private List<VehicleDto> _vehicleSearchMatches = new();
+    private int? _selectedVehicleVmfCode;
     private VehicleDto? _selectedVehicle;
 
     private bool _loadingContracts = true;
@@ -202,6 +222,14 @@
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<ContractDto> PagedPendingContracts
+        => _pendingContracts.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages
+        => Math.Max(1, (int)Math.Ceiling(_pendingContracts.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -216,6 +244,7 @@
         {
             var contracts = await ContractService.GetContractsAsync();
             _pendingContracts = await FilterPendingContractsAsync(contracts);
+            _page = 1;
             await HydratePendingContractsAsync();
         }
         finally
@@ -277,6 +306,8 @@
     {
         _searchError = null;
         _selectedVehicle = null;
+        _selectedVehicleVmfCode = null;
+        _vehicleSearchMatches = new();
 
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
@@ -287,12 +318,16 @@
         _searching = true;
         try
         {
-            var results = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
-            _selectedVehicle = results.FirstOrDefault();
-            if (_selectedVehicle == null)
+            var query = _searchQuery.Trim();
+            var results = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleSearchMatches = RankVehicleMatchesBySearchType(results, query, _searchType);
+            if (_vehicleSearchMatches.Count == 0)
             {
                 _searchError = "No vehicles matched the search criteria.";
+                return;
             }
+
+            _searchError = "Select a vehicle from the list to continue.";
         }
         finally
         {
@@ -304,7 +339,17 @@
     {
         _searchQuery = "";
         _searchError = null;
+        _vehicleSearchMatches = new();
+        _selectedVehicleVmfCode = null;
         _selectedVehicle = null;
+    }
+
+    private Task OnSelectedVehicleChanged()
+    {
+        _selectedVehicle = _selectedVehicleVmfCode.HasValue
+            ? _vehicleSearchMatches.FirstOrDefault(v => v.vmf_code == _selectedVehicleVmfCode.Value)
+            : null;
+        return Task.CompletedTask;
     }
 
     private void OpenSelectedVehicle()
@@ -327,6 +372,22 @@
         Navigation.NavigateTo($"/contracts/backdating-approval/detail?contractId={contractId}&action={action}&ggnumber={ggNumber}&regnumber={regNumber}");
     }
 
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
     private static string FormatDate(DateTime? date)
     {
         return date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
@@ -340,7 +401,7 @@
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private static string GetFleetNumber(ContractDto contract)
-        => ValueOrDash(contract.Vehicle?.fleet_number ?? contract.vehicle_registration);
+        => ValueOrDash(contract.Vehicle?.fleet_number ?? contract.fleet_number);
 
     private static string GetRegNumber(ContractDto contract)
         => ValueOrDash(contract.vehicle_registration);
@@ -506,5 +567,25 @@
         return roleClaims.Any(value =>
             value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 .Any(item => roles.Any(role => string.Equals(item, role, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    private static string GetVehicleContextLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static List<VehicleDto> RankVehicleMatchesBySearchType(List<VehicleDto> matches, string query, string searchType)
+    {
+        return (searchType == "GG"
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                searchType == "GG"
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(v =>
+                searchType == "GG"
+                    ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
     }
 }

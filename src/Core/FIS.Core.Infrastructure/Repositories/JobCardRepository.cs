@@ -310,7 +310,9 @@ public class JobCardRepository : IJobCardRepository
     /// <summary>
     /// Close a job card
     /// </summary>
-    public async Task<JobCard> CloseAsync(int jobCardId, int currentUserId, string? closeNotes)
+    public async Task<JobCard> CloseAsync(int jobCardId, int currentUserId, string? closeNotes,
+        decimal? labourCost = null, decimal? partsCost = null, decimal? otherCost = null,
+        string? invoiceNumber = null, DateTime? invoiceDate = null, string? serviceProvider = null)
     {
         var jobCard = await _context.JobCards
             .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
@@ -329,11 +331,52 @@ public class JobCardRepository : IJobCardRepository
                 : $"{jobCard.comments}\nClosed: {closeNotes}";
         }
 
+        // Capture repair costs if provided
+        ApplyCosts(jobCard, labourCost, partsCost, otherCost, invoiceNumber, invoiceDate, serviceProvider);
+
         await _context.SaveChangesAsync();
 
-        // Reload with navigation properties
         return await GetByIdAsync(jobCardId)
             ?? throw new InvalidOperationException("Failed to retrieve closed job card");
+    }
+
+    public async Task<JobCard> UpdateCostsAsync(int jobCardId, int currentUserId,
+        decimal? labourCost, decimal? partsCost, decimal? otherCost,
+        string? invoiceNumber, DateTime? invoiceDate, string? serviceProvider)
+    {
+        var jobCard = await _context.JobCards
+            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
+            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+
+        ApplyCosts(jobCard, labourCost, partsCost, otherCost, invoiceNumber, invoiceDate, serviceProvider);
+        jobCard.date_updated = DateTime.UtcNow;
+        jobCard.modified_by_user_code = currentUserId;
+
+        await _context.SaveChangesAsync();
+
+        return await GetByIdAsync(jobCardId)
+            ?? throw new InvalidOperationException("Failed to retrieve updated job card");
+    }
+
+    /// <summary>
+    /// Applies cost fields and auto-calculates total_cost.
+    /// Only overwrites fields that are explicitly provided (non-null).
+    /// </summary>
+    private static void ApplyCosts(JobCard jobCard,
+        decimal? labourCost, decimal? partsCost, decimal? otherCost,
+        string? invoiceNumber, DateTime? invoiceDate, string? serviceProvider)
+    {
+        if (labourCost.HasValue) jobCard.labour_cost = labourCost;
+        if (partsCost.HasValue) jobCard.parts_cost = partsCost;
+        if (otherCost.HasValue) jobCard.other_cost = otherCost;
+        if (invoiceNumber != null) jobCard.invoice_number = invoiceNumber;
+        if (invoiceDate.HasValue) jobCard.invoice_date = invoiceDate;
+        if (serviceProvider != null) jobCard.service_provider = serviceProvider;
+
+        // Auto-calculate total from whatever is now set
+        jobCard.total_cost = (jobCard.labour_cost ?? 0)
+                           + (jobCard.parts_cost ?? 0)
+                           + (jobCard.other_cost ?? 0);
     }
 
     /// <summary>

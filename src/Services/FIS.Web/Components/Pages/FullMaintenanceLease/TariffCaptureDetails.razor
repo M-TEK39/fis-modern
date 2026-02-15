@@ -1,8 +1,14 @@
 @page "/full-maintenance-lease/tariffs/details"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Lease Vehicle Capturing and Approval</PageTitle>
 
@@ -45,44 +51,61 @@
                         <input class="form-input" value="@_item.VehicleContractTermID" readonly />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">VMF Code</label>
-                        <input class="form-input" value="@_item.vmf_Code" readonly />
+                        <label class="form-label">Vehicle</label>
+                        <input class="form-input" value="@GetVehicleLabel(_item.vmf_Code)" readonly />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Start Date</label>
-                        <InputDate @bind-Value="_item.StartDate" class="form-input" />
+                        <InputDate @bind-Value="_item.StartDate" class="form-input" disabled="@(!CanEditCapture())" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">End Date</label>
-                        <InputDate @bind-Value="_item.EndDate" class="form-input" />
+                        <InputDate @bind-Value="_item.EndDate" class="form-input" disabled="@(!CanEditCapture())" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Agreed Terms (months)</label>
-                        <InputNumber @bind-Value="_item.AgreedTerms" class="form-input" />
+                        <InputNumber @bind-Value="_item.AgreedTerms" class="form-input" disabled="@(!CanEditCapture())" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Agreed Kilos</label>
-                        <InputNumber @bind-Value="_item.AgreedKilos" class="form-input" />
+                        <InputNumber @bind-Value="_item.AgreedKilos" class="form-input" disabled="@(!CanEditCapture())" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Applied Interest</label>
-                        <InputNumber @bind-Value="_item.AppliedInterest" class="form-input" />
+                        <InputNumber @bind-Value="_item.AppliedInterest" class="form-input" disabled="@(!CanEditCapture())" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Fixed Monthly Amount</label>
-                        <InputNumber @bind-Value="_item.FixedMonthlyAmount" class="form-input" />
+                        <InputNumber @bind-Value="_item.FixedMonthlyAmount" class="form-input" disabled="@(!CanEditCapture())" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Authority Status</label>
-                        <select class="form-select" @bind="_item.AuthorityStatus">
-                            <option value="1">Pending</option>
-                            <option value="2">Approved</option>
-                            <option value="4">Rejected</option>
-                        </select>
+                        <input class="form-input" value="@MapStatus(_item.AuthorityStatus)" readonly />
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Reviewer Comment</label>
+                        <textarea class="form-input" rows="3" @bind="_reviewComment" disabled="@(!CanReviewPending())"></textarea>
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Rejection Reason (required when rejecting)</label>
+                        <input class="form-input" @bind="_rejectionReason" disabled="@(!CanReviewPending())" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+                    @if (CanEditCapture())
+                    {
+                        <button class="btn btn-primary" @onclick="SaveCaptureAsync" disabled="@_saving">Save</button>
+                        <button class="btn btn-secondary" @onclick="SubmitForReviewAsync" disabled="@_saving">Submit for Approval</button>
+                    }
+                    else if (CanReviewPending())
+                    {
+                        <button class="btn btn-primary" @onclick="ApproveAsync" disabled="@_saving">Approve</button>
+                        <button class="btn btn-danger" @onclick="RejectAsync" disabled="@_saving">Reject</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-secondary" disabled>View Only</button>
+                    }
                 </div>
             </div>
         </div>
@@ -100,15 +123,25 @@
 @code {
     [SupplyParameterFromQuery(Name = "id")]
     public int? Id { get; set; }
+    [SupplyParameterFromQuery(Name = "mode")]
+    public string? Mode { get; set; }
 
     private bool _loading = true;
     private bool _saving;
     private bool _error;
     private string _message = string.Empty;
+    private string _reviewComment = string.Empty;
+    private string _rejectionReason = string.Empty;
+    private int? _currentUserAccessCode;
+    private long _currentAccessLevel;
+    private bool _hasFinancialAccess;
     private LeaseTermDto? _item;
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
 
     protected override async Task OnParametersSetAsync()
     {
+        await ResolveAccessAsync();
+
         if (!Id.HasValue || Id.Value <= 0)
         {
             _item = null;
@@ -120,6 +153,15 @@
         try
         {
             _item = await LeaseService.GetByIdAsync<LeaseTermDto>(Id.Value);
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => FormatVehicleLabel(g.First()));
+            }
         }
         catch (Exception ex)
         {
@@ -134,6 +176,58 @@
 
     private async Task SaveAsync()
     {
+        await SaveWithStatusAsync(_item?.AuthorityStatus, "Lease tariff detail updated.", "Failed to save lease tariff detail.");
+    }
+
+    private async Task SaveCaptureAsync()
+    {
+        if (!CanEditCapture())
+        {
+            return;
+        }
+
+        await SaveAsync();
+    }
+
+    private async Task SubmitForReviewAsync()
+    {
+        if (!CanEditCapture())
+        {
+            return;
+        }
+
+        await SaveWithStatusAsync(1, "Lease tariff submitted for approval.", "Failed to submit lease tariff for approval.");
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (!CanReviewPending())
+        {
+            return;
+        }
+
+        await SaveWithStatusAsync(2, "Lease tariff approved successfully.", "Failed to approve lease tariff.");
+    }
+
+    private async Task RejectAsync()
+    {
+        if (!CanReviewPending())
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_rejectionReason))
+        {
+            _error = true;
+            _message = "Rejection reason is required.";
+            return;
+        }
+
+        await SaveWithStatusAsync(4, "Lease tariff rejected for correction.", "Failed to reject lease tariff.");
+    }
+
+    private async Task SaveWithStatusAsync(int? status, string successMessage, string errorMessage)
+    {
         if (_item == null)
         {
             return;
@@ -144,14 +238,29 @@
         _message = string.Empty;
         try
         {
+            _item.AuthorityStatus = status;
+            _item.modified_by_user_code = _currentUserAccessCode;
+            if (!string.IsNullOrWhiteSpace(_reviewComment))
+            {
+                _item.authority_comment = _reviewComment.Trim();
+            }
+            if (!string.IsNullOrWhiteSpace(_rejectionReason))
+            {
+                _item.rejection_reason = _rejectionReason.Trim();
+            }
+
             var updated = await LeaseService.UpdateAsync(_item.VehicleContractTermID, _item);
             _error = updated == null;
-            _message = _error ? "Failed to save lease tariff detail." : "Lease tariff detail updated.";
+            _message = _error ? errorMessage : successMessage;
+            if (!_error && updated != null)
+            {
+                _item = updated;
+            }
         }
         catch (Exception ex)
         {
             _error = true;
-            _message = "Failed to save lease tariff detail.";
+            _message = errorMessage;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error updating lease tariff detail: {ex.Message}");
         }
         finally
@@ -159,6 +268,84 @@
             _saving = false;
         }
     }
+
+    private bool CanEditCapture()
+    {
+        if (_item == null)
+        {
+            return false;
+        }
+
+        var status = _item.AuthorityStatus ?? 0;
+        var mode = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        return (mode == "edit" || mode == string.Empty)
+            && IsCurrentUserCapturer()
+            && (status == 1 || status == 4);
+    }
+
+    private bool CanReviewPending()
+    {
+        if (_item == null)
+        {
+            return false;
+        }
+
+        var mode = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        var status = _item.AuthorityStatus ?? 0;
+        return mode == "review"
+            && status == 1
+            && _hasFinancialAccess
+            && !IsCurrentUserCapturer();
+    }
+
+    private bool IsCurrentUserCapturer()
+    {
+        return _currentUserAccessCode is > 0
+            && _item?.created_by_user_code is > 0
+            && _item.created_by_user_code.Value == _currentUserAccessCode.Value;
+    }
+
+    private static string MapStatus(int? status) => status switch
+    {
+        1 => "Pending",
+        2 => "Approved",
+        4 => "Rejected",
+        _ => "Unknown"
+    };
+
+    private string GetVehicleLabel(int vmfCode)
+        => _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : vmfCode.ToString();
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private async Task ResolveAccessAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _hasFinancialAccess = false;
+            return;
+        }
+
+        _currentUserAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        if (!long.TryParse(accessLevelClaim, out _currentAccessLevel))
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            _currentAccessLevel = await UserAccessContextService.EnsureAccessLevelAsync(_currentUserAccessCode, firstName);
+        }
+
+        _hasFinancialAccess =
+            (_currentAccessLevel & LegacyPermissionBits.Financial) == LegacyPermissionBits.Financial;
+    }
+
+    private static int? TryParseInt(string? value)
+        => int.TryParse(value, out var parsed) ? parsed : null;
 
     private sealed class LeaseTermDto
     {
@@ -169,6 +356,10 @@
         public decimal? AppliedInterest { get; set; }
         public decimal? FixedMonthlyAmount { get; set; }
         public int? AuthorityStatus { get; set; }
+        public int? created_by_user_code { get; set; }
+        public int? modified_by_user_code { get; set; }
+        public string? authority_comment { get; set; }
+        public string? rejection_reason { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
     }

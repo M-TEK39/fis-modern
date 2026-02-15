@@ -13,7 +13,7 @@
             <i class="bx bx-bar-chart-square"></i>
             @PageTitleText
         </h1>
-        <p class="page-description">Financial reporting aligned to the legacy workflow.</p>
+        <p class="page-description">Financial reporting and invoice output.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
@@ -27,6 +27,9 @@
             <p>@SectionDescription</p>
         </div>
         <div class="form-card-body">
+            <div class="contract-banner contract-banner-info contract-banner-inline">
+                Billing policy: contracts with <strong>still_current = Y</strong> must continue billing even when end date has passed, until contract close/reassign/extend.
+            </div>
             @if (IsFinancialYear)
             {
                 <div class="form-grid">

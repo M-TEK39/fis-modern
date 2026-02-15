@@ -103,9 +103,19 @@
                 {
                     <div class="form-grid">
                         <div class="form-field form-group-full">
-                            <label class="form-label">GG or Registration Number</label>
+                            <label class="form-label">Number Type</label>
                             <div class="contract-search-radio">
-                                <input class="form-input" placeholder="A partial number is allowed" style="max-width: 260px;" @bind="_ggSearch" @bind:event="oninput" />
+                                <label class="form-radio-label">
+                                    <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                    GG
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                    GP
+                                </label>
+                            </div>
+                            <div class="contract-search-radio">
+                                <input class="form-input" placeholder="@(_searchMode == "GG" ? "Search by GG number" : "Search by GP number")" style="max-width: 260px;" @bind="_ggSearch" @bind:event="oninput" />
                                 <button class="btn btn-secondary btn-sm" @onclick="SearchByVehicle">Go</button>
                             </div>
                         </div>
@@ -121,7 +131,7 @@
                             <option value="">Select Department</option>
                             @foreach (var department in _departments)
                             {
-                                <option value="@department.department_code">@department.department_description</option>
+                                <option value="@department.department_code">@($"{department.department_description} ({department.department_code})")</option>
                             }
                         </select>
                         </div>
@@ -131,7 +141,7 @@
                             <option value="">Select Site</option>
                             @foreach (var site in _sites)
                             {
-                                <option value="@site.SiteCode">@site.Description</option>
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                             }
                         </select>
                         </div>
@@ -159,6 +169,7 @@
 
 @code {
     private string _activeTab = "gg";
+    private string _searchMode = "GG";
     private string _ggSearch = "";
     private string _authoritySearch = "";
     private string? _selectedDepartment;
@@ -180,6 +191,18 @@
     private string _accessMessage = "You do not have sufficient access to use this page.";
     private string _currentDepartmentCodeDisplay => _currentDepartmentCode?.ToString() ?? "-";
     private string _currentSiteCodeDisplay => _currentSiteCode?.ToString() ?? "-";
+    private readonly int _pageSize = 12;
+    private int _inPage = 1;
+    private int _outPage = 1;
+
+    private IEnumerable<VehicleRow> PagedVehiclesIn
+        => _vehiclesIn.Skip((_inPage - 1) * _pageSize).Take(_pageSize);
+
+    private IEnumerable<TripRow> PagedVehiclesOut
+        => _vehiclesOut.Skip((_outPage - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalInPages => Math.Max(1, (int)Math.Ceiling(_vehiclesIn.Count / (double)_pageSize));
+    private int TotalOutPages => Math.Max(1, (int)Math.Ceiling(_vehiclesOut.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -196,6 +219,7 @@
     private void SetActiveTab(string tab)
     {
         _activeTab = tab;
+        ResetPaging();
     }
 
     private RenderFragment TripTables => @<div>
@@ -224,13 +248,11 @@
                             }
                             else if (_vehiclesIn.Count == 0)
                             {
-                                <tr>
-                                    <td colspan="7">No vehicles were found that are currently IN and available.</td>
-                                </tr>
+                                <tr><td colspan="7">No in-service vehicles available for trip assignment.</td></tr>
                             }
                             else
                             {
-                                @foreach (var vehicle in _vehiclesIn)
+                                @foreach (var vehicle in PagedVehiclesIn)
                                 {
                                     <tr>
                                         <td>@ValueOrDash(vehicle.FleetNumber)</td>
@@ -249,6 +271,15 @@
                     </table>
                 </div>
             </div>
+            @if (_vehiclesIn.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevInPage" disabled="@(_inPage <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_inPage of @TotalInPages</div>
+                    <button class="pagination-btn" @onclick="NextInPage" disabled="@(_inPage >= TotalInPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_vehiclesIn.Count | Page size: @_pageSize</div>
+            }
         </div>
 
         <div class="form-section">
@@ -282,7 +313,7 @@
                             }
                             else
                             {
-                                @foreach (var trip in _vehiclesOut)
+                                @foreach (var trip in PagedVehiclesOut)
                                 {
                                     <tr>
                                         <td>@ValueOrDash(trip.FleetNumber)</td>
@@ -301,6 +332,15 @@
                     </table>
                 </div>
             </div>
+            @if (_vehiclesOut.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevOutPage" disabled="@(_outPage <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_outPage of @TotalOutPages</div>
+                    <button class="pagination-btn" @onclick="NextOutPage" disabled="@(_outPage >= TotalOutPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_vehiclesOut.Count | Page size: @_pageSize</div>
+            }
         </div>
     </div>;
 
@@ -358,17 +398,21 @@
             return;
         }
 
-        var matches = await VehicleService.SearchVehiclesAsync(_ggSearch.Trim());
+        var searchTerm = _ggSearch.Trim();
+        var matches = await VehicleService.SearchVehiclesAsync(searchTerm);
+        matches = RankVehicleMatches(matches, searchTerm, _searchMode);
         if (matches.Count == 0)
         {
             _vehiclesIn = new();
             _vehiclesOut = new();
+            ResetPaging();
             return;
         }
 
         var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
         _vehiclesIn = filteredVehicles.Where(v => v.VmfCode.HasValue && vmfCodes.Contains(v.VmfCode.Value)).ToList();
         _vehiclesOut = filteredTrips.Where(t => t.VmfCode.HasValue && vmfCodes.Contains(t.VmfCode.Value)).ToList();
+        ResetPaging();
     }
 
     private void SearchByAuthority()
@@ -381,6 +425,7 @@
 
         _vehiclesOut = FilterTripsByMode(_allTrips).Where(t => t.TripId == tripId).ToList();
         _vehiclesIn = new();
+        ResetPaging();
     }
 
     private void ApplyFilters()
@@ -402,6 +447,7 @@
 
         _vehiclesOut = outList;
         _vehiclesIn = inList.Where(v => !_vehiclesOut.Any(t => t.VmfCode == v.VmfCode)).ToList();
+        ResetPaging();
     }
 
     private Task ApplyFiltersAfterBind()
@@ -455,6 +501,67 @@
         var status = trip.ContractType ?? string.Empty;
         return !status.Contains("closed", StringComparison.OrdinalIgnoreCase)
             && !status.Contains("close", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, string searchMode)
+    {
+        var keyword = query.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _ggSearch = string.Empty;
+        ApplyFilters();
+    }
+
+    private void PrevInPage()
+    {
+        if (_inPage > 1)
+        {
+            _inPage--;
+        }
+    }
+
+    private void NextInPage()
+    {
+        if (_inPage < TotalInPages)
+        {
+            _inPage++;
+        }
+    }
+
+    private void PrevOutPage()
+    {
+        if (_outPage > 1)
+        {
+            _outPage--;
+        }
+    }
+
+    private void NextOutPage()
+    {
+        if (_outPage < TotalOutPages)
+        {
+            _outPage++;
+        }
+    }
+
+    private void ResetPaging()
+    {
+        _inPage = 1;
+        _outPage = 1;
     }
 
     private string BuildCreateTripLink(VehicleRow vehicle)

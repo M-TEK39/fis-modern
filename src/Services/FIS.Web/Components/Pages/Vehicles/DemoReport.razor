@@ -11,7 +11,7 @@
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title"><i class="bx bx-table"></i> Report: All Demo Vehicles</h1>
-        <p class="page-description">Legacy report layout with live data loading.</p>
+        <p class="page-description">Report layout with live data loading.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
@@ -35,12 +35,15 @@
         <div class="empty-state">
             <i class="bx bx-info-circle"></i>
             <h3>No demo vehicles found</h3>
-            <p>No records returned by the report endpoint.</p>
+            <p>No demo vehicles are available for this report.</p>
         </div>
     }
     else if (_items.Count > 0)
     {
         <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_items.Count demo vehicle(s)</span>
+            </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
@@ -50,14 +53,14 @@
                             <th>Description</th>
                             <th>Year Model</th>
                             <th>Site</th>
-                            <th>Bank Code</th>
+                            <th>Bank ID</th>
                             <th>Tank</th>
                             <th>Engine Number</th>
                             <th>Chassis Number</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _items)
+                        @foreach (var item in PagedItems)
                         {
                             <tr>
                                 <td>@item.gg_number</td>
@@ -74,6 +77,14 @@
                     </tbody>
                 </table>
             </div>
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <span>Page @_page of @TotalPages</span>
+                    <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+            }
         </div>
     }
 </div>
@@ -81,7 +92,11 @@
 @code {
     private bool _loading;
     private bool _loaded;
+    private int _page = 1;
+    private const int _pageSize = 12;
     private List<DemoVehicleReportRow> _items = new();
+    private IEnumerable<DemoVehicleReportRow> PagedItems => _items.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_items.Count / (double)_pageSize));
 
     private async Task LoadAsync()
     {
@@ -93,6 +108,7 @@
             _items = await Http.GetFromJsonAsync<List<DemoVehicleReportRow>>("api/demo-vehicles/reports/all")
                 ?? await Http.GetFromJsonAsync<List<DemoVehicleReportRow>>("api/demo-vehicles")
                 ?? new List<DemoVehicleReportRow>();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -110,6 +126,22 @@
         if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
         {
             Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 

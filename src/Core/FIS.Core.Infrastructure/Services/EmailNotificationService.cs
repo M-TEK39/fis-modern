@@ -21,6 +21,8 @@ public class EmailNotificationService : IEmailNotificationService
     private readonly IVehicleRepository _vehicleRepository;
     private readonly IContractRepository _contractRepository;
     private readonly IMaintenanceRecordRepository _maintenanceRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly ISiteRepository _siteRepository;
 
     // Email configuration settings
     private readonly string _smtpServer;
@@ -183,6 +185,91 @@ public class EmailNotificationService : IEmailNotificationService
             },
             IsActive = true,
         },
+
+        ["ContractExpiryReminder"] = new EmailTemplate
+        {
+            TemplateName = "ContractExpiryReminder",
+            Subject = "REMINDER: Vehicle Contract Expiring in {DaysRemaining} Days — {FleetNumber} ({Registration})",
+            HtmlBody =
+                @"<h2>Vehicle Hire Contract — Expiry Reminder</h2>
+                <p>Dear {RecipientName},</p>
+                <p>Please be advised that the vehicle hire contract detailed below will expire in <strong>{DaysRemaining} day(s)</strong> on <strong>{ExpiryDate}</strong>.</p>
+                <table cellpadding='4' cellspacing='0' border='1' style='border-collapse:collapse;'>
+                    <tr><td><strong>Contract #</strong></td><td>{ContractNumber}</td></tr>
+                    <tr><td><strong>Vehicle Fleet #</strong></td><td>{FleetNumber}</td></tr>
+                    <tr><td><strong>Registration</strong></td><td>{Registration}</td></tr>
+                    <tr><td><strong>Driver</strong></td><td>{DriverId}</td></tr>
+                    <tr><td><strong>Site</strong></td><td>{SiteName}</td></tr>
+                    <tr><td><strong>Contract Start</strong></td><td>{StartDate}</td></tr>
+                    <tr><td><strong>Expiry Date</strong></td><td>{ExpiryDate}</td></tr>
+                </table>
+                <br/>
+                <p style='background:#fff3cd;padding:10px;border-left:4px solid #ffc107;'>
+                    <strong>Action Required:</strong> If you intend to retain the vehicle beyond the expiry date,
+                    you must submit a <strong>formal letter of extension</strong> to Fleet Management
+                    <em>before</em> the contract expires. Failure to return the vehicle or obtain an approved
+                    extension may result in the contract being classified as overdue.
+                </p>
+                <p>If you have any questions, please contact your Fleet Management Officer.</p>
+                <p>Thank you,<br/>Fleet Management System</p>",
+            RequiredPlaceholders = new List<string>
+            {
+                "RecipientName", "DaysRemaining", "ContractNumber", "FleetNumber",
+                "Registration", "DriverId", "SiteName", "StartDate", "ExpiryDate",
+            },
+            IsActive = true,
+        },
+
+        ["ContractOpened"] = new EmailTemplate
+        {
+            TemplateName = "ContractOpened",
+            Subject = "Contract Activated - {ContractNumber} ({FleetNumber})",
+            HtmlBody =
+                @"<h2>Contract Activated</h2>
+                <p>Dear {RecipientName},</p>
+                <p>The following contract has been <strong>activated</strong>:</p>
+                <table cellpadding='4' cellspacing='0' border='1' style='border-collapse:collapse;'>
+                    <tr><td><strong>Contract #</strong></td><td>{ContractNumber}</td></tr>
+                    <tr><td><strong>Vehicle Fleet #</strong></td><td>{FleetNumber}</td></tr>
+                    <tr><td><strong>Registration</strong></td><td>{Registration}</td></tr>
+                    <tr><td><strong>Driver</strong></td><td>{DriverId}</td></tr>
+                    <tr><td><strong>Site</strong></td><td>{SiteCode}</td></tr>
+                    <tr><td><strong>Start Date</strong></td><td>{StartDate}</td></tr>
+                    <tr><td><strong>Target Return</strong></td><td>{TargetReturnDate}</td></tr>
+                </table>
+                <p>Thank you,<br/>Fleet Management System</p>",
+            RequiredPlaceholders = new List<string>
+            {
+                "RecipientName", "ContractNumber", "FleetNumber", "Registration",
+                "DriverId", "SiteCode", "StartDate", "TargetReturnDate",
+            },
+            IsActive = true,
+        },
+
+        ["ContractClosed"] = new EmailTemplate
+        {
+            TemplateName = "ContractClosed",
+            Subject = "Contract Closed - {ContractNumber} ({FleetNumber})",
+            HtmlBody =
+                @"<h2>Contract Closed</h2>
+                <p>Dear {RecipientName},</p>
+                <p>The following contract has been <strong>closed</strong> ({ClosureReason}):</p>
+                <table cellpadding='4' cellspacing='0' border='1' style='border-collapse:collapse;'>
+                    <tr><td><strong>Contract #</strong></td><td>{ContractNumber}</td></tr>
+                    <tr><td><strong>Vehicle Fleet #</strong></td><td>{FleetNumber}</td></tr>
+                    <tr><td><strong>Registration</strong></td><td>{Registration}</td></tr>
+                    <tr><td><strong>Start Date</strong></td><td>{StartDate}</td></tr>
+                    <tr><td><strong>End Date</strong></td><td>{EndDate}</td></tr>
+                    <tr><td><strong>Performed By</strong></td><td>{PerformedBy}</td></tr>
+                </table>
+                <p>Thank you,<br/>Fleet Management System</p>",
+            RequiredPlaceholders = new List<string>
+            {
+                "RecipientName", "ContractNumber", "FleetNumber", "Registration",
+                "StartDate", "EndDate", "PerformedBy", "ClosureReason",
+            },
+            IsActive = true,
+        },
     };
 
     public EmailNotificationService(
@@ -191,7 +278,9 @@ public class EmailNotificationService : IEmailNotificationService
         IReportingService reportingService,
         IVehicleRepository vehicleRepository,
         IContractRepository contractRepository,
-        IMaintenanceRecordRepository maintenanceRepository
+        IMaintenanceRecordRepository maintenanceRepository,
+        IUserRepository userRepository,
+        ISiteRepository siteRepository
     )
     {
         _configuration = configuration;
@@ -200,6 +289,8 @@ public class EmailNotificationService : IEmailNotificationService
         _vehicleRepository = vehicleRepository;
         _contractRepository = contractRepository;
         _maintenanceRepository = maintenanceRepository;
+        _userRepository = userRepository;
+        _siteRepository = siteRepository;
 
         // Load email configuration
         var emailConfig = _configuration.GetSection("EmailSettings");
@@ -544,6 +635,232 @@ public class EmailNotificationService : IEmailNotificationService
                 "Error sending contract expiry notification for Contract {ContractId}",
                 contractId
             );
+            return false;
+        }
+    }
+
+    public async Task<bool> SendContractOpenedNotificationAsync(
+        int contractId,
+        int capturerUserId,
+        int approverUserId)
+    {
+        try
+        {
+            _logger.LogInformation(
+                "Sending contract-opened notification for Contract {ContractId}", contractId);
+
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+            {
+                _logger.LogWarning("Contract {ContractId} not found for opened notification", contractId);
+                return false;
+            }
+
+            var vehicle = contract.vmf_code > 0
+                ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
+                : null;
+
+            var template = _defaultTemplates["ContractOpened"];
+            var site = await _siteRepository.GetByIdAsync(contract.site_code);
+
+            // Collect email addresses: capturer, approver, and the site contact (client)
+            var recipients = new List<(string email, string name)>();
+            foreach (var userId in new[] { capturerUserId, approverUserId }.Distinct())
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user?.email != null)
+                    recipients.Add((user.email, user.email));
+            }
+            // Site contact (the "client" — responsible person at the hiring department)
+            if (!string.IsNullOrWhiteSpace(site?.net_address))
+                recipients.Add((site.net_address, site.res_person ?? site.net_address));
+
+            if (recipients.Count == 0)
+            {
+                _logger.LogWarning(
+                    "No email addresses found for contract-opened notification (Contract {ContractId})", contractId);
+                return false;
+            }
+
+            var placeholders = new Dictionary<string, string>
+            {
+                ["ContractNumber"] = contract.contract_code.ToString(),
+                ["FleetNumber"] = vehicle?.fleet_number ?? "N/A",
+                ["Registration"] = vehicle?.registration_number ?? "N/A",
+                ["DriverId"] = contract.Driver_id ?? "N/A",
+                ["SiteCode"] = site?.description ?? contract.site_code.ToString(),
+                ["StartDate"] = contract.start_date.ToString("yyyy-MM-dd"),
+                ["TargetReturnDate"] = contract.target_return_date?.ToString("yyyy-MM-dd") ?? "Open-ended",
+            };
+
+            bool allOk = true;
+            foreach (var (email, name) in recipients)
+            {
+                placeholders["RecipientName"] = name;
+                var subject = ReplacePlaceholders(template.Subject, placeholders);
+                var htmlBody = ReplacePlaceholders(template.HtmlBody, placeholders);
+                var ok = await SendHtmlEmailAsync(email, subject, htmlBody);
+                if (!ok) allOk = false;
+            }
+            return allOk;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending contract-opened notification for Contract {ContractId}", contractId);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendContractClosedNotificationAsync(
+        int contractId,
+        int performedByUserId,
+        string closureReason)
+    {
+        try
+        {
+            _logger.LogInformation(
+                "Sending contract-closed notification for Contract {ContractId}", contractId);
+
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+            {
+                _logger.LogWarning("Contract {ContractId} not found for closed notification", contractId);
+                return false;
+            }
+
+            var vehicle = contract.vmf_code > 0
+                ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
+                : null;
+
+            var template = _defaultTemplates["ContractClosed"];
+            var site = await _siteRepository.GetByIdAsync(contract.site_code);
+
+            // Notify capturer, approver, the person who closed, and the site contact (client)
+            var userIds = new List<int> { performedByUserId };
+            if (contract.created_by_user_code.HasValue)
+                userIds.Add(contract.created_by_user_code.Value);
+            if (contract.approver_code.HasValue)
+                userIds.Add(contract.approver_code.Value);
+
+            var recipients = new List<(string email, string name)>();
+            foreach (var userId in userIds.Distinct())
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user?.email != null)
+                    recipients.Add((user.email, user.email));
+            }
+            // Site contact (the "client")
+            if (!string.IsNullOrWhiteSpace(site?.net_address))
+                recipients.Add((site.net_address, site.res_person ?? site.net_address));
+
+            if (recipients.Count == 0)
+            {
+                _logger.LogWarning(
+                    "No email addresses found for contract-closed notification (Contract {ContractId})", contractId);
+                return false;
+            }
+
+            var performedByUser = await _userRepository.GetByIdAsync(performedByUserId);
+
+            var placeholders = new Dictionary<string, string>
+            {
+                ["ContractNumber"] = contract.contract_code.ToString(),
+                ["FleetNumber"] = vehicle?.fleet_number ?? "N/A",
+                ["Registration"] = vehicle?.registration_number ?? "N/A",
+                ["StartDate"] = contract.start_date.ToString("yyyy-MM-dd"),
+                ["EndDate"] = contract.end_date?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"),
+                ["PerformedBy"] = performedByUser?.email ?? performedByUserId.ToString(),
+                ["ClosureReason"] = closureReason,
+            };
+
+            bool allOk = true;
+            foreach (var (email, name) in recipients)
+            {
+                placeholders["RecipientName"] = name;
+                var subject = ReplacePlaceholders(template.Subject, placeholders);
+                var htmlBody = ReplacePlaceholders(template.HtmlBody, placeholders);
+                var ok = await SendHtmlEmailAsync(email, subject, htmlBody);
+                if (!ok) allOk = false;
+            }
+            return allOk;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending contract-closed notification for Contract {ContractId}", contractId);
+            return false;
+        }
+    }
+
+    public async Task<bool> SendContractExpiryReminderAsync(int contractId, int daysRemaining)
+    {
+        try
+        {
+            _logger.LogInformation(
+                "Sending expiry reminder for Contract {ContractId} ({DaysRemaining} days remaining)",
+                contractId, daysRemaining);
+
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+            {
+                _logger.LogWarning("Contract {ContractId} not found for expiry reminder", contractId);
+                return false;
+            }
+
+            var vehicle = contract.vmf_code > 0
+                ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
+                : null;
+
+            var site = await _siteRepository.GetByIdAsync(contract.site_code);
+            var template = _defaultTemplates["ContractExpiryReminder"];
+
+            // Recipients: site contact (primary — this is the "client"), plus the capturer
+            var recipients = new List<(string email, string name)>();
+
+            // Site contact (client — responsible person at the hiring department)
+            if (!string.IsNullOrWhiteSpace(site?.net_address))
+                recipients.Add((site.net_address, site.res_person ?? site.net_address));
+
+            // Internal capturer so fleet management is also aware
+            if (contract.created_by_user_code.HasValue)
+            {
+                var capturer = await _userRepository.GetByIdAsync(contract.created_by_user_code.Value);
+                if (capturer?.email != null && !recipients.Any(r => r.email == capturer.email))
+                    recipients.Add((capturer.email, capturer.email));
+            }
+
+            if (recipients.Count == 0)
+            {
+                _logger.LogWarning(
+                    "No email addresses for expiry reminder (Contract {ContractId})", contractId);
+                return false;
+            }
+
+            var placeholders = new Dictionary<string, string>
+            {
+                ["DaysRemaining"] = daysRemaining.ToString(),
+                ["ContractNumber"] = contract.contract_code.ToString(),
+                ["FleetNumber"] = vehicle?.fleet_number ?? "N/A",
+                ["Registration"] = vehicle?.registration_number ?? "N/A",
+                ["DriverId"] = contract.Driver_id ?? "N/A",
+                ["SiteName"] = site?.description ?? contract.site_code.ToString(),
+                ["StartDate"] = contract.start_date.ToString("yyyy-MM-dd"),
+                ["ExpiryDate"] = contract.target_return_date?.ToString("yyyy-MM-dd") ?? "N/A",
+            };
+
+            bool allOk = true;
+            foreach (var (email, name) in recipients)
+            {
+                placeholders["RecipientName"] = name;
+                var subject = ReplacePlaceholders(template.Subject, placeholders);
+                var htmlBody = ReplacePlaceholders(template.HtmlBody, placeholders);
+                var ok = await SendHtmlEmailAsync(email, subject, htmlBody);
+                if (!ok) allOk = false;
+            }
+            return allOk;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending expiry reminder for Contract {ContractId}", contractId);
             return false;
         }
     }

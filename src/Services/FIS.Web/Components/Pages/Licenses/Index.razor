@@ -1,6 +1,5 @@
 @page "/licenses"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 
 <PageTitle>Licences - Fleet Information System</PageTitle>
 
@@ -10,7 +9,7 @@
             <i class="bx bxs-user-badge"></i>
             Licence Maintenance Menu
         </h1>
-        <p class="page-description">Legacy licence maintenance workflows.</p>
+        <p class="page-description">Licence maintenance workflows.</p>
     </div>
 </div>
 
@@ -51,10 +50,4 @@
             </div>
         </div>
     </div>
-    <LegacyEndpointActionPanel
-        LegacyPath="License/MNTLicence.aspx"
-        Endpoint="api/license"
-        HttpMethod="GET"
-        ButtonText="Run Licence Menu API"
-        ReportType="licenses-menu" />
 </div>

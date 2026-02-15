@@ -1,7 +1,6 @@
 @page "/users/deactivate"
 @rendermode InteractiveServer
 @using FIS.Web.Components.Pages.Users
-@using FIS.Web.Components.Shared
 
 <PageTitle>Activate or De-Activate User - Fleet Information System</PageTitle>
 
@@ -17,12 +16,4 @@
 
 <div class="page-content">
     <UserAdminDeactivateContent />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="UserAdmin/DeActivateUser.aspx"
-        Endpoint="api/user/1"
-        HttpMethod="DELETE"
-        ButtonText="Test Deactivate User Endpoint"
-        ReportType="useradmin-deactivate" />
-
 </div>

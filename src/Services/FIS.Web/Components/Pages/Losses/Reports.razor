@@ -1,6 +1,5 @@
 @page "/losses/reports"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @inject NavigationManager Navigation
 
 <PageTitle>Losses Reports Menu</PageTitle>
@@ -11,7 +10,7 @@
             <i class="bx bx-file"></i>
             Losses Reports Menu
         </h1>
-        <p class="page-description">Legacy loss reports grouped by category and period.</p>
+        <p class="page-description">Loss reports grouped by category and period.</p>
     </div>
         <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/losses")'>
@@ -38,7 +37,7 @@
                 <i class="bx bx-list-ul"></i>
             </button>
             <div class="menu-tile-body">
-                <p class="menu-item-text">Legacy view with all losses sorted by type, date, department.</p>
+                <p class="menu-item-text">View all losses sorted by type, date, and department.</p>
             </div>
         </div>
         <div class="menu-tile">
@@ -69,10 +68,4 @@
             </div>
         </div>
     </div>
-    <LegacyEndpointActionPanel
-        LegacyPath="Losses/RPT_All_losses_menu.aspx"
-        Endpoint="api/report/losses/menu"
-        HttpMethod="GET"
-        ButtonText="Run Losses Reports API"
-        ReportType="losses-reports-menu" />
 </div>

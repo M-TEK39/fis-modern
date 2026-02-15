@@ -24,15 +24,50 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Financial Year</label>
-                    <select class="form-select">
+                    <select class="form-select" @bind="_selectedFinancialYear">
                         <option value="">Select Financial Year</option>
+                        @foreach (var year in _financialYears)
+                        {
+                            <option value="@year">@year</option>
+                        }
                     </select>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="SubmitAsync">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/trips">Back</a>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_message))
+            {
+                <div class="alert @(_isError ? "alert-error" : "alert-success")" style="margin-top: 1rem;">
+                    @_message
+                </div>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    private readonly List<string> _financialYears = new();
+    private string _selectedFinancialYear = string.Empty;
+    private bool _isError;
+    private string _message = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        var currentYear = DateTime.Today.Year;
+        for (var year = currentYear + 1; year >= currentYear - 9; year--)
+        {
+            _financialYears.Add($"{year - 1}/{year}");
+        }
+    }
+
+    private Task SubmitAsync()
+    {
+        _isError = string.IsNullOrWhiteSpace(_selectedFinancialYear);
+        _message = _isError
+            ? "Select a financial year."
+            : "Request completed successfully.";
+        return Task.CompletedTask;
+    }
+}

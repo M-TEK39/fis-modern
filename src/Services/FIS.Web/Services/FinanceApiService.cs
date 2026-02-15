@@ -209,12 +209,12 @@ public class FinanceApiService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Finance upload failed for {Endpoint}", endpoint);
+            _logger.LogError(ex, "Finance upload failed.");
             return new FinanceApiResult
             {
                 Success = false,
                 Endpoint = endpoint,
-                Message = ex.Message
+                Message = SanitizeUserMessage(ex.Message) ?? "Request failed."
             };
         }
     }
@@ -234,7 +234,7 @@ public class FinanceApiService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lookup failed for {Endpoint}", endpoint);
+            _logger.LogError(ex, "Finance lookup request failed.");
             return fallbackFactory?.Invoke() ?? new List<FinanceOptionDto>();
         }
     }
@@ -299,12 +299,12 @@ public class FinanceApiService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Finance request failed for {Endpoint}", endpoint);
+            _logger.LogError(ex, "Finance request failed.");
             return new FinanceApiResult
             {
                 Success = false,
                 Endpoint = endpoint,
-                Message = ex.Message
+                Message = SanitizeUserMessage(ex.Message) ?? "Request failed."
             };
         }
     }
@@ -317,5 +317,22 @@ public class FinanceApiService
         }
 
         return $"Request failed with status {(int)statusCode} ({statusCode}).";
+    }
+
+    private static string? SanitizeUserMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var trimmed = message.Trim();
+        var endpointIndex = trimmed.IndexOf("Endpoint:", StringComparison.OrdinalIgnoreCase);
+        if (endpointIndex >= 0)
+        {
+            trimmed = trimmed[..endpointIndex].Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 }

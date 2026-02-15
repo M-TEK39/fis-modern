@@ -1,7 +1,5 @@
 @page "/accidents/help"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>Accident Maintenance Help - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -10,7 +8,7 @@
             <i class="bx bx-help-circle"></i>
             Accident Maintenance Information / Help
         </h1>
-        <p class="page-description">Legacy help documentation.</p>
+        <p class="page-description">Help documentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/accidents">Back to Accident Menu</a>
@@ -20,14 +18,8 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <p>Open the legacy help document:</p>
+            <p>Open the help document:</p>
             <a class="btn btn-primary" href="/legacy/accidents/Doc/Doc_Accidents.htm" target="_blank">Open Accident Help</a>
-            <LegacyEndpointActionPanel
-                LegacyPath="Accident/Doc/Doc_Accidents.htm"
-                Endpoint="api/accident/help"
-                HttpMethod="GET"
-                ButtonText="Run Accident Help API"
-                ReportType="accidents-help" />
         </div>
     </div>
 </div>

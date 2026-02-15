@@ -39,8 +39,8 @@
                         </label>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Number</label>
-                        <input class="form-input" @bind="_vehicleNumber" />
+                        <label class="form-label">@(_numberType == "GG" ? "GG Number" : "GP Number")</label>
+                        <input class="form-input" @bind="_vehicleNumber" placeholder="@(_numberType == "GG" ? "Enter GG number" : "Enter GP number")" />
                     </div>
                 </div>
                 <div class="form-actions">
@@ -87,7 +87,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    @foreach (var loss in _losses)
+                                    @foreach (var loss in PagedLosses)
                                     {
                                         <tr>
                                             <td>@loss.loss_date?.ToString("yyyy/MM/dd")</td>
@@ -108,6 +108,15 @@
                                 </tbody>
                             </table>
                         </div>
+                        @if (_losses.Count > _pageSize)
+                        {
+                            <div class="pagination">
+                                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                                <div class="pagination-info">Page @_page of @TotalPages</div>
+                                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                            </div>
+                            <div class="pagination-meta">Total records: @_losses.Count | Page size: @_pageSize</div>
+                        }
                     </div>
                 }
                 <div class="form-actions">
@@ -123,6 +132,11 @@
     private string _vehicleNumber = string.Empty;
     private bool _loading;
     private List<LossDto> _losses = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<LossDto> PagedLosses => _losses.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_losses.Count / (double)_pageSize));
 
     private async Task SearchLosses()
     {
@@ -136,6 +150,7 @@
         try
         {
             _losses = await LossService.GetByVehicleAsync<LossDto>(_vehicleNumber.Trim());
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -151,5 +166,24 @@
     private void OnNumberTypeChanged(ChangeEventArgs args)
     {
         _numberType = args.Value?.ToString() ?? "GG";
+        _vehicleNumber = string.Empty;
+        _losses = new();
+        _page = 1;
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

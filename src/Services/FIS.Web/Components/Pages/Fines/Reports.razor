@@ -1,7 +1,5 @@
 @page "/fines/reports"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
-
 <PageTitle>Fines Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -10,7 +8,7 @@
             <i class="bx bx-file"></i>
             Fines Reports Menu
         </h1>
-        <p class="page-description">Legacy reports grouped by category.</p>
+        <p class="page-description">Reports grouped by category.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/fines">Back to Fines Menu</a>
@@ -43,10 +41,4 @@
             </div>
         </div>
     </div>
-    <LegacyEndpointActionPanel
-        LegacyPath="Fines/RPTFines.aspx"
-        Endpoint="api/report/fines/menu"
-        HttpMethod="GET"
-        ButtonText="Run Fines Reports API"
-        ReportType="fines-reports-menu" />
 </div>

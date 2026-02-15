@@ -43,7 +43,7 @@
                         <option value="">Select Traffic Dept</option>
                         @foreach (var dept in _trafficDepts)
                         {
-                            <option value="@dept.Traffic_dept_code">@dept.Traf_name</option>
+                            <option value="@dept.Traffic_dept_code">@($"{dept.Traf_name} ({dept.Traffic_dept_code})")</option>
                         }
                     </select>
                 </div>
@@ -82,12 +82,12 @@
                     <input class="form-input" type="date" @bind="_fine.Notify_dept_date" />
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Dept Code</label>
+                    <label class="form-label">Site</label>
                     <select class="form-select" @bind="_fine.Site_code">
                         <option value="">Select Dept/Site</option>
                         @foreach (var site in _sites)
                         {
-                            <option value="@site.SiteCode">@site.Description</option>
+                            <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                         }
                     </select>
                 </div>

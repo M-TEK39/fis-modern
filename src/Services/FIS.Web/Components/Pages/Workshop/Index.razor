@@ -1,5 +1,10 @@
 @page "/workshop"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject WorkshopApiService WorkshopService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Workshop - Fleet Information System</PageTitle>
 
@@ -50,11 +55,95 @@
             }
         </div>
     </div>
+
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">All Workshop Entries Snapshot</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="RefreshOverviewAsync" disabled="@_loading">
+                    <i class="bx bx-refresh"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_message))
+        {
+            <div class="alert @(_isError ? "alert-error" : "alert-success")" style="margin:0.75rem 0;">@_message</div>
+        }
+
+        @if (_loading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading workshop entries...</p>
+            </div>
+        }
+        else if (_entries.Count == 0)
+        {
+            <div class="empty-state">
+                <i class="bx bx-info-circle"></i>
+                <h3>No entries found</h3>
+                <p>No workshop entries match the current filter selection.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Entry ID</th>
+                            <th>Vehicle</th>
+                            <th>Date Received</th>
+                            <th>Date Completed</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var row in PagedEntries)
+                        {
+                            <tr>
+                                <td>@row.ww_code</td>
+                                <td>@GetVehicleLabel(row.vmf_code)</td>
+                                <td>@FormatDate(row.receive_date)</td>
+                                <td>@FormatDate(row.complete_time)</td>
+                                <td>@(row.complete_time.HasValue ? "Closed" : "Open")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_entries.Count | Page size: @_pageSize</div>
+        }
+    </div>
 </div>
 
 @code {
     private bool _showWorkshopInfo = true;
     private bool _showWorkshopSection = true;
+    private bool _loading = true;
+    private bool _isError;
+    private string _message = string.Empty;
+    private List<WorkshopOverviewRow> _entries = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<WorkshopOverviewRow> PagedEntries
+        => _entries.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_entries.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOverviewAsync();
+    }
 
     private void ToggleWorkshopInfo()
     {
@@ -64,5 +153,90 @@
     private void ToggleWorkshopSection()
     {
         _showWorkshopSection = !_showWorkshopSection;
+    }
+
+    private async Task LoadOverviewAsync()
+    {
+        _loading = true;
+        _isError = false;
+        _message = string.Empty;
+        try
+        {
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => FormatVehicleLabel(g.First()));
+            }
+            _entries = await WorkshopService.GetAllAsync<WorkshopOverviewRow>();
+            _entries = _entries
+                .OrderByDescending(x => x.receive_date ?? DateTime.MinValue)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            _entries = new();
+            _isError = true;
+            _message = "Unable to load workshop overview.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task RefreshOverviewAsync()
+    {
+        await LoadOverviewAsync();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private sealed class WorkshopOverviewRow
+    {
+        public int ww_code { get; set; }
+        public int? vmf_code { get; set; }
+        public DateTime? receive_date { get; set; }
+        public DateTime? complete_time { get; set; }
     }
 }

@@ -13,7 +13,7 @@
             <i class="bx bx-wrench"></i>
             Private Hire Maintenance
         </h1>
-        <p class="page-description">Legacy private hire vehicle and contractor maintenance.</p>
+        <p class="page-description">Private hire vehicle and contractor maintenance.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Back to Maintenance Menu</a>
@@ -99,10 +99,10 @@
                                             }
                                             else
                                             {
-                                                @foreach (var match in _vehicleMatches)
+                                                @foreach (var match in PagedVehicleMatches)
                                                 {
                                                     <tr>
-                                                        <td>@match.registration_number</td>
+                                                        <td>@ValueOrDash(match.registration_number)</td>
                                                         <td>@FormatDate(match.hire_start_date)</td>
                                                         <td>@FormatDate(match.hire_end_date)</td>
                                                         <td>
@@ -114,6 +114,14 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                @if (TotalVehiclePages > 1)
+                                {
+                                    <div class="pagination-controls">
+                                        <button class="btn btn-secondary btn-sm" @onclick="PreviousVehiclePage" disabled="@(_vehiclePage <= 1)">Previous</button>
+                                        <span>Page @_vehiclePage of @TotalVehiclePages</span>
+                                        <button class="btn btn-secondary btn-sm" @onclick="NextVehiclePage" disabled="@(_vehiclePage >= TotalVehiclePages)">Next</button>
+                                    </div>
+                                }
                             </div>
                         </div>
 
@@ -123,11 +131,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Registration number</strong></label>
-                                    <input class="form-input" readonly value="@_selectedVehicle?.registration_number" />
+                                    <input class="form-input" readonly value="@(ValueOrDash(_selectedVehicle?.registration_number))" />
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label"><strong>Make &amp; Model</strong></label>
-                                    <input class="form-input" readonly value="@_selectedVehicle?.make_model" />
+                                    <input class="form-input" readonly value="@(ValueOrDash(_selectedVehicle?.make_model))" />
                                 </div>
                                 <div class="form-field">
                                     <label class="form-label"><strong>Site</strong></label>
@@ -253,10 +261,10 @@
                                             }
                                             else
                                             {
-                                                @foreach (var match in _vehicleMatches)
+                                                @foreach (var match in PagedVehicleMatches)
                                                 {
                                                     <tr>
-                                                        <td>@match.registration_number</td>
+                                                        <td>@ValueOrDash(match.registration_number)</td>
                                                         <td>@FormatDate(match.hire_start_date)</td>
                                                         <td>@FormatDate(match.hire_end_date)</td>
                                                         <td>
@@ -268,6 +276,14 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                @if (TotalVehiclePages > 1)
+                                {
+                                    <div class="pagination-controls">
+                                        <button class="btn btn-secondary btn-sm" @onclick="PreviousVehiclePage" disabled="@(_vehiclePage <= 1)">Previous</button>
+                                        <span>Page @_vehiclePage of @TotalVehiclePages</span>
+                                        <button class="btn btn-secondary btn-sm" @onclick="NextVehiclePage" disabled="@(_vehiclePage >= TotalVehiclePages)">Next</button>
+                                    </div>
+                                }
                             </div>
                         </div>
 
@@ -277,7 +293,7 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Registration number</strong></label>
-                                    <input class="form-input" readonly value="@_selectedVehicle?.registration_number" />
+                                    <input class="form-input" readonly value="@(ValueOrDash(_selectedVehicle?.registration_number))" />
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label"><strong>Make &amp; Model</strong></label>
@@ -351,7 +367,7 @@
                                 </div>
                                 <div class="form-field form-group-full">
                                     <label class="form-label">Expiry Date (fuel card)</label>
-                                    <input class="form-input" readonly value="@_selectedVehicle?.make_model" />
+                                    <input class="form-input" readonly value="@(ValueOrDash(_selectedVehicle?.make_model))" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
@@ -668,11 +684,16 @@
     private void SetVehicleMode(string mode)
     {
         _vehicleMode = mode;
+        _vehiclePage = 1;
     }
 
     private string _vehicleSearch = "";
+    private int _vehiclePage = 1;
+    private const int _vehiclePageSize = 12;
     private List<PrivateHireVehicleDto> _vehicleMatches = new();
     private PrivateHireVehicleDto? _selectedVehicle;
+    private IEnumerable<PrivateHireVehicleDto> PagedVehicleMatches => _vehicleMatches.Skip((_vehiclePage - 1) * _vehiclePageSize).Take(_vehiclePageSize);
+    private int TotalVehiclePages => Math.Max(1, (int)Math.Ceiling(_vehicleMatches.Count / (double)_vehiclePageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -683,6 +704,7 @@
     {
         var vehicles = await PrivateHireService.GetVehiclesAsync();
         _vehicleMatches = vehicles;
+        _vehiclePage = 1;
     }
 
     private async Task SearchVehicles()
@@ -691,10 +713,12 @@
         if (string.IsNullOrWhiteSpace(_vehicleSearch))
         {
             _vehicleMatches = vehicles;
+            _vehiclePage = 1;
             return;
         }
 
         _vehicleMatches = vehicles.Where(v => v.registration_number.Contains(_vehicleSearch.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+        _vehiclePage = 1;
     }
 
     private void SelectVehicle(PrivateHireVehicleDto vehicle)
@@ -704,4 +728,23 @@
 
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousVehiclePage()
+    {
+        if (_vehiclePage > 1)
+        {
+            _vehiclePage--;
+        }
+    }
+
+    private void NextVehiclePage()
+    {
+        if (_vehiclePage < TotalVehiclePages)
+        {
+            _vehiclePage++;
+        }
+    }
 }

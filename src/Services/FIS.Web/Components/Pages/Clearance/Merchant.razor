@@ -1,6 +1,5 @@
 @page "/clearance/merchant"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using Microsoft.AspNetCore.Components.Forms
@@ -17,7 +16,7 @@
             <i class="bx bx-store"></i>
             Merchant Maintenance
         </h1>
-        <p class="page-description">Legacy merchant lookup, add, edit, and delete workflow.</p>
+        <p class="page-description">Merchant lookup, add, edit, and delete workflow.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/clearance")'>
@@ -39,7 +38,7 @@
                             <option value="">Select...</option>
                             @foreach (var merchant in _merchants)
                             {
-                                <option value="@merchant.Merchant_code">@merchant.Merchant_Name</option>
+                                <option value="@merchant.Merchant_code">@($"{merchant.Merchant_Name} ({merchant.Merchant_code})")</option>
                             }
                         </select>
                     </div>
@@ -103,14 +102,14 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Code</th>
+                        <th>Merchant ID</th>
                         <th>Name</th>
                         <th>Contact</th>
                         <th>Last Updated</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var merchant in _merchants)
+                    @foreach (var merchant in PagedMerchants)
                     {
                         <tr>
                             <td>@merchant.Merchant_code</td>
@@ -122,6 +121,15 @@
                 </tbody>
             </table>
         </div>
+        @if (_merchants.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_merchants.Count | Page size: @_pageSize</div>
+        }
     </div>
 </div>
 
@@ -131,6 +139,11 @@
     private bool _merchantSaved;
     private string? _error;
     private List<MerchantDto> _merchants = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<MerchantDto> PagedMerchants => _merchants.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_merchants.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -142,6 +155,10 @@
         try
         {
             _merchants = await MerchantService.GetAllAsync();
+            if (_page > TotalPages)
+            {
+                _page = TotalPages;
+            }
         }
         catch (Exception ex)
         {
@@ -224,11 +241,28 @@
 
             await LoadMerchants();
             _merchantSaved = true;
+            _page = 1;
         }
         catch (Exception ex)
         {
             _error = "Failed to save merchant.";
             await JS.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 

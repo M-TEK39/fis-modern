@@ -5,6 +5,8 @@
 @inject LicenseReportApiService ReportService
 @inject ReferenceDataApiService ReferenceDataService
 @inject LicenseFeeApiService LicenseFeeService
+@inject DepartmentApiService DepartmentService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JS
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
@@ -15,7 +17,7 @@
             <i class="bx bx-file"></i>
             @_pageTitle
         </h1>
-        <p class="page-description">Legacy licence report parameters and output.</p>
+        <p class="page-description">Licence report parameters and output.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/licenses/reports">Back to Licence Reports</a>
@@ -32,7 +34,24 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">@GetLicenseLabel(Mode)</label>
-                            <input class="form-input" @bind="_filter.Identifier" />
+                            @if (UsesVehicleLookupForIdentifier)
+                            {
+                                <div class="fis-input-group-compact">
+                                    <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@GetLookupPlaceholder(Mode)" />
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync">Find</button>
+                                </div>
+                                <select class="form-select fis-mt-05" @bind="_selectedVehicleVmfCode" @bind:after="ApplySelectedVehicleSelection" disabled="@(_vehicleMatches.Count == 0)">
+                                    <option value="">Select vehicle...</option>
+                                    @foreach (var vehicle in _vehicleMatches)
+                                    {
+                                        <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input class="form-input" @bind="_filter.Identifier" />
+                            }
                         </div>
                     </div>
                     <div class="form-actions">
@@ -81,8 +100,14 @@
                     <h2 class="form-section-title">Site Report</h2>
                     <div class="form-grid">
                         <div class="form-field">
-                            <label class="form-label">Dept Code</label>
-                            <input class="form-input" @bind="_filter.DepartmentCode" />
+                            <label class="form-label">Department</label>
+                            <select class="form-select" @bind="_filter.DepartmentCode">
+                                <option value="">All Departments</option>
+                                @foreach (var department in _departments.OrderBy(d => d.department_description))
+                                {
+                                    <option value="@department.department_code">@($"{department.department_description} ({department.department_code})")</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -151,7 +176,13 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Dept</label>
-                            <input class="form-input" @bind="_filter.DepartmentCode" />
+                            <select class="form-select" @bind="_filter.DepartmentCode" disabled="@(_filter.DeptScope == "ALL")">
+                                <option value="">All Departments</option>
+                                @foreach (var department in _departments.OrderBy(d => d.department_description))
+                                {
+                                    <option value="@department.department_code">@($"{department.department_description} ({department.department_code})")</option>
+                                }
+                            </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Expire Begin Date</label>
@@ -270,8 +301,18 @@
                     <h2 class="form-section-title">@(_pageTitle)</h2>
                     <div class="form-grid">
                         <div class="form-field">
-                            <label class="form-label">GG Number</label>
-                            <input class="form-input" @bind="_filter.Identifier" />
+                            <label class="form-label">@GetLicenseLabel(Mode)</label>
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@GetLookupPlaceholder(Mode)" />
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync">Find</button>
+                            </div>
+                            <select class="form-select fis-mt-05" @bind="_selectedVehicleVmfCode" @bind:after="ApplySelectedVehicleSelection" disabled="@(_vehicleMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _vehicleMatches)
+                                {
+                                    <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -311,7 +352,7 @@
                                 <option value="">Select Model</option>
                                 @foreach (var model in _models)
                                 {
-                                    <option value="@model.model_code">@model.model_name</option>
+                                    <option value="@model.model_code">@($"{model.model_name} ({model.model_code})")</option>
                                 }
                             </select>
                         </div>
@@ -384,7 +425,7 @@
                     <h2 class="form-section-title">Licence Received by GGMT</h2>
                     <div class="form-grid">
                         <div class="form-field">
-                            <label class="form-label">GG Number</label>
+                            <label class="form-label">@GetLicenseLabel(Mode)</label>
                             <input class="form-input" @bind="_filter.Identifier" />
                         </div>
                     </div>
@@ -415,10 +456,18 @@
             }
             else
             {
-                <p class="form-hint">This report screen will be aligned to the legacy report parameters and output tables.</p>
+                <p class="form-hint">Use the filters above to run and review licence report output.</p>
             }
         </div>
     </div>
+    @if (UsesPagedRows && _results.Count > 0 && TotalPages > 1)
+    {
+        <div class="pagination-controls">
+            <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <span>Page @_page of @TotalPages</span>
+            <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+        </div>
+    }
 </div>
 
 @code {
@@ -427,15 +476,28 @@
 
     private string _pageTitle = "Licence Report";
     private bool _loading;
+    private int _page = 1;
+    private const int _pageSize = 12;
     private List<Dictionary<string, object>> _results = new();
+    private IEnumerable<Dictionary<string, object>> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
     private LicenseReportFilter _filter = new();
     private List<ModelDto> _models = new();
     private List<LicenseFeeDto> _licenseFees = new();
+    private List<DepartmentDto> _departments = new();
+    private List<VehicleDto> _vehicleMatches = new();
+    private string _vehicleSearchTerm = string.Empty;
+    private int? _selectedVehicleVmfCode;
+    private bool UsesPagedRows =>
+        Mode is "site" or "all" or "dept-period" or "expire-date" or "month-fees" or "old-expire" or "sap" or "cof" or "model-fees" or "gg-model-fees" or "workgroup" or "workgroup-latest" or "ggmt-received";
+    private bool UsesVehicleLookupForIdentifier =>
+        Mode is "gg-number" or "gp-number" or "register-number" or "sap" or "cof" or "ggmt-received";
 
     protected override async Task OnInitializedAsync()
     {
         _models = await ReferenceDataService.GetModelsAsync();
         _licenseFees = await LicenseFeeService.GetAllAsync();
+        _departments = await DepartmentService.GetDepartmentsAsync();
     }
 
     protected override void OnParametersSet()
@@ -463,6 +525,9 @@
             _ => "Licence Report"
         };
         _results = new();
+        _vehicleMatches = new();
+        _vehicleSearchTerm = string.Empty;
+        _selectedVehicleVmfCode = null;
     }
 
     private async Task LoadIdentifierReport() =>
@@ -533,6 +598,7 @@
         try
         {
             _results = await loader();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -559,7 +625,7 @@
         }
 
         var rowIndex = 0;
-        foreach (var row in _results)
+        foreach (var row in PagedResults)
         {
             builder.OpenElement(10 + rowIndex, "tr");
             var columnIndex = 0;
@@ -574,6 +640,22 @@
             rowIndex++;
         }
     };
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private static string GetValue(Dictionary<string, object> row, string column)
     {
@@ -714,8 +796,91 @@
             "register-number" => "Register Number",
             "engine-number" => "Engine Number",
             "chassis-number" => "Chassis Number",
+            "sap" => "GG Number",
+            "cof" => "GG Number",
+            "ggmt-received" => "GG Number",
             _ => "Number"
         };
+
+    private static string GetLookupPlaceholder(string? mode) =>
+        mode switch
+        {
+            "gp-number" or "register-number" => "Enter GP number",
+            _ => "Enter GG number"
+        };
+
+    private async Task SearchVehiclesAsync()
+    {
+        var query = _vehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            _filter.Identifier = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleMatches = FilterVehicleMatchesForMode(matches, query, Mode);
+            if (_vehicleMatches.All(x => x.vmf_code != _selectedVehicleVmfCode))
+            {
+                _selectedVehicleVmfCode = null;
+                _filter.Identifier = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            _filter.Identifier = null;
+            await JS.InvokeVoidAsync("console.error", $"Error searching vehicles: {ex.Message}");
+        }
+    }
+
+    private void ApplySelectedVehicleSelection()
+    {
+        var selected = _vehicleMatches.FirstOrDefault(x => x.vmf_code == _selectedVehicleVmfCode);
+        _filter.Identifier = selected == null ? null : ResolveIdentifierForMode(selected);
+    }
+
+    private string ResolveIdentifierForMode(VehicleDto vehicle)
+    {
+        if (Mode == "gp-number" || Mode == "register-number")
+        {
+            return vehicle.registration_number ?? vehicle.fleet_number ?? vehicle.vmf_code.ToString();
+        }
+
+        return vehicle.fleet_number ?? vehicle.registration_number ?? vehicle.vmf_code.ToString();
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatchesForMode(List<VehicleDto> matches, string query, string? mode)
+    {
+        var normalizedMode = mode ?? string.Empty;
+        var useRegistration = normalizedMode == "gp-number" || normalizedMode == "register-number";
+        var useFleet = normalizedMode == "gg-number";
+
+        return (useRegistration
+            ? matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            : useFleet
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v =>
+                    (!string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    || (!string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase))))
+            .OrderByDescending(v => useRegistration
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : useFleet
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase) || string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
 
     private sealed class LicenseReportFilter
     {

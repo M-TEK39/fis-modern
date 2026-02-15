@@ -14,7 +14,7 @@
             <i class="bx bx-spreadsheet"></i>
             @PageTitleText
         </h1>
-        <p class="page-description">Financial allocation maintenance aligned to the legacy workflow.</p>
+        <p class="page-description">Financial allocation maintenance.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/finance">Finance Menu</a>
@@ -70,24 +70,24 @@
                         </select>
                     </div>
                 </div>
-                <button class="btn btn-secondary btn-sm" @onclick="LoadSegmentsAsync" disabled="@_submitting">Load Segment Codes</button>
+                <button class="btn btn-secondary btn-sm" @onclick="LoadSegmentsAsync" disabled="@_submitting">Load Segments</button>
                 <div class="table-container" style="margin-top: 1rem;">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Segment Code</th>
+                                    <th>Segment ID</th>
                                     <th>Description</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @if (_segmentRows.Count == 0)
                                 {
-                                    <tr><td colspan="2">No BAS segment codes loaded.</td></tr>
+                                    <tr><td colspan="2">No BAS segments loaded.</td></tr>
                                 }
                                 else
                                 {
-                                    @foreach (var row in _segmentRows)
+                                    @foreach (var row in PagedSegmentRows)
                                     {
                                         <tr>
                                             <td>@(row.Data.TryGetValue("segmentCode", out var code) ? code : "")</td>
@@ -98,6 +98,15 @@
                             </tbody>
                         </table>
                     </div>
+                    @if (_segmentRows.Count > _pageSize)
+                    {
+                        <div class="pagination">
+                            <button class="pagination-btn" @onclick="PrevSegmentPage" disabled="@(_segmentPage <= 1)">Previous</button>
+                            <div class="pagination-info">Page @_segmentPage of @SegmentTotalPages</div>
+                            <button class="pagination-btn" @onclick="NextSegmentPage" disabled="@(_segmentPage >= SegmentTotalPages)">Next</button>
+                        </div>
+                        <div class="pagination-meta">Total records: @_segmentRows.Count | Page size: @_pageSize</div>
+                    }
                 </div>
                 <button class="btn btn-primary" @onclick="ActivateSegmentsAsync" disabled="@_submitting">Update List</button>
             }
@@ -154,11 +163,11 @@
                             <tbody>
                                 @if (_journalRows.Count == 0)
                                 {
-                                    <tr><td colspan="2">No journals found.</td></tr>
+                                    <tr><td colspan="2">No journals found for the selected filters.</td></tr>
                                 }
                                 else
                                 {
-                                    @foreach (var row in _journalRows)
+                                    @foreach (var row in PagedJournalRows)
                                     {
                                         <tr>
                                             <td>@(row.Data.TryGetValue("journalNumber", out var journal) ? journal : "")</td>
@@ -169,6 +178,15 @@
                             </tbody>
                         </table>
                     </div>
+                    @if (_journalRows.Count > _pageSize)
+                    {
+                        <div class="pagination">
+                            <button class="pagination-btn" @onclick="PrevJournalPage" disabled="@(_journalPage <= 1)">Previous</button>
+                            <div class="pagination-info">Page @_journalPage of @JournalTotalPages</div>
+                            <button class="pagination-btn" @onclick="NextJournalPage" disabled="@(_journalPage >= JournalTotalPages)">Next</button>
+                        </div>
+                        <div class="pagination-meta">Total records: @_journalRows.Count | Page size: @_pageSize</div>
+                    }
                 </div>
             }
             else if (IsAllocateFund)
@@ -198,11 +216,11 @@
                             <tbody>
                                 @if (_journalRows.Count == 0)
                                 {
-                                    <tr><td colspan="2">No journals found.</td></tr>
+                                    <tr><td colspan="2">No journals found for the selected filters.</td></tr>
                                 }
                                 else
                                 {
-                                    @foreach (var row in _journalRows)
+                                    @foreach (var row in PagedJournalRows)
                                     {
                                         <tr>
                                             <td>@(row.Data.TryGetValue("journalNumber", out var journal) ? journal : "")</td>
@@ -213,6 +231,15 @@
                             </tbody>
                         </table>
                     </div>
+                    @if (_journalRows.Count > _pageSize)
+                    {
+                        <div class="pagination">
+                            <button class="pagination-btn" @onclick="PrevJournalPage" disabled="@(_journalPage <= 1)">Previous</button>
+                            <div class="pagination-info">Page @_journalPage of @JournalTotalPages</div>
+                            <button class="pagination-btn" @onclick="NextJournalPage" disabled="@(_journalPage >= JournalTotalPages)">Next</button>
+                        </div>
+                        <div class="pagination-meta">Total records: @_journalRows.Count | Page size: @_pageSize</div>
+                    }
                 </div>
             }
             else
@@ -246,6 +273,14 @@
 
     private List<FinanceGridRowDto> _segmentRows = new();
     private List<FinanceGridRowDto> _journalRows = new();
+    private int _segmentPage = 1;
+    private int _journalPage = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<FinanceGridRowDto> PagedSegmentRows => _segmentRows.Skip((_segmentPage - 1) * _pageSize).Take(_pageSize);
+    private IEnumerable<FinanceGridRowDto> PagedJournalRows => _journalRows.Skip((_journalPage - 1) * _pageSize).Take(_pageSize);
+    private int SegmentTotalPages => Math.Max(1, (int)Math.Ceiling(_segmentRows.Count / (double)_pageSize));
+    private int JournalTotalPages => Math.Max(1, (int)Math.Ceiling(_journalRows.Count / (double)_pageSize));
 
     private bool _submitting;
     private bool _statusError;
@@ -272,7 +307,7 @@
     {
         if (_importFile == null)
         {
-            SetStatus(false, "Please select a file before submitting.", "");
+            SetStatus(false, "Please select a file before submitting.");
             return;
         }
 
@@ -283,7 +318,7 @@
             ["startDate"] = _startDate?.ToString("yyyy-MM-dd") ?? string.Empty,
             ["endDate"] = _endDate?.ToString("yyyy-MM-dd") ?? string.Empty
         });
-        SetStatus(result.Success, result.Message, result.Endpoint);
+        SetStatus(result.Success, result.Message);
         _submitting = false;
     }
 
@@ -292,7 +327,8 @@
         _submitting = true;
         var endpoint = $"api/finance/bas/segments?departmentCode={Uri.EscapeDataString(_selectedDepartment)}&segmentType={Uri.EscapeDataString(_selectedSegmentType)}";
         var result = await FinanceService.GetActionAsync(endpoint);
-        SetStatus(result.Success, result.Message, result.Endpoint);
+        _segmentPage = 1;
+        SetStatus(result.Success, result.Message);
         _submitting = false;
     }
 
@@ -304,7 +340,7 @@
             departmentCode = _selectedDepartment,
             segmentType = _selectedSegmentType
         });
-        SetStatus(result.Success, result.Message, result.Endpoint);
+        SetStatus(result.Success, result.Message);
         _submitting = false;
     }
 
@@ -313,7 +349,8 @@
         _submitting = true;
         var endpoint = $"api/finance/bas/journals/invalid?departmentCode={Uri.EscapeDataString(_selectedDepartment)}";
         var result = await FinanceService.GetActionAsync(endpoint);
-        SetStatus(result.Success, result.Message, result.Endpoint);
+        _journalPage = 1;
+        SetStatus(result.Success, result.Message);
         _submitting = false;
     }
 
@@ -322,8 +359,41 @@
         _submitting = true;
         var endpoint = $"api/finance/bas/journals/uninvoiced?departmentCode={Uri.EscapeDataString(_selectedDepartment)}";
         var result = await FinanceService.GetActionAsync(endpoint);
-        SetStatus(result.Success, result.Message, result.Endpoint);
+        _journalPage = 1;
+        SetStatus(result.Success, result.Message);
         _submitting = false;
+    }
+
+    private void PrevSegmentPage()
+    {
+        if (_segmentPage > 1)
+        {
+            _segmentPage--;
+        }
+    }
+
+    private void NextSegmentPage()
+    {
+        if (_segmentPage < SegmentTotalPages)
+        {
+            _segmentPage++;
+        }
+    }
+
+    private void PrevJournalPage()
+    {
+        if (_journalPage > 1)
+        {
+            _journalPage--;
+        }
+    }
+
+    private void NextJournalPage()
+    {
+        if (_journalPage < JournalTotalPages)
+        {
+            _journalPage++;
+        }
     }
 
     private async Task RunListingAsync()
@@ -338,16 +408,14 @@
         };
 
         var result = await FinanceService.GetActionAsync(endpoint);
-        SetStatus(result.Success, result.Message, result.Endpoint);
+        SetStatus(result.Success, result.Message);
         _submitting = false;
     }
 
-    private void SetStatus(bool success, string message, string endpoint)
+    private void SetStatus(bool success, string message)
     {
         _statusError = !success;
-        _statusMessage = string.IsNullOrWhiteSpace(endpoint)
-            ? message
-            : message;
+        _statusMessage = message;
     }
 
     private string PageTitleText => Action switch

@@ -31,30 +31,22 @@ public class AuthorizationHeaderHandler : DelegatingHandler
 
         if (tokenService != null)
         {
-            // DEBUG: Log what CircuitId the TokenService is seeing
-            var debugCircuitId = tokenService.GetType()
-                .GetMethod("GetCircuitId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.Invoke(tokenService, null) as string;
-
-            _logger.LogInformation("🔍 DEBUG: Handler CircuitId = '{CircuitId}', IsValid = {IsValid}, HasToken = {HasToken}",
-                debugCircuitId, tokenService.IsTokenValid, !string.IsNullOrEmpty(tokenService.Token));
-
             // Read JWT token from TokenService (loaded from ProtectedSessionStorage)
             if (tokenService.IsTokenValid && !string.IsNullOrEmpty(tokenService.Token))
             {
                 token = tokenService.Token;
-                _logger.LogInformation("✅ Using JWT token from TokenService for request: {Method} {Uri}",
-                    request.Method, request.RequestUri);
+                _logger.LogInformation("Using JWT token from TokenService for request method {Method}.",
+                    request.Method);
             }
             else
             {
-                _logger.LogWarning("⚠️ No valid token in TokenService for request: {Method} {Uri}. IsValid: {IsValid}, HasToken: {HasToken}",
-                    request.Method, request.RequestUri, tokenService.IsTokenValid, !string.IsNullOrEmpty(tokenService.Token));
+                _logger.LogWarning("No valid token in TokenService for request method {Method}. IsValid: {IsValid}, HasToken: {HasToken}",
+                    request.Method, tokenService.IsTokenValid, !string.IsNullOrEmpty(tokenService.Token));
             }
         }
         else
         {
-            _logger.LogError("❌ TokenService not found in service provider!");
+            _logger.LogError("TokenService not found in service provider.");
         }
 
         // Add token to Authorization header

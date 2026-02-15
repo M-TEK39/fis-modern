@@ -41,7 +41,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var type in _vehicleTypes)
+                    @foreach (var type in PagedTypes)
                     {
                         <tr>
                             <td>@type.type_name</td>
@@ -59,6 +59,11 @@ else
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     </div>
 }
@@ -93,6 +98,11 @@ else
     private bool _showDeleteConfirm = false;
     private bool _isEdit = false;
     private bool _saving = false;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<VehicleTypeDto> PagedTypes => _vehicleTypes.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_vehicleTypes.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -104,6 +114,7 @@ else
         _loading = true;
         _vehicleTypes = await RefDataService.GetTypesAsync();
         _loading = false;
+        _page = Math.Min(_page, TotalPages);
         StateHasChanged();
     }
 
@@ -169,6 +180,22 @@ else
         {
             HideDeleteDialog();
             await LoadVehicleTypes();
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

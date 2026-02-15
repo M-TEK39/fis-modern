@@ -101,12 +101,27 @@ public class VehicleRepository : IVehicleRepository
         var term = searchTerm.ToLower().Trim();
 
         return await _context.Vehicles
-            .Where(v => 
+            .Where(v =>
                 (v.fleet_number != null && v.fleet_number.ToLower().Contains(term)) ||
                 (v.registration_number != null && v.registration_number.ToLower().Contains(term)) ||
                 (v.chassis_number != null && v.chassis_number.ToLower().Contains(term)) ||
-                (v.engine_number_1 != null && v.engine_number_1.ToLower().Contains(term))
+                (v.engine_number_1 != null && v.engine_number_1.ToLower().Contains(term)) ||
+                (v.invoice_number != null && v.invoice_number.ToLower().Contains(term))
             )
+            .OrderBy(v => v.fleet_number)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// Get vehicles by invoice number
+    /// </summary>
+    public async Task<IEnumerable<Vehicle>> GetByInvoiceNumberAsync(string invoiceNumber)
+    {
+        if (string.IsNullOrWhiteSpace(invoiceNumber))
+            return Enumerable.Empty<Vehicle>();
+
+        return await _context.Vehicles
+            .Where(v => !v.is_deleted && v.invoice_number == invoiceNumber)
             .OrderBy(v => v.fleet_number)
             .ToListAsync();
     }

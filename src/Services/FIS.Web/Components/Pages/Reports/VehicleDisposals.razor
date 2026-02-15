@@ -1,12 +1,171 @@
 @page "/reports/vehicle-disposals"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="All Vehicle DISPOSALS in a date range"
-    Description="Legacy placeholder for FISReports/SelectStartAndEndDate.aspx?Item=AllVehiclesDisposedInADateRange."
-    LegacyPath="FISReports/SelectStartAndEndDate.aspx?Item=AllVehiclesDisposedInADateRange"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="vehicle-disposals"
-    Icon="bx-file" />
+<PageTitle>Vehicle Disposals - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-minus-circle"></i>
+            All Vehicle Disposals in a Date Range
+        </h1>
+        <p class="page-description">Vehicles disposed (sold) within the selected date range.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/vehicles">Vehicle Master</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">From Date</label>
+                    <InputDate class="form-input" @bind-Value="_startDate" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">To Date</label>
+                    <InputDate class="form-input" @bind-Value="_endDate" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Vehicle Disposals</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>GG Number</th>
+                        <th>GP Number</th>
+                        <th>Vehicle</th>
+                        <th>Sold Date</th>
+                        <th>Sold To</th>
+                        <th>Sold Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="6">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="6">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@ValueOrDash(row.fleet_number)</td>
+                                <td>@ValueOrDash(row.registration_number)</td>
+                                <td>@GetVehicleLabel(row)</td>
+                                <td>@(row.sold_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@ValueOrDash(row.sold_to)</td>
+                                <td>@(row.sold_amount?.ToString("N2") ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private DateTime? _startDate = DateTime.Today.AddYears(-1);
+    private DateTime? _endDate = DateTime.Today;
+    private List<VehicleDto> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var start = _startDate ?? DateTime.Today.AddYears(-1);
+            var end = _endDate ?? DateTime.Today;
+            if (end < start)
+            {
+                (start, end) = (end, start);
+            }
+
+            var vehicles = (await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000)).Data;
+            _rows = vehicles
+                .Where(v => v.sold_date.HasValue && v.sold_date.Value.Date >= start.Date && v.sold_date.Value.Date <= end.Date)
+                .OrderByDescending(v => v.sold_date)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicle disposals report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _startDate = DateTime.Today.AddYears(-1);
+        _endDate = DateTime.Today;
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto row)
+        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

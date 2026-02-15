@@ -1,7 +1,6 @@
 @page "/call-centre/notifications"
 @rendermode InteractiveServer
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject CallCentreApiService CallCentreService
 @inject IJSRuntime JSRuntime
 
@@ -13,7 +12,7 @@
             <i class="bx bx-envelope"></i>
             Notification List for eMail Addresses
         </h1>
-        <p class="page-description">Legacy CallCentre/MNT_call_notify_pass.aspx workflow.</p>
+        <p class="page-description">Call centre notification workflow.</p>
     </div>
 </div>
 
@@ -34,7 +33,7 @@
         <div class="empty-state">
             <i class="bx bx-envelope"></i>
             <h3>No notifications available</h3>
-            <p>Notification data endpoint pending.</p>
+            <p>No notifications match the current filter selection.</p>
         </div>
     }
     else
@@ -48,7 +47,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _notifications)
+                        @foreach (var item in PagedNotifications)
                         {
                             <tr>
                                 <td>@item</td>
@@ -57,27 +56,27 @@
                     </tbody>
                 </table>
             </div>
+            @if (_notifications.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_notifications.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
-
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/MNT_call_notify_pass.aspx"
-        Endpoint="api/callcentre/notifications"
-        HttpMethod="GET"
-        ButtonText="Test Notification List Endpoint"
-        ReportType="call-centre-notifications" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="CallCentre/MNT_call_notify_pass.aspx"
-        Endpoint="api/notification/config/status"
-        HttpMethod="GET"
-        ButtonText="Test Notification Config Endpoint"
-        ReportType="notification-config-status" />
 </div>
 
 @code {
     private bool _loading;
     private List<string> _notifications = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<string> PagedNotifications => _notifications.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_notifications.Count / (double)_pageSize));
 
     private async Task LoadNotifications()
     {
@@ -86,6 +85,7 @@
         try
         {
             _notifications = await CallCentreService.GetAllAsync<string>();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -94,6 +94,22 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

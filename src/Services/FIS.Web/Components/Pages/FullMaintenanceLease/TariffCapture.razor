@@ -1,8 +1,14 @@
 @page "/full-maintenance-lease/tariffs"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 
 <PageTitle>Capturing of Tariffs for Lease Vehicles</PageTitle>
 
@@ -24,7 +30,7 @@
         <div class="form-card-body">
             <div class="form-row">
                 <label class="form-label">Authority Status</label>
-                <select class="form-select" @bind="_statusFilter">
+                <select class="form-select" @bind="_statusFilter" @bind:after="OnStatusFilterChanged">
                     <option value="all">All</option>
                     <option value="pending">Pending</option>
                     <option value="approved">Approved</option>
@@ -44,7 +50,7 @@
             <p>Loading lease tariff records...</p>
         </div>
     }
-    else if (FilteredItems.Count == 0)
+    else if (FilteredItemsList.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-info-circle"></i>
@@ -56,14 +62,14 @@
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@FilteredItems.Count record(s)</span>
+                <span class="table-title">@FilteredItemsList.Count record(s)</span>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
                             <th>ID</th>
-                            <th>VMF</th>
+                            <th>Vehicle</th>
                             <th>Status</th>
                             <th>Start Date</th>
                             <th>End Date</th>
@@ -72,24 +78,29 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in FilteredItems)
+                        @foreach (var item in PagedFilteredItems)
                         {
                             <tr>
                                 <td>@item.VehicleContractTermID</td>
-                                <td>@item.vmf_Code</td>
+                                <td>@GetVehicleLabel(item.vmf_Code)</td>
                                 <td>@MapStatus(item.AuthorityStatus)</td>
                                 <td>@FormatDate(item.StartDate)</td>
                                 <td>@FormatDate(item.EndDate)</td>
                                 <td>@FormatCurrency(item.FixedMonthlyAmount)</td>
                                 <td class="actions-column">
                                     <div class="table-actions">
-                                        <a class="btn btn-secondary btn-sm" href="@($"/full-maintenance-lease/tariffs/details?id={item.VehicleContractTermID}")">Open</a>
+                                        <a class="btn btn-secondary btn-sm" href="@BuildDetailsLink(item)">@GetActionLabel(item)</a>
                                     </div>
                                 </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -99,8 +110,14 @@
     private bool _loading = true;
     private string _statusFilter = "all";
     private List<LeaseTermDto> _items = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private int? _currentUserAccessCode;
+    private long _currentAccessLevel;
+    private bool _hasFinancialAccess;
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
 
-    private List<LeaseTermDto> FilteredItems =>
+    private List<LeaseTermDto> FilteredItemsList =>
         _statusFilter switch
         {
             "pending" => _items.Where(x => (x.AuthorityStatus ?? 0) == 1).ToList(),
@@ -108,9 +125,12 @@
             "rejected" => _items.Where(x => (x.AuthorityStatus ?? 0) == 4).ToList(),
             _ => _items
         };
+    private IEnumerable<LeaseTermDto> PagedFilteredItems => FilteredItemsList.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItemsList.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
+        await ResolveAccessAsync();
         await LoadAsync();
     }
 
@@ -120,10 +140,21 @@
         try
         {
             _items = await LeaseService.GetAllAsync<LeaseTermDto>();
+            if (_vehicleLabelByVmf.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabelByVmf = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => FormatVehicleLabel(g.First()));
+            }
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             _items = new List<LeaseTermDto>();
+            _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lease tariff capture list: {ex.Message}");
         }
         finally
@@ -146,10 +177,108 @@
     private static string FormatCurrency(decimal? value)
         => value.HasValue ? $"R {value.Value:N2}" : "-";
 
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private string GetVehicleLabel(int vmfCode)
+        => _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : $"- / - ({vmfCode})";
+
+    private string BuildDetailsLink(LeaseTermDto item)
+    {
+        var mode = GetWorkflowMode(item);
+        return $"/full-maintenance-lease/tariffs/details?id={item.VehicleContractTermID}&mode={mode}";
+    }
+
+    private string GetActionLabel(LeaseTermDto item)
+    {
+        return GetWorkflowMode(item) switch
+        {
+            "review" => "Review",
+            "edit" => "Edit",
+            _ => "View"
+        };
+    }
+
+    private string GetWorkflowMode(LeaseTermDto item)
+    {
+        var status = item.AuthorityStatus ?? 0;
+        var isCapturer = IsCurrentUserCapturer(item);
+        var pendingOrRejected = status == 1 || status == 4;
+
+        if (status == 1 && _hasFinancialAccess && !isCapturer)
+        {
+            return "review";
+        }
+
+        if (pendingOrRejected && isCapturer)
+        {
+            return "edit";
+        }
+
+        return "view";
+    }
+
+    private bool IsCurrentUserCapturer(LeaseTermDto item)
+    {
+        return _currentUserAccessCode is > 0
+            && item.created_by_user_code is > 0
+            && item.created_by_user_code.Value == _currentUserAccessCode.Value;
+    }
+
+    private async Task ResolveAccessAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _hasFinancialAccess = false;
+            return;
+        }
+
+        _currentUserAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
+
+        var accessLevelClaim = user.FindFirst("access_level")?.Value;
+        if (!long.TryParse(accessLevelClaim, out _currentAccessLevel))
+        {
+            var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+            _currentAccessLevel = await UserAccessContextService.EnsureAccessLevelAsync(_currentUserAccessCode, firstName);
+        }
+
+        _hasFinancialAccess =
+            (_currentAccessLevel & LegacyPermissionBits.Financial) == LegacyPermissionBits.Financial;
+    }
+
+    private static int? TryParseInt(string? value)
+        => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private void OnStatusFilterChanged()
+    {
+        _page = 1;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
     private sealed class LeaseTermDto
     {
         public int VehicleContractTermID { get; set; }
         public int vmf_Code { get; set; }
+        public int? created_by_user_code { get; set; }
         public int? AuthorityStatus { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }

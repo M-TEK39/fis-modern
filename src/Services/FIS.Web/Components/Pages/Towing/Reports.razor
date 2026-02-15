@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/towing/reports"
 @rendermode InteractiveServer
 
@@ -10,7 +9,7 @@
             <i class="bx bx-file"></i>
             Road Side Assistance Report Menu
         </h1>
-        <p class="page-description">Legacy reports menu for road side assistance.</p>
+        <p class="page-description">Reports menu for road side assistance.</p>
     </div>
 </div>
 
@@ -23,7 +22,7 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/reports/request">1) Road Side Assistance Request Report</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
@@ -35,21 +34,14 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/tow-truck-data/report">1) All Assistance Firm General Data</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/reports/firm-date">2) Road Side Call's for a Firm</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Towing/RPTTowing.aspx"
-        Endpoint="api/towing/reports/menu"
-        HttpMethod="GET"
-        ButtonText="Test Towing Reports Menu Endpoint"
-        ReportType="towing-reports-menu" />
 
 </div>

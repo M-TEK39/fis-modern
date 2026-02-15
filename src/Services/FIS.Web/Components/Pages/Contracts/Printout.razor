@@ -1,0 +1,347 @@
+@page "/contracts/printout"
+@rendermode InteractiveServer
+@using FIS.Web.Services
+@using Microsoft.AspNetCore.Components
+@inject ContractApiService ContractService
+@inject UserApiService UserService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Contract Printout</PageTitle>
+
+<div class="page-header no-print">
+    <div class="page-header-content">
+        <h1 class="page-title"><i class="bx bx-printer"></i> Contract Printout</h1>
+        <p class="page-description">Print-ready contract summary with audit timeline.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/contracts/print-menu">Print Menu</a>
+        <button class="btn btn-secondary btn-sm" @onclick="DownloadAsync" disabled="@(_printout == null)">Download</button>
+        <button class="btn btn-secondary btn-sm" @onclick="PrintAsync">Print</button>
+        <a class="btn btn-secondary btn-sm" href="/contracts">Back</a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state"><div class="spinner"></div><p>Loading printout...</p></div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-error">@_error</div>
+    }
+    else if (_printout != null)
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>@(_printout.DocumentTitle ?? $"Contract #{_printout.Contract?.ContractCode}")</h2>
+                <span class="contract-muted">Printed: @ValueOrDash(_printout.PrintedAt?.ToString("yyyy-MM-dd HH:mm"))</span>
+            </div>
+            <div class="form-card-body">
+                <div class="detail-grid">
+                    <section class="form-section">
+                        <h3 class="form-section-title">Contract</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Contract #</th><td>@ValueOrDash(_printout.Contract?.ContractCode.ToString())</td></tr>
+                                    <tr><th>Status</th><td>@ValueOrDash(_printout.Contract?.StatusText)</td></tr>
+                                    <tr><th>Start Date</th><td>@ValueOrDash(_printout.Contract?.StartDate)</td></tr>
+                                    <tr><th>Target Return</th><td>@ValueOrDash(_printout.Contract?.TargetReturnDate)</td></tr>
+                                    <tr><th>Start Odometer</th><td>@ValueOrDash(_printout.Contract?.StartOdometer?.ToString())</td></tr>
+                                    <tr><th>End Odometer</th><td>@ValueOrDash(_printout.Contract?.EndOdometer?.ToString())</td></tr>
+                                    <tr><th>Type</th><td>@ValueOrDash(_printout.Contract?.ContractType)</td></tr>
+                                    <tr><th>Driver ID</th><td>@ValueOrDash(_printout.Contract?.DriverId)</td></tr>
+                                    <tr><th>Notes</th><td>@ValueOrDash(_printout.Contract?.Notes)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="form-section">
+                        <h3 class="form-section-title">Vehicle</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Fleet/GG</th><td>@ValueOrDash(_printout.Vehicle?.FleetNumber)</td></tr>
+                                    <tr><th>Registration</th><td>@ValueOrDash(_printout.Vehicle?.RegistrationNumber)</td></tr>
+                                    <tr><th>Vehicle ID</th><td>@ValueOrDash(_printout.Vehicle?.VmfCode?.ToString())</td></tr>
+                                    <tr><th>Year</th><td>@ValueOrDash(_printout.Vehicle?.YearManufactured?.ToString())</td></tr>
+                                    <tr><th>Current ODO</th><td>@ValueOrDash(_printout.Vehicle?.CurrentOdo?.ToString())</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="form-section">
+                        <h3 class="form-section-title">Site</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Site</th><td>@ValueOrDash(_printout.Site?.Description)</td></tr>
+                                    <tr><th>Site ID</th><td>@ValueOrDash(_printout.Site?.SiteCode?.ToString())</td></tr>
+                                    <tr><th>Responsible</th><td>@ValueOrDash(_printout.Site?.ResponsiblePerson)</td></tr>
+                                    <tr><th>Email</th><td>@ValueOrDash(_printout.Site?.NetAddress)</td></tr>
+                                    <tr><th>Telephone</th><td>@ValueOrDash(_printout.Site?.Telephone)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="form-section">
+                        <h3 class="form-section-title">Parties</h3>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Capturer</th><td>@FormatUser(_printout.Parties?.Capturer?.UserCode, _printout.Parties?.Capturer?.Email)</td></tr>
+                                    <tr><th>Capturer Email</th><td>@ValueOrDash(_printout.Parties?.Capturer?.Email)</td></tr>
+                                    <tr><th>Approver</th><td>@FormatUser(_printout.Parties?.Approver?.UserCode, _printout.Parties?.Approver?.Email)</td></tr>
+                                    <tr><th>Approver Email</th><td>@ValueOrDash(_printout.Parties?.Approver?.Email)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="form-section" style="margin-top: 1.25rem;">
+                    <h3 class="form-section-title">Audit Trail</h3>
+                    @if (_printout.AuditTrail == null || _printout.AuditTrail.Count == 0)
+                    {
+                        <p class="contract-muted">No workflow history entries recorded yet.</p>
+                    }
+                    else
+                    {
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>When</th>
+                                        <th>Action</th>
+                                        <th>User</th>
+                                        <th>From</th>
+                                        <th>To</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in PagedAuditTrail)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(item.PerformedAt)</td>
+                                            <td>@ValueOrDash(item.Action)</td>
+                                            <td>@FormatUser(item.PerformedByUserCode, null)</td>
+                                            <td>@ValueOrDash(item.OldStatus)</td>
+                                            <td>@ValueOrDash(item.NewStatus)</td>
+                                            <td>@ValueOrDash(item.Notes)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        @if ((_printout.AuditTrail?.Count ?? 0) > _pageSize)
+                        {
+                            <div class="pagination">
+                                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                                <div class="pagination-info">Page @_page of @TotalPages</div>
+                                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                            </div>
+                            <div class="pagination-meta">Total records: @(_printout.AuditTrail?.Count ?? 0) | Page size: @_pageSize</div>
+                        }
+                    }
+                </section>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "contractId")] public string? ContractId { get; set; }
+    [SupplyParameterFromQuery(Name = "autoprint")] public string? AutoPrint { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private ContractPrintoutDto? _printout;
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+    private Dictionary<short, UserProfileDto> _userProfilesByCode = new();
+    private bool _autoPrintTriggered;
+
+    private IEnumerable<ContractPrintoutAuditDto> PagedAuditTrail
+        => (_printout?.AuditTrail ?? new List<ContractPrintoutAuditDto>())
+            .Skip((_page - 1) * _pageSize)
+            .Take(_pageSize);
+
+    private int TotalPages
+        => Math.Max(1, (int)Math.Ceiling(((_printout?.AuditTrail?.Count) ?? 0) / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(x => x.UserAccessCode > 0)
+                .GroupBy(x => x.UserAccessCode)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            if (!int.TryParse(ContractId, out var contractId) || contractId <= 0)
+            {
+                _error = "Contract ID is required for printout.";
+                return;
+            }
+
+            _printout = await ContractService.GetContractPrintoutAsync(contractId);
+            _page = 1;
+            if (_printout == null)
+            {
+                _error = "Unable to load contract printout.";
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_autoPrintTriggered || _printout == null || string.IsNullOrWhiteSpace(AutoPrint))
+        {
+            return;
+        }
+
+        if (!AutoPrint.Equals("1", StringComparison.OrdinalIgnoreCase)
+            && !AutoPrint.Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _autoPrintTriggered = true;
+        await PrintAsync();
+    }
+
+    private async Task PrintAsync()
+    {
+        await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private async Task DownloadAsync()
+    {
+        if (_printout?.Contract == null)
+        {
+            return;
+        }
+
+        var contractCode = _printout.Contract.ContractCode;
+        var fileName = $"Contract_{contractCode}_{DateTime.Now:yyyyMMdd_HHmm}.txt";
+        var content = BuildDownloadText(_printout);
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, content, "text/plain;charset=utf-8");
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string FormatUser(int? userCode, string? fallbackEmail)
+    {
+        if (!userCode.HasValue || userCode.Value <= 0)
+        {
+            return ValueOrDash(fallbackEmail);
+        }
+
+        if (_userProfilesByCode.TryGetValue((short)userCode.Value, out var user))
+        {
+            var fullName = $"{user.FirstName} {user.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return !string.IsNullOrWhiteSpace(user.Email)
+                    ? $"{fullName} ({user.Email})"
+                    : $"{fullName} ({userCode.Value})";
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                return $"{user.Email} ({userCode.Value})";
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackEmail))
+        {
+            return $"{fallbackEmail} ({userCode.Value})";
+        }
+
+        return $"User {userCode.Value}";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string BuildDownloadText(ContractPrintoutDto printout)
+    {
+        var lines = new List<string>
+        {
+            $"Document: {ValueOrDash(printout.DocumentTitle)}",
+            $"Printed At: {ValueOrDash(printout.PrintedAt?.ToString("yyyy-MM-dd HH:mm"))}",
+            string.Empty,
+            "CONTRACT",
+            $"Contract #: {printout.Contract?.ContractCode}",
+            $"Status: {ValueOrDash(printout.Contract?.StatusText)}",
+            $"Still Current: {ValueOrDash(printout.Contract?.StillCurrent)}",
+            $"Start Date: {ValueOrDash(printout.Contract?.StartDate)}",
+            $"End Date: {ValueOrDash(printout.Contract?.EndDate)}",
+            $"Target Return Date: {ValueOrDash(printout.Contract?.TargetReturnDate)}",
+            $"Start Odometer: {ValueOrDash(printout.Contract?.StartOdometer?.ToString())}",
+            $"End Odometer: {ValueOrDash(printout.Contract?.EndOdometer?.ToString())}",
+            $"Type: {ValueOrDash(printout.Contract?.ContractType)}",
+            $"Driver ID: {ValueOrDash(printout.Contract?.DriverId)}",
+            $"Notes: {ValueOrDash(printout.Contract?.Notes)}",
+            string.Empty,
+            "VEHICLE",
+            $"Fleet/GG: {ValueOrDash(printout.Vehicle?.FleetNumber)}",
+            $"Registration: {ValueOrDash(printout.Vehicle?.RegistrationNumber)}",
+            $"Vehicle ID: {ValueOrDash(printout.Vehicle?.VmfCode?.ToString())}",
+            $"Year: {ValueOrDash(printout.Vehicle?.YearManufactured?.ToString())}",
+            $"Current ODO: {ValueOrDash(printout.Vehicle?.CurrentOdo?.ToString())}",
+            string.Empty,
+            "SITE",
+            $"Site: {ValueOrDash(printout.Site?.Description)}",
+            $"Site ID: {ValueOrDash(printout.Site?.SiteCode?.ToString())}",
+            $"Responsible: {ValueOrDash(printout.Site?.ResponsiblePerson)}",
+            $"Email: {ValueOrDash(printout.Site?.NetAddress)}",
+            $"Telephone: {ValueOrDash(printout.Site?.Telephone)}",
+            string.Empty,
+            "PARTIES",
+            $"Capturer: {ValueOrDash(printout.Parties?.Capturer?.Email)} ({ValueOrDash(printout.Parties?.Capturer?.UserCode?.ToString())})",
+            $"Approver: {ValueOrDash(printout.Parties?.Approver?.Email)} ({ValueOrDash(printout.Parties?.Approver?.UserCode?.ToString())})",
+            string.Empty,
+            "AUDIT TRAIL"
+        };
+
+        if (printout.AuditTrail == null || printout.AuditTrail.Count == 0)
+        {
+            lines.Add("No audit entries.");
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        foreach (var item in printout.AuditTrail)
+        {
+            lines.Add(
+                $"{ValueOrDash(item.PerformedAt)} | {ValueOrDash(item.Action)} | User {ValueOrDash(item.PerformedByUserCode?.ToString())} | {ValueOrDash(item.OldStatus)} -> {ValueOrDash(item.NewStatus)} | {ValueOrDash(item.Notes)}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+}

@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +13,7 @@
             <i class="bx bx-file"></i>
             Inquiry Report on ONE Reference Number
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/RPT_Mon_one_num_main.aspx.</p>
+        <p class="page-description">View a detailed inquiry report for a single reference number.</p>
     </div>
 </div>
 
@@ -60,14 +59,6 @@
         </div>
     }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/RPT_Mon_one_num_main.aspx"
-        Endpoint="api/monitor/reports/one-reference-number/1"
-        HttpMethod="GET"
-        ButtonText="Test Monitor One Reference Report Endpoint"
-        ReportType="monitor-report-one-reference" />
 
 @code {
     private bool _loading;

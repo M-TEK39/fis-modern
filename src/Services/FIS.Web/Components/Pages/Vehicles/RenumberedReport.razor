@@ -58,11 +58,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var vehicle in _results)
+                        @foreach (var vehicle in PagedResults)
                         {
                             <tr>
-                                <td>@vehicle.fleet_number</td>
-                                <td>@vehicle.registration_number</td>
+                                <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(vehicle.registration_number)</td>
                                 <td>@(string.IsNullOrWhiteSpace(vehicle.recovered_gg_number) ? "-" : vehicle.recovered_gg_number)</td>
                                 <td>@(string.IsNullOrWhiteSpace(vehicle.renumbered_to) ? "-" : vehicle.renumbered_to)</td>
                                 <td>@vehicle.status_description</td>
@@ -71,6 +71,14 @@
                     </tbody>
                 </table>
             </div>
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <span>Page @_page of @TotalPages</span>
+                    <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+            }
         </div>
     }
 </div>
@@ -78,7 +86,11 @@
 @code {
     private bool _loading;
     private bool _hasLoaded;
+    private int _page = 1;
+    private const int _pageSize = 12;
     private List<VehicleDto> _results = new();
+    private IEnumerable<VehicleDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private async Task LoadAsync()
     {
@@ -92,6 +104,7 @@
                 .Where(v => !string.IsNullOrWhiteSpace(v.renumbered_to) || !string.IsNullOrWhiteSpace(v.recovered_gg_number))
                 .OrderBy(v => v.fleet_number)
                 .ToList();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -102,4 +115,23 @@
             _loading = false;
         }
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

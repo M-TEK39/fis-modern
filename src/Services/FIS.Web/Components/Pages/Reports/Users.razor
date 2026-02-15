@@ -1,12 +1,157 @@
 @page "/reports/users"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject UserApiService UserService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="User Reports"
-    Description="Legacy placeholder for Users/Users.aspx."
-    LegacyPath="Users/Users.aspx"
-    Endpoint="api/user"
-    HttpMethod="GET"
-    ReportType="user-reports"
-    Icon="bx-file" />
+<PageTitle>User Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-user"></i>
+            User Reports
+        </h1>
+        <p class="page-description">User profile and access-level report.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/users">Users Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">User Profiles</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Telephone</th>
+                        <th>Site</th>
+                        <th>User Active</th>
+                        <th>Access Level</th>
+                        <th>Last Log On</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="8">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="8">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.UserAccessCode</td>
+                                <td>@($"{ValueOrDash(row.FirstName)} {ValueOrDash(row.LastName)}")</td>
+                                <td>@ValueOrDash(row.Email)</td>
+                                <td>@ValueOrDash(row.Telephone)</td>
+                                <td>@GetSiteLabel(row.SiteCode)</td>
+                                <td>@(row.UserActive ? "Yes" : "No")</td>
+                                <td>@row.AccessLevel</td>
+                                <td>@(row.LastLogOn?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<UserProfileDto> _rows = new();
+    private Dictionary<short, string> _siteLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<UserProfileDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var sites = await SiteService.GetAllAsync();
+            _siteLabels = sites
+                .GroupBy(s => s.SiteCode)
+                .ToDictionary(
+                    g => g.Key,
+                    g => $"{ValueOrDash(g.First().Description)} ({g.Key})");
+
+            _rows = (await UserService.GetAllProfilesAsync())
+                .OrderBy(u => u.FirstName)
+                .ThenBy(u => u.LastName)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading user report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetSiteLabel(short? siteCode)
+    {
+        if (!siteCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _siteLabels.TryGetValue(siteCode.Value, out var label)
+            ? label
+            : siteCode.Value.ToString();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

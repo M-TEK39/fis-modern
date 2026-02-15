@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject ReportCatalogApiService ReportCatalogService
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +13,7 @@
             <i class="bx bx-file"></i>
             Logbook Reports
         </h1>
-        <p class="page-description">Legacy placeholder for logbook/RPTLogbk.aspx.</p>
+        <p class="page-description">Browse available logbook reports.</p>
     </div>
 </div>
 
@@ -49,7 +48,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var report in _reports)
+                        @foreach (var report in PagedReports)
                         {
                             <tr>
                                 <td>@report.Name</td>
@@ -59,35 +58,23 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logbook/RPTLogbk.aspx"
-        Endpoint="api/logbook/reports/menu"
-        HttpMethod="GET"
-        ButtonText="Test Logbook Reports Menu Endpoint"
-        ReportType="logbook-reports-menu" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logbook/RPT_one_num_main_Logbk.htm"
-        Endpoint="api/logbook/reports/one-number"
-        HttpMethod="POST"
-        ButtonText="Test Logbook One Number Report Endpoint"
-        ReportType="logbook-report-one-number" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logbook/RPT_dept_period_main_Logbk.aspx"
-        Endpoint="api/logbook/reports/department-period"
-        HttpMethod="POST"
-        ButtonText="Test Logbook Department Period Report Endpoint"
-        ReportType="logbook-report-department-period" />
-
 @code {
     private bool _loading = true;
     private List<ReportDto> _reports = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<ReportDto> PagedReports => _reports.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_reports.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -102,6 +89,23 @@
         finally
         {
             _loading = false;
+            _page = 1;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

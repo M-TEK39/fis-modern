@@ -32,14 +32,14 @@
                     <label class="form-label">Number Type</label>
                     <div class="contract-search-radio">
                         <label class="form-label form-checkbox">
-                            <input type="radio" name="auctionNumberType" checked="@(_searchType == "GG")" @onchange='() => _searchType = "GG"' />
+                            <input type="radio" name="auctionNumberType" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
                             GG
                         </label>
                         <label class="form-label form-checkbox">
-                            <input type="radio" name="auctionNumberType" checked="@(_searchType == "GP")" @onchange='() => _searchType = "GP"' />
+                            <input type="radio" name="auctionNumberType" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
                             GP
                         </label>
-                        <input class="form-input" placeholder="Number" style="max-width: 140px;" @bind="_searchQuery" @bind:event="oninput" />
+                        <input class="form-input" placeholder="@(_searchType == "GG" ? "GG Number" : "GP Number")" style="max-width: 140px;" @bind="_searchQuery" @bind:event="oninput" />
                     </div>
                 </div>
             </div>
@@ -79,7 +79,7 @@
                     }
                     else
                     {
-                        @foreach (var item in _auctions)
+                        @foreach (var item in PagedAuctions)
                         {
                             <tr>
                                 <td>@item.VehicleNumber</td>
@@ -94,6 +94,15 @@
                 </tbody>
             </table>
         </div>
+        @if (_auctions.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_auctions.Count | Page size: @_pageSize</div>
+        }
     </div>
 </div>
 
@@ -103,6 +112,11 @@
     private bool _loading;
     private List<AuctionRow> _auctions = new();
     private List<AuctionRow> _allAuctions = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<AuctionRow> PagedAuctions => _auctions.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_auctions.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -115,14 +129,21 @@
         try
         {
             var apiItems = await AuctionService.GetAllAsync<AuctionDto>();
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            var vehicleMap = vehicles.Data
+                .GroupBy(v => v.vmf_code)
+                .ToDictionary(g => g.Key, g => g.First());
             _allAuctions = apiItems.Select(a => new AuctionRow(
                 AuctionCode: a.auction_code,
                 VmfCode: a.vmf_code,
                 AuctionNumber: a.auction_number,
                 AuctionGarage: a.camp ?? a.auction_garage?.ToString(),
-                VehicleNumber: a.vmf_code.ToString()
+                FleetNumber: vehicleMap.TryGetValue(a.vmf_code, out var vehicle) ? vehicle.fleet_number : null,
+                RegistrationNumber: vehicleMap.TryGetValue(a.vmf_code, out vehicle) ? vehicle.registration_number : null,
+                VehicleNumber: vehicleMap.TryGetValue(a.vmf_code, out vehicle) ? FormatVehicleLabel(vehicle) : a.vmf_code.ToString()
             )).ToList();
             _auctions = new List<AuctionRow>(_allAuctions);
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -141,30 +162,83 @@
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
             _auctions = new List<AuctionRow>(_allAuctions);
+            _page = 1;
             return;
         }
 
-        var matches = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
+        var searchTerm = _searchQuery.Trim();
+        var matches = await VehicleService.SearchVehiclesAsync(searchTerm);
+        matches = FilterVehicleMatchesByNumberType(matches, searchTerm, _searchType);
         if (matches.Count == 0)
         {
             _auctions = new();
+            _page = 1;
             return;
         }
 
         var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
         _auctions = _allAuctions.Where(a => vmfCodes.Contains(a.VmfCode)).ToList();
+        _page = 1;
+    }
+
+    private void SetSearchType(string value)
+    {
+        _searchType = value;
+        _auctions = new List<AuctionRow>(_allAuctions);
+        _page = 1;
     }
 
     private void SelectAuction(AuctionRow item)
     {
-        _searchQuery = item.VehicleNumber;
+        _searchQuery = _searchType == "GG"
+            ? ValueOrDash(item.FleetNumber)
+            : ValueOrDash(item.RegistrationNumber);
     }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static List<VehicleDto> FilterVehicleMatchesByNumberType(List<VehicleDto> matches, string term, string searchType)
+    {
+        return searchType == "GG"
+            ? matches
+                .Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(v => string.Equals(v.fleet_number?.Trim(), term, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(v => v.vmf_code)
+                .ToList()
+            : matches
+                .Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(v => string.Equals(v.registration_number?.Trim(), term, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(v => v.vmf_code)
+                .ToList();
+    }
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private sealed record AuctionRow(
         short AuctionCode,
         int VmfCode,
         string? AuctionNumber,
         string? AuctionGarage,
+        string? FleetNumber,
+        string? RegistrationNumber,
         string VehicleNumber
     );
 }

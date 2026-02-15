@@ -1,5 +1,6 @@
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Auth;
+using FIS.Core.Domain.Entities.Contracts;
 using FIS.Core.Domain.Entities.Drivers;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Core.Domain.Entities.System;
@@ -21,6 +22,7 @@ public interface IVehicleRepository
     Task<IEnumerable<Vehicle>> GetAvailableVehiclesAsync();
     Task<IEnumerable<Vehicle>> GetAllAsync();
     Task<IEnumerable<Vehicle>> SearchVehiclesAsync(string searchTerm);
+    Task<IEnumerable<Vehicle>> GetByInvoiceNumberAsync(string invoiceNumber);
     Task<Vehicle> CreateAsync(Vehicle vehicle, int currentUserId);
     Task UpdateAsync(Vehicle vehicle, int currentUserId);
     Task DeleteAsync(int vmfCode, int currentUserId);
@@ -47,6 +49,18 @@ public interface IVehicleAuthorizationRepository
 }
 
 /// <summary>
+/// Repository interface for the contract audit log (append-only event trail)
+/// </summary>
+public interface IContractAuditLogRepository
+{
+    Task<IEnumerable<ContractAuditLog>> GetByContractAsync(int contractCode);
+    Task LogAsync(int contractCode, string action, int performedByUserId,
+        short? oldStatus = null, short? newStatus = null,
+        string? notes = null,
+        string? fieldChanged = null, string? oldValue = null, string? newValue = null);
+}
+
+/// <summary>
 /// Repository interface for contract operations
 /// </summary>
 public interface IContractRepository
@@ -60,7 +74,7 @@ public interface IContractRepository
     Task<Contract> CreateAsync(Contract contract, int currentUserId);
     Task UpdateAsync(Contract contract, int currentUserId);
     Task DeleteAsync(int contractCode, int currentUserId);
-    Task EndContractAsync(int contractCode, DateTime endDate, int? endOdometer = null, string? notes = null);
+    Task EndContractAsync(int contractCode, DateTime endDate, int currentUserId, int? endOdometer = null, string? notes = null);
 }
 
 /// <summary>
@@ -528,6 +542,24 @@ public interface ILossTypeRepository
 }
 
 /// <summary>
+/// Repository interface for class-based tariff CRUD and approval workflow.
+/// Approval threshold: monthly_fixed_amount > R100,000 requires approval.
+/// Self-approval is blocked on all approve/reject operations.
+/// </summary>
+public interface ITariffManagementRepository
+{
+    Task<Tariff?> GetByIdAsync(int tariffCode);
+    Task<IEnumerable<Tariff>> GetAllAsync();
+    Task<IEnumerable<Tariff>> GetApprovedAsync(); // Only status=2, effective tariffs
+    Task<IEnumerable<Tariff>> GetPendingApprovalAsync(); // Status=1
+    Task<Tariff> CreateAsync(Tariff tariff, int currentUserId);
+    Task UpdateAsync(Tariff tariff, int currentUserId);
+    Task<Tariff> SubmitForApprovalAsync(int tariffCode, int currentUserId);
+    Task<Tariff> ApproveAsync(int tariffCode, int approverUserId);
+    Task<Tariff> RejectAsync(int tariffCode, int approverUserId, string rejectionReason);
+}
+
+/// <summary>
 /// Repository interface for vehicle tariff operations
 /// </summary>
 public interface IVehicleTariffRepository
@@ -538,4 +570,32 @@ public interface IVehicleTariffRepository
     Task<VehicleTariff> CreateAsync(VehicleTariff tariff);
     Task UpdateAsync(VehicleTariff tariff);
     Task RecalculateTariffAsync(int vmfCode);
+}
+
+
+/// <summary>
+/// Repository interface for vehicle remarks (operational notes, missing/investigation flags).
+/// </summary>
+public interface IVehicleRemarkRepository
+{
+    Task<VehicleRemark?> GetByIdAsync(int remarkId);
+    Task<IEnumerable<VehicleRemark>> GetByVehicleAsync(int vmfCode);
+    Task<IEnumerable<VehicleRemark>> GetActiveByVehicleAsync(int vmfCode);
+    Task<VehicleRemark?> GetLatestActiveByVehicleAsync(int vmfCode);
+    Task<IEnumerable<VehicleRemark>> GetAllActiveAsync(); // All open remarks across fleet
+    Task<VehicleRemark> CreateAsync(VehicleRemark remark, int currentUserId);
+    Task<VehicleRemark> ResolveAsync(int remarkId, int resolvedByUserId, string? resolutionNotes);
+    Task DeleteAsync(int remarkId, int currentUserId);
+}
+
+/// <summary>
+/// Repository interface for vehicle licence history.
+/// A snapshot is written here before every new licence capture so the full
+/// renewal history is preserved.
+/// </summary>
+public interface IVehicleLicenceHistoryRepository
+{
+    Task<IEnumerable<VehicleLicenceHistory>> GetByVehicleAsync(int vmfCode);
+    Task<VehicleLicenceHistory?> GetLatestByVehicleAsync(int vmfCode);
+    Task<VehicleLicenceHistory> CreateAsync(VehicleLicenceHistory history);
 }

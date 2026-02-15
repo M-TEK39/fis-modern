@@ -2,8 +2,8 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject TowingApiService TowingService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Road Side Call's for a Firm - Fleet Information System</PageTitle>
@@ -14,7 +14,7 @@
             <i class="bx bx-calendar"></i>
             Road Side Call's for a Firm
         </h1>
-        <p class="page-description">Legacy placeholder for Towing/RPT_road_firmdate_main.aspx.</p>
+        <p class="page-description">View road side calls by firm and date range.</p>
     </div>
 </div>
 
@@ -61,11 +61,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.Call_refer</td>
-                                <td>@item.vmf_code</td>
+                                <td>@GetVehicleLabel(item.vmf_code)</td>
                                 <td>@FormatDate(item.Tow_request_date)</td>
                             </tr>
                         }
@@ -73,22 +73,30 @@
                 </table>
             </div>
         </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+        </div>
     }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Towing/RPT_road_firmdate_main.aspx"
-        Endpoint="api/towing/reports/firm-date"
-        HttpMethod="POST"
-        ButtonText="Test Towing Firm Date Report Endpoint"
-        ReportType="towing-report-firm-date" />
 
 @code {
     private bool _loading;
     private DateTime? _fromDate;
     private DateTime? _toDate;
     private List<TowingDto> _results = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<TowingDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicleLookupAsync();
+    }
 
     private async Task LoadReport()
     {
@@ -100,6 +108,7 @@
             _results = all.Where(t => (!_fromDate.HasValue || (t.Tow_request_date.HasValue && t.Tow_request_date.Value.Date >= _fromDate.Value.Date)) &&
                                       (!_toDate.HasValue || (t.Tow_request_date.HasValue && t.Tow_request_date.Value.Date <= _toDate.Value.Date)))
                 .ToList();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -113,4 +122,48 @@
 
     private static string FormatDate(DateTime? date) =>
         date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private async Task LoadVehicleLookupAsync()
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _vehicleLabelByVmf = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(
+                g => g.Key,
+                g => FormatVehicleLabel(g.First()));
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
 }

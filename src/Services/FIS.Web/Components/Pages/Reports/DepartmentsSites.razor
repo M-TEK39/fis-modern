@@ -1,12 +1,281 @@
 @page "/reports/departments-sites"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject DepartmentApiService DepartmentService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Department &amp;amp; Site Reports"
-    Description="Legacy placeholder for Department/Department.aspx."
-    LegacyPath="Department/Department.aspx"
-    Endpoint="api/department"
-    HttpMethod="GET"
-    ReportType="department-site-reports"
-    Icon="bx-file" />
+<PageTitle>Department &amp; Site Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-buildings"></i>
+            Department &amp; Site Reports
+        </h1>
+        <p class="page-description">Department and site reporting aligned to menu flow.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/departments">Departments</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Department</label>
+                    <select class="form-select" @bind="_departmentCode">
+                        <option value="">All Departments</option>
+                        @foreach (var department in _departments.OrderBy(d => d.department_description))
+                        {
+                            <option value="@department.department_code">@($"{ValueOrDash(department.department_description)} ({department.department_code})")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="_statusFilter">
+                        <option value="all">All</option>
+                        <option value="active">Active only</option>
+                        <option value="inactive">Inactive only</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="ApplyFilters">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Departments</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Department</th>
+                        <th>Description</th>
+                        <th>Contact Person</th>
+                        <th>Telephone</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="5">Loading report...</td></tr>
+                    }
+                    else if (PagedDepartments.Count == 0)
+                    {
+                        <tr><td colspan="5">No departments found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var department in PagedDepartments)
+                        {
+                            <tr>
+                                <td>@department.department_code</td>
+                                <td>@ValueOrDash(department.department_description)</td>
+                                <td>@ValueOrDash(department.contact_person)</td>
+                                <td>@ValueOrDash(department.telephone)</td>
+                                <td>@(department.dept_active ? "Active" : "Inactive")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filteredDepartments.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevDepartmentPage" disabled="@(_departmentPage <= 1)">Previous</button>
+                <div class="pagination-info">Page @_departmentPage of @DepartmentTotalPages</div>
+                <button class="pagination-btn" @onclick="NextDepartmentPage" disabled="@(_departmentPage >= DepartmentTotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_filteredDepartments.Count | Page size: @_pageSize</div>
+        }
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Sites</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Site</th>
+                        <th>Department</th>
+                        <th>Description</th>
+                        <th>Telephone</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="5">Loading report...</td></tr>
+                    }
+                    else if (PagedSites.Count == 0)
+                    {
+                        <tr><td colspan="5">No sites found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var site in PagedSites)
+                        {
+                            <tr>
+                                <td>@site.SiteCode</td>
+                                <td>@GetDepartmentLabel(site.DepartmentCode)</td>
+                                <td>@ValueOrDash(site.Description)</td>
+                                <td>@ValueOrDash(site.Telephone)</td>
+                                <td>@(site.SiteActive ? "Active" : "Inactive")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_filteredSites.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevSitePage" disabled="@(_sitePage <= 1)">Previous</button>
+                <div class="pagination-info">Page @_sitePage of @SiteTotalPages</div>
+                <button class="pagination-btn" @onclick="NextSitePage" disabled="@(_sitePage >= SiteTotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_filteredSites.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<DepartmentDto> _departments = new();
+    private List<DepartmentDto> _filteredDepartments = new();
+    private List<SiteResponseDto> _sites = new();
+    private List<SiteResponseDto> _filteredSites = new();
+    private string _departmentCode = string.Empty;
+    private string _statusFilter = "all";
+    private int _departmentPage = 1;
+    private int _sitePage = 1;
+    private const int _pageSize = 12;
+
+    private List<DepartmentDto> PagedDepartments => _filteredDepartments.Skip((_departmentPage - 1) * _pageSize).Take(_pageSize).ToList();
+    private List<SiteResponseDto> PagedSites => _filteredSites.Skip((_sitePage - 1) * _pageSize).Take(_pageSize).ToList();
+    private int DepartmentTotalPages => Math.Max(1, (int)Math.Ceiling(_filteredDepartments.Count / (double)_pageSize));
+    private int SiteTotalPages => Math.Max(1, (int)Math.Ceiling(_filteredSites.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        try
+        {
+            _departments = await DepartmentService.GetDepartmentsAsync();
+            _sites = await SiteService.GetAllAsync();
+            ApplyFilters();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading department/site report: {ex.Message}");
+            _departments = new();
+            _sites = new();
+            _filteredDepartments = new();
+            _filteredSites = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilters()
+    {
+        short? selectedDepartment = short.TryParse(_departmentCode, out var departmentCode) ? departmentCode : null;
+
+        _filteredDepartments = _departments
+            .Where(d => !selectedDepartment.HasValue || d.department_code == selectedDepartment.Value)
+            .Where(d => _statusFilter == "all"
+                || (_statusFilter == "active" && d.dept_active)
+                || (_statusFilter == "inactive" && !d.dept_active))
+            .OrderBy(d => d.department_description)
+            .ToList();
+
+        _filteredSites = _sites
+            .Where(s => !selectedDepartment.HasValue || s.DepartmentCode == selectedDepartment.Value)
+            .Where(s => _statusFilter == "all"
+                || (_statusFilter == "active" && s.SiteActive)
+                || (_statusFilter == "inactive" && !s.SiteActive))
+            .OrderBy(s => s.Description)
+            .ToList();
+
+        _departmentPage = 1;
+        _sitePage = 1;
+    }
+
+    private void ResetFilters()
+    {
+        _departmentCode = string.Empty;
+        _statusFilter = "all";
+        ApplyFilters();
+    }
+
+    private string GetDepartmentLabel(short? departmentCode)
+    {
+        if (!departmentCode.HasValue)
+        {
+            return "-";
+        }
+
+        var department = _departments.FirstOrDefault(d => d.department_code == departmentCode.Value);
+        return department == null
+            ? departmentCode.Value.ToString()
+            : $"{ValueOrDash(department.department_description)} ({department.department_code})";
+    }
+
+    private void PrevDepartmentPage()
+    {
+        if (_departmentPage > 1)
+        {
+            _departmentPage--;
+        }
+    }
+
+    private void NextDepartmentPage()
+    {
+        if (_departmentPage < DepartmentTotalPages)
+        {
+            _departmentPage++;
+        }
+    }
+
+    private void PrevSitePage()
+    {
+        if (_sitePage > 1)
+        {
+            _sitePage--;
+        }
+    }
+
+    private void NextSitePage()
+    {
+        if (_sitePage < SiteTotalPages)
+        {
+            _sitePage++;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+}

@@ -1,12 +1,171 @@
 @page "/reports/vip-pool-income-current"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TripApiService TripService
+@inject ContractApiService ContractService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Utilization of VIP and Pool vehicles (current month, including income)"
-    Description="Legacy placeholder for Finance/GeneratedReports.aspx?key=9.6%20Utilisation%20of%20VIP%20and%20Pool%20vehicles..."
-    LegacyPath="Finance/GeneratedReports.aspx?key=9.6%20Utilisation%20of%20VIP%20and%20Pool%20vehicles.."
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="vip-pool-income-current"
-    Icon="bx-file" />
+<PageTitle>VIP/Pool Utilization with Income (Current Month) - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-money-withdraw"></i>
+            VIP and Pool Utilization (Current Month, Including Income)
+        </h1>
+        <p class="page-description">Current-month utilization with estimated income based on contract monthly cost.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/contracts">Contracts Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Current Month Income Utilization</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Vehicle (VMF)</th>
+                        <th>Total Trips</th>
+                        <th>Open Trips</th>
+                        <th>Utilization %</th>
+                        <th>Monthly Contract Cost (R)</th>
+                        <th>Estimated Income (R)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="6">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="6">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.VehicleLabel</td>
+                                <td>@row.TotalTrips</td>
+                                <td>@row.OpenTrips</td>
+                                <td>@row.UtilizationPercent.ToString("0.0")%</td>
+                                <td>@row.MonthlyCost.ToString("N2")</td>
+                                <td>@row.EstimatedIncome.ToString("N2")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<IncomeRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<IncomeRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var start = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            var end = DateTime.Today;
+            var daysInScope = Math.Max(1, (end - start).Days + 1);
+
+            var trips = await TripService.GetDateRangeAsync(start, end);
+            var contractPage = await ContractService.GetContractsPageAsync(new ContractsPageQuery
+            {
+                Page = 1,
+                PageSize = 5000
+            });
+            var monthlyCostByVmf = contractPage.Data
+                .Where(c => c.vmf_code.HasValue)
+                .GroupBy(c => c.vmf_code!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.contract_id).FirstOrDefault()?.monthly_cost ?? 0m);
+
+            _rows = trips
+                .Where(t => t.VmfCode > 0)
+                .GroupBy(t => t.VmfCode)
+                .Select(g =>
+                {
+                    var all = g.ToList();
+                    var activeDays = all.Select(t => t.TripDate.Date).Distinct().Count();
+                    var utilization = activeDays * 100d / daysInScope;
+                    var monthlyCost = monthlyCostByVmf.TryGetValue(g.Key, out var value) ? value : 0m;
+                    var estimatedIncome = monthlyCost * (decimal)(utilization / 100d);
+                    return new IncomeRow(
+                        VehicleLabel: g.Key.ToString(),
+                        TotalTrips: all.Count,
+                        OpenTrips: all.Count(t => !string.Equals(t.Status, "Closed", StringComparison.OrdinalIgnoreCase)),
+                        UtilizationPercent: utilization,
+                        MonthlyCost: monthlyCost,
+                        EstimatedIncome: estimatedIncome);
+                })
+                .OrderByDescending(r => r.EstimatedIncome)
+                .ThenByDescending(r => r.TotalTrips)
+                .ToList();
+
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading VIP/pool income current report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record IncomeRow(
+        string VehicleLabel,
+        int TotalTrips,
+        int OpenTrips,
+        double UtilizationPercent,
+        decimal MonthlyCost,
+        decimal EstimatedIncome);
+}

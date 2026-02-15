@@ -212,6 +212,7 @@ builder.Services.AddScoped<IUserClaimsService, UserClaimsService>();
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IVehicleAuthorizationRepository, VehicleAuthorizationRepository>();
 builder.Services.AddScoped<IContractRepository, ContractRepository>();
+builder.Services.AddScoped<IContractAuditLogRepository, ContractAuditLogRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<IAccessLevelRepository, AccessLevelRepository>();
@@ -228,6 +229,8 @@ builder.Services.AddScoped<IClassRepository, ClassRepository>();
 builder.Services.AddScoped<IFuelTypeRepository, FuelTypeRepository>();
 builder.Services.AddScoped<IFuelTariffRepository, FuelTariffRepository>();
 builder.Services.AddScoped<IJobCardRepository, JobCardRepository>();
+builder.Services.AddScoped<IVehicleRemarkRepository, VehicleRemarkRepository>();
+builder.Services.AddScoped<IVehicleLicenceHistoryRepository, VehicleLicenceHistoryRepository>();
 builder.Services.AddScoped<IMaintenanceTriggerRepository, MaintenanceTriggerRepository>();
 builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
 builder.Services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();
@@ -347,6 +350,7 @@ builder.Services.AddScoped<IPasswordService, PasswordService>();
 // Financial system repositories - temporarily disabled for debugging
 //builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>(); // ✅ Re-enabled for tariff recalculation
+builder.Services.AddScoped<ITariffManagementRepository, TariffManagementRepository>();
 //builder.Services.AddScoped<ILeaseTariffRepository, LeaseTariffRepository>();
 //builder.Services.AddScoped<ITariffParameterRepository, TariffParameterRepository>();
 //builder.Services.AddScoped<IMaintenanceValueRepository, MaintenanceValueRepository>();
@@ -360,6 +364,8 @@ builder.Services.AddScoped<IJournalDetailRepository, JournalDetailRepository>();
 
 // Register background jobs (Phase 5)
 builder.Services.AddScoped<WorkflowMetricsJob>();
+builder.Services.AddScoped<ContractExpiryReminderJob>();
+builder.Services.AddScoped<MonthlyBillingJob>();
 
 // Add health checks
 builder.Services.AddHealthChecks().AddDbContextCheck<FisDbContext>();
@@ -411,5 +417,21 @@ recurringJobManager.AddOrUpdate<WorkflowMetricsJob>(
     "generate-daily-workflow-metrics",
     job => job.GenerateDailyMetricsAsync(),
     "0 2 * * *"); // Cron: Daily at 2:00 AM
+
+// Contract expiry reminders (runs at 7 AM daily)
+// Sends emails at 90, 60, 30, 14, and 7 days before target_return_date
+// Recipients: site contact (client) + original capturer
+recurringJobManager.AddOrUpdate<ContractExpiryReminderJob>(
+    "contract-expiry-reminders",
+    job => job.RunAsync(),
+    "0 7 * * *"); // Cron: Daily at 7:00 AM
+
+// Monthly billing (runs on the 1st of each month at 06:00)
+// Bills all still_current = 'Y' contracts from Charged_Until → today.
+// end_date does NOT stop billing — only closing/reassigning a contract does.
+recurringJobManager.AddOrUpdate<MonthlyBillingJob>(
+    "monthly-contract-billing",
+    job => job.RunAsync(),
+    "0 6 1 * *"); // Cron: 1st of each month at 06:00
 
 app.Run();

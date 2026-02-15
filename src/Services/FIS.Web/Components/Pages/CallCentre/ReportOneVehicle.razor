@@ -30,9 +30,17 @@
                     <th>Vehicle Number</th>
                     <td>
                         <div class="contract-search-inputs">
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GP")" @onchange='() => _searchMode = "GP"' /> GP</label>
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GG")" @onchange='() => _searchMode = "GG"' /> GG</label>
-                            <input class="form-input" style="max-width: 12rem;" @bind="_searchTerm" />
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' /> GP</label>
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' /> GG</label>
+                            <input class="form-input" style="max-width: 12rem;" @bind="_searchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                            <button class="btn btn-secondary btn-sm" @onclick="SearchVehicleAsync" disabled="@_loading">Find</button>
+                            <select class="form-select" style="max-width: 20rem;" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _vehicleMatches)
+                                {
+                                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                                }
+                            </select>
                             <button class="btn btn-primary btn-sm" @onclick="LoadReport" disabled="@_loading">Submit</button>
                             <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu" disabled="@_loading">Menu</button>
                         </div>
@@ -77,10 +85,10 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
-                                <td>@(_searchMode == "GG" ? ValueOrDash(item.GG_number) : ValueOrDash(_searchTerm))</td>
+                                <td>@GetResultVehicleNumber(item)</td>
                                 <td>@item.Call_centre_code</td>
                                 <td>@ValueOrDash(item.Incident_type)</td>
                                 <td>@FormatDate(item.Call_date)</td>
@@ -90,6 +98,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -100,7 +117,15 @@
     private string _message = string.Empty;
     private string _searchTerm = string.Empty;
     private string _searchMode = "GP";
+    private List<VehicleLookupDto> _vehicleMatches = new();
+    private int? _selectedVmfCode;
+    private string _selectedVehicleNumber = string.Empty;
     private List<CallCentreDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<CallCentreDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
 
@@ -119,17 +144,22 @@
         _loading = true;
         try
         {
-            var matches = await VehicleLookupService.SearchAsync(_searchTerm.Trim());
-            var selected = matches.FirstOrDefault();
-            if (selected?.VmfCode == null)
+            if (!_selectedVmfCode.HasValue)
             {
-                _message = "No vehicle matched the search value.";
+                await SearchVehicleAsync();
+            }
+
+            if (!_selectedVmfCode.HasValue)
+            {
+                _message = "No vehicle selected.";
                 _messageIsError = true;
                 return;
             }
 
             var all = await CallCentreService.GetAllAsync<CallCentreDto>();
-            _results = all.Where(c => c.vmf_code == selected.VmfCode).OrderByDescending(c => c.Call_date).ToList();
+            _results = all.Where(c => c.vmf_code == _selectedVmfCode.Value).OrderByDescending(c => c.Call_date).ToList();
+            _selectedVehicleNumber = ResolveSelectedVehicleNumber();
+            _page = 1;
 
             _message = _results.Count == 0
                 ? "No incidents found for the selected vehicle."
@@ -148,6 +178,121 @@
         }
     }
 
+    private async Task SearchVehicleAsync()
+    {
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _selectedVehicleNumber = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return;
+        }
+
+        try
+        {
+            var searchTerm = _searchTerm.Trim();
+            var matches = await VehicleLookupService.SearchAsync(searchTerm);
+            _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _searchMode);
+            if (_vehicleMatches.All(vehicle => vehicle.VmfCode != _selectedVmfCode))
+            {
+                _selectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
     private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.VmfCode)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _selectedVehicleNumber = string.Empty;
+        _results = new();
+        _message = string.Empty;
+        _page = 1;
+    }
+
+    private string ResolveSelectedVehicleNumber()
+    {
+        if (!_selectedVmfCode.HasValue)
+        {
+            return string.Empty;
+        }
+
+        var selected = _vehicleMatches.FirstOrDefault(v => v.VmfCode == _selectedVmfCode.Value);
+        if (selected == null)
+        {
+            return string.Empty;
+        }
+
+        var preferred = _searchMode == "GG" ? selected.GGNumber : selected.RegistrationNumber;
+        if (!string.IsNullOrWhiteSpace(preferred))
+        {
+            return preferred.Trim();
+        }
+
+        var fallback = _searchMode == "GG" ? selected.RegistrationNumber : selected.GGNumber;
+        return fallback?.Trim() ?? string.Empty;
+    }
+
+    private string GetResultVehicleNumber(CallCentreDto item)
+    {
+        if (_searchMode == "GG" && !string.IsNullOrWhiteSpace(item.GG_number))
+        {
+            return item.GG_number;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedVehicleNumber))
+        {
+            return _selectedVehicleNumber;
+        }
+
+        return ValueOrDash(_searchTerm);
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

@@ -1,7 +1,9 @@
 @page "/full-maintenance-lease/reports/maintenance-history"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject LeaseContractTermsApiService LeaseService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>FML Vehicle Maintenance History</PageTitle>
@@ -19,9 +21,34 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <div class="form-row">
-                <label class="form-label">VMF Code Filter</label>
-                <InputNumber @bind-Value="_vmfFilter" class="form-input" />
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Vehicle Search</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                    <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                    <div class="form-actions" style="margin-top: 0.5rem;">
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadVehicleMatchesAsync">Search vehicle</button>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Vehicle Match</label>
+                    <select class="form-select" @bind="_vmfFilter" disabled="@(_vehicleMatches.Count == 0)">
+                        <option value="">All vehicles</option>
+                        @foreach (var vehicle in _vehicleMatches)
+                        {
+                            <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                        }
+                    </select>
+                </div>
             </div>
             <div class="form-actions">
                 <button class="btn btn-primary" @onclick="ApplyFilter">Apply</button>
@@ -44,14 +71,14 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Lease ID</th><th>VMF</th><th>Start</th><th>End</th><th>Terms</th><th>Kilos</th><th>Fixed Amount</th><th>Status</th></tr>
+                        <tr><th>Lease ID</th><th>Vehicle</th><th>Start</th><th>End</th><th>Terms</th><th>Kilos</th><th>Fixed Amount</th><th>Status</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _filtered)
+                        @foreach (var row in PagedRows)
                         {
                             <tr>
                                 <td>@row.VehicleContractTermID</td>
-                                <td>@row.vmf_Code</td>
+                                <td>@GetVehicleLabel(row.vmf_Code)</td>
                                 <td>@FormatDate(row.StartDate)</td>
                                 <td>@FormatDate(row.EndDate)</td>
                                 <td>@(row.AgreedTerms?.ToString() ?? "-")</td>
@@ -63,27 +90,48 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
 </div>
 
 @code {
     private bool _loading = true;
+    private string _searchMode = "GG";
     private int? _vmfFilter;
+    private string _vehicleSearchTerm = string.Empty;
+    private List<VehicleDto> _vehicleMatches = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
     private List<LeaseTermDto> _all = new();
     private List<LeaseTermDto> _filtered = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<LeaseTermDto> PagedRows => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _vehicleLabelByVmf = vehicles.Data
+                .GroupBy(v => v.vmf_code)
+                .ToDictionary(
+                    g => g.Key,
+                    g => GetVehicleLabel(g.First()));
             _all = await LeaseService.GetAllAsync<LeaseTermDto>();
             _filtered = new List<LeaseTermDto>(_all.OrderByDescending(x => x.StartDate));
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             _all = new();
             _filtered = new();
+            _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading maintenance-history report: {ex.Message}");
         }
         finally
@@ -97,10 +145,12 @@
         if (_vmfFilter.HasValue && _vmfFilter.Value > 0)
         {
             _filtered = _all.Where(x => x.vmf_Code == _vmfFilter.Value).OrderByDescending(x => x.StartDate).ToList();
+            _page = 1;
             return;
         }
 
         _filtered = new List<LeaseTermDto>(_all.OrderByDescending(x => x.StartDate));
+        _page = 1;
     }
 
     private static string MapStatus(int? status) => status switch
@@ -113,6 +163,55 @@
 
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
     private static string FormatCurrency(decimal? value) => value.HasValue ? $"R {value.Value:N2}" : "-";
+    private string GetVehicleLabel(int vmfCode) =>
+        _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : $"- / - ({vmfCode})";
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private async Task LoadVehicleMatchesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleSearchTerm))
+        {
+            _vehicleMatches = new();
+            _vmfFilter = null;
+            return;
+        }
+
+        try
+        {
+            var keyword = _vehicleSearchTerm.Trim();
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+
+            if (_vehicleMatches.All(v => v.vmf_code != _vmfFilter))
+            {
+                _vmfFilter = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error searching vehicles: {ex.Message}");
+        }
+    }
 
     private sealed class LeaseTermDto
     {
@@ -124,5 +223,28 @@
         public int? AuthorityStatus { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
+    }
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _vmfFilter = null;
     }
 }

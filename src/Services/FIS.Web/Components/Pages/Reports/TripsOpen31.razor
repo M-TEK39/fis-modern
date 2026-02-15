@@ -1,12 +1,157 @@
 @page "/reports/trips-open-31"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TripApiService TripService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Trips open for over 31 days"
-    Description="Legacy placeholder for FISReports/ShowReport.aspx?Item=TripsOpenForOver31Days."
-    LegacyPath="FISReports/ShowReport.aspx?Item=TripsOpenForOver31Days"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="trips-open31"
-    Icon="bx-file" />
+<PageTitle>Trips Open for Over 31 Days - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-time-five"></i>
+            Trips Open for Over 31 Days
+        </h1>
+        <p class="page-description">Open trip authority exceptions older than 31 days.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/trip-authorities">Trip Authorities</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Trips Open &gt; 31 Days</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Trip ID</th>
+                        <th>Vehicle</th>
+                        <th>Trip Date</th>
+                        <th>Days Open</th>
+                        <th>Status</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="6">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="6">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var trip in PagedRows)
+                        {
+                            <tr>
+                                <td>@trip.TripId</td>
+                                <td>@GetVehicleLabel(trip.VmfCode)</td>
+                                <td>@trip.TripDate.ToString("yyyy-MM-dd")</td>
+                                <td>@((DateTime.Today - trip.TripDate.Date).Days)</td>
+                                <td>@ValueOrDash(trip.Status)</td>
+                                <td>@ValueOrDash(trip.Notes)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<TripDto> _rows = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<TripDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BuildVehicleLabelCacheAsync();
+        await LoadReportAsync();
+    }
+
+    private async Task BuildVehicleLabelCacheAsync()
+    {
+        try
+        {
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _vehicleLabels = vehicles.Data
+                .GroupBy(v => v.vmf_code)
+                .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles cache: {ex.Message}");
+        }
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var allTrips = await TripService.GetAllAsync();
+            var cutoff = DateTime.Today.AddDays(-31);
+
+            _rows = allTrips
+                .Where(t => t.TripDate.Date <= cutoff)
+                .Where(t => !string.Equals(t.Status, "Closed", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => t.TripDate)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading open trips report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetVehicleLabel(int vmfCode)
+        => _vehicleLabels.TryGetValue(vmfCode, out var label) ? label : vmfCode.ToString();
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

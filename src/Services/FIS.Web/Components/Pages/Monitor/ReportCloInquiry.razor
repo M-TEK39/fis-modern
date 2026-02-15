@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +13,7 @@
             <i class="bx bx-id-card"></i>
             Client Liaison Officer (CLO) Inquiry Report
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/RPT_mon_clo_main.aspx.</p>
+        <p class="page-description">CLO inquiry reporting workflow.</p>
     </div>
 </div>
 
@@ -57,7 +56,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.monitor_code</td>
@@ -68,22 +67,28 @@
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/RPT_Mon_clo_main.aspx"
-        Endpoint="api/monitor/reports/clo-inquiry"
-        HttpMethod="POST"
-        ButtonText="Test Monitor CLO Inquiry Endpoint"
-        ReportType="monitor-report-clo" />
 
 @code {
     private bool _loading;
     private string _inquiryType = string.Empty;
     private List<MonitorDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<MonitorDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private async Task LoadReport()
     {
@@ -95,6 +100,7 @@
             _results = string.IsNullOrWhiteSpace(_inquiryType)
                 ? all
                 : all.Where(m => string.Equals(m.Inquiry_type, _inquiryType, StringComparison.OrdinalIgnoreCase)).ToList();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -103,6 +109,22 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

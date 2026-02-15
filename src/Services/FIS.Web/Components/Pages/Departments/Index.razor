@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject DepartmentApiService DepartmentService
 
 <PageTitle>Department Management - Fleet Information System</PageTitle>
@@ -188,15 +187,6 @@
         </div>
     }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_Department.aspx"
-        Endpoint="api/department"
-        HttpMethod="GET"
-        ButtonText="Test Department Endpoint"
-        ReportType="department-reference" />
-
 @code {
     private List<DepartmentDto> _departments = new();
     private DepartmentDto _currentDept = new();

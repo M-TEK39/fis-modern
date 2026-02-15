@@ -1,12 +1,245 @@
 @page "/reports/management"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject ContractApiService ContractService
+@inject JobCardApiService JobCardService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Management Reports"
-    Description="Legacy placeholder for Management_Reports/Management.aspx."
-    LegacyPath="Management_Reports/Management.aspx"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="management"
-    Icon="bx-file" />
+<PageTitle>Management Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-line-chart"></i>
+            Management Reports
+        </h1>
+        <p class="page-description">Operational overview across vehicles, contracts, and maintenance costs.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Refresh</button>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">As Of Date</label>
+                    <InputDate class="form-input" @bind-Value="_asOfDate" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Management KPI Summary</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="2">Loading report...</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in _kpis)
+                        {
+                            <tr>
+                                <td>@row.Label</td>
+                                <td>@row.Value</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Top Workshop Cost Vehicles</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Vehicle</th>
+                        <th>Total Workshop Cost (R)</th>
+                        <th>Last Job Card Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="3">Loading report...</td></tr>
+                    }
+                    else if (_rows.Count == 0)
+                    {
+                        <tr><td colspan="3">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@GetVehicleLabel(row)</td>
+                                <td>@row.TotalCost.ToString("N2")</td>
+                                <td>@(row.LastDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private DateTime _asOfDate = DateTime.Today;
+    private List<KpiRow> _kpis = new();
+    private List<CostByVehicleRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<CostByVehicleRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var vehicleTask = VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            var contractTask = ContractService.GetContractsAsync();
+            var jobCardTask = JobCardService.GetRepairCostReportAsync(toDate: _asOfDate);
+
+            await Task.WhenAll(vehicleTask, contractTask, jobCardTask);
+
+            var vehicles = vehicleTask.Result.Data;
+            var contracts = contractTask.Result;
+            var workshopRows = jobCardTask.Result.Items ?? new List<JobCardRepairCostLineDto>();
+
+            var activeContracts = contracts.Count(c =>
+                string.Equals(c.still_current, "Y", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(c.status, "Pending Approval", StringComparison.OrdinalIgnoreCase));
+            var pendingContracts = contracts.Count(c => string.Equals(c.status, "Pending Approval", StringComparison.OrdinalIgnoreCase));
+            var inServiceVehicles = vehicles.Count(v => string.Equals(v.status_description, "In Service", StringComparison.OrdinalIgnoreCase));
+            var outOfServiceVehicles = vehicles.Count(v => !string.Equals(v.status_description, "In Service", StringComparison.OrdinalIgnoreCase));
+            var totalWorkshopCost = workshopRows.Sum(r => r.TotalCost);
+            var vehiclesWithNoContract = vehicles.Count(v => !contracts.Any(c => c.vmf_code == v.vmf_code && string.Equals(c.still_current, "Y", StringComparison.OrdinalIgnoreCase)));
+
+            _kpis = new()
+            {
+                new KpiRow("Total Vehicles", vehicles.Count.ToString("N0")),
+                new KpiRow("Vehicles In Service", inServiceVehicles.ToString("N0")),
+                new KpiRow("Vehicles Not In Service", outOfServiceVehicles.ToString("N0")),
+                new KpiRow("Active Contracts", activeContracts.ToString("N0")),
+                new KpiRow("Pending Approval Contracts", pendingContracts.ToString("N0")),
+                new KpiRow("Vehicles Without Active Contract", vehiclesWithNoContract.ToString("N0")),
+                new KpiRow("Workshop Cost (As Of Date)", totalWorkshopCost.ToString("N2"))
+            };
+
+            _rows = workshopRows
+                .GroupBy(r => new { r.VmfCode, r.GGNumber, r.RegistrationNumber })
+                .Select(group => new CostByVehicleRow
+                {
+                    VmfCode = group.Key.VmfCode,
+                    GGNumber = group.Key.GGNumber,
+                    RegistrationNumber = group.Key.RegistrationNumber,
+                    TotalCost = group.Sum(x => x.TotalCost),
+                    LastDate = group.Max(x => x.DateClosed ?? x.InvoiceDate)
+                })
+                .OrderByDescending(r => r.TotalCost)
+                .ThenBy(r => r.VmfCode)
+                .ToList();
+
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading management report: {ex.Message}");
+            _kpis = new();
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(CostByVehicleRow row)
+    {
+        var vmf = row.VmfCode?.ToString() ?? "-";
+        return $"{ValueOrDash(row.GGNumber)} / {ValueOrDash(row.RegistrationNumber)} ({vmf})";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed class KpiRow
+    {
+        public KpiRow(string label, string value)
+        {
+            Label = label;
+            Value = value;
+        }
+
+        public string Label { get; }
+        public string Value { get; }
+    }
+
+    private sealed class CostByVehicleRow
+    {
+        public int? VmfCode { get; set; }
+        public string? GGNumber { get; set; }
+        public string? RegistrationNumber { get; set; }
+        public decimal TotalCost { get; set; }
+        public DateTime? LastDate { get; set; }
+    }
+}

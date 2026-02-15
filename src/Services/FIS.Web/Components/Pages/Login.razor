@@ -3,12 +3,12 @@
 @layout FIS.Web.Components.Layout.AuthLayout
 @using Microsoft.AspNetCore.Components.Authorization
 
-<PageTitle>Legacy Auth Shortcut - FIS</PageTitle>
+<PageTitle>Auth Shortcut - FIS</PageTitle>
 
 <div class="auth-card">
     <div class="auth-header">
-        <h1>Legacy JWT Access</h1>
-        <p>Use the legacy login form to request a JWT token.</p>
+        <h1>JWT Access</h1>
+        <p>Use the login form to request a JWT token.</p>
     </div>
 
     <AuthorizeView>
@@ -22,7 +22,7 @@
         <NotAuthorized>
             <div class="auth-actions">
                 <a href="/login/legacy" class="btn btn-primary auth-btn">
-                    Continue to Legacy Login
+                    Continue to Login
                 </a>
                 <a href="/login" class="btn btn-secondary auth-btn auth-outline">
                     Back to Sign In Options

@@ -34,13 +34,13 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>VMF</th><th>GG Number</th><th>Current Odo</th><th>Agreed Kilos</th><th>Variance</th></tr>
+                        <tr><th>Vehicle</th><th>GG Number</th><th>Current Odo</th><th>Agreed Kilos</th><th>Variance</th></tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _rows)
+                        @foreach (var row in PagedRows)
                         {
                             <tr>
-                                <td>@row.VmfCode</td>
+                                <td>@GetVehicleLabel(row)</td>
                                 <td>@ValueOrDash(row.GgNumber)</td>
                                 <td>@row.CurrentOdo.ToString("N0")</td>
                                 <td>@row.AgreedKilos.ToString("N0")</td>
@@ -50,6 +50,11 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
 </div>
@@ -57,6 +62,10 @@
 @code {
     private bool _loading = true;
     private List<OverUtilizedRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<OverUtilizedRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -80,15 +89,18 @@
                     _rows.Add(new OverUtilizedRow(
                         term.vmf_Code,
                         vehicle?.fleet_number,
+                        vehicle?.registration_number,
                         currentOdo,
                         agreed,
                         currentOdo - agreed));
                 }
             }
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             _rows = new List<OverUtilizedRow>();
+            _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading over-utilized report: {ex.Message}");
         }
         finally
@@ -98,8 +110,30 @@
     }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private static string GetVehicleLabel(OverUtilizedRow row)
+    {
+        var gg = string.IsNullOrWhiteSpace(row.GgNumber) ? "-" : row.GgNumber;
+        var reg = string.IsNullOrWhiteSpace(row.RegistrationNumber) ? "-" : row.RegistrationNumber;
+        return $"{gg} / {reg} ({row.VmfCode})";
+    }
 
-    private sealed record OverUtilizedRow(int VmfCode, string? GgNumber, long CurrentOdo, long AgreedKilos, long Variance);
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record OverUtilizedRow(int VmfCode, string? GgNumber, string? RegistrationNumber, long CurrentOdo, long AgreedKilos, long Variance);
 
     private sealed class LeaseTermDto
     {

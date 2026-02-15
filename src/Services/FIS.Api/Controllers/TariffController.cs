@@ -1,6 +1,8 @@
 using FIS.Core.Application.Services.Billing;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -15,13 +17,16 @@ namespace FIS.Api.Controllers;
 public class TariffController : BaseApiController
 {
     private readonly ITariffCalculationService _tariffCalculationService;
+    private readonly FisDbContext _context;
     private readonly ILogger<TariffController> _logger;
 
     public TariffController(
         ITariffCalculationService tariffCalculationService,
+        FisDbContext context,
         ILogger<TariffController> logger)
     {
         _tariffCalculationService = tariffCalculationService ?? throw new ArgumentNullException(nameof(tariffCalculationService));
+        _context = context;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -141,6 +146,85 @@ public class TariffController : BaseApiController
     {
         var isProRated = _tariffCalculationService.IsLeaseProRated(contractStartDate);
         return Ok(new { contractStartDate, isProRated });
+    }
+
+    /// <summary>
+    /// Preview the current approved tariff for a vehicle — used to auto-populate tariff
+    /// information when a new contract is being opened (before the contract exists).
+    ///
+    /// Lookup chain: vehicle → model → class_code → current approved tariff
+    /// Returns null tariff fields if no approved tariff exists for the vehicle's class.
+    /// </summary>
+    [HttpGet("preview-for-vehicle/{vmfCode}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> PreviewForVehicle(int vmfCode)
+    {
+        try
+        {
+            var vehicle = await _context.Vehicles
+                .Include(v => v.Model)
+                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
+
+            if (vehicle == null)
+                return NotFound(new { error = $"Vehicle {vmfCode} not found" });
+
+            if (vehicle.Model == null)
+                return Ok(new
+                {
+                    vmf_code = vmfCode,
+                    fleet_number = vehicle.fleet_number,
+                    year_manufactured = vehicle.year_manufactured,
+                    class_code = (short?)null,
+                    tariff = (object?)null,
+                    note = "No model linked to vehicle — cannot resolve tariff class"
+                });
+
+            var classCode = vehicle.Model.class_code;
+            var today = DateTime.Today;
+
+            // Find the currently effective, approved tariff for this vehicle class
+            var tariff = await _context.Tariffs
+                .Where(t =>
+                    t.class_code == classCode &&
+                    t.tariff_approval_status == 2 && // Approved
+                    !t.is_deleted &&
+                    t.effective_start_date <= today &&
+                    (t.effective_end_date == null || t.effective_end_date >= today))
+                .OrderByDescending(t => t.effective_start_date)
+                .FirstOrDefaultAsync();
+
+            return Ok(new
+            {
+                vmf_code = vmfCode,
+                fleet_number = vehicle.fleet_number,
+                registration = vehicle.registration_number,
+                year_manufactured = vehicle.year_manufactured,
+                model_code = vehicle.model_code,
+                class_code = classCode,
+                tariff = tariff == null ? null : new
+                {
+                    tariff_code = tariff.tariff_code,
+                    class_code = tariff.class_code,
+                    year_manufactured = tariff.year_manufactured,
+                    monthly_fixed_amount = tariff.monthly_fixed_amount,
+                    monthly_odo_amount = tariff.monthly_odo_amount,
+                    daily_fixed_amount = tariff.daily_fixed_amount,
+                    hourly_fixed_amount = tariff.hourly_fixed_amount,
+                    fuel_kilo_tariff = tariff.fuel_kilo_tariff,
+                    effective_start_date = tariff.effective_start_date.ToString("yyyy-MM-dd"),
+                    effective_end_date = tariff.effective_end_date?.ToString("yyyy-MM-dd"),
+                },
+                note = tariff == null
+                    ? $"No approved tariff found for class {classCode} effective today"
+                    : "Current approved tariff returned"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error previewing tariff for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to preview tariff", message = ex.Message });
+        }
     }
 }
 

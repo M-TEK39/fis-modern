@@ -44,7 +44,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var dept in _departments)
+                    @foreach (var dept in PagedDepartments)
                     {
                         <tr>
                             <td>@dept.department_description</td>
@@ -65,6 +65,11 @@ else
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     </div>
 }
@@ -97,7 +102,7 @@ else
                 </div>
                 <div class="form-field">
                     <label class="form-label">Department Active</label>
-                    <select class="form-input" @bind="_currentDept.dept_active">
+                    <select class="form-select" @bind="_currentDept.dept_active">
                         <option value="true">Active</option>
                         <option value="false">Inactive</option>
                     </select>
@@ -124,7 +129,7 @@ else
                     <input type="text" @bind="_currentDept.physical_address_line3" class="form-input" />
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Postal Code</label>
+                    <label class="form-label">Postal / ZIP</label>
                     <input type="text" @bind="_currentDept.postal_code" class="form-input" />
                 </div>
             </div>
@@ -197,6 +202,11 @@ else
     private bool _isEdit = false;
     private bool _saving = false;
     private bool _deleting = false;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<DepartmentDto> PagedDepartments => _departments.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_departments.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -208,6 +218,7 @@ else
         _loading = true;
         _departments = await DepartmentService.GetDepartmentsAsync();
         _loading = false;
+        _page = Math.Min(_page, TotalPages);
         StateHasChanged();
     }
 
@@ -275,6 +286,22 @@ else
         {
             HideDeleteDialog();
             await LoadDepartments();
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

@@ -4,6 +4,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject FinanceApiService FinanceService
+@inject VehicleApiService VehicleService
 
 <PageTitle>@PageTitleText - Fleet Information System</PageTitle>
 
@@ -13,7 +14,7 @@
             <i class="bx bx-file-blank"></i>
             @PageTitleText
         </h1>
-        <p class="page-description">Auction report parameters aligned to the legacy workflow.</p>
+        <p class="page-description">Auction report parameters and output.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/auction/reports">Reports Menu</a>
@@ -33,14 +34,24 @@
                         <label class="form-label">Number Type</label>
                         <div class="contract-search-radio">
                             <label class="form-label form-checkbox">
-                                <input type="radio" name="auctionNumberType" />
+                                <input type="radio" name="auctionNumberType" checked="@(_numberType == "GP")" @onchange='() => SetNumberType("GP")' />
                                 GP
                             </label>
                             <label class="form-label form-checkbox">
-                                <input type="radio" name="auctionNumberType" checked />
+                                <input type="radio" name="auctionNumberType" checked="@(_numberType == "GG")" @onchange='() => SetNumberType("GG")' />
                                 GG
                             </label>
-                            <input class="form-input" placeholder="Number" style="max-width: 140px;" />
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_numberType == "GG" ? "Enter GG number" : "Enter GP number")" style="max-width: 180px;" />
+                                <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_running">Find</button>
+                            </div>
+                            <select class="form-select fis-mt-05" @bind="_selectedVehicleVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _vehicleMatches)
+                                {
+                                    <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -142,6 +153,18 @@
     private bool _running;
     private bool _statusError;
     private string _statusMessage = string.Empty;
+    private string _numberType = "GG";
+    private string _vehicleSearchTerm = string.Empty;
+    private List<VehicleDto> _vehicleMatches = new();
+    private int? _selectedVehicleVmfCode;
+
+    private void SetNumberType(string value)
+    {
+        _numberType = value;
+        _vehicleSearchTerm = string.Empty;
+        _vehicleMatches = new();
+        _selectedVehicleVmfCode = null;
+    }
 
     private async Task RunReportAsync()
     {
@@ -161,6 +184,9 @@
         var result = await FinanceService.PostActionAsync(endpoint, new
         {
             mode = Mode,
+            numberType = _numberType,
+            vehicleIdentifier = string.IsNullOrWhiteSpace(_vehicleSearchTerm) ? null : _vehicleSearchTerm.Trim(),
+            vmfCode = _selectedVehicleVmfCode,
             legacyPath = LegacyPathText
         });
 
@@ -168,6 +194,61 @@
         _statusMessage = result.Message;
         _running = false;
     }
+
+    private async Task SearchVehiclesAsync()
+    {
+        if (Mode != "one-vehicle")
+        {
+            return;
+        }
+
+        var query = _vehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleMatches = RankVehicleMatches(matches, query, _numberType);
+            if (_vehicleMatches.All(v => v.vmf_code != _selectedVehicleVmfCode))
+            {
+                _selectedVehicleVmfCode = null;
+            }
+        }
+        catch (Exception)
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            _statusError = true;
+            _statusMessage = "Unable to search vehicles.";
+        }
+    }
+
+    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, string searchMode)
+    {
+        var keyword = query.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private string PageTitleText => Mode switch
     {
@@ -182,10 +263,10 @@
     private string LegacyPathText => Mode switch
     {
         "one-vehicle" => "Auction/RPT_one_num_main_auction.htm",
-        "all-vehicles" => "Auction/RPT_all_main_auction.aspx",
-        "sale-to-name" => "Auction/RPT_one_name_main_auction.aspx",
-        "auction-gg" => "Auction/RPT_one_auct1_main_auction.aspx",
-        "auction-lot" => "Auction/RPT_one_auct2_main_auction.aspx",
-        _ => "Auction/RPTAuction.aspx"
+        "all-vehicles" => "Auction all vehicles report workflow",
+        "sale-to-name" => "Auction sale-to-name report workflow",
+        "auction-gg" => "Auction GG-sorted report workflow",
+        "auction-lot" => "Auction lot-sorted report workflow",
+        _ => "Auction report workflow"
     };
 }

@@ -28,12 +28,18 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">GG Number</label>
-                    <input class="form-input" placeholder="Enter GG number" @bind="_ggNumber" @bind:event="oninput" />
+                    <label class="form-label">
+                        <input type="radio" name="reliefSearchType" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
+                        GG
+                    </label>
+                    <label class="form-label">
+                        <input type="radio" name="reliefSearchType" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
+                        GP
+                    </label>
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Registration Number</label>
-                    <input class="form-input" placeholder="Enter registration number" @bind="_registrationNumber" @bind:event="oninput" />
+                    <label class="form-label">@(_searchMode == "gg" ? "GG Number" : "Registration Number")</label>
+                    <input class="form-input" placeholder="@(_searchMode == "gg" ? "Enter GG number" : "Enter registration number")" @bind="_searchQuery" @bind:event="oninput" />
                 </div>
             </div>
             <div style="margin-top: 1rem;">
@@ -80,23 +86,23 @@
                                         <div class="empty-state">
                                             <i class="bx bx-car"></i>
                                             <h3>No relief vehicles found</h3>
-                                            <p>Search results will appear here.</p>
+                                            <p>Try another GG/GP search or adjust filters.</p>
                                         </div>
                                     </td>
                                 </tr>
                             }
                             else
                             {
-                                @foreach (var vehicle in _results)
+                                @foreach (var vehicle in PagedResults)
                                 {
                                     <tr>
-                                        <td>@vehicle.fleet_number</td>
-                                        <td>@vehicle.registration_number</td>
+                                        <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                        <td>@ValueOrDash(vehicle.registration_number)</td>
                                         <td>@vehicle.type_name</td>
                                         <td>@vehicle.model_name</td>
                                         <td>@vehicle.status_description</td>
                                         <td>
-                                            <a class="btn btn-secondary btn-sm" href="@($"/contracts/detail?ggnumber={vehicle.fleet_number}&regnumber={vehicle.registration_number}")">View</a>
+                                            <a class="btn btn-secondary btn-sm" href="@BuildContractDetailUrl(vehicle)">View</a>
                                         </td>
                                     </tr>
                                 }
@@ -105,22 +111,36 @@
                     </table>
                 </div>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     </div>
 </div>
 
 @code {
-    private string _ggNumber = "";
-    private string _registrationNumber = "";
+    private string _searchMode = "gg";
+    private string _searchQuery = "";
     private bool _loading;
     private List<VehicleDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<VehicleDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private async Task SearchVehicles()
     {
         _loading = true;
         try
         {
-            var query = string.IsNullOrWhiteSpace(_ggNumber) ? _registrationNumber : _ggNumber;
+            var query = _searchQuery;
             if (string.IsNullOrWhiteSpace(query))
             {
                 _results = new();
@@ -130,7 +150,11 @@
             var endpoint = $"api/contracts/relief/search?query={Uri.EscapeDataString(query.Trim())}";
             await ContractService.GetActionAsync(endpoint);
 
-            _results = await VehicleService.SearchVehiclesAsync(query.Trim());
+            _results = RankVehicleMatches(
+                await VehicleService.SearchVehiclesAsync(query.Trim()),
+                query.Trim(),
+                _searchMode == "gg");
+            _page = 1;
         }
         catch
         {
@@ -144,8 +168,59 @@
 
     private void ClearSearch()
     {
-        _ggNumber = "";
-        _registrationNumber = "";
+        _searchQuery = "";
         _results = new();
+        _page = 1;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        if (_searchMode == mode)
+        {
+            return;
+        }
+
+        _searchMode = mode;
+        _searchQuery = string.Empty;
+        _results = new();
+        _page = 1;
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, bool preferFleet)
+    {
+        return (preferFleet
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                preferFleet
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private static string BuildContractDetailUrl(VehicleDto vehicle)
+    {
+        var gg = Uri.EscapeDataString(vehicle.fleet_number ?? string.Empty);
+        var reg = Uri.EscapeDataString(vehicle.registration_number ?? string.Empty);
+        return $"/contracts/detail?ggnumber={gg}&regnumber={reg}";
     }
 }

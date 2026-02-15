@@ -46,7 +46,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var site in _sites)
+                    @foreach (var site in PagedSites)
                     {
                         <tr>
                             <td>@site.Description</td>
@@ -67,6 +67,11 @@ else
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     </div>
 }
@@ -98,27 +103,27 @@ else
                 </div>
                 <div class="form-field">
                     <label class="form-label">Department <span class="required">*</span></label>
-                    <select class="form-input" @bind="_currentSite.DepartmentCode">
+                    <select class="form-select" @bind="_currentSite.DepartmentCode">
                         <option value="">Select department</option>
                         @foreach (var dept in _departments)
                         {
-                            <option value="@dept.department_code">@dept.department_description</option>
+                            <option value="@dept.department_code">@($"{dept.department_description} ({dept.department_code})")</option>
                         }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Province</label>
-                    <select class="form-input" @bind="_currentSite.ProvinceCode">
+                    <select class="form-select" @bind="_currentSite.ProvinceCode">
                         <option value="">Select province</option>
                         @foreach (var province in _provinces)
                         {
-                            <option value="@province.province_code">@province.province_name</option>
+                            <option value="@province.province_code">@($"{province.province_name} ({province.province_code})")</option>
                         }
                     </select>
                 </div>
                 <div class="form-field">
                     <label class="form-label">Active</label>
-                    <select class="form-input" @bind="_currentSite.SiteActive">
+                    <select class="form-select" @bind="_currentSite.SiteActive">
                         <option value="true">Active</option>
                         <option value="false">Inactive</option>
                     </select>
@@ -141,7 +146,7 @@ else
                     <input type="text" class="form-input" @bind="_currentSite.Address3" />
                 </div>
                 <div class="form-field">
-                    <label class="form-label">Postal Code</label>
+                    <label class="form-label">Postal / ZIP</label>
                     <input type="text" class="form-input" @bind="_currentSite.PostalCode" />
                 </div>
             </div>
@@ -233,6 +238,11 @@ else
     private bool _saving = false;
     private bool _deleting = false;
     private short _editSiteCode;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<SiteResponseDto> PagedSites => _sites.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_sites.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -245,6 +255,7 @@ else
         _loading = true;
         _sites = await SiteService.GetAllAsync();
         _loading = false;
+        _page = Math.Min(_page, TotalPages);
         StateHasChanged();
     }
 
@@ -357,5 +368,21 @@ else
 
         var dept = _departments.FirstOrDefault(d => d.department_code == departmentCode);
         return dept?.department_description ?? "-";
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

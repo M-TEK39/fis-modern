@@ -179,7 +179,7 @@ public class ContractRepository : IContractRepository
     /// End/close an active contract
     /// Sets still_current = 'N' and records end details
     /// </summary>
-    public async Task EndContractAsync(int contractCode, DateTime endDate, int? endOdometer = null, string? notes = null)
+    public async Task EndContractAsync(int contractCode, DateTime endDate, int currentUserId, int? endOdometer = null, string? notes = null)
     {
         var contract = await GetByIdAsync(contractCode);
         if (contract == null)
@@ -191,13 +191,15 @@ public class ContractRepository : IContractRepository
         contract.still_current = "N";
         contract.end_date = endDate;
         contract.end_time = DateTime.Now;
-        
+        contract.contract_status_code = 7; // Closed
+        contract.contract_status_date = DateTime.Now;
+
         if (endOdometer.HasValue)
             contract.end_odometer = endOdometer.Value;
-            
+
         if (!string.IsNullOrEmpty(notes))
             contract.Notes = notes;
 
-        await UpdateAsync(contract, 1);
+        await UpdateAsync(contract, currentUserId);
     }
 }

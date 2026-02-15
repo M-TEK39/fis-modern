@@ -1,6 +1,5 @@
 @page "/losses/add"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Forms
 @using FIS.Web.Services
 @using FIS.Web.Models
@@ -9,6 +8,7 @@
 @inject LossApiService LossService
 @inject LossTypeApiService LossTypeService
 @inject SiteApiService SiteService
+@inject VehicleApiService VehicleService
 
 <PageTitle>Add Loss - Fleet Information System</PageTitle>
 
@@ -18,7 +18,7 @@
             <i class="bx bx-plus-circle"></i>
             Add Loss
         </h1>
-        <p class="page-description">Legacy loss creation form with the critical fields required in the old system.</p>
+        <p class="page-description">Loss creation form with the critical fields required in the system.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/losses")'>
@@ -40,11 +40,30 @@
             </div>
             <div class="form-field">
                 <label class="form-label">Vehicle Identifier (GG/Reg)</label>
+                <div class="contract-search-radio">
+                    <label class="form-radio-label">
+                        <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                        GG
+                    </label>
+                    <label class="form-radio-label">
+                        <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                        GP
+                    </label>
+                </div>
                 <InputText class="form-input" @bind-Value="_form.VehicleIdentifier" />
             </div>
             <div class="form-field">
-                <label class="form-label">VMF Code</label>
-                <InputNumber class="form-input" @bind-Value="_form.VmfCode" />
+                <label class="form-label">Vehicle Match</label>
+                <select class="form-select" @bind="_form.VmfCode">
+                    <option value="">Select vehicle</option>
+                    @foreach (var vehicle in _vehicleMatches)
+                    {
+                        <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                    }
+                </select>
+                <div class="form-actions" style="margin-top: 0.5rem;">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_saving">Search vehicle</button>
+                </div>
             </div>
             <div class="form-field">
                 <label class="form-label">Loss Date</label>
@@ -56,7 +75,7 @@
                     <option value="">Select Loss Type</option>
                     @foreach (var type in _lossTypes)
                     {
-                        <option value="@type.loss_code">@type.loss_description</option>
+                        <option value="@type.loss_code">@($"{type.loss_description} ({type.loss_code})")</option>
                     }
                 </select>
             </div>
@@ -106,6 +125,16 @@
                 <InputText class="form-input" @bind-Value="_form.HqReference" />
             </div>
             <div class="form-field">
+                <label class="form-label">Receiver Site</label>
+                <select class="form-select" @bind="_form.SiteCode">
+                    <option value="">Select site</option>
+                    @foreach (var site in _sites.OrderBy(s => s.Description))
+                    {
+                        <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                    }
+                </select>
+            </div>
+            <div class="form-field">
                 <label class="form-label">Remarks</label>
                 <InputTextArea class="form-input" rows="3" @bind-Value="_form.Remarks" />
             </div>
@@ -134,8 +163,10 @@
     private readonly LossFormModel _form = new();
     private bool _saved;
     private bool _saving;
+    private string _searchMode = "GG";
     private List<LossTypeDto> _lossTypes = new();
     private List<SiteResponseDto> _sites = new();
+    private List<VehicleDto> _vehicleMatches = new();
 
     private static readonly string[] _lossStatuses =
     {
@@ -178,7 +209,56 @@
     private void ResetForm()
     {
         _form.Reset();
+        _vehicleMatches = new();
         _saved = false;
+    }
+
+    private async Task SearchVehiclesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.VehicleIdentifier))
+        {
+            _vehicleMatches = new();
+            _form.VmfCode = null;
+            return;
+        }
+
+        var keyword = _form.VehicleIdentifier.Trim();
+        var matches = await VehicleService.SearchVehiclesAsync(keyword);
+        _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+
+        if (_vehicleMatches.All(v => v.vmf_code != _form.VmfCode))
+        {
+            _form.VmfCode = null;
+        }
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _form.VmfCode = null;
     }
 
     private sealed class LossFormModel
@@ -245,13 +325,3 @@
             };
     }
 }
-            <div class="form-field">
-                <label class="form-label">Receiver Site</label>
-                <select class="form-select" @bind="_form.SiteCode">
-                    <option value="">Select Site</option>
-                    @foreach (var site in _sites)
-                    {
-                        <option value="@site.SiteCode">@site.Description</option>
-                    }
-                </select>
-            </div>

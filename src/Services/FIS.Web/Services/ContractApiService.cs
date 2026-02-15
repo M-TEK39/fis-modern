@@ -45,6 +45,15 @@ internal class ApiContractResponse
 
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }
+
+    [JsonPropertyName("startOdometer")]
+    public int? StartOdometer { get; set; }
+
+    [JsonPropertyName("driverId")]
+    public string? DriverId { get; set; }
+
+    [JsonPropertyName("targetReturnDate")]
+    public DateTime? TargetReturnDate { get; set; }
 }
 
 public class ContractApiService
@@ -81,6 +90,71 @@ public class ContractApiService
         {
             // Return empty list for any other errors
             return new List<FIS.Web.Models.ContractDto>();
+        }
+    }
+
+    public async Task<ContractPageResult> GetContractsPageAsync(ContractsPageQuery query)
+    {
+        try
+        {
+            var parameters = new List<string>
+            {
+                $"page={Math.Max(1, query.Page)}",
+                $"pageSize={Math.Max(1, query.PageSize)}"
+            };
+
+            if (query.StatusCode.HasValue)
+            {
+                parameters.Add($"status={query.StatusCode.Value}");
+            }
+
+            if (query.SiteCode.HasValue)
+            {
+                parameters.Add($"siteCode={query.SiteCode.Value}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.StillCurrent))
+            {
+                parameters.Add($"stillCurrent={Uri.EscapeDataString(query.StillCurrent)}");
+            }
+
+            if (query.StartDateFrom.HasValue)
+            {
+                parameters.Add($"startDateFrom={query.StartDateFrom.Value:yyyy-MM-dd}");
+            }
+
+            if (query.StartDateTo.HasValue)
+            {
+                parameters.Add($"startDateTo={query.StartDateTo.Value:yyyy-MM-dd}");
+            }
+
+            if (query.VmfCode.HasValue)
+            {
+                parameters.Add($"vmfCode={query.VmfCode.Value}");
+            }
+
+            var endpoint = $"api/contracts?{string.Join("&", parameters)}";
+            var response = await _httpClient.GetAsync(endpoint);
+            response.EnsureSuccessStatusCode();
+
+            var payload = await response.Content.ReadFromJsonAsync<PagedContractsResponse>();
+            if (payload == null)
+            {
+                return ContractPageResult.Empty(query.Page, query.PageSize);
+            }
+
+            return new ContractPageResult
+            {
+                Page = payload.Page,
+                PageSize = payload.PageSize,
+                TotalRecords = payload.TotalRecords,
+                TotalPages = payload.TotalPages,
+                Data = payload.Data?.Select(MapToDto).ToList() ?? new List<ContractDto>()
+            };
+        }
+        catch
+        {
+            return ContractPageResult.Empty(query.Page, query.PageSize);
         }
     }
 
@@ -234,6 +308,18 @@ public class ContractApiService
         }
     }
 
+    public async Task<ContractPrintoutDto?> GetContractPrintoutAsync(int contractId)
+    {
+        try
+        {
+            return await _httpClient.GetFromJsonAsync<ContractPrintoutDto>($"api/contracts/{contractId}/printout");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public Task<FinanceApiResult> GetActionAsync(string endpoint)
         => SendAsync(HttpMethod.Get, endpoint, null);
 
@@ -266,7 +352,7 @@ public class ContractApiService
                 Endpoint = endpoint,
                 Message = response.IsSuccessStatusCode
                     ? "Request completed successfully."
-                    : ExtractApiErrorMessage(body) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
+                    : SanitizeUserMessage(ExtractApiErrorMessage(body)) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
                 ResponseBody = body
             };
         }
@@ -276,7 +362,7 @@ public class ContractApiService
             {
                 Success = false,
                 Endpoint = endpoint,
-                Message = ex.Message
+                Message = SanitizeUserMessage(ex.Message) ?? "Request failed."
             };
         }
     }
@@ -319,6 +405,23 @@ public class ContractApiService
         return null;
     }
 
+    private static string? SanitizeUserMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var trimmed = message.Trim();
+        var endpointIndex = trimmed.IndexOf("Endpoint:", StringComparison.OrdinalIgnoreCase);
+        if (endpointIndex >= 0)
+        {
+            trimmed = trimmed[..endpointIndex].Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
+
     private static ContractDto MapToDto(ApiContractResponse api)
     {
         var stillCurrent = (api.StillCurrent ?? string.Empty).Trim().ToUpperInvariant();
@@ -349,10 +452,60 @@ public class ContractApiService
             contractor_name = api.ContractTypeCode ?? "",
             start_date = api.StartDate,
             end_date = api.EndDate,
+            start_odometer = api.StartOdometer,
+            driver_id = api.DriverId,
+            target_return_date = api.TargetReturnDate,
             status = statusLabel,
             contract_notes = api.Notes
         };
     }
+
+    private static ContractDto MapToDto(PagedContractResponse api)
+    {
+        var statusCode = api.ContractStatusCode;
+        var stillCurrent = (api.StillCurrent ?? string.Empty).Trim().ToUpperInvariant();
+
+        return new ContractDto
+        {
+            contract_id = api.ContractCode,
+            vmf_code = api.VmfCode,
+            site_code = api.SiteCode,
+            contract_status_code = statusCode,
+            still_current = stillCurrent,
+            user_code = api.UserCode,
+            approver_code = api.ApproverCode,
+            created_by_user_code = api.CreatedByUserCode,
+            modified_by_user_code = api.ModifiedByUserCode,
+            contract_number = api.ContractCode.ToString(),
+            vehicle_registration = api.RegistrationNumber ?? string.Empty,
+            vehicle_make = api.Make ?? string.Empty,
+            vehicle_model = api.Model ?? string.Empty,
+            department_name = api.DepartmentName ?? string.Empty,
+            contractor_name = api.ContractTypeCode ?? string.Empty,
+            start_date = api.StartDate,
+            end_date = api.EndDate,
+            status = api.ContractStatus ?? StatusLabel(statusCode, stillCurrent),
+            contract_notes = api.Notes,
+            target_return_date = api.TargetReturnDate,
+            fleet_number = api.FleetNumber,
+            site_name = api.SiteName,
+            driver_name = api.DriverName
+        };
+    }
+
+    private static string StatusLabel(short? statusCode, string? stillCurrent)
+        => statusCode switch
+        {
+            0 => "Draft",
+            1 => "Pending Review",
+            2 => "Approved",
+            3 => "Active",
+            4 => "Declined for Correction",
+            5 => "Declined",
+            6 => "Cancelled",
+            7 => "Closed",
+            _ => string.Equals(stillCurrent, "Y", StringComparison.OrdinalIgnoreCase) ? "Active" : "Unknown"
+        };
 }
 
 public class ContractCreateDto
@@ -397,4 +550,284 @@ public class ContractSummaryDto
     public int vmf_code { get; set; }
     public short site_code { get; set; }
     public string? still_current { get; set; }
+}
+
+public class ContractsPageQuery
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 25;
+    public short? StatusCode { get; set; }
+    public short? SiteCode { get; set; }
+    public string? StillCurrent { get; set; }
+    public DateTime? StartDateFrom { get; set; }
+    public DateTime? StartDateTo { get; set; }
+    public int? VmfCode { get; set; }
+}
+
+public class ContractPageResult
+{
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalRecords { get; set; }
+    public int TotalPages { get; set; }
+    public List<ContractDto> Data { get; set; } = new();
+
+    public static ContractPageResult Empty(int page, int pageSize)
+        => new()
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalRecords = 0,
+            TotalPages = 0,
+            Data = new List<ContractDto>()
+        };
+}
+
+internal class PagedContractsResponse
+{
+    [JsonPropertyName("page")]
+    public int Page { get; set; }
+
+    [JsonPropertyName("pageSize")]
+    public int PageSize { get; set; }
+
+    [JsonPropertyName("page_size")]
+    public int PageSizeLegacy
+    {
+        get => PageSize;
+        set => PageSize = value;
+    }
+
+    [JsonPropertyName("totalRecords")]
+    public int TotalRecords { get; set; }
+
+    [JsonPropertyName("total_records")]
+    public int TotalRecordsLegacy
+    {
+        get => TotalRecords;
+        set => TotalRecords = value;
+    }
+
+    [JsonPropertyName("totalPages")]
+    public int TotalPages { get; set; }
+
+    [JsonPropertyName("total_pages")]
+    public int TotalPagesLegacy
+    {
+        get => TotalPages;
+        set => TotalPages = value;
+    }
+
+    [JsonPropertyName("data")]
+    public List<PagedContractResponse>? Data { get; set; }
+}
+
+internal class PagedContractResponse
+{
+    [JsonPropertyName("contractCode")]
+    public int ContractCode { get; set; }
+
+    [JsonPropertyName("vmfCode")]
+    public int? VmfCode { get; set; }
+
+    [JsonPropertyName("fleetNumber")]
+    public string? FleetNumber { get; set; }
+
+    [JsonPropertyName("registrationNumber")]
+    public string? RegistrationNumber { get; set; }
+
+    [JsonPropertyName("siteCode")]
+    public short? SiteCode { get; set; }
+
+    [JsonPropertyName("siteName")]
+    public string? SiteName { get; set; }
+
+    [JsonPropertyName("departmentName")]
+    public string? DepartmentName { get; set; }
+
+    [JsonPropertyName("driverName")]
+    public string? DriverName { get; set; }
+
+    [JsonPropertyName("contractTypeCode")]
+    public string? ContractTypeCode { get; set; }
+
+    [JsonPropertyName("contractStatusCode")]
+    public short? ContractStatusCode { get; set; }
+
+    [JsonPropertyName("contractStatus")]
+    public string? ContractStatus { get; set; }
+
+    [JsonPropertyName("stillCurrent")]
+    public string? StillCurrent { get; set; }
+
+    [JsonPropertyName("startDate")]
+    public DateTime StartDate { get; set; }
+
+    [JsonPropertyName("endDate")]
+    public DateTime? EndDate { get; set; }
+
+    [JsonPropertyName("targetReturnDate")]
+    public DateTime? TargetReturnDate { get; set; }
+
+    [JsonPropertyName("userCode")]
+    public short? UserCode { get; set; }
+
+    [JsonPropertyName("approverCode")]
+    public int? ApproverCode { get; set; }
+
+    [JsonPropertyName("createdByUserCode")]
+    public int? CreatedByUserCode { get; set; }
+
+    [JsonPropertyName("modifiedByUserCode")]
+    public int? ModifiedByUserCode { get; set; }
+
+    [JsonPropertyName("notes")]
+    public string? Notes { get; set; }
+
+    [JsonPropertyName("make")]
+    public string? Make { get; set; }
+
+    [JsonPropertyName("model")]
+    public string? Model { get; set; }
+}
+
+public class ContractPrintoutDto
+{
+    [JsonPropertyName("printed_at")]
+    public DateTime? PrintedAt { get; set; }
+
+    [JsonPropertyName("document_title")]
+    public string? DocumentTitle { get; set; }
+
+    [JsonPropertyName("contract")]
+    public ContractPrintoutContractDto? Contract { get; set; }
+
+    [JsonPropertyName("vehicle")]
+    public ContractPrintoutVehicleDto? Vehicle { get; set; }
+
+    [JsonPropertyName("site")]
+    public ContractPrintoutSiteDto? Site { get; set; }
+
+    [JsonPropertyName("parties")]
+    public ContractPrintoutPartiesDto? Parties { get; set; }
+
+    [JsonPropertyName("audit_trail")]
+    public List<ContractPrintoutAuditDto>? AuditTrail { get; set; }
+}
+
+public class ContractPrintoutContractDto
+{
+    [JsonPropertyName("contract_code")]
+    public int ContractCode { get; set; }
+
+    [JsonPropertyName("status_code")]
+    public short? StatusCode { get; set; }
+
+    [JsonPropertyName("status_text")]
+    public string? StatusText { get; set; }
+
+    [JsonPropertyName("still_current")]
+    public string? StillCurrent { get; set; }
+
+    [JsonPropertyName("start_date")]
+    public string? StartDate { get; set; }
+
+    [JsonPropertyName("end_date")]
+    public string? EndDate { get; set; }
+
+    [JsonPropertyName("target_return_date")]
+    public string? TargetReturnDate { get; set; }
+
+    [JsonPropertyName("start_odometer")]
+    public int? StartOdometer { get; set; }
+
+    [JsonPropertyName("end_odometer")]
+    public int? EndOdometer { get; set; }
+
+    [JsonPropertyName("contract_type")]
+    public string? ContractType { get; set; }
+
+    [JsonPropertyName("driver_id")]
+    public string? DriverId { get; set; }
+
+    [JsonPropertyName("notes")]
+    public string? Notes { get; set; }
+}
+
+public class ContractPrintoutVehicleDto
+{
+    [JsonPropertyName("vmf_code")]
+    public int? VmfCode { get; set; }
+
+    [JsonPropertyName("fleet_number")]
+    public string? FleetNumber { get; set; }
+
+    [JsonPropertyName("registration_number")]
+    public string? RegistrationNumber { get; set; }
+
+    [JsonPropertyName("year_manufactured")]
+    public int? YearManufactured { get; set; }
+
+    [JsonPropertyName("model_code")]
+    public short? ModelCode { get; set; }
+
+    [JsonPropertyName("current_odo")]
+    public int? CurrentOdo { get; set; }
+}
+
+public class ContractPrintoutSiteDto
+{
+    [JsonPropertyName("site_code")]
+    public short? SiteCode { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("res_person")]
+    public string? ResponsiblePerson { get; set; }
+
+    [JsonPropertyName("net_address")]
+    public string? NetAddress { get; set; }
+
+    [JsonPropertyName("telephone")]
+    public string? Telephone { get; set; }
+}
+
+public class ContractPrintoutPartiesDto
+{
+    [JsonPropertyName("capturer")]
+    public ContractPrintoutUserDto? Capturer { get; set; }
+
+    [JsonPropertyName("approver")]
+    public ContractPrintoutUserDto? Approver { get; set; }
+}
+
+public class ContractPrintoutUserDto
+{
+    [JsonPropertyName("user_code")]
+    public int? UserCode { get; set; }
+
+    [JsonPropertyName("email")]
+    public string? Email { get; set; }
+}
+
+public class ContractPrintoutAuditDto
+{
+    [JsonPropertyName("action")]
+    public string? Action { get; set; }
+
+    [JsonPropertyName("performed_by_user_code")]
+    public int? PerformedByUserCode { get; set; }
+
+    [JsonPropertyName("performed_at")]
+    public string? PerformedAt { get; set; }
+
+    [JsonPropertyName("old_status")]
+    public string? OldStatus { get; set; }
+
+    [JsonPropertyName("new_status")]
+    public string? NewStatus { get; set; }
+
+    [JsonPropertyName("notes")]
+    public string? Notes { get; set; }
 }

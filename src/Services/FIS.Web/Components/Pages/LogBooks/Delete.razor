@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject LogbookApiService LogbookService
 @inject VehicleLookupApiService VehicleLookupService
 @inject IJSRuntime JSRuntime
@@ -15,18 +14,42 @@
             <i class="bx bx-trash"></i>
             Delete a Logbook Handout
         </h1>
-        <p class="page-description">Legacy Logbook/MNT_logbkdelj_getreg.aspx workflow.</p>
+        <p class="page-description">Logbook delete workflow.</p>
     </div>
 </div>
 
 <div class="page-content">
     <div class="form-card">
         <div class="form-row">
-            <label class="form-label">GG Number</label>
-            <input class="form-input" @bind="_searchTerm" placeholder="Enter GG number" />
+            <label class="form-label">Number Type</label>
+            <div class="contract-search-radio">
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                    GG
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                    GP
+                </label>
+            </div>
+        </div>
+        <div class="form-row">
+            <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+            <input class="form-input" @bind="_searchTerm" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">Vehicle Match</label>
+            <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                <option value="">Select vehicle...</option>
+                @foreach (var vehicle in _vehicleMatches)
+                {
+                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                }
+            </select>
         </div>
         <div class="form-actions">
-            <button class="btn btn-primary" @onclick="SearchLogbooks">Search</button>
+            <button class="btn btn-secondary" @onclick="SearchLogbooks">Find</button>
+            <button class="btn btn-primary" @onclick="LoadLogbooksForSelectedVehicleAsync" disabled="@(!_selectedVmfCode.HasValue)">Search</button>
         </div>
     </div>
 
@@ -63,7 +86,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var logbook in _logbooks)
+                        @foreach (var logbook in PagedLogbooks)
                         {
                             <tr>
                                 <td>@_vehicleLabel</td>
@@ -82,23 +105,32 @@
                     </tbody>
                 </table>
             </div>
+            @if (_logbooks.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_logbooks.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logbook/MNT_logbkdelj_getreg.aspx"
-        Endpoint="api/logbook/handout/1"
-        HttpMethod="DELETE"
-        ButtonText="Test Logbook Delete Endpoint"
-        ReportType="logbook-delete" />
-
 @code {
     private bool _loading;
+    private string _searchMode = "GG";
     private string _searchTerm = string.Empty;
     private string _vehicleLabel = string.Empty;
+    private int? _selectedVmfCode;
+    private List<VehicleLookupDto> _vehicleMatches = new();
     private List<LogbookDto> _logbooks = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<LogbookDto> PagedLogbooks => _logbooks.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_logbooks.Count / (double)_pageSize));
 
     private async Task SearchLogbooks()
     {
@@ -107,17 +139,21 @@
         _vehicleLabel = string.Empty;
         try
         {
-            if (!string.IsNullOrWhiteSpace(_searchTerm))
+            if (string.IsNullOrWhiteSpace(_searchTerm))
             {
-                var vehicleMatches = await VehicleLookupService.SearchAsync(_searchTerm);
-                var match = vehicleMatches.FirstOrDefault();
-                if (match != null && match.VmfCode > 0)
-                {
-                    _vehicleLabel = match.GGNumber ?? match.RegistrationNumber ?? string.Empty;
-                    var all = await LogbookService.GetAllAsync<LogbookDto>();
-                    _logbooks = all.Where(l => l.vmf_code == match.VmfCode).ToList();
-                }
+                _vehicleMatches = new();
+                _selectedVmfCode = null;
+                return;
             }
+
+            var searchTerm = _searchTerm.Trim();
+            var matches = await VehicleLookupService.SearchAsync(searchTerm);
+            _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _searchMode);
+            if (_vehicleMatches.All(vehicle => vehicle.VmfCode != _selectedVmfCode))
+            {
+                _selectedVmfCode = null;
+            }
+
         }
         catch (Exception ex)
         {
@@ -129,12 +165,32 @@
         }
     }
 
+    private async Task LoadLogbooksForSelectedVehicleAsync()
+    {
+        _logbooks = new();
+        _vehicleLabel = string.Empty;
+        if (!_selectedVmfCode.HasValue || _selectedVmfCode.Value <= 0)
+        {
+            return;
+        }
+
+        var selectedVehicle = _vehicleMatches.FirstOrDefault(vehicle => vehicle.VmfCode == _selectedVmfCode.Value);
+        _vehicleLabel = selectedVehicle == null ? string.Empty : VehicleOptionLabel(selectedVehicle);
+        var all = await LogbookService.GetAllAsync<LogbookDto>();
+        _logbooks = all.Where(logbook => logbook.vmf_code == _selectedVmfCode.Value).ToList();
+        _page = 1;
+    }
+
     private async Task DeleteLogbook(LogbookDto logbook)
     {
         try
         {
             await LogbookService.DeleteAsync(logbook.logbookcode);
             _logbooks.Remove(logbook);
+            if (_page > TotalPages)
+            {
+                _page = TotalPages;
+            }
         }
         catch (Exception ex)
         {
@@ -142,6 +198,58 @@
         }
     }
 
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
     private static string FormatDate(DateTime? date) =>
         date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.VmfCode)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+        _logbooks = new();
+        _vehicleLabel = string.Empty;
+        _page = 1;
+    }
 }

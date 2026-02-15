@@ -34,7 +34,7 @@
                             <option value="">Select Model</option>
                             @foreach (var model in _models)
                             {
-                                <option value="@model.model_code">@model.model_name</option>
+                                <option value="@model.model_code">@($"{model.model_name} ({model.model_code})")</option>
                             }
                         </select>
                     </div>
@@ -63,7 +63,7 @@
                             <option value="">Select Licence Description</option>
                             @foreach (var fee in _licenseFees)
                             {
-                                <option value="@fee.licence_fee_code">@fee.licence_description</option>
+                                <option value="@fee.licence_fee_code">@($"{fee.licence_description} ({fee.licence_fee_code})")</option>
                             }
                         </select>
                     </div>

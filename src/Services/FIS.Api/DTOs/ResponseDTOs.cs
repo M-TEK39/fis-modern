@@ -147,10 +147,69 @@ namespace FIS.Api.DTOs
         public int? captured_by_user_code { get; set; }
         public int? authorized_by_user_code { get; set; }
 
+        // Repair costs (populated once job card is closed with cost data)
+        public decimal? labour_cost { get; set; }
+        public decimal? parts_cost { get; set; }
+        public decimal? other_cost { get; set; }
+        public decimal? total_cost { get; set; }
+        public string? invoice_number { get; set; }
+        public DateTime? invoice_date { get; set; }
+        public string? service_provider { get; set; }
+
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }
         public int? created_by_user_code { get; set; }
         public int? modified_by_user_code { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for a single vehicle licence history entry
+    /// </summary>
+    public class VehicleLicenceHistoryDto
+    {
+        public int licence_history_id { get; set; }
+        public int vmf_code { get; set; }
+        public string? fleet_number { get; set; }
+        public string? registration_number { get; set; }
+        // Snapshotted licence values at time of supersession
+        public DateTime? licence_due_date { get; set; }
+        public string? lic_register_number { get; set; }
+        public string? lic_registration_doc { get; set; }
+        public string? licence_comments { get; set; }
+        public DateTime? cof_last_done { get; set; }
+        public string? cof_required { get; set; }
+        public int? tare { get; set; }
+        public string? Licence_receiver { get; set; }
+        public string? Licence_receiver_id { get; set; }
+        public string? Licence_receiver_tel { get; set; }
+        public short? Licence_receiver_site { get; set; }
+        public DateTime? Licence_date_taken { get; set; }
+        // Metadata
+        public DateTime captured_at { get; set; }
+        public int? captured_by_user_code { get; set; }
+        public string? captured_by_user_email { get; set; }
+        public string? update_notes { get; set; }
+    }
+
+    /// <summary>
+    /// DTO for vehicle remark responses
+    /// </summary>
+    public class VehicleRemarkResponseDto
+    {
+        public int remark_id { get; set; }
+        public int vmf_code { get; set; }
+        public string? fleet_number { get; set; }
+        public string? registration_number { get; set; }
+        public string remark_category { get; set; } = string.Empty;
+        public string remark_text { get; set; } = string.Empty;
+        public bool is_resolved { get; set; }
+        public DateTime? resolved_date { get; set; }
+        public string? resolved_by_user_email { get; set; }
+        public string? resolution_notes { get; set; }
+        public DateTime date_created { get; set; }
+        public DateTime? date_updated { get; set; }
+        public int? created_by_user_code { get; set; }
+        public string? created_by_user_email { get; set; }
     }
 }

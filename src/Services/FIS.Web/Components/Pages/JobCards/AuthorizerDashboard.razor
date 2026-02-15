@@ -3,7 +3,9 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject JobCardApiService JobCardService
+@inject UserApiService UserService
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -40,7 +42,7 @@
     }
     else if (_items.Count == 0)
     {
-        <div class="empty-state"><i class="bx bx-info-circle"></i><h3>No job cards</h3><p>No records returned by the API.</p></div>
+        <div class="empty-state"><i class="bx bx-info-circle"></i><h3>No job cards</h3><p>No job cards are currently available for review.</p></div>
     }
     else
     {
@@ -61,23 +63,25 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _items)
+                        @foreach (var item in PagedItems)
                         {
                             <tr>
                                 <td>@item.JobCardId</td>
                                 <td>@ValueOrDash(item.GGNumber)</td>
                                 <td>@ValueOrDash(item.Status)</td>
-                                <td>@ValueOrDash(item.AssignedToName)</td>
+                                <td>@FormatUser(item.AssignedTo, item.AssignedToName)</td>
                                 <td>@FormatDate(item.AssignedDate)</td>
                                 <td>
                                     <input class="form-input"
                                            @bind="_reviewComments[item.JobCardId]"
-                                           placeholder="Optional comment" />
+                                           placeholder="Optional comment"
+                                           disabled="@(!CanReview(item))" />
                                 </td>
                                 <td>
                                     <input class="form-input"
                                            @bind="_declineReasons[item.JobCardId]"
-                                           placeholder="Required when declining" />
+                                           placeholder="Required when declining"
+                                           disabled="@(!CanReview(item))" />
                                 </td>
                                 <td class="actions-column">
                                     <div class="table-actions">
@@ -91,6 +95,10 @@
                                                 @onclick="() => DeclineAsync(item)">
                                             Decline
                                         </button>
+                                        @if (!CanReview(item))
+                                        {
+                                            <span class="form-hint">Captured by you</span>
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -98,6 +106,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_items.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_items.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -111,8 +128,13 @@
     private int? _currentUserAccessCode;
     private string _message = string.Empty;
     private List<JobCardDto> _items = new();
+    private Dictionary<short, UserProfileDto> _userProfilesByCode = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
     private readonly Dictionary<int, string> _reviewComments = new();
     private readonly Dictionary<int, string> _declineReasons = new();
+    private IEnumerable<JobCardDto> PagedItems => _items.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_items.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -125,8 +147,15 @@
 
         try
         {
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(x => x.UserAccessCode > 0)
+                .GroupBy(x => x.UserAccessCode)
+                .ToDictionary(g => g.Key, g => g.First());
+
             _items = await JobCardService.GetAllAsync();
             EnsureInputState();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -191,8 +220,14 @@
             }
 
             _message = "Request completed successfully.";
-            _items = await JobCardService.GetAllAsync();
-            EnsureInputState();
+        _items = await JobCardService.GetAllAsync();
+        var profiles = await UserService.GetAllProfilesAsync();
+        _userProfilesByCode = profiles
+            .Where(x => x.UserAccessCode > 0)
+            .GroupBy(x => x.UserAccessCode)
+            .ToDictionary(g => g.Key, g => g.First());
+        EnsureInputState();
+        _page = 1;
         }
         finally
         {
@@ -232,7 +267,13 @@
 
             _message = "Request completed successfully.";
             _items = await JobCardService.GetAllAsync();
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(x => x.UserAccessCode > 0)
+                .GroupBy(x => x.UserAccessCode)
+                .ToDictionary(g => g.Key, g => g.First());
             EnsureInputState();
+            _page = 1;
         }
         finally
         {
@@ -293,6 +334,46 @@
 
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private string FormatUser(int? userCode, string? fallback)
+    {
+        if (!userCode.HasValue || userCode.Value <= 0)
+        {
+            return ValueOrDash(fallback);
+        }
+
+        if (_userProfilesByCode.TryGetValue((short)userCode.Value, out var user))
+        {
+            var fullName = $"{user.FirstName} {user.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return fullName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                return user.Email;
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(fallback) ? fallback : $"User {userCode.Value}";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";

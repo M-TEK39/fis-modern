@@ -1,4 +1,3 @@
-@using FIS.Web.Components.Shared
 @page "/towing"
 @rendermode InteractiveServer
 
@@ -10,7 +9,7 @@
             <i class="bx bx-anchor"></i>
             Road Side Assistance Menu
         </h1>
-        <p class="page-description">Legacy towing and road side assistance menu.</p>
+        <p class="page-description">Towing and road side assistance menu.</p>
     </div>
 </div>
 
@@ -23,15 +22,15 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/request">1) Capture a New Request</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/request">2) Edit / Update / Delete a Existing Request</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/reports">3) Road Side Request Reports</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
@@ -43,21 +42,14 @@
             <div class="menu-tile-body">
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/tow-truck-data">4) Capture / Edit / Update Road Assistance Data</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
                     <a class="menu-item-link" href="/towing/tow-truck-data/report">5) Show All Road Assistance Data</a>
-                    <span class="menu-item-badge">Legacy</span>
+                    <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Towing/MNTTowing.aspx"
-        Endpoint="api/towing/menu"
-        HttpMethod="GET"
-        ButtonText="Test Towing Menu Endpoint"
-        ReportType="towing-menu" />
 
 </div>

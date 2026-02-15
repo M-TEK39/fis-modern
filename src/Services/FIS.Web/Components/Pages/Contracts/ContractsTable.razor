@@ -12,7 +12,7 @@ else if (Contracts.Count == 0)
     <div class="empty-state">
         <i class="bx bx-file"></i>
         <h3>No contracts found</h3>
-        <p>@(HasSearchTerm ? "No contracts match your search criteria" : "Get started by creating your first vehicle contract")</p>
+        <p>@(HasSearchTerm ? "No contracts match the selected search/filter criteria." : "Start by creating a vehicle contract.")</p>
         @if (!HasSearchTerm)
         {
             <button class="btn btn-primary" @onclick="OnAddContract">
@@ -48,7 +48,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var contract in Contracts)
+                    @foreach (var contract in PagedContracts)
                     {
                         <tr>
                             <td class="contract-number">@ValueOrDash(contract.contract_number)</td>
@@ -92,6 +92,15 @@ else
                 </tbody>
             </table>
         </div>
+        @if (Contracts.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @Contracts.Count | Page size: @_pageSize</div>
+        }
     </div>
 }
 
@@ -104,6 +113,43 @@ else
     [Parameter] public EventCallback<ContractDto> OnView { get; set; }
     [Parameter] public EventCallback<ContractDto> OnEdit { get; set; }
     [Parameter] public EventCallback<ContractDto> OnDelete { get; set; }
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<ContractDto> PagedContracts
+        => Contracts.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages
+        => Math.Max(1, (int)Math.Ceiling(Contracts.Count / (double)_pageSize));
+
+    protected override void OnParametersSet()
+    {
+        if (_page > TotalPages)
+        {
+            _page = TotalPages;
+        }
+
+        if (_page < 1)
+        {
+            _page = 1;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private string GetStatusClass(ContractDto contract)
     {

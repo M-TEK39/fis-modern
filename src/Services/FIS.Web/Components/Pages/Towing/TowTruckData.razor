@@ -4,6 +4,7 @@
 @using FIS.Web.Services
 @using FIS.Web.Components.Shared
 @inject TowingApiService TowingService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Road Assistance Data - Fleet Information System</PageTitle>
@@ -14,7 +15,7 @@
             <i class="bx bx-truck"></i>
             Capture / Edit / Update Road Assistance Data
         </h1>
-        <p class="page-description">Legacy placeholder for Towing/MNT_towtruck_getdata.aspx.</p>
+        <p class="page-description">Capture, edit, and update road assistance request details.</p>
     </div>
 </div>
 
@@ -53,11 +54,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var request in _requests)
+                        @foreach (var request in PagedRequests)
                         {
                             <tr>
                                 <td>@request.Call_refer</td>
-                                <td>@request.vmf_code</td>
+                                <td>@GetVehicleLabel(request.vmf_code)</td>
                                 <td>@request.Tow_location_start</td>
                                 <td>@request.Vehicle_problem</td>
                                 <td class="actions-column">
@@ -72,6 +73,11 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     }
 
@@ -101,19 +107,22 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Towing/MNT_towtruck_getdata.aspx"
-        Endpoint="api/towing/towtruck/1"
-        HttpMethod="PUT"
-        ButtonText="Test Towing Tow Truck Data Endpoint"
-        ReportType="towing-towtruck-data" />
-
 @code {
     private bool _loading;
     private bool _showForm;
     private List<TowingDto> _requests = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
     private TowingDto? _editing;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<TowingDto> PagedRequests => _requests.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_requests.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadVehicleLookupAsync();
+    }
 
     private async Task LoadRequests()
     {
@@ -122,6 +131,7 @@
         try
         {
             _requests = await TowingService.GetAllAsync<TowingDto>();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -167,4 +177,48 @@
         _showForm = false;
         await InvokeAsync(StateHasChanged);
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private async Task LoadVehicleLookupAsync()
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _vehicleLabelByVmf = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(
+                g => g.Key,
+                g => FormatVehicleLabel(g.First()));
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabelByVmf.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : vmfCode.Value.ToString();
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
 }

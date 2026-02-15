@@ -1,6 +1,8 @@
 @page "/private-hire/reports/contractors"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Private Hire Contractors - Fleet Information System</PageTitle>
 
@@ -23,27 +25,21 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">
-                        <input type="radio" name="contractorsScope" checked />
+                        <input type="radio" name="contractorsScope" checked="@(_scope == "all")" @onchange='() => _scope = "all"' />
                         All Contractors
                     </label>
                 </div>
                 <div class="form-field">
                     <label class="form-label">
-                        <input type="radio" name="contractorsScope" />
+                        <input type="radio" name="contractorsScope" checked="@(_scope == "active")" @onchange='() => _scope = "active"' />
                         Private Hire Contractors
                     </label>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="ApplyScope">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
-            <LegacyEndpointActionPanel
-                LegacyPath="Private_Hire/RPT_private_hire_contractors_1.aspx"
-                Endpoint="api/privatehire/contractors"
-                HttpMethod="GET"
-                ButtonText="Run Contractors API"
-                ReportType="private-hire-report-contractors" />
             <div class="table-container" style="margin-top: 1.5rem;">
                 <div class="table-wrapper">
                     <table class="data-table">
@@ -64,13 +60,118 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="12">No records found.</td>
-                            </tr>
+                            @if (_loading)
+                            {
+                                <tr>
+                                    <td colspan="12">Loading records...</td>
+                                </tr>
+                            }
+                            else if (_filtered.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="12">No records found.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var contractor in PagedContractors)
+                                {
+                                    <tr>
+                                        <td>@ValueOrDash(contractor.company_name)</td>
+                                        <td>@ValueOrDash(contractor.address)</td>
+                                        <td>-</td>
+                                        <td>@ValueOrDash(contractor.phone)</td>
+                                        <td>-</td>
+                                        <td>@ValueOrDash(contractor.email)</td>
+                                        <td>@ValueOrDash(contractor.contact_person)</td>
+                                        <td>@ValueOrDash(contractor.business_registration)</td>
+                                        <td>@ValueOrDash(contractor.status)</td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                    </tr>
+                                }
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading = true;
+    private string _scope = "all";
+    private List<PrivateHireContractorDto> _all = new();
+    private List<PrivateHireContractorDto> _filtered = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<PrivateHireContractorDto> PagedContractors => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _all = await PrivateHireService.GetContractorsAsync();
+            ApplyScopeInternal();
+        }
+        catch (Exception ex)
+        {
+            _all = new();
+            _filtered = new();
+            _page = 1;
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading private hire contractors report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyScope()
+    {
+        ApplyScopeInternal();
+    }
+
+    private void ApplyScopeInternal()
+    {
+        _filtered = _scope == "active"
+            ? _all.Where(c => string.Equals(c.status, "Active", StringComparison.OrdinalIgnoreCase)).ToList()
+            : new List<PrivateHireContractorDto>(_all);
+
+        _page = 1;
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

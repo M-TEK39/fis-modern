@@ -190,6 +190,8 @@ hr {
 
 .contract-section {
     margin-bottom: 1.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .contract-legacy-table {
@@ -3020,4 +3022,28 @@ body.sidebar-collapsed .legacy-shell .sidebar-notification {
     right: 1rem;
     top: 0.35rem;
     font-size: 1.2rem;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+@media print {
+    .no-print,
+    .page-actions,
+    .sidebar,
+    nav {
+        display: none !important;
+    }
+
+    .page-content,
+    .form-card,
+    .form-card-body {
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
 }

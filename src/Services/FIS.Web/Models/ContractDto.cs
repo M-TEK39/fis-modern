@@ -27,7 +27,13 @@ public class ContractDto
     [Required]
     public DateTime start_date { get; set; } = DateTime.Today;
     public DateTime? end_date { get; set; }
+    public int? start_odometer { get; set; }
+    public string? driver_id { get; set; }
     public decimal? monthly_cost { get; set; }
+    public DateTime? target_return_date { get; set; }
+    public string? fleet_number { get; set; }
+    public string? site_name { get; set; }
+    public string? driver_name { get; set; }
     [Required]
     public string status { get; set; } = "Active";
     public string? contract_notes { get; set; }

@@ -1,7 +1,9 @@
 @page "/workshop/entry/modify"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject WorkshopApiService WorkshopService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Modify Workshop Entry</PageTitle>
@@ -19,9 +21,37 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <div class="form-row">
-                <label class="form-label">Workshop Entry ID</label>
-                <InputNumber @bind-Value="_entryId" class="form-input" />
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Number Type</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="entrySearchMode" checked="@(_entrySearchMode == "GG")" @onchange='() => SetEntrySearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="entrySearchMode" checked="@(_entrySearchMode == "GP")" @onchange='() => SetEntrySearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">@(_entrySearchMode == "GG" ? "GG Number" : "GP Number")</label>
+                    <div class="fis-input-group-compact">
+                        <input class="form-input" @bind="_entrySearchTerm" placeholder="@(_entrySearchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
+                        <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchEntryOptionsAsync" disabled="@_loading">Find</button>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Workshop Entry</label>
+                    <select class="form-select" @bind="_entryId">
+                        <option value="">Select workshop entry...</option>
+                        @foreach (var option in _entryOptions)
+                        {
+                            <option value="@option.ww_code">@GetEntryLabel(option)</option>
+                        }
+                    </select>
+                </div>
             </div>
             <div class="form-actions">
                 <button class="btn btn-primary" @onclick="LoadAsync" disabled="@_loading">Load</button>
@@ -31,10 +61,36 @@
 
     @if (_item != null)
     {
-        <div class="form-card fis-mt-1">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field"><label class="form-label">VMF Code</label><InputNumber @bind-Value="_item.vmf_code" class="form-input" /></div>
+            <div class="form-card fis-mt-1">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Vehicle Search</label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                GP
+                            </label>
+                        </div>
+                        <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                        <div class="form-actions" style="margin-top: 0.5rem;">
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadVehicleMatchesAsync" disabled="@_saving">Search vehicle</button>
+                        </div>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Vehicle Match</label>
+                        <select class="form-select" @bind="_item.vmf_code" disabled="@(_vehicleMatches.Count == 0)">
+                            <option value="">Select vehicle</option>
+                            @foreach (var vehicle in _vehicleMatches)
+                            {
+                                <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                            }
+                        </select>
+                    </div>
                     <div class="form-field"><label class="form-label">Receive Date</label><InputDate @bind-Value="_item.receive_date" class="form-input" /></div>
                     <div class="form-field"><label class="form-label">Receive Time</label><InputDate @bind-Value="_item.receive_time" class="form-input" /></div>
                     <div class="form-field"><label class="form-label">Complete Time</label><InputDate @bind-Value="_item.complete_time" class="form-input" /></div>
@@ -64,16 +120,59 @@
     private bool _saving;
     private bool _error;
     private string _message = string.Empty;
+    private string _searchMode = "GG";
+    private string _entrySearchMode = "GG";
+    private string _entrySearchTerm = string.Empty;
     private WorkshopDto? _item;
+    private string _vehicleSearchTerm = string.Empty;
+    private List<VehicleDto> _vehicleMatches = new();
+    private List<WorkshopDto> _allEntries = new();
+    private List<WorkshopDto> _entryOptions = new();
+    private Dictionary<int, string> _vehicleLabelByVmf = new();
 
-    protected override Task OnParametersSetAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        await LoadEntryOptionsAsync();
+
         if (Id.HasValue && Id.Value > 0)
         {
             _entryId = Id;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadEntryOptionsAsync()
+    {
+        if (_vehicleLabelByVmf.Count == 0)
+        {
+            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+            _vehicleLabelByVmf = vehicles.Data
+                .GroupBy(v => v.vmf_code)
+                .ToDictionary(g => g.Key, g => GetVehicleLabel(g.First()));
         }
 
-        return Task.CompletedTask;
+        _allEntries = await WorkshopService.GetAllAsync<WorkshopDto>();
+        _entryOptions = new(_allEntries.OrderByDescending(x => x.receive_date).ThenByDescending(x => x.ww_code));
+    }
+
+    private async Task SearchEntryOptionsAsync()
+    {
+        var query = _entrySearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _entryOptions = new(_allEntries.OrderByDescending(x => x.receive_date).ThenByDescending(x => x.ww_code));
+            return;
+        }
+
+        var matches = await VehicleService.SearchVehiclesAsync(query);
+        var filteredVehicles = FilterVehicleMatches(matches, query, _entrySearchMode);
+        var vmfCodes = filteredVehicles.Select(v => v.vmf_code).ToHashSet();
+        _entryOptions = _allEntries
+            .Where(x => x.vmf_code.HasValue && vmfCodes.Contains(x.vmf_code.Value))
+            .OrderByDescending(x => x.receive_date)
+            .ThenByDescending(x => x.ww_code)
+            .ToList();
+
     }
 
     private async Task LoadAsync()
@@ -95,6 +194,13 @@
             {
                 _error = true;
                 _message = "Workshop entry not found.";
+                _vehicleMatches = new();
+            }
+            else if (_item.vmf_code.HasValue)
+            {
+                var vehicle = await VehicleService.GetVehicleAsync(_item.vmf_code.Value);
+                _vehicleSearchTerm = vehicle?.fleet_number ?? _item.vmf_code.Value.ToString();
+                _vehicleMatches = vehicle is null ? new List<VehicleDto>() : new List<VehicleDto> { vehicle };
             }
         }
         catch (Exception ex)
@@ -113,6 +219,13 @@
     {
         if (_item == null)
         {
+            return;
+        }
+
+        if (!_item.vmf_code.HasValue || _item.vmf_code.Value <= 0)
+        {
+            _error = true;
+            _message = "Select a vehicle before submitting.";
             return;
         }
 
@@ -137,6 +250,36 @@
         }
     }
 
+    private async Task LoadVehicleMatchesAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_vehicleSearchTerm))
+        {
+            _vehicleMatches = new();
+            if (_item != null)
+            {
+                _item.vmf_code = null;
+            }
+            return;
+        }
+
+        try
+        {
+            var keyword = _vehicleSearchTerm.Trim();
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+
+            if (_item != null && _vehicleMatches.All(vehicle => vehicle.vmf_code != _item.vmf_code))
+            {
+                _item.vmf_code = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error searching vehicles: {ex.Message}");
+        }
+    }
+
     private sealed class WorkshopDto
     {
         public short ww_code { get; set; }
@@ -144,5 +287,55 @@
         public DateTime? receive_time { get; set; }
         public DateTime? receive_date { get; set; }
         public DateTime? complete_time { get; set; }
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private string GetEntryLabel(WorkshopDto entry)
+    {
+        var vehicleLabel = entry.vmf_code.HasValue && _vehicleLabelByVmf.TryGetValue(entry.vmf_code.Value, out var label)
+            ? label
+            : $"VMF {entry.vmf_code?.ToString() ?? "-"}";
+        return $"{vehicleLabel} | Entry #{entry.ww_code} | Received {FormatDate(entry.receive_date)}";
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        if (_item != null)
+        {
+            _item.vmf_code = null;
+        }
+    }
+
+    private void SetEntrySearchMode(string mode)
+    {
+        _entrySearchMode = mode;
+        _entryOptions = new();
+        _entryId = null;
     }
 }

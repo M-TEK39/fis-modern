@@ -6,6 +6,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject SiteApiService SiteService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
@@ -27,8 +28,18 @@
 <div class="page-content status-maintenance-page">
     <div class="status-search-panel">
         <label class="form-label" for="statusSearchInput">Select the vehicle for status management:</label>
+        <div class="contract-search-radio">
+            <label class="form-radio-label">
+                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                GG
+            </label>
+            <label class="form-radio-label">
+                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                GP
+            </label>
+        </div>
         <div class="status-search-row">
-            <input id="statusSearchInput" class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="GG number or registration" />
+            <input id="statusSearchInput" class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
             <button class="btn btn-primary" @onclick="SearchVehiclesAsync" disabled="@_loading">Submit</button>
         </div>
     </div>
@@ -82,7 +93,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var vehicle in _searchResults)
+                        @foreach (var vehicle in PagedSearchResults)
                         {
                             var selected = _selectedVehicle?.vmf_code == vehicle.vmf_code;
                             <tr class="@(selected ? "status-row-selected" : string.Empty)">
@@ -101,6 +112,11 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousSearchPage" disabled="@(_searchPage <= 1)">Previous</button>
+                <div class="pagination-info">Page @_searchPage of @SearchTotalPages</div>
+                <button class="pagination-btn" @onclick="NextSearchPage" disabled="@(_searchPage >= SearchTotalPages)">Next</button>
             </div>
         </div>
     }
@@ -151,7 +167,7 @@
                                 }
                                 else
                                 {
-                                    @foreach (var row in _statusHistory)
+                                    @foreach (var row in PagedStatusHistory)
                                     {
                                         <tr>
                                             <td>@row.StatusDescription</td>
@@ -165,6 +181,11 @@
                                 }
                             </tbody>
                         </table>
+                    </div>
+                    <div class="pagination-controls" style="margin-top: 1rem;">
+                        <button class="pagination-btn" @onclick="PreviousHistoryPage" disabled="@(_historyPage <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_historyPage of @HistoryTotalPages</div>
+                        <button class="pagination-btn" @onclick="NextHistoryPage" disabled="@(_historyPage >= HistoryTotalPages)">Next</button>
                     </div>
                 </div>
             </section>
@@ -203,6 +224,20 @@
                         <label class="form-label">Comments:</label>
                         <textarea class="form-input" rows="3" maxlength="500" @bind="_comments"></textarea>
                     </div>
+
+                    @if (ShowStolenSiteInformation)
+                    {
+                        <div class="status-field-row">
+                            <label class="form-label">Book Under Site:</label>
+                            <select class="form-select" @bind="_stolenSiteCode">
+                                <option value="">Select site</option>
+                                @foreach (var site in _sites.OrderBy(s => s.Description))
+                                {
+                                    <option value="@site.SiteCode">@($"{ValueOrDash(site.Description)} ({site.SiteCode})")</option>
+                                }
+                            </select>
+                        </div>
+                    }
                 </div>
 
                 @if (ShowSoldInformation)
@@ -235,16 +270,19 @@
 
 @code {
     private const short SoldStatusCode = 5;
+    private const short StolenStatusCode = 4;
 
     [SupplyParameterFromQuery(Name = "vmfCode")]
     public int? VmfCode { get; set; }
 
     private string _searchTerm = string.Empty;
     private bool _loading;
+    private string _searchMode = "GG";
     private bool _saving;
     private bool _hasSearched;
     private List<VehicleDto> _searchResults = new();
     private List<StatusOption> _statusCatalog = new();
+    private List<SiteResponseDto> _sites = new();
     private VehicleDto? _selectedVehicle;
     private short? _selectedStatusCode;
     private DateTime? _effectiveDate;
@@ -253,13 +291,22 @@
     private decimal? _soldAmount;
     private DateTime? _soldDate;
     private string _soldTo = string.Empty;
+    private short? _stolenSiteCode;
     private string _statusValidationIssues = string.Empty;
     private string _statusUpdateMessage = string.Empty;
     private string _limitedAccessMessage = string.Empty;
     private string _currentUserDisplay = "Current User";
     private List<StatusHistoryRow> _statusHistory = new();
+    private int _searchPage = 1;
+    private int _historyPage = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<VehicleDto> PagedSearchResults => _searchResults.Skip((_searchPage - 1) * _pageSize).Take(_pageSize);
+    private int SearchTotalPages => Math.Max(1, (int)Math.Ceiling(_searchResults.Count / (double)_pageSize));
+    private IEnumerable<StatusHistoryRow> PagedStatusHistory => _statusHistory.Skip((_historyPage - 1) * _pageSize).Take(_pageSize);
+    private int HistoryTotalPages => Math.Max(1, (int)Math.Ceiling(_statusHistory.Count / (double)_pageSize));
 
     private bool ShowSoldInformation => _selectedStatusCode == SoldStatusCode;
+    private bool ShowStolenSiteInformation => _selectedStatusCode == StolenStatusCode;
 
     private IReadOnlyList<StatusOption> NextStatuses
     {
@@ -291,6 +338,7 @@
     protected override async Task OnInitializedAsync()
     {
         await ResolveCurrentUserAsync();
+        _sites = await SiteService.GetAllAsync();
         await LoadStatusCatalogAsync();
 
         if (VmfCode.HasValue && VmfCode.Value > 0)
@@ -348,7 +396,11 @@
         _searchResults = new();
         try
         {
-            _searchResults = await VehicleService.SearchVehiclesAsync(_searchTerm.Trim());
+            var keyword = _searchTerm.Trim();
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _searchResults = FilterVehicleMatches(matches, keyword, _searchMode);
+
+            _searchPage = 1;
         }
         catch (Exception ex)
         {
@@ -380,6 +432,7 @@
             _soldAmount = null;
             _soldDate = null;
             _soldTo = string.Empty;
+            _stolenSiteCode = _selectedVehicle.site_code;
 
             SeedStatusHistoryFromVehicle(_selectedVehicle);
         }
@@ -405,6 +458,7 @@
                 vehicle.current_odo,
                 "System")
         };
+        _historyPage = 1;
     }
 
     private void SelectStatus(short statusCode)
@@ -415,6 +469,14 @@
             _soldAmount = null;
             _soldDate = null;
             _soldTo = string.Empty;
+        }
+        if (!ShowStolenSiteInformation)
+        {
+            _stolenSiteCode = null;
+        }
+        else if (_selectedVehicle?.site_code is not null && _stolenSiteCode is null)
+        {
+            _stolenSiteCode = _selectedVehicle.site_code;
         }
     }
 
@@ -439,29 +501,47 @@
             var selectedStatus = _statusCatalog.FirstOrDefault(s => s.Code == statusCode)
                 ?? new StatusOption(statusCode, $"Status {statusCode}");
 
-            _selectedVehicle.vehicle_status_code = statusCode;
-            _selectedVehicle.status_description = selectedStatus.Description;
-            _selectedVehicle.vehicle_status_date = _effectiveDate;
+            var statusResult = await VehicleService.ChangeVehicleStatusAsync(
+                _selectedVehicle.vmf_code,
+                statusCode,
+                ShowStolenSiteInformation ? _stolenSiteCode : null,
+                _effectiveDate,
+                _comments);
+
+            if (!statusResult.Success)
+            {
+                _statusValidationIssues = string.IsNullOrWhiteSpace(statusResult.Message)
+                    ? "Failed to update status. Please try again."
+                    : statusResult.Message;
+                return;
+            }
+
+            _selectedVehicle.vehicle_status_code = statusResult.new_status_code ?? statusCode;
+            _selectedVehicle.status_description = statusResult.new_status_description ?? selectedStatus.Description;
+            _selectedVehicle.vehicle_status_date = statusResult.effective_date ?? _effectiveDate;
             _selectedVehicle.current_odo = _endOdometer ?? _selectedVehicle.current_odo;
 
-            var ok = await VehicleService.UpdateVehicleAsync(_selectedVehicle.vmf_code, _selectedVehicle);
-            if (!ok)
+            if (statusResult.location_code.HasValue)
             {
-                _statusValidationIssues = "Failed to update status. Please try again.";
-                return;
+                _selectedVehicle.location_code = statusResult.location_code.Value;
+                _selectedVehicle.site_code = statusResult.location_code.Value;
+                _selectedVehicle.location_description = ResolveSiteDescription(statusResult.location_code);
             }
 
             _statusHistory.Insert(0,
                 new StatusHistoryRow(
-                    selectedStatus.Description,
-                    _effectiveDate,
+                    _selectedVehicle.status_description ?? selectedStatus.Description,
+                    _selectedVehicle.vehicle_status_date,
                     null,
                     DateTime.Now,
                     _endOdometer,
                     _currentUserDisplay));
+            _historyPage = 1;
 
-            var odoText = _endOdometer.HasValue ? $" and odometer {_endOdometer.Value:N0}" : string.Empty;
-            _statusUpdateMessage = $"Status set as [{selectedStatus.Description}] effective from {FormatDate(_effectiveDate)}{odoText}.";
+            var actions = statusResult.actions_performed.Where(a => !string.IsNullOrWhiteSpace(a)).ToList();
+            _statusUpdateMessage = actions.Count > 0
+                ? string.Join(" ", actions)
+                : $"Status set as '{_selectedVehicle.status_description}' effective from {FormatDate(_selectedVehicle.vehicle_status_date)}.";
 
             var idx = _searchResults.FindIndex(v => v.vmf_code == _selectedVehicle.vmf_code);
             if (idx >= 0)
@@ -474,6 +554,7 @@
             _soldAmount = null;
             _soldDate = null;
             _soldTo = string.Empty;
+            _stolenSiteCode = null;
         }
         catch (Exception ex)
         {
@@ -526,7 +607,23 @@
             }
         }
 
+        if (ShowStolenSiteInformation && !_stolenSiteCode.HasValue)
+        {
+            errors.Add("Book Under Site is required when marking a vehicle as Stolen.");
+        }
+
         return string.Join(" ", errors);
+    }
+
+    private string ResolveSiteDescription(short? siteCode)
+    {
+        if (!siteCode.HasValue)
+        {
+            return _selectedVehicle?.location_description ?? "-";
+        }
+
+        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
+        return site == null ? $"Site {siteCode.Value}" : site.Description ?? $"Site {siteCode.Value}";
     }
 
     private StatusOption? ResolveCurrentStatusOption()
@@ -555,11 +652,68 @@
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchResults = new();
+        _selectedVehicle = null;
+        _hasSearched = false;
+        _searchPage = 1;
+    }
+
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy/MM/dd") : "-";
 
     private static string FormatDateTime(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy/MM/dd HH:mm") : "-";
+
+    private void PreviousSearchPage()
+    {
+        if (_searchPage > 1)
+        {
+            _searchPage--;
+        }
+    }
+
+    private void NextSearchPage()
+    {
+        if (_searchPage < SearchTotalPages)
+        {
+            _searchPage++;
+        }
+    }
+
+    private void PreviousHistoryPage()
+    {
+        if (_historyPage > 1)
+        {
+            _historyPage--;
+        }
+    }
+
+    private void NextHistoryPage()
+    {
+        if (_historyPage < HistoryTotalPages)
+        {
+            _historyPage++;
+        }
+    }
 
     private sealed record StatusOption(short Code, string Description);
 

@@ -20,13 +20,25 @@
 
 <div class="page-content">
     <form class="search-bar" @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
+        <div class="form-grid fis-mb-05">
+            <div class="form-field">
+                <label class="form-label">
+                    <input type="radio" name="photoSearchType" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
+                    GG
+                </label>
+                <label class="form-label">
+                    <input type="radio" name="photoSearchType" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
+                    GP
+                </label>
+            </div>
+        </div>
         <div class="search-input-wrapper fis-input-group-spaced">
             <i class="bx bx-search"></i>
             <input
                 id="keyword"
                 type="text"
                 class="search-input"
-                placeholder="GG or registration number"
+                placeholder="@(_searchMode == "gg" ? "GG number" : "Registration number")"
                 @bind="_searchQuery"
                 @bind:event="oninput"
                 list="vehicle-keywords"
@@ -82,7 +94,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var vehicle in _searchResults)
+                        @foreach (var vehicle in PagedSearchResults)
                         {
                             <tr>
                                 <td>@vehicle.GGNumber</td>
@@ -106,6 +118,11 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
 </div>
@@ -120,6 +137,12 @@
     private string? _searchError;
     private List<string> _keywords = new();
     private List<VehicleLookupDto> _searchResults = new();
+    private string _searchMode = "gg";
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<VehicleLookupDto> PagedSearchResults => _searchResults.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_searchResults.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -168,7 +191,10 @@
         _searching = true;
         try
         {
-            _searchResults = await VehicleLookupService.SearchAsync(_searchQuery.Trim());
+            var query = _searchQuery.Trim();
+            var matches = await VehicleLookupService.SearchAsync(query);
+            _searchResults = RankVehicleMatches(matches, query, _searchMode == "gg");
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -180,8 +206,51 @@
         }
     }
 
+    private void SetSearchMode(string mode)
+    {
+        if (_searchMode == mode)
+        {
+            return;
+        }
+
+        _searchMode = mode;
+        _searchQuery = string.Empty;
+        _searchResults = new();
+        _searchError = null;
+        _page = 1;
+    }
+
+    private static List<VehicleLookupDto> RankVehicleMatches(List<VehicleLookupDto> matches, string query, bool preferGg)
+    {
+        return (preferGg
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                preferGg
+                    ? string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => preferGg ? v.GGNumber : v.RegistrationNumber)
+            .ToList();
+    }
+
     private void ManagePhotos(VehicleLookupDto vehicle)
     {
         Navigation.NavigateTo($"/vehicle-photos/manage/{vehicle.VmfCode}?keyword={Uri.EscapeDataString(_searchQuery)}");
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

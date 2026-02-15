@@ -5,6 +5,9 @@
 @using System.Security.Claims
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
+@inject VehicleApiService VehicleService
+@inject ContractApiService ContractService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicle Master - Fleet Information System</PageTitle>
 <a id="PageTop"></a>
@@ -15,7 +18,7 @@
             <i class="bx bxs-car-mechanic"></i>
             Vehicle Master Menu
         </h1>
-        <p class="page-description">Legacy vehicle master navigation and maintenance options</p>
+        <p class="page-description">Vehicle master navigation and maintenance options.</p>
     </div>
     @* UX enhancement kept for future merge. Do not remove. *@
     @*
@@ -161,6 +164,80 @@
                 </div>
             }
         </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">All Vehicles Snapshot</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="RefreshVehicleOverviewAsync" disabled="@_loadingOverview">
+                        <i class="bx bx-refresh"></i>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_overviewMessage))
+            {
+                <div class="alert @(_overviewError ? "alert-error" : "alert-success")" style="margin:0.75rem 0;">@_overviewMessage</div>
+            }
+
+            @if (_loadingOverview)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading vehicles...</p>
+                </div>
+            }
+            else if (_vehicleOverview.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bx bx-info-circle"></i>
+                    <h3>No vehicles found</h3>
+                    <p>No vehicles match the current filter selection.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>GG Number</th>
+                                <th>Registration</th>
+                                <th>Invoice Number</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Contract State</th>
+                                <th>Target Return</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var vehicle in _vehicleOverview)
+                            {
+                                <tr>
+                                    <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                    <td>@ValueOrDash(vehicle.registration_number)</td>
+                                    <td>@ValueOrDash(vehicle.invoice_number)</td>
+                                    <td>@ValueOrDash(vehicle.model_name)</td>
+                                    <td>@ValueOrDash(vehicle.status_description)</td>
+                                    <td>
+                                        <span class="badge @GetContractStateBadgeClass(vehicle.vmf_code)">@GetContractStateLabel(vehicle.vmf_code)</span>
+                                    </td>
+                                    <td>@FormatDate(GetContractTargetReturn(vehicle.vmf_code))</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevOverviewPageAsync" disabled="@(_overviewPage <= 1 || _loadingOverview)">Previous</button>
+                    <div class="pagination-info">Page @_overviewPage of @_overviewTotalPages</div>
+                    <button class="pagination-btn" @onclick="NextOverviewPageAsync" disabled="@(_overviewPage >= _overviewTotalPages || _loadingOverview)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_overviewTotalRecords | Page size: @_overviewPageSize</div>
+            }
+        </div>
     }
 </div>
 
@@ -176,10 +253,24 @@
     private bool _showVehicleSource = true;
     private bool _showRecoveredVehicles = true;
     private bool _showDemoVehicles = true;
+    private bool _loadingOverview;
+    private bool _overviewError;
+    private string _overviewMessage = string.Empty;
+    private int _overviewPage = 1;
+    private readonly int _overviewPageSize = 12;
+    private int _overviewTotalPages = 1;
+    private int _overviewTotalRecords;
+    private List<FIS.Web.Models.VehicleDto> _vehicleOverview = new();
+    private readonly Dictionary<int, string> _contractStateByVmf = new();
+    private readonly Dictionary<int, DateTime?> _contractReturnByVmf = new();
 
     protected override async Task OnInitializedAsync()
     {
         await ResolveAccessAsync();
+        if (_hasVehicleAccess)
+        {
+            await LoadVehicleOverviewAsync();
+        }
     }
 
     private async Task ResolveAccessAsync()
@@ -242,4 +333,136 @@
     private void ToggleVehicleSource() => _showVehicleSource = !_showVehicleSource;
     private void ToggleDemoVehicles() => _showDemoVehicles = !_showDemoVehicles;
     private void ToggleRecoveredVehicles() => _showRecoveredVehicles = !_showRecoveredVehicles;
+
+    private async Task LoadVehicleOverviewAsync()
+    {
+        _loadingOverview = true;
+        _overviewError = false;
+        _overviewMessage = string.Empty;
+        try
+        {
+            var page = await VehicleService.GetVehiclesAsync(_overviewPage, _overviewPageSize);
+            _vehicleOverview = page.Data ?? new List<FIS.Web.Models.VehicleDto>();
+            _overviewTotalRecords = Math.Max(page.TotalCount, _vehicleOverview.Count);
+            _overviewTotalPages = Math.Max(1, page.TotalPages);
+            await LoadContractStatesForCurrentPageAsync();
+        }
+        catch (Exception ex)
+        {
+            _overviewError = true;
+            _overviewMessage = "Unable to load vehicle overview.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+            _vehicleOverview = new();
+            _contractStateByVmf.Clear();
+            _contractReturnByVmf.Clear();
+        }
+        finally
+        {
+            _loadingOverview = false;
+        }
+    }
+
+    private async Task LoadContractStatesForCurrentPageAsync()
+    {
+        _contractStateByVmf.Clear();
+        _contractReturnByVmf.Clear();
+
+        foreach (var vehicle in _vehicleOverview)
+        {
+            var latest = await ContractService.GetLatestContractForVehicleAsync(vehicle.vmf_code);
+            if (latest == null)
+            {
+                _contractStateByVmf[vehicle.vmf_code] = "No Contract";
+                _contractReturnByVmf[vehicle.vmf_code] = null;
+                continue;
+            }
+
+            _contractStateByVmf[vehicle.vmf_code] = ResolveContractState(latest);
+            _contractReturnByVmf[vehicle.vmf_code] = latest.target_return_date;
+        }
+    }
+
+    private string ResolveContractState(FIS.Web.Models.ContractDto contract)
+    {
+        var status = contract.contract_status_code switch
+        {
+            1 => "Pending",
+            2 => "Approved",
+            3 => "Active",
+            4 => "Correction Required",
+            5 => "Declined",
+            6 => "Cancelled",
+            7 => "Closed",
+            _ => "Draft"
+        };
+
+        if (contract.end_date.HasValue && contract.end_date.Value.Date < DateTime.Today)
+        {
+            return "Expired";
+        }
+
+        if (status == "Active"
+            && contract.target_return_date.HasValue
+            && contract.target_return_date.Value.Date <= DateTime.Today.AddDays(30))
+        {
+            return "Soon To Expire";
+        }
+
+        return status;
+    }
+
+    private string GetContractStateLabel(int vmfCode)
+        => _contractStateByVmf.TryGetValue(vmfCode, out var label) ? label : "No Contract";
+
+    private DateTime? GetContractTargetReturn(int vmfCode)
+        => _contractReturnByVmf.TryGetValue(vmfCode, out var value) ? value : null;
+
+    private string GetContractStateBadgeClass(int vmfCode)
+    {
+        var label = GetContractStateLabel(vmfCode);
+        return label switch
+        {
+            "Active" => "badge-success",
+            "Approved" => "badge-success",
+            "Pending" => "badge-warning",
+            "Soon To Expire" => "badge-warning",
+            "Expired" => "badge-error",
+            "Declined" => "badge-error",
+            "Correction Required" => "badge-warning",
+            _ => "badge"
+        };
+    }
+
+    private async Task PrevOverviewPageAsync()
+    {
+        if (_overviewPage <= 1)
+        {
+            return;
+        }
+
+        _overviewPage--;
+        await LoadVehicleOverviewAsync();
+    }
+
+    private async Task NextOverviewPageAsync()
+    {
+        if (_overviewPage >= _overviewTotalPages)
+        {
+            return;
+        }
+
+        _overviewPage++;
+        await LoadVehicleOverviewAsync();
+    }
+
+    private async Task RefreshVehicleOverviewAsync()
+    {
+        await LoadVehicleOverviewAsync();
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 }

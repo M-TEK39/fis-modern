@@ -16,7 +16,7 @@
             <i class="bx bx-barcode"></i>
             Add / Edit Vehicle Barcode
         </h1>
-        <p class="page-description">Legacy barcode maintenance workflow.</p>
+        <p class="page-description">Barcode maintenance workflow.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
@@ -27,11 +27,34 @@
     <div class="form-card">
         <div class="form-card-body">
             <div class="form-row">
-                <label class="form-label">GG Number</label>
-                <input class="form-input" @bind="_ggNumber" />
+                <label class="form-label">Number Type</label>
+                <div class="contract-search-radio">
+                    <label class="form-radio-label">
+                        <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                        GG
+                    </label>
+                    <label class="form-radio-label">
+                        <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                        GP
+                    </label>
+                </div>
+            </div>
+            <div class="form-row">
+                <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                <div class="fis-input-group-compact">
+                    <input class="form-input" @bind="_ggNumber" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchVehicleAsync">Find</button>
+                </div>
+                <select class="form-select fis-mt-05" @bind="_selectedVmfCode" @bind:after="ApplySelectedVehicle" disabled="@(_vehicleMatches.Count == 0)">
+                    <option value="">Select vehicle...</option>
+                    @foreach (var vehicle in _vehicleMatches)
+                    {
+                        <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                    }
+                </select>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary" @onclick="SearchVehicleAsync">Submit</button>
+                <button class="btn btn-primary" @onclick="ApplySelectedVehicle" disabled="@(!_selectedVmfCode.HasValue)">Submit</button>
                 <button class="btn btn-secondary" @onclick="ResetAsync">Cancel</button>
             </div>
         </div>
@@ -59,7 +82,7 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">GG Number</label>
-                        <input class="form-input" value="@_vehicle.fleet_number" readonly />
+                        <input class="form-input" value="@(ValueOrDash(_vehicle.fleet_number))" readonly />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Barcode</label>
@@ -76,11 +99,14 @@
 
 @code {
     private string _ggNumber = string.Empty;
+    private string _searchMode = "GG";
     private string _barcode = string.Empty;
     private bool _loading;
     private bool _saving;
     private bool _searched;
     private VehicleDto? _vehicle;
+    private int? _selectedVmfCode;
+    private List<VehicleDto> _vehicleMatches = new();
 
     private async Task SearchVehicleAsync()
     {
@@ -88,23 +114,36 @@
         _searched = true;
         _vehicle = null;
         _barcode = string.Empty;
+        _selectedVmfCode = null;
         try
         {
-            var matches = await VehicleService.SearchVehiclesAsync(_ggNumber.Trim());
-            var match = matches.FirstOrDefault();
-            if (match != null)
-            {
-                _vehicle = await VehicleService.GetVehicleAsync(match.vmf_code);
-            }
+            var keyword = _ggNumber.Trim();
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
         }
         catch (Exception ex)
         {
+            _vehicleMatches = new();
+            _selectedVmfCode = null;
             await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private async Task ApplySelectedVehicle()
+    {
+        if (!_selectedVmfCode.HasValue || _selectedVmfCode.Value <= 0)
+        {
+            _vehicle = null;
+            _barcode = string.Empty;
+            return;
+        }
+
+        _vehicle = await VehicleService.GetVehicleAsync(_selectedVmfCode.Value);
+        _barcode = string.Empty;
     }
 
     private async Task UpdateBarcodeAsync()
@@ -150,6 +189,40 @@
         _barcode = string.Empty;
         _searched = false;
         _vehicle = null;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
         return Task.CompletedTask;
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searched = false;
+        _vehicle = null;
+        _barcode = string.Empty;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
     }
 }

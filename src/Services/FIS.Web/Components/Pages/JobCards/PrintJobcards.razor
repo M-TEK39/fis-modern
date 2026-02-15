@@ -3,7 +3,9 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject JobCardApiService JobCardService
+@inject UserApiService UserService
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -16,7 +18,7 @@
             <i class="bx bx-printer"></i>
             Print Job Cards
         </h1>
-        <p class="page-description">Enter GG Number to view authorized job cards ready for printing.</p>
+        <p class="page-description">Search by GG/GP number to view authorized job cards ready for printing.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/job-cards/capturer-default">Main Menu</a>
@@ -50,8 +52,18 @@
             <div class="form-card-body">
                 <div class="form-grid">
                     <div class="form-field">
-                        <label class="form-label">GG Number</label>
-                        <input class="form-input" @bind="_searchGg" />
+                        <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                GP
+                            </label>
+                        </div>
+                        <input class="form-input" @bind="_searchVehicleNumber" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
                     </div>
                 </div>
                 <div class="form-actions">
@@ -89,6 +101,7 @@
                             <tr>
                                 <th>Job Card #</th>
                                 <th>GG Number</th>
+                                <th>Registration</th>
                                 <th>Description</th>
                                 <th>Status</th>
                                 <th>Assigned To</th>
@@ -97,14 +110,15 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var item in _filtered)
+                            @foreach (var item in PagedItems)
                             {
                                 <tr>
                                     <td>@item.JobCardId</td>
                                     <td>@ValueOrDash(item.GGNumber)</td>
+                                    <td>@ValueOrDash(item.RegistrationNumber)</td>
                                     <td>@ValueOrDash(item.JobDescription)</td>
                                     <td>@ValueOrDash(item.Status)</td>
-                                    <td>@ValueOrDash(item.AssignedToName)</td>
+                                    <td>@FormatUser(item.AssignedTo, item.AssignedToName)</td>
                                     <td>@FormatDate(item.AssignedDate)</td>
                                     <td class="actions-column">
                                         <button class="btn btn-secondary btn-sm"
@@ -117,6 +131,15 @@
                         </tbody>
                     </table>
                 </div>
+                @if (_filtered.Count > _pageSize)
+                {
+                    <div class="pagination">
+                        <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_page of @TotalPages</div>
+                        <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                    </div>
+                    <div class="pagination-meta">Total records: @_filtered.Count | Page size: @_pageSize</div>
+                }
             </div>
         }
 
@@ -146,7 +169,7 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Assigned To</label>
-                            <input class="form-input" value="@ValueOrDash(_selected.AssignedToName)" readonly />
+                            <input class="form-input" value="@FormatUser(_selected.AssignedTo, _selected.AssignedToName)" readonly />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Assigned Date</label>
@@ -172,11 +195,17 @@
     private bool _canCapturer;
     private bool _loading = true;
     private bool _isError;
-    private string _searchGg = string.Empty;
+    private string _searchMode = "GG";
+    private string _searchVehicleNumber = string.Empty;
     private string _message = string.Empty;
     private List<JobCardDto> _all = new();
     private List<JobCardDto> _filtered = new();
+    private Dictionary<short, UserProfileDto> _userProfilesByCode = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
     private JobCardDto? _selected;
+    private IEnumerable<JobCardDto> PagedItems => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -197,16 +226,30 @@
         _message = string.Empty;
         try
         {
-            var gg = _searchGg.Trim();
-            _all = string.IsNullOrWhiteSpace(gg)
-                ? await JobCardService.GetAllAsync()
-                : await JobCardService.GetByGGNumberAsync(gg);
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(x => x.UserAccessCode > 0)
+                .GroupBy(x => x.UserAccessCode)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var query = _searchVehicleNumber.Trim();
+            _all = await JobCardService.GetAllAsync();
+
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                var isGp = string.Equals(_searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+                _all = _all.Where(x => isGp
+                    ? string.Equals(x.RegistrationNumber, query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(x.GGNumber, query, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
 
             _filtered = _all
                 .Where(IsPrintableStatus)
                 .OrderByDescending(x => x.DateCreated)
                 .ToList();
-            _selected = _filtered.FirstOrDefault();
+            _selected = null;
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -225,9 +268,16 @@
 
     private void Clear()
     {
-        _searchGg = string.Empty;
+        _searchVehicleNumber = string.Empty;
         _filtered = _all.Where(IsPrintableStatus).OrderByDescending(x => x.DateCreated).ToList();
-        _selected = _filtered.FirstOrDefault();
+        _selected = null;
+        _page = 1;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _searchVehicleNumber = string.Empty;
     }
 
     private async Task PrintRow(JobCardDto item)
@@ -317,4 +367,44 @@
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private string FormatUser(int? userCode, string? fallback)
+    {
+        if (!userCode.HasValue || userCode.Value <= 0)
+        {
+            return ValueOrDash(fallback);
+        }
+
+        if (_userProfilesByCode.TryGetValue((short)userCode.Value, out var user))
+        {
+            var fullName = $"{user.FirstName} {user.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return fullName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                return user.Email;
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(fallback) ? fallback : $"User {userCode.Value}";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

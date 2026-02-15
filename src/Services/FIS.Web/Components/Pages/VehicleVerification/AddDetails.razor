@@ -79,11 +79,11 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Vehicle Reg. No</label>
-                            <input class="form-input" type="text" value="@_vehicle?.registration_number" readonly />
+                            <input class="form-input" type="text" value="@(ValueOrDash(_vehicle?.registration_number))" readonly />
                         </div>
                         <div class="form-field">
                             <label class="form-label">GG No</label>
-                            <input class="form-input" type="text" value="@_vehicle?.fleet_number" readonly />
+                            <input class="form-input" type="text" value="@(ValueOrDash(_vehicle?.fleet_number))" readonly />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Vehicle Make</label>
@@ -91,7 +91,7 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Vehicle Colour</label>
-                            <input class="form-input" type="text" value="@_vehicle?.colour" readonly />
+                            <input class="form-input" type="text" value="@(ValueOrDash(_vehicle?.colour))" readonly />
                         </div>
                         <div class="form-field form-group-full">
                             <label class="form-label">Vehicle Model</label>
@@ -203,7 +203,7 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Vehicle Chassis Number</label>
-                            <input class="form-input" type="text" value="@_vehicle?.chassis_number" readonly />
+                            <input class="form-input" type="text" value="@(ValueOrDash(_vehicle?.chassis_number))" readonly />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Current KM (from vehicle) <span class="required">*</span></label>
@@ -296,11 +296,18 @@
         try
         {
             var vehicles = await VehicleService.SearchVehiclesAsync(GG ?? string.Empty);
-            _vehicle = MatchVehicle(vehicles, GG);
+            var ambiguousVehicleMatch = false;
+            _vehicle = MatchVehicle(vehicles, GG, out ambiguousVehicleMatch);
 
             if (_vehicle == null)
             {
-                _errorMessage = $"No records found for this vehicle [{GG}]. Please contact the HelpDesk to add the vehicle and open a contract before adding it to asset verification.";
+                if (ambiguousVehicleMatch)
+                {
+                    _errorMessage = $"Multiple vehicles matched '{GG}'. Please search using an exact GG or GP number.";
+                    return;
+                }
+
+                _errorMessage = $"No records found for this vehicle '{GG}'. Please contact the HelpDesk to add the vehicle and open a contract before adding it to asset verification.";
                 return;
             }
 
@@ -330,22 +337,55 @@
         }
     }
 
-    private static VehicleDto? MatchVehicle(List<VehicleDto> vehicles, string? query)
+    private static VehicleDto? MatchVehicle(List<VehicleDto> vehicles, string? query, out bool ambiguous)
     {
+        ambiguous = false;
         if (vehicles.Count == 0)
         {
             return null;
         }
 
-        if (string.IsNullOrWhiteSpace(query))
+        var keyword = query?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(keyword))
         {
-            return vehicles.FirstOrDefault();
+            ambiguous = vehicles.Count > 0;
+            return null;
         }
 
-        return vehicles.FirstOrDefault(v =>
-                   string.Equals(v.fleet_number, query, StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(v.registration_number, query, StringComparison.OrdinalIgnoreCase))
-               ?? vehicles.FirstOrDefault();
+        var exactMatches = vehicles
+            .Where(v =>
+                string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(v => v.vmf_code)
+            .ToList();
+
+        if (exactMatches.Count > 0)
+        {
+            ambiguous = exactMatches.Count > 1;
+            if (exactMatches.Count != 1)
+            {
+                return null;
+            }
+
+            return exactMatches.SingleOrDefault();
+        }
+
+        var filtered = FilterVehicleMatches(vehicles, keyword);
+        ambiguous = filtered.Count > 1;
+        return null;
+    }
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> vehicles, string keyword)
+    {
+        return vehicles
+            .Where(v =>
+                (!string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                || (!string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
     }
 
     private async Task LoadVehicleDetails()
@@ -377,14 +417,14 @@
 
         if (contract == null)
         {
-            _errorMessage = $"No Contract was found for this vehicle [{GG}]. Please contact the HelpDesk to open a contract before adding it to asset verification.";
+            _errorMessage = $"No Contract was found for this vehicle '{GG}'. Please contact the HelpDesk to open a contract before adding it to asset verification.";
             return;
         }
 
         var site = await SiteService.GetByIdAsync(contract.site_code);
         if (site == null)
         {
-            _errorMessage = $"No Site found for this vehicle [{GG}]. Please contact the HelpDesk to load or investigate this vehicle.";
+            _errorMessage = $"No Site found for this vehicle '{GG}'. Please contact the HelpDesk to load or investigate this vehicle.";
             return;
         }
 
@@ -593,6 +633,9 @@
 
     private static bool IsSelectValue(string? value)
         => string.IsNullOrWhiteSpace(value) || string.Equals(value, SelectValue, StringComparison.OrdinalIgnoreCase);
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
     private void GoMenu()
     {

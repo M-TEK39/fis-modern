@@ -1,5 +1,6 @@
 @page "/workshop/merchant/delete"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Services
 @inject MerchantApiService MerchantService
 @inject NavigationManager Navigation
@@ -21,8 +22,14 @@
     <div class="form-card">
         <div class="form-card-body">
             <div class="form-row">
-                <label class="form-label">Merchant Code</label>
-                <InputNumber @bind-Value="Id" class="form-input" />
+                <label class="form-label">Merchant</label>
+                <select class="form-select" @bind="Id">
+                    <option value="">Select merchant...</option>
+                    @foreach (var merchant in _merchants)
+                    {
+                        <option value="@merchant.Merchant_code">@($"{merchant.Merchant_Name} ({merchant.Merchant_code})")</option>
+                    }
+                </select>
             </div>
             <div class="form-actions">
                 <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@_running">Delete</button>
@@ -46,6 +53,21 @@
     private bool _running;
     private bool _error;
     private string _message = string.Empty;
+    private List<MerchantDto> _merchants = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _merchants = await MerchantService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = "Unable to load merchants.";
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading merchants: {ex.Message}");
+        }
+    }
 
     private async Task DeleteAsync()
     {
@@ -54,7 +76,7 @@
         if (!Id.HasValue || Id.Value <= 0)
         {
             _error = true;
-            _message = "Enter a valid merchant code.";
+            _message = "Select a valid merchant.";
             return;
         }
 

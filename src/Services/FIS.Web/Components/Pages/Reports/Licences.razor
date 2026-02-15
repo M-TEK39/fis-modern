@@ -13,7 +13,7 @@
             <i class="bx bx-file"></i>
             Licence Reports
         </h1>
-        <p class="page-description">Legacy placeholder for License/RPTlicence.aspx.</p>
+        <p class="page-description">Licence reporting workflow and report launcher.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/licenses/reports")'>Open Licence Reports</button>
@@ -23,22 +23,35 @@
 <div class="page-content">
     <div class="empty-state">
         <i class="bx bx-file"></i>
-        <h3>Licence Reports pending</h3>
-        <p>This page will mirror the legacy report.</p>
-        <button class="btn btn-primary btn-sm" @onclick="TestEndpoint">Ping Licence Report Endpoint</button>
+        <h3>Licence Reports</h3>
+        <p>Use this page to launch and validate licence report output.</p>
+        <button class="btn btn-primary btn-sm" @onclick="ValidateReportAccessAsync">Validate Report Access</button>
+        @if (!string.IsNullOrWhiteSpace(_statusMessage))
+        {
+            <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-10">
+                @_statusMessage
+            </div>
+        }
     </div>
 </div>
 
 @code {
-    private async Task TestEndpoint()
+    private bool _statusError;
+    private string _statusMessage = string.Empty;
+
+    private async Task ValidateReportAccessAsync()
     {
         try
         {
             await ReportService.GetAllAsync<Dictionary<string, object>>(new { });
+            _statusError = false;
+            _statusMessage = "Request completed successfully.";
         }
         catch (Exception ex)
         {
-            await JS.InvokeVoidAsync("console.error", $"Error pinging licence report endpoint: {ex.Message}");
+            _statusError = true;
+            _statusMessage = "Unable to validate report access.";
+            await JS.InvokeVoidAsync("console.error", $"Error validating licence report access: {ex.Message}");
         }
     }
 }

@@ -1,12 +1,167 @@
 @page "/reports/taxis"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TaxiApiService TaxiService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Taxis Reports"
-    Description="Legacy placeholder for Taxis/RPTtaxis.aspx."
-    LegacyPath="Taxis/RPTtaxis.aspx"
-    Endpoint="api/taxi"
-    HttpMethod="GET"
-    ReportType="taxi-reports"
-    Icon="bx-file" />
+<PageTitle>Taxis Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-taxi"></i>
+            Taxis Reports
+        </h1>
+        <p class="page-description">Taxi requisition and usage reporting.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/taxis">Taxis Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Taxi Records</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Request ID</th>
+                        <th>Requisition #</th>
+                        <th>Official</th>
+                        <th>Vehicle</th>
+                        <th>Rank/Status</th>
+                        <th>Date Required</th>
+                        <th>Address</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="7">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="7">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.request_id</td>
+                                <td>@ValueOrDash(row.rek_num)</td>
+                                <td>@ValueOrDash(row.official)</td>
+                                <td>@GetVehicleLabel(row.vmf_code)</td>
+                                <td>@ValueOrDash(row.rank)</td>
+                                <td>@(row.date_required?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@ValueOrDash(row.address_1)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<TaxiReportDto> _rows = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<TaxiReportDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            if (_vehicleLabels.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabels = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
+            }
+
+            _rows = (await TaxiService.GetAllAsync<TaxiReportDto>())
+                .OrderByDescending(t => t.date_required)
+                .ThenByDescending(t => t.request_id)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading taxis report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetVehicleLabel(string? vmfCodeText)
+    {
+        if (!int.TryParse(vmfCodeText, out var vmfCode))
+        {
+            return ValueOrDash(vmfCodeText);
+        }
+
+        return _vehicleLabels.TryGetValue(vmfCode, out var label)
+            ? label
+            : vmfCode.ToString();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed class TaxiReportDto
+    {
+        public int request_id { get; set; }
+        public string? rek_num { get; set; }
+        public string? official { get; set; }
+        public string? vmf_code { get; set; }
+        public string? rank { get; set; }
+        public DateTime? date_required { get; set; }
+        public string? address_1 { get; set; }
+    }
+}

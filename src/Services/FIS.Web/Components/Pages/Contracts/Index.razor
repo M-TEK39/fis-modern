@@ -2,13 +2,14 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
-@using System.Text.Json
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
+@inject DriverApiService DriverService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -22,7 +23,7 @@
             <i class="bx bx-file"></i>
             Contracts Menu
         </h1>
-        <p class="page-description">Vehicle contract maintenance aligned to the legacy workflow.</p>
+        <p class="page-description">Vehicle contract maintenance.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick="GoMainMenu">Main Menu</button>
@@ -64,6 +65,9 @@
                     </div>
                     <div class="menu-item">
                         <a class="menu-item-link" href="/contracts/backdating-history">3) Vehicle Contract History Backdating</a>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/contracts/print-menu">4) Contract Print Out Menu</a>
                     </div>
                 </div>
             }
@@ -125,6 +129,15 @@
                                 </button>
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
                             </div>
+                            <div class="contract-search-inputs fis-mt-05">
+                                <select class="form-select" style="min-width: 22rem;" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChanged" disabled="@(_vehicleSearchMatches.Count == 0)">
+                                    <option value="">Select vehicle...</option>
+                                    @foreach (var vehicle in _vehicleSearchMatches)
+                                    {
+                                        <option value="@vehicle.vmf_code">@GetVehicleContextLabel(vehicle)</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
                         @if (!string.IsNullOrWhiteSpace(_searchError))
                         {
@@ -133,7 +146,7 @@
                         @if (_selectedVehicle != null)
                         {
                             <div class="contract-search-result">
-                                <div><strong>Selected Vehicle:</strong> @_selectedVehicle.fleet_number (@_selectedVehicle.registration_number)</div>
+                                <div><strong>Selected Vehicle:</strong> @GetVehicleContextLabel(_selectedVehicle)</div>
                                 <div>Make/Model: @_selectedVehicle.model_name | Status: @_selectedVehicle.status_description</div>
                                 <button class="btn btn-primary btn-sm" type="button" @onclick="OpenSelectedVehicle">Open Contract Management</button>
                             </div>
@@ -145,123 +158,193 @@
     </div>
 
     <div class="contract-section">
-        <div class="contract-filters">
-            <label class="form-label">
-                <input type="checkbox" checked="@_filterPermanent" @onchange="TogglePermanent" />
-                Permanent
-            </label>
-            <label class="form-label">
-                <input type="checkbox" checked="@_filterDaily" @onchange="ToggleDaily" />
-                Daily
-            </label>
-            <label class="form-label">
-                <input type="checkbox" checked="@_filterHourly" @onchange="ToggleHourly" />
-                Hourly
-            </label>
-            <label class="form-label">
-                <input type="checkbox" checked="@_filterRelieve" @onchange="ToggleRelieve" />
-                Relieve
-            </label>
-            <label class="form-label">
-                <input type="checkbox" checked="@_filterLease" @onchange="ToggleLease" />
-                Lease
-            </label>
-        </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Contracts</span>
+                <div class="table-controls">
+                    <select class="form-select" style="min-width: 10rem;" @bind="_statusFilter">
+                        <option value="">All Statuses</option>
+                        <option value="0">Draft</option>
+                        <option value="1">Pending Review</option>
+                        <option value="2">Approved</option>
+                        <option value="3">Active</option>
+                        <option value="4">Declined for Correction</option>
+                        <option value="5">Declined</option>
+                        <option value="6">Cancelled</option>
+                        <option value="7">Closed</option>
+                    </select>
+                    <select class="form-select" style="min-width: 10rem;" @bind="_siteFilter">
+                        <option value="">All Sites</option>
+                        @foreach (var site in _sites)
+                        {
+                            <option value="@site.SiteCode.ToString()">@($"{site.Description} ({site.SiteCode})")</option>
+                        }
+                    </select>
+                    <select class="form-select" style="min-width: 9rem;" @bind="_stillCurrentFilter">
+                        <option value="">All</option>
+                        <option value="Y">Still Current</option>
+                        <option value="N">Not Current</option>
+                    </select>
+                    <input type="date" class="form-input" @bind-value="_startDateFrom" @bind-value:format="yyyy-MM-dd" />
+                    <input type="date" class="form-input" @bind-value="_startDateTo" @bind-value:format="yyyy-MM-dd" />
+                    <button class="btn btn-primary btn-sm" type="button" @onclick="ApplyFiltersAsync" disabled="@_loadingContracts">Apply</button>
+                    <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearFiltersAsync" disabled="@_loadingContracts">Reset</button>
+                </div>
+            </div>
 
-        <table class="contract-legacy-table">
-            <thead>
-                <tr class="contract-legacy-heading">
-                    <th>Pending Contracts</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td class="contract-legacy-content">
-                        @if (_loadingContracts)
-                        {
-                            <div class="loading-state">
-                                <div class="spinner"></div>
-                                <p>Loading pending contracts...</p>
-                            </div>
-                        }
-                        else if (FilteredPendingContracts.Count == 0)
-                        {
-                            <div class="empty-state">
-                                <i class="bx bx-file"></i>
-                                <h3>No pending contracts</h3>
-                                <p>Pending contracts will appear here once they require action.</p>
-                            </div>
-                        }
-                        else
-                        {
-                            @foreach (var contract in FilteredPendingContracts)
+            @if (!string.IsNullOrWhiteSpace(_actionMessage))
+            {
+                <div class="alert @(_actionError ? "alert-error" : "alert-success")" style="margin:0.75rem 0;">@_actionMessage</div>
+            }
+
+            @if (_loadingContracts)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading contracts...</p>
+                </div>
+            }
+            else if (_contracts.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bx bx-file"></i>
+                    <h3>No contracts found</h3>
+                    <p>No records matched the selected filters.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Contract #</th>
+                                <th>Vehicle (Fleet/GG No)</th>
+                                <th>Site/Dept</th>
+                                <th>Driver</th>
+                                <th>Start Date</th>
+                                <th>Target Return</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var contract in _contracts)
                             {
-                                <table class="contract-subtable">
-                                    <tbody>
-                                        <tr>
-                                            <th>GG Number</th>
-                                            <td>@GetFleetNumber(contract)</td>
-                                            <th>Status</th>
-                                            <td>@GetVehicleStatus(contract)</td>
-                                            <th>Contract Type</th>
-                                            <td>@GetContractType(contract)</td>
-                                            <th>Contract Status</th>
-                                            <td>@GetContractStatus(contract)</td>
-                                        </tr>
-                                        <tr>
-                                            <th>Reg Number</th>
-                                            <td>@GetRegNumber(contract)</td>
-                                            <th>Hire Type</th>
-                                            <td>@GetHireType(contract)</td>
-                                            <th>Start Date</th>
-                                            <td>@FormatDate(contract.start_date)</td>
-                                            <th>Status Date</th>
-                                            <td>@FormatDate(contract.end_date)</td>
-                                        </tr>
-                                        <tr>
-                                            <th>Make</th>
-                                            <td>@GetMake(contract)</td>
-                                            <th>Location</th>
-                                            <td>@GetLocation(contract)</td>
-                                            <th>Modified</th>
-                                            <td>@FormatDate(contract.end_date)</td>
-                                            <th rowspan="2" class="contract-action-header">Action</th>
-                                            <td rowspan="2" class="contract-actions">
-                                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "view")'>View</button>
-                                                @if (CanReviewContract(contract))
+                                <tr>
+                                    <td>@contract.contract_id</td>
+                                    <td>@GetVehicleDisplay(contract)</td>
+                                    <td>@GetSiteDepartmentDisplay(contract)</td>
+                                    <td>@ValueOrDash(contract.driver_name)</td>
+                                    <td>@FormatDate(contract.start_date)</td>
+                                    <td>@FormatDate(contract.target_return_date)</td>
+                                    <td>
+                                        <span class="badge @GetStatusBadgeClass(contract.contract_status_code)">@GetStatusLabel(contract)</span>
+                                    </td>
+                                    <td class="actions-column">
+                                        <div class="table-actions">
+                                            @foreach (var action in GetRowActions(contract))
+                                            {
+                                                @if (action.Kind == "print")
                                                 {
-                                                    <button class="btn btn-primary btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "review")'>Review</button>
-                                                    <button class="btn btn-success btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "process")'>Process</button>
+                                                    <a class="btn btn-secondary btn-sm" href="@GetPrintoutUrl(contract.contract_id)" target="_blank">@action.Label</a>
                                                 }
-                                                @if (CanEditContract(contract))
+                                                else
                                                 {
-                                                    <button class="btn btn-warning btn-sm" type="button" @onclick='() => OpenContractDetail(contract, "edit")'>Edit</button>
+                                                    <button class="btn btn-secondary btn-sm" type="button" @onclick="() => RunRowActionAsync(contract, action)">@action.Label</button>
                                                 }
-                                            </td>
-                                        </tr>
-                                        <tr>
-                                            <th>Model</th>
-                                            <td colspan="3">@GetModel(contract)</td>
-                                            <th>Username</th>
-                                            <td>@GetUserName(contract)</td>
-                                        </tr>
-                                        <tr>
-                                            <th>Department</th>
-                                            <td colspan="3">@GetDepartment(contract)</td>
-                                            <th>Site</th>
-                                            <td colspan="3">@GetSite(contract)</td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                                <div class="contract-divider"></div>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
                             }
-                        }
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPageAsync" disabled="@(_page <= 1 || _loadingContracts)">Previous</button>
+                    <div class="pagination-info">Page @_page of @Math.Max(1, _totalPages)</div>
+                    <button class="pagination-btn" @onclick="NextPageAsync" disabled="@(_page >= _totalPages || _loadingContracts)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_totalRecords | Page size: @_pageSize</div>
+            }
+        </div>
     </div>
 </div>
+
+@if (_showEditModal && _editingContractModel != null)
+{
+    <Modal IsVisible="_showEditModal"
+           Title="@GetEditModalTitle()"
+           ShowFooter="false"
+           ShowCloseButton="true"
+           Size="Modal.ModalSize.Large"
+           OnCancel="CloseEditModalAsync">
+        <ChildContent>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">Site</label>
+                    <select class="form-select" @bind="_editingContractModel.SiteCode" disabled="@_editSaving">
+                        <option value="">Select site</option>
+                        @foreach (var site in _sites)
+                        {
+                            <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Target Return Date</label>
+                    <input type="date" class="form-input" @bind-value="_editingContractModel.TargetReturnDate" @bind-value:format="yyyy-MM-dd" disabled="@_editSaving" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Start Odometer</label>
+                    <input type="number" min="0" class="form-input" @bind="_editingContractModel.StartOdometer" disabled="@_editSaving" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Driver ID</label>
+                    <select class="form-select" @bind="_editingContractModel.DriverId" disabled="@_editSaving">
+                        <option value="">Select driver</option>
+                        @foreach (var driver in _drivers)
+                        {
+                            <option value="@driver.site_driver_code.ToString()">@DriverDisplay(driver)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group form-group-full">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-textarea" rows="4" @bind="_editingContractModel.Notes" disabled="@_editSaving"></textarea>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_editValidationMessage))
+            {
+                <div class="alert alert-error" style="margin-top:0.75rem;">@_editValidationMessage</div>
+            }
+
+            <div class="form-actions" style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+                <button class="btn btn-secondary" type="button" @onclick="CloseEditModalAsync" disabled="@_editSaving">Cancel</button>
+                <button class="btn btn-primary" type="button" @onclick="SaveEditedContractAsync" disabled="@_editSaving">
+                    @if (_editSaving)
+                    {
+                        <span class="spinner-sm"></span>
+                        <span>Saving...</span>
+                    }
+                    else
+                    {
+                        <span>Save Changes</span>
+                    }
+                </button>
+                @if (CanResubmitEditedContract())
+                {
+                    <button class="btn btn-warning" type="button" @onclick="SaveAndResubmitEditedContractAsync" disabled="@_editSaving">
+                        Save + Resubmit
+                    </button>
+                }
+            </div>
+        </ChildContent>
+    </Modal>
+}
 
 <a id="PageBottom"></a>
 
@@ -270,43 +353,110 @@
     private bool _showContractMaintenance = true;
     private bool _showContractBookings = true;
 
-
     private string _searchType = "GG";
-    private string _searchQuery = "";
+    private string _searchQuery = string.Empty;
     private bool _searching;
     private string? _searchError;
+    private List<VehicleDto> _vehicleSearchMatches = new();
+    private int? _selectedVehicleVmfCode;
     private VehicleDto? _selectedVehicle;
 
     private bool _loadingContracts = true;
-    private List<ContractDto> _pendingContracts = new();
+    private readonly List<ContractDto> _contracts = new();
+    private List<SiteResponseDto> _sites = new();
+    private List<DriverDto> _drivers = new();
 
-    private bool _filterPermanent = true;
-    private bool _filterDaily = true;
-    private bool _filterHourly = true;
-    private bool _filterRelieve = true;
-    private bool _filterLease = true;
+    private string _statusFilter = string.Empty;
+    private string _siteFilter = string.Empty;
+    private string _stillCurrentFilter = string.Empty;
+    private DateTime? _startDateFrom;
+    private DateTime? _startDateTo;
+
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+    private int _totalPages = 1;
+    private int _totalRecords;
+
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
+    private bool _isAdminUser;
+
+    private string _actionMessage = string.Empty;
+    private bool _actionError;
+    private bool _showEditModal;
+    private bool _editSaving;
+    private string? _editValidationMessage;
+    private ContractEditModel? _editingContractModel;
 
     protected override async Task OnInitializedAsync()
     {
         await ResolveCurrentUserContextAsync();
-        await LoadPendingContracts();
+        _sites = await SiteService.GetAllAsync();
+        _drivers = await DriverService.GetDriversAsync();
+        await LoadContractsPageAsync();
     }
 
-    private async Task LoadPendingContracts()
+    private async Task LoadContractsPageAsync()
     {
         _loadingContracts = true;
+        _actionMessage = string.Empty;
         try
         {
-            var contracts = await ContractService.GetRecentContractsWindowAsync();
-            _pendingContracts = await FilterPendingContractsAsync(contracts);
-            await HydratePendingContractsAsync();
+            var query = new ContractsPageQuery
+            {
+                Page = _page,
+                PageSize = _pageSize,
+                StatusCode = ParseShort(_statusFilter),
+                SiteCode = ParseShort(_siteFilter),
+                StillCurrent = string.IsNullOrWhiteSpace(_stillCurrentFilter) ? null : _stillCurrentFilter,
+                StartDateFrom = _startDateFrom,
+                StartDateTo = _startDateTo
+            };
+
+            var result = await ContractService.GetContractsPageAsync(query);
+
+            _contracts.Clear();
+            _contracts.AddRange(result.Data);
+            _totalRecords = result.TotalRecords;
+            _totalPages = Math.Max(1, result.TotalPages);
+
+            await EnrichContractsAsync();
         }
         finally
         {
             _loadingContracts = false;
+        }
+    }
+
+    private async Task EnrichContractsAsync()
+    {
+        foreach (var contract in _contracts)
+        {
+            if (string.IsNullOrWhiteSpace(contract.fleet_number) || string.IsNullOrWhiteSpace(contract.vehicle_registration))
+            {
+                if (contract.vmf_code is > 0)
+                {
+                    contract.Vehicle ??= await VehicleService.GetVehicleAsync(contract.vmf_code.Value);
+                    contract.fleet_number ??= contract.Vehicle?.fleet_number;
+                    contract.vehicle_registration = string.IsNullOrWhiteSpace(contract.vehicle_registration)
+                        ? (contract.Vehicle?.registration_number ?? string.Empty)
+                        : contract.vehicle_registration;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(contract.site_name) && contract.site_code is > 0)
+            {
+                var site = _sites.FirstOrDefault(s => s.SiteCode == contract.site_code.Value)
+                    ?? await SiteService.GetByIdAsync(contract.site_code.Value);
+                contract.site_name = site?.Description;
+
+                if (string.IsNullOrWhiteSpace(contract.department_name) && site?.DepartmentCode is > 0)
+                {
+                    var dept = await DepartmentService.GetDepartmentAsync(site.DepartmentCode.Value);
+                    contract.department_name = dept?.department_description ?? contract.department_name;
+                }
+            }
         }
     }
 
@@ -329,6 +479,8 @@
     {
         _searchError = null;
         _selectedVehicle = null;
+        _selectedVehicleVmfCode = null;
+        _vehicleSearchMatches = new();
 
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
@@ -339,30 +491,16 @@
         _searching = true;
         try
         {
-            var results = await VehicleService.SearchVehiclesAsync(_searchQuery.Trim());
             var query = _searchQuery.Trim();
-            if (_searchType == "GG")
-            {
-                _selectedVehicle = results
-                    .FirstOrDefault(v =>
-                        string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                _selectedVehicle = results
-                    .FirstOrDefault(v =>
-                        string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase));
-            }
-
-            _selectedVehicle ??= results.FirstOrDefault(v =>
-                _searchType == "GG"
-                    ? (v.fleet_number?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-                    : (v.registration_number?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false));
-
-            if (_selectedVehicle == null)
+            var results = await VehicleService.SearchVehiclesAsync(query);
+            _vehicleSearchMatches = RankVehicleMatchesBySearchType(results, query, _searchType);
+            if (_vehicleSearchMatches.Count == 0)
             {
                 _searchError = "No vehicles matched the search criteria.";
+                return;
             }
+
+            _searchError = "Select a vehicle from the list to continue.";
         }
         finally
         {
@@ -372,9 +510,36 @@
 
     private void ClearSearch()
     {
-        _searchQuery = "";
+        _searchQuery = string.Empty;
         _searchError = null;
+        _vehicleSearchMatches = new();
+        _selectedVehicleVmfCode = null;
         _selectedVehicle = null;
+    }
+
+    private Task OnSelectedVehicleChanged()
+    {
+        _selectedVehicle = _selectedVehicleVmfCode.HasValue
+            ? _vehicleSearchMatches.FirstOrDefault(v => v.vmf_code == _selectedVehicleVmfCode.Value)
+            : null;
+        return Task.CompletedTask;
+    }
+
+    private static List<VehicleDto> RankVehicleMatchesBySearchType(List<VehicleDto> matches, string query, string searchType)
+    {
+        return (searchType == "GG"
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                searchType == "GG"
+                    ? string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(v =>
+                searchType == "GG"
+                    ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
     }
 
     private async Task OpenSelectedVehicle()
@@ -385,8 +550,9 @@
         }
 
         var contract = await ContractService.GetLatestContractForVehicleAsync(_selectedVehicle.vmf_code);
-        var ggNumber = Uri.EscapeDataString(_selectedVehicle.fleet_number ?? "");
-        var regNumber = Uri.EscapeDataString(_selectedVehicle.registration_number ?? "");
+        var ggNumber = Uri.EscapeDataString(_selectedVehicle.fleet_number ?? string.Empty);
+        var regNumber = Uri.EscapeDataString(_selectedVehicle.registration_number ?? string.Empty);
+
         if (contract?.contract_id > 0)
         {
             Navigation.NavigateTo($"/contracts/detail?contractId={contract.contract_id}&ggnumber={ggNumber}&regnumber={regNumber}");
@@ -396,185 +562,250 @@
         Navigation.NavigateTo($"/contracts/detail?ggnumber={ggNumber}&regnumber={regNumber}");
     }
 
-    private void OpenContractDetail(ContractDto contract, string action)
+    private async Task ApplyFiltersAsync()
     {
-        var contractId = contract.contract_id;
-        var regNumber = Uri.EscapeDataString(contract.vehicle_registration ?? "");
-        var ggNumber = Uri.EscapeDataString(contract.Vehicle?.fleet_number ?? "");
-        Navigation.NavigateTo($"/contracts/detail?contractId={contractId}&action={action}&ggnumber={ggNumber}&regnumber={regNumber}");
+        _page = 1;
+        await LoadContractsPageAsync();
     }
 
-    private static string FormatDate(DateTime? date)
+    private async Task ClearFiltersAsync()
     {
-        return date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
+        _statusFilter = string.Empty;
+        _siteFilter = string.Empty;
+        _stillCurrentFilter = string.Empty;
+        _startDateFrom = null;
+        _startDateTo = null;
+        _page = 1;
+        await LoadContractsPageAsync();
     }
 
-    private static string FormatDate(DateTime date)
+    private async Task PrevPageAsync()
     {
-        return date.ToString("yyyy/MM/dd");
-    }
-
-    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string GetFleetNumber(ContractDto contract)
-        => ValueOrDash(contract.Vehicle?.fleet_number ?? contract.vehicle_registration);
-
-    private static string GetRegNumber(ContractDto contract)
-        => ValueOrDash(contract.vehicle_registration);
-
-    private static string GetVehicleStatus(ContractDto contract)
-        => ValueOrDash(contract.Vehicle?.status_description ?? contract.status);
-
-    private static string GetContractType(ContractDto contract)
-        => ValueOrDash(contract.contractor_name);
-
-    private static string GetContractStatus(ContractDto contract)
-        => ValueOrDash(contract.status);
-
-    private static string GetHireType(ContractDto contract)
-        => ValueOrDash(contract.contractor_name);
-
-    private static string GetMake(ContractDto contract)
-        => ValueOrDash(contract.vehicle_make);
-
-    private static string GetLocation(ContractDto contract)
-        => ValueOrDash(contract.Vehicle?.location_description);
-
-    private static string GetModel(ContractDto contract)
-        => ValueOrDash(contract.vehicle_model ?? contract.Vehicle?.model_name);
-
-    private static string GetUserName(ContractDto contract)
-        => ValueOrDash("-");
-
-    private static string GetDepartment(ContractDto contract)
-        => ValueOrDash(contract.department_name ?? contract.Department?.department_description);
-
-    private static string GetSite(ContractDto contract)
-        => ValueOrDash(contract.site_code?.ToString());
-
-    private List<ContractDto> FilteredPendingContracts
-        => _pendingContracts.Where(MatchesContractTypeFilter).ToList();
-
-    private void TogglePermanent(ChangeEventArgs _) => _filterPermanent = !_filterPermanent;
-    private void ToggleDaily(ChangeEventArgs _) => _filterDaily = !_filterDaily;
-    private void ToggleHourly(ChangeEventArgs _) => _filterHourly = !_filterHourly;
-    private void ToggleRelieve(ChangeEventArgs _) => _filterRelieve = !_filterRelieve;
-    private void ToggleLease(ChangeEventArgs _) => _filterLease = !_filterLease;
-
-    private bool MatchesContractTypeFilter(ContractDto contract)
-    {
-        var contractType = (GetContractType(contract) ?? string.Empty).Trim().ToLowerInvariant();
-        if (string.IsNullOrEmpty(contractType))
-        {
-            return true;
-        }
-
-        if ((contractType.Contains("permanent") || contractType.Contains("perm")) && !_filterPermanent)
-        {
-            return false;
-        }
-
-        if (contractType.Contains("daily") && !_filterDaily)
-        {
-            return false;
-        }
-
-        if (contractType.Contains("hourly") && !_filterHourly)
-        {
-            return false;
-        }
-
-        if ((contractType.Contains("relieve") || contractType.Contains("relief")) && !_filterRelieve)
-        {
-            return false;
-        }
-
-        if (contractType.Contains("lease") && !_filterLease)
-        {
-            return false;
-        }
-
-        return true;
-    }
-
-    private async Task<List<ContractDto>> FilterPendingContractsAsync(List<ContractDto> contracts)
-    {
-        var pending = contracts
-            .Where(c => c.contract_status_code == 1)
-            .ToList();
-
-        foreach (var contract in contracts)
-        {
-            if (pending.Any(p => p.contract_id == contract.contract_id))
-            {
-                continue;
-            }
-
-            var pendingResponse = await ContractService.GetActionAsync($"api/contracts/{contract.contract_id}/pending");
-            if (!pendingResponse.Success || string.IsNullOrWhiteSpace(pendingResponse.ResponseBody))
-            {
-                continue;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(pendingResponse.ResponseBody);
-                if (doc.RootElement.TryGetProperty("isPending", out var isPending) && isPending.GetBoolean())
-                {
-                    if (doc.RootElement.TryGetProperty("submittedByUserCode", out var submittedBy))
-                    {
-                        if (submittedBy.ValueKind == JsonValueKind.Number && submittedBy.TryGetInt32(out var submittedByCode))
-                        {
-                            contract.created_by_user_code = submittedByCode;
-                        }
-                        else if (submittedBy.ValueKind == JsonValueKind.String && int.TryParse(submittedBy.GetString(), out submittedByCode))
-                        {
-                            contract.created_by_user_code = submittedByCode;
-                        }
-                    }
-
-                    pending.Add(contract);
-                }
-            }
-            catch
-            {
-                // Ignore malformed pending responses and continue.
-            }
-        }
-
-        return pending;
-    }
-
-    private async Task HydratePendingContractsAsync()
-    {
-        if (_pendingContracts.Count == 0)
+        if (_page <= 1)
         {
             return;
         }
 
-        foreach (var contract in _pendingContracts)
+        _page--;
+        await LoadContractsPageAsync();
+    }
+
+    private async Task NextPageAsync()
+    {
+        if (_page >= _totalPages)
         {
-            if (contract.vmf_code.HasValue && contract.Vehicle == null)
+            return;
+        }
+
+        _page++;
+        await LoadContractsPageAsync();
+    }
+
+    private async Task RunRowActionAsync(ContractDto contract, ContractRowAction action)
+    {
+        _actionError = false;
+        _actionMessage = string.Empty;
+
+        if (action.Kind == "edit")
+        {
+            OpenEditModal(contract);
+            return;
+        }
+
+        if (action.Kind == "view" || action.Kind == "review")
+        {
+            var ggNumber = Uri.EscapeDataString(contract.fleet_number ?? contract.Vehicle?.fleet_number ?? string.Empty);
+            var regNumber = Uri.EscapeDataString(contract.vehicle_registration ?? contract.Vehicle?.registration_number ?? string.Empty);
+            var actionParam = action.Kind == "view" ? string.Empty : $"&action={action.Kind}";
+            Navigation.NavigateTo($"/contracts/detail?contractId={contract.contract_id}{actionParam}&ggnumber={ggNumber}&regnumber={regNumber}");
+            return;
+        }
+
+        var endpoint = action.Kind switch
+        {
+            "submit" => $"api/contracts/{contract.contract_id}/submit",
+            "resubmit" => $"api/contracts/{contract.contract_id}/submit",
+            "recall" => $"api/contracts/{contract.contract_id}/recall",
+            "activate" => $"api/contracts/{contract.contract_id}/approve-activate",
+            "extend" => $"api/contracts/{contract.contract_id}/extend",
+            "close" => $"api/contracts/{contract.contract_id}/close",
+            "cancel" => $"api/contracts/{contract.contract_id}/cancel",
+            _ => string.Empty
+        };
+
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            return;
+        }
+
+        var response = await ContractService.PostActionAsync(endpoint, new { });
+        _actionError = !response.Success;
+        _actionMessage = response.Message;
+
+        await LoadContractsPageAsync();
+    }
+
+    private void OpenEditModal(ContractDto contract)
+    {
+        if (!IsCurrentUserContractCapturer(contract) && !_isAdminUser)
+        {
+            _actionError = true;
+            _actionMessage = "Only the original contract capturer can edit this record.";
+            return;
+        }
+
+        _editingContractModel = new ContractEditModel
+        {
+            ContractId = contract.contract_id,
+            StatusCode = contract.contract_status_code ?? 0,
+            SiteCode = contract.site_code,
+            DriverId = string.IsNullOrWhiteSpace(contract.driver_id) ? null : contract.driver_id.Trim(),
+            Notes = contract.contract_notes ?? string.Empty,
+            TargetReturnDate = contract.target_return_date
+        };
+
+        _editValidationMessage = null;
+        _showEditModal = true;
+    }
+
+    private Task CloseEditModalAsync()
+    {
+        _showEditModal = false;
+        _editSaving = false;
+        _editValidationMessage = null;
+        _editingContractModel = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveEditedContractAsync()
+    {
+        await SaveEditedContractCoreAsync(resubmitAfterSave: false);
+    }
+
+    private async Task SaveAndResubmitEditedContractAsync()
+    {
+        await SaveEditedContractCoreAsync(resubmitAfterSave: true);
+    }
+
+    private async Task SaveEditedContractCoreAsync(bool resubmitAfterSave)
+    {
+        if (_editingContractModel == null)
+        {
+            return;
+        }
+
+        _editValidationMessage = null;
+        if (_editingContractModel.SiteCode is null or <= 0)
+        {
+            _editValidationMessage = "Select a site before saving.";
+            return;
+        }
+
+        _editSaving = true;
+        _actionMessage = string.Empty;
+        _actionError = false;
+
+        try
+        {
+            var editResult = await ContractService.PutActionAsync($"api/contracts/{_editingContractModel.ContractId}/edit", new
             {
-                contract.Vehicle = await VehicleService.GetVehicleAsync(contract.vmf_code.Value);
+                SiteCode = _editingContractModel.SiteCode,
+                DriverId = string.IsNullOrWhiteSpace(_editingContractModel.DriverId) ? null : _editingContractModel.DriverId.Trim(),
+                Notes = string.IsNullOrWhiteSpace(_editingContractModel.Notes) ? null : _editingContractModel.Notes.Trim(),
+                TargetReturnDate = _editingContractModel.TargetReturnDate,
+                StartOdometer = _editingContractModel.StartOdometer
+            });
+
+            if (!editResult.Success)
+            {
+                _actionError = true;
+                _actionMessage = editResult.Message;
+                return;
             }
 
-            if (contract.site_code.HasValue && contract.Department == null)
+            if (resubmitAfterSave && _editingContractModel.StatusCode == 4)
             {
-                var site = await SiteService.GetByIdAsync(contract.site_code.Value);
-                if (site?.DepartmentCode != null)
-                {
-                    contract.Department = await DepartmentService.GetDepartmentAsync(site.DepartmentCode.Value);
-                }
+                var submitResult = await ContractService.PostActionAsync($"api/contracts/{_editingContractModel.ContractId}/submit", new { });
+                _actionError = !submitResult.Success;
+                _actionMessage = submitResult.Message;
             }
+            else
+            {
+                _actionMessage = editResult.Message;
+            }
+
+            if (!_actionError)
+            {
+                await CloseEditModalAsync();
+            }
+
+            await LoadContractsPageAsync();
+        }
+        finally
+        {
+            _editSaving = false;
         }
     }
 
-    private bool CanReviewContract(ContractDto contract)
-        => _hasContractApproverRole && !IsCurrentUserContractCapturer(contract);
+    private bool CanResubmitEditedContract()
+        => _editingContractModel?.StatusCode == 4;
 
-    private bool CanEditContract(ContractDto contract)
-        => IsCurrentUserContractCapturer(contract) || !_hasContractApproverRole;
+    private string GetEditModalTitle()
+    {
+        if (_editingContractModel == null)
+        {
+            return "Edit Contract";
+        }
+
+        return _editingContractModel.StatusCode == 4
+            ? $"Edit Contract {_editingContractModel.ContractId} (Correction)"
+            : $"Edit Contract {_editingContractModel.ContractId}";
+    }
+
+    private IReadOnlyList<ContractRowAction> GetRowActions(ContractDto contract)
+    {
+        var statusCode = contract.contract_status_code ?? -1;
+        var isCapturer = IsCurrentUserContractCapturer(contract);
+        var canReview = _hasContractApproverRole && !isCapturer;
+        var actions = statusCode switch
+        {
+            0 => (_isAdminUser || isCapturer)
+                ? new[] { new ContractRowAction("Edit", "edit"), new ContractRowAction("Submit", "submit") }
+                : Array.Empty<ContractRowAction>(),
+            1 => _isAdminUser
+                ? new[] { new ContractRowAction("Recall", "recall"), new ContractRowAction("Review", "review") }
+                : isCapturer
+                    ? new[] { new ContractRowAction("Recall", "recall") }
+                    : canReview
+                        ? new[] { new ContractRowAction("Review", "review") }
+                        : Array.Empty<ContractRowAction>(),
+            2 => (_isAdminUser || canReview)
+                ? new[] { new ContractRowAction("Activate", "activate") }
+                : Array.Empty<ContractRowAction>(),
+            3 => (_isAdminUser || canReview)
+                ? new[]
+                {
+                    new ContractRowAction("Extend", "extend"),
+                    new ContractRowAction("Close", "close"),
+                    new ContractRowAction("Cancel", "cancel")
+                }
+                : Array.Empty<ContractRowAction>(),
+            4 => _isAdminUser
+                ? new[] { new ContractRowAction("Edit", "edit") }
+                : isCapturer
+                    ? new[] { new ContractRowAction("Edit", "edit"), new ContractRowAction("Resubmit", "resubmit") }
+                    : Array.Empty<ContractRowAction>(),
+            6 or 7 => new[] { new ContractRowAction("View", "view") },
+            _ => Array.Empty<ContractRowAction>()
+        };
+
+        if (statusCode >= 2)
+        {
+            return actions.Append(new ContractRowAction("Print", "print")).ToList();
+        }
+
+        return actions;
+    }
 
     private bool IsCurrentUserContractCapturer(ContractDto contract)
     {
@@ -614,6 +845,14 @@
         {
             _hasContractApproverRole = true;
         }
+
+        _isAdminUser = HasAnyRole(user, "admin", "administrator")
+            || (_currentAccessLevel & LegacyPermissionBits.UserAdministration) == LegacyPermissionBits.UserAdministration;
+    }
+
+    private static short? ParseShort(string? value)
+    {
+        return short.TryParse(value, out var parsed) ? parsed : null;
     }
 
     private static int? TryParseInt(string? value)
@@ -641,5 +880,88 @@
         return roleClaims.Any(value =>
             value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 .Any(item => roles.Any(role => string.Equals(item, role, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    private static string GetVehicleDisplay(ContractDto contract)
+    {
+        var fleet = ValueOrDash(contract.fleet_number ?? contract.Vehicle?.fleet_number);
+        var registration = ValueOrDash(contract.vehicle_registration ?? contract.Vehicle?.registration_number);
+        return $"{fleet} / {registration}";
+    }
+
+    private static string GetSiteDepartmentDisplay(ContractDto contract)
+    {
+        var site = ValueOrDash(contract.site_name);
+        var dept = ValueOrDash(contract.department_name);
+        return $"{site} / {dept}";
+    }
+
+    private static string GetStatusLabel(ContractDto contract)
+    {
+        return contract.contract_status_code switch
+        {
+            0 => "Draft",
+            1 => "Pending Review",
+            2 => "Approved",
+            3 => "Active",
+            4 => "Declined for Correction",
+            5 => "Declined",
+            6 => "Cancelled",
+            7 => "Closed",
+            _ => ValueOrDash(contract.status)
+        };
+    }
+
+    private static string GetStatusBadgeClass(short? statusCode)
+        => statusCode switch
+        {
+            1 => "badge-warning",
+            2 => "status-info",
+            3 => "badge-success",
+            4 => "badge-warning",
+            5 => "badge-error",
+            6 => "badge-error",
+            _ => string.Empty
+        };
+
+    private static string FormatDate(DateTime? date)
+    {
+        return date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
+    }
+
+    private static string FormatDate(DateTime date)
+    {
+        return date.ToString("yyyy/MM/dd");
+    }
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleContextLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string DriverDisplay(DriverDto driver)
+    {
+        var fullName = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            fullName = "Unknown Driver";
+        }
+
+        return $"{fullName} ({driver.site_driver_code})";
+    }
+
+    private static string GetPrintoutUrl(int contractId) => $"/contracts/printout?contractId={contractId}";
+
+    private sealed record ContractRowAction(string Label, string Kind);
+
+    private sealed class ContractEditModel
+    {
+        public int ContractId { get; set; }
+        public short StatusCode { get; set; }
+        public short? SiteCode { get; set; }
+        public int? StartOdometer { get; set; }
+        public string? DriverId { get; set; }
+        public string? Notes { get; set; }
+        public DateTime? TargetReturnDate { get; set; }
     }
 }

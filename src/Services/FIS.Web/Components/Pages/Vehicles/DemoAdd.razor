@@ -1,9 +1,11 @@
 @page "/vehicles/demo/add"
 @rendermode InteractiveServer
 @using System.Net.Http.Headers
+@using FIS.Web.Models
 @using FIS.Web.Services
 @inject HttpClient Http
 @inject SiteApiService SiteService
+@inject ReferenceDataApiService ReferenceDataService
 @inject TokenService TokenService
 @inject IJSRuntime JSRuntime
 
@@ -25,10 +27,29 @@
             <div class="form-grid">
                 <div class="form-field"><label class="form-label">GG number</label><input class="form-input" @bind="_item.gg_number" /></div>
                 <div class="form-field"><label class="form-label">Prov. Registration number</label><input class="form-input" @bind="_item.reg_number" /></div>
-                <div class="form-field form-group-full"><label class="form-label">Make &amp; Model</label><input class="form-input" @bind="_item.model_description" /></div>
-                <div class="form-field"><label class="form-label">Site</label><select class="form-select" @bind="_item.site_code"><option value="">Select...</option>@foreach (var s in _sites){<option value="@s.SiteCode">@s.DepartmentNumber : @s.Description</option>}</select></div>
+                <div class="form-field">
+                    <label class="form-label">Make</label>
+                    <select class="form-select" @bind="_selectedMakeCode" @bind:after="OnMakeChangedAsync">
+                        <option value="">Select make...</option>
+                        @foreach (var make in _makes.OrderBy(m => m.make_name))
+                        {
+                            <option value="@make.make_code">@($"{make.make_name} ({make.make_code})")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Model</label>
+                    <select class="form-select" @bind="_selectedModelCode" @bind:after="OnModelChanged" disabled="@(_models.Count == 0)">
+                        <option value="">Select model...</option>
+                        @foreach (var model in _models.OrderBy(m => m.model_name))
+                        {
+                            <option value="@model.model_code">@($"{model.model_name} ({model.model_code})")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field"><label class="form-label">Site</label><select class="form-select" @bind="_item.site_code"><option value="">Select...</option>@foreach (var s in _sites){<option value="@s.SiteCode">@($"{s.Description} ({s.SiteCode})")</option>}</select></div>
                 <div class="form-field"><label class="form-label">Year Manufactured</label><input class="form-input" @bind="_item.year_mnf" /></div>
-                <div class="form-field"><label class="form-label">Bank code</label><input class="form-input" @bind="_item.bank_code" /></div>
+                <div class="form-field"><label class="form-label">Bank ID</label><input class="form-input" @bind="_item.bank_code" /></div>
                 <div class="form-field"><label class="form-label">Colour</label><input class="form-input" @bind="_item.colour" /></div>
                 <div class="form-field"><label class="form-label">Tank Capacity</label><input class="form-input" @bind="_item.tank" /></div>
                 <div class="form-field"><label class="form-label">Engine number</label><input class="form-input" @bind="_item.engine_number" /></div>
@@ -45,10 +66,15 @@
     private DemoVehicleDto _item = new();
     private bool _saving;
     private List<SiteResponseDto> _sites = new();
+    private List<MakeDto> _makes = new();
+    private List<ModelDto> _models = new();
+    private int? _selectedMakeCode;
+    private int? _selectedModelCode;
 
     protected override async Task OnInitializedAsync()
     {
         _sites = await SiteService.GetAllAsync();
+        _makes = await ReferenceDataService.GetMakesAsync();
     }
 
     private async Task SubmitAsync()
@@ -65,6 +91,9 @@
             else
             {
                 _item = new DemoVehicleDto();
+                _selectedMakeCode = null;
+                _selectedModelCode = null;
+                _models = new();
             }
         }
         catch (Exception ex)
@@ -83,6 +112,21 @@
         {
             Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
         }
+    }
+
+    private async Task OnMakeChangedAsync()
+    {
+        _selectedModelCode = null;
+        _item.model_description = string.Empty;
+        _models = _selectedMakeCode.HasValue && _selectedMakeCode.Value > 0
+            ? await ReferenceDataService.GetModelsByMakeAsync(_selectedMakeCode.Value)
+            : new List<ModelDto>();
+    }
+
+    private void OnModelChanged()
+    {
+        var selected = _models.FirstOrDefault(m => m.model_code == _selectedModelCode);
+        _item.model_description = selected?.model_name ?? string.Empty;
     }
 
     private sealed class DemoVehicleDto

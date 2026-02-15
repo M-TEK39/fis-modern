@@ -51,4 +51,5 @@ public class UserSummaryDto
     public string? Position { get; set; }
     public string? Telephone { get; set; }
     public string? LastLoginDate { get; set; }
+    public long AccessLevel { get; set; }
 }

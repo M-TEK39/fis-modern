@@ -1,12 +1,270 @@
 @page "/reports/audit-trail"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Text.Json
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LogsheetApiService LogsheetService
+@inject LogbookApiService LogbookService
+@inject SiteApiService SiteService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Audit Trail Reports"
-    Description="Legacy placeholder for FISReports/AuditTrail.aspx."
-    LegacyPath="FISReports/AuditTrail.aspx"
-    Endpoint="api/report/audit-trail"
-    HttpMethod="GET"
-    ReportType="audit-trail-reports"
-    Icon="bx-file" />
+<PageTitle>Audit Trail Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-history"></i>
+            Audit Trail Reports
+        </h1>
+        <p class="page-description">Consolidated operational activity across logsheets and logbooks.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/finance/audit-trail">Finance Audit Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Search</label>
+                    <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Entity, action, vehicle, reference" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Source</label>
+                    <select class="form-select" @bind="_sourceFilter">
+                        <option value="all">All</option>
+                        <option value="logsheet">Logsheet</option>
+                        <option value="logbook">Logbook</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Audit Trail Activity</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Entity</th>
+                        <th>Action</th>
+                        <th>Reference</th>
+                        <th>Vehicle</th>
+                        <th>Site</th>
+                        <th>Activity Date</th>
+                        <th>Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="8">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="8">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.Source</td>
+                                <td>@row.Entity</td>
+                                <td>@row.Action</td>
+                                <td>@row.Reference</td>
+                                <td>@row.Vehicle</td>
+                                <td>@ResolveSiteLabel(row.SiteCode)</td>
+                                <td>@FormatDate(row.ActivityDate)</td>
+                                <td>@row.Details</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private string _searchTerm = string.Empty;
+    private string _sourceFilter = "all";
+    private List<AuditTrailRow> _rows = new();
+    private Dictionary<short, string> _siteLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<AuditTrailRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            if (_siteLabels.Count == 0)
+            {
+                var sites = await SiteService.GetAllAsync();
+                    _siteLabels = sites
+                        .GroupBy(s => s.SiteCode)
+                        .ToDictionary(
+                            g => g.Key,
+                            g => $"{ValueOrDash(g.First().Description)} ({g.Key})");
+            }
+
+            var rows = new List<AuditTrailRow>();
+
+            var logsheets = await LogsheetService.GetAllAsync<LogsheetDto>();
+            rows.AddRange(logsheets.Select(log => new AuditTrailRow
+            {
+                Source = "Logsheet",
+                Entity = "Log Sheet",
+                Action = "Captured/Updated",
+                Reference = log.rek_num ?? $"LOG-{log.log_code}",
+                Vehicle = log.vmf_code.ToString(),
+                SiteCode = log.site_code.ToString(),
+                ActivityDate = log.month,
+                Details = $"ODO {log.start_odo:N0} -> {log.end_odo:N0}; Days used: {(log.days_used?.ToString() ?? "-")}"
+            }));
+
+            var logbooks = await LogbookService.GetAllAsync<LogbookDto>();
+            rows.AddRange(logbooks.Select(log => new AuditTrailRow
+            {
+                Source = "Logbook",
+                Entity = "Log Book",
+                Action = "Issued/Updated",
+                Reference = $"{(log.begin_num ?? "-")} - {(log.end_num ?? "-")}",
+                Vehicle = log.vmf_code?.ToString() ?? "-",
+                SiteCode = log.site_code?.ToString() ?? "-",
+                ActivityDate = log.handout_date,
+                Details = BuildLogbookDetails(log)
+            }));
+
+            IEnumerable<AuditTrailRow> filtered = rows;
+
+            if (_sourceFilter == "logsheet")
+            {
+                filtered = filtered.Where(r => r.Source.Equals("Logsheet", StringComparison.OrdinalIgnoreCase));
+            }
+            else if (_sourceFilter == "logbook")
+            {
+                filtered = filtered.Where(r => r.Source.Equals("Logbook", StringComparison.OrdinalIgnoreCase));
+            }
+
+            var q = _searchTerm.Trim();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                filtered = filtered.Where(r =>
+                    Contains(r.Source, q)
+                    || Contains(r.Entity, q)
+                    || Contains(r.Action, q)
+                    || Contains(r.Reference, q)
+                    || Contains(r.Vehicle, q)
+                    || Contains(r.Details, q));
+            }
+
+            _rows = filtered
+                .OrderByDescending(r => r.ActivityDate)
+                .ThenBy(r => r.Source)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading audit trail report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _searchTerm = string.Empty;
+        _sourceFilter = "all";
+    }
+
+    private static string BuildLogbookDetails(LogbookDto logbook)
+    {
+        var receiver = string.IsNullOrWhiteSpace(logbook.lb_receiver_name) ? "-" : logbook.lb_receiver_name;
+        var comment = string.IsNullOrWhiteSpace(logbook.lb_comment) ? "-" : logbook.lb_comment;
+        return $"Receiver: {receiver}; Comment: {comment}";
+    }
+
+    private static bool Contains(string? value, string term)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    private static string FormatDate(DateTime? value)
+        => value?.ToString("yyyy-MM-dd") ?? "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string ResolveSiteLabel(string? siteCode)
+    {
+        if (!short.TryParse(siteCode, out var parsed))
+        {
+            return string.IsNullOrWhiteSpace(siteCode) ? "-" : siteCode;
+        }
+
+        return _siteLabels.TryGetValue(parsed, out var label)
+            ? label
+            : parsed.ToString();
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed class AuditTrailRow
+    {
+        public string Source { get; set; } = "-";
+        public string Entity { get; set; } = "-";
+        public string Action { get; set; } = "-";
+        public string Reference { get; set; } = "-";
+        public string Vehicle { get; set; } = "-";
+        public string SiteCode { get; set; } = "-";
+        public DateTime? ActivityDate { get; set; }
+        public string Details { get; set; } = "-";
+    }
+}

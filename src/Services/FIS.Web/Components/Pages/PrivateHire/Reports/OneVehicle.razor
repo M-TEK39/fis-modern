@@ -1,6 +1,8 @@
 @page "/private-hire/reports/one-vehicle"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>One Private Hire Vehicle - Fleet Information System</PageTitle>
 
@@ -23,22 +25,16 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label"><strong>GP Number:</strong></label>
-                    <input class="form-input" placeholder="Enter GP number" />
+                    <input class="form-input" placeholder="Enter GP number or registration" @bind="_query" @bind:event="oninput" />
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="SearchAsync">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
-            <LegacyEndpointActionPanel
-                LegacyPath="Private_Hire/Get_gp.aspx"
-                Endpoint="api/privatehire/search?searchTerm=GP"
-                HttpMethod="GET"
-                ButtonText="Run One Vehicle API"
-                ReportType="private-hire-report-one-vehicle" />
 
             <div class="form-section" style="margin-top: 1.5rem;">
-                <h3 class="form-section-title">REPORT FOR: [GP Number]</h3>
+                <h3 class="form-section-title">REPORT FOR: @(!string.IsNullOrWhiteSpace(_query) ? _query : "GP Number")</h3>
                 <p class="form-hint">Date printed: @DateTime.Now</p>
             </div>
 
@@ -62,13 +58,126 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="12">No records found.</td>
-                            </tr>
+                            @if (_loading)
+                            {
+                                <tr>
+                                    <td colspan="12">Loading records...</td>
+                                </tr>
+                            }
+                            else if (_filtered.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="12">No records found.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in PagedVehicles)
+                                {
+                                    <tr>
+                                        <td>@ValueOrDash(row.registration_number)</td>
+                                        <td>@ValueOrDash(row.make_model)</td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                        <td>@(row.department_code > 0 ? row.department_code.ToString() : "-")</td>
+                                        <td>@ValueOrDash(row.contractor_name)</td>
+                                        <td>-</td>
+                                        <td>-</td>
+                                        <td>@FormatDate(row.hire_start_date)</td>
+                                        <td>-</td>
+                                        <td>@FormatDate(row.hire_end_date)</td>
+                                        <td>-</td>
+                                    </tr>
+                                }
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading = true;
+    private string _query = string.Empty;
+    private List<PrivateHireVehicleDto> _all = new();
+    private List<PrivateHireVehicleDto> _filtered = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<PrivateHireVehicleDto> PagedVehicles => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _all = await PrivateHireService.GetVehiclesAsync();
+            _filtered = new();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            _all = new();
+            _filtered = new();
+            _page = 1;
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading private hire one vehicle report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SearchAsync()
+    {
+        var term = _query.Trim();
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            _filtered = new();
+            _page = 1;
+            return;
+        }
+
+        _filtered = _all.Where(v =>
+                (!string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                || v.vehicle_id.ToString().Contains(term, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        _page = 1;
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

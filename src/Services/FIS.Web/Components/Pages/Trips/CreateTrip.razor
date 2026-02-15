@@ -2,11 +2,12 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @inject TripApiService TripService
+@inject TripDriverApiService TripDriverService
 @inject VehicleApiService VehicleService
+@inject DriverApiService DriverService
 @inject ContractApiService ContractService
 @inject UserApiService UserService
 @inject AuthenticationStateProvider AuthStateProvider
@@ -20,7 +21,7 @@
             <i class="bx bx-plus-circle"></i>
             Create Trip Authority
         </h1>
-        <p class="page-description">Legacy trip authority creation workflow.</p>
+        <p class="page-description">Trip authority creation workflow.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/trips">&lt; Back to Trips</a>
@@ -50,6 +51,36 @@
                 <div class="form-section">
                     <div class="form-section-title">Selected Vehicle: <span class="contract-muted">@VehicleLabel()</span></div>
                     <div class="form-hint">* BOLD fields are REQUIRED</div>
+                    @if (_vehicle is null)
+                    {
+                        <div class="form-grid" style="margin-top: 0.75rem;">
+                            <div class="form-field">
+                                <label class="form-label"><strong>Vehicle Search:</strong></label>
+                                <div class="contract-search-radio">
+                                    <label class="form-radio-label">
+                                        <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                        GG
+                                    </label>
+                                    <label class="form-radio-label">
+                                        <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                        GP
+                                    </label>
+                                </div>
+                                <div class="fis-input-group-compact">
+                                    <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync">Find</button>
+                                </div>
+                                <select class="form-select fis-mt-05" @bind="_selectedVehicleVmfCode" @bind:after="ApplySelectedVehicleAsync" disabled="@(_vehicleMatches.Count == 0)">
+                                    <option value="">Select vehicle...</option>
+                                    @foreach (var vehicle in _vehicleMatches)
+                                    {
+                                        <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                                    }
+                                </select>
+                                <div class="form-hint">Select a vehicle to load odometer and contract context.</div>
+                            </div>
+                        </div>
+                    }
                     <div class="form-grid" style="margin-top: 0.75rem;">
                         <div class="form-field">
                             <label class="form-label"><strong>Start ODO Meter Reading:</strong></label>
@@ -92,6 +123,10 @@
                                     <option value="@approver.UserAccessCode">@ApproverLabel(approver)</option>
                                 }
                             </select>
+                            @if (_approvers.Count == 0)
+                            {
+                                <div class="form-hint">No eligible approvers are configured for your account.</div>
+                            }
                         </div>
                         <div class="form-field">
                             <label class="form-label">Request Number</label>
@@ -102,6 +137,32 @@
 
                 <div class="form-section">
                     <h3 class="form-section-title">Trip Driver(s) Information</h3>
+                    <div class="form-grid" style="margin-bottom: 0.75rem;">
+                        <div class="form-field">
+                            <label class="form-label">Select Driver</label>
+                            <select class="form-select" @bind="_selectedTripDriverCode">
+                                <option value="">-- Select driver --</option>
+                                @foreach (var driver in _availableDrivers.OrderBy(d => d.driver_surname).ThenBy(d => d.driver_firstname))
+                                {
+                                    <option value="@driver.site_driver_code">@DriverLabel(driver)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Primary Driver</label>
+                            <label class="form-label form-checkbox">
+                                <input type="checkbox" @bind="_selectedTripDriverPrimary" />
+                                Yes
+                            </label>
+                        </div>
+                    </div>
+                    <div class="contract-action-group" style="margin-bottom:0.75rem;">
+                        <button class="btn btn-secondary btn-sm" @onclick="AddTripDriverAsync" disabled="@(_createdTrip is null || !_selectedTripDriverCode.HasValue)">Add Driver to Trip</button>
+                    </div>
+                    @if (_createdTrip is null)
+                    {
+                        <div class="form-hint">Save trip authority first, then add trip driver(s).</div>
+                    }
                     <div class="table-container">
                         <div class="table-wrapper">
                             <table class="data-table">
@@ -113,9 +174,25 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td colspan="3">No Drivers Added</td>
-                                    </tr>
+                                    @if (_tripDrivers.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="3">No Drivers Added</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var item in _tripDrivers)
+                                        {
+                                            <tr>
+                                                <td>@ValueOrDash(item.trip_driver_name) | @ValueOrDash(item.trip_driver_id)</td>
+                                                <td>@(item.trip_driver_primary ? "YES" : "NO")</td>
+                                                <td>
+                                                    <button class="btn btn-danger btn-sm" @onclick="() => RemoveTripDriverAsync(item.trip_driver_code)">Remove</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
                                 </tbody>
                             </table>
                         </div>
@@ -193,6 +270,14 @@
     private VehicleDto? _vehicle;
     private TripDto? _createdTrip;
     private List<UserSummaryDto> _approvers = new();
+    private List<DriverDto> _availableDrivers = new();
+    private List<TripDriverDto> _tripDrivers = new();
+    private string _searchMode = "GG";
+    private string _vehicleSearchTerm = string.Empty;
+    private List<VehicleDto> _vehicleMatches = new();
+    private int? _selectedVehicleVmfCode;
+    private int? _selectedTripDriverCode;
+    private bool _selectedTripDriverPrimary = true;
 
     private int _startOdometer;
     private string _tripReason = string.Empty;
@@ -211,18 +296,17 @@
         {
             if (VmfCode is > 0)
             {
-                _vehicle = await VehicleService.GetVehicleAsync(VmfCode.Value);
-                _startOdometer = _vehicle?.current_odo ?? 0;
+                await LoadVehicleContextAsync(VmfCode.Value);
             }
 
-            _approvers = await UserService.GetAllSummariesAsync();
             await ResolveCurrentUserAsync();
+            _approvers = FilterApprovers(await UserService.GetAllSummariesAsync());
+            RemoveCurrentUserFromApprovers();
+            _availableDrivers = await DriverService.GetDriversAsync();
 
-            _resolvedContractCode = ContractCode ?? 0;
-            if (_resolvedContractCode <= 0 && VmfCode is > 0)
+            if (ContractCode is > 0)
             {
-                var latestContract = await ContractService.GetLatestContractForVehicleAsync(VmfCode.Value);
-                _resolvedContractCode = latestContract?.contract_id ?? 0;
+                _resolvedContractCode = ContractCode.Value;
             }
         }
         finally
@@ -238,6 +322,13 @@
         _message = string.Empty;
         try
         {
+            if (_vehicle == null)
+            {
+                _isError = true;
+                _message = "Select a vehicle before creating a trip authority.";
+                return;
+            }
+
             if (_resolvedContractCode <= 0)
             {
                 _isError = true;
@@ -249,6 +340,13 @@
             {
                 _isError = true;
                 _message = "Please select Approver.";
+                return;
+            }
+
+            if (IsSelfApproverSelection())
+            {
+                _isError = true;
+                _message = "You cannot select yourself as the trip approver.";
                 return;
             }
 
@@ -283,6 +381,7 @@
 
             _createdTrip = created;
             _message = "Request completed successfully.";
+            await LoadTripDriversAsync();
         }
         catch (Exception ex)
         {
@@ -305,16 +404,230 @@
     {
         if (_vehicle == null)
         {
-            return "[Vehicle]";
+            return "No vehicle selected";
         }
 
-        return $"{_vehicle.fleet_number} | {_vehicle.registration_number} | {_vehicle.model_name}";
+        return $"{GetVehicleLabel(_vehicle)} | {ValueOrDash(_vehicle.model_name)}";
+    }
+
+    private async Task SearchVehiclesAsync()
+    {
+        _isError = false;
+        _message = string.Empty;
+        var keyword = _vehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+            if (_vehicleMatches.All(v => v.vmf_code != _selectedVehicleVmfCode))
+            {
+                _selectedVehicleVmfCode = null;
+                _vehicle = null;
+                _resolvedContractCode = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            _selectedVehicleVmfCode = null;
+            _isError = true;
+            _message = "Unable to search vehicles.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private async Task ApplySelectedVehicleAsync()
+    {
+        if (!_selectedVehicleVmfCode.HasValue || _selectedVehicleVmfCode.Value <= 0)
+        {
+            _vehicle = null;
+            _resolvedContractCode = 0;
+            return;
+        }
+
+        await LoadVehicleContextAsync(_selectedVehicleVmfCode.Value);
+    }
+
+    private async Task LoadVehicleContextAsync(int vmfCode)
+    {
+        _vehicle = await VehicleService.GetVehicleAsync(vmfCode);
+        _startOdometer = _vehicle?.current_odo ?? 0;
+        var latestContract = await ContractService.GetLatestContractForVehicleAsync(vmfCode);
+        _resolvedContractCode = ContractCode is > 0 ? ContractCode.Value : (latestContract?.contract_id ?? 0);
+    }
+
+    private async Task AddTripDriverAsync()
+    {
+        if (_createdTrip is null || !_selectedTripDriverCode.HasValue)
+        {
+            return;
+        }
+
+        var selected = _availableDrivers.FirstOrDefault(d => d.site_driver_code == _selectedTripDriverCode.Value);
+        if (selected == null)
+        {
+            _isError = true;
+            _message = "Selected driver could not be loaded.";
+            return;
+        }
+
+        var payload = new TripDriverDto
+        {
+            trip_authority_code = _createdTrip.TripId,
+            trip_driver_primary = _selectedTripDriverPrimary,
+            trip_driver_name = $"{selected.driver_firstname} {selected.driver_surname}".Trim(),
+            trip_driver_id = selected.driver_SA_id,
+            site_code = selected.site_code,
+            driver_licence_type_id = selected.driver_licence_type_id,
+            driver_passportnumber = selected.driver_passportnumber,
+            driver_persalnumber = selected.driver_persalnumber,
+            driver_contractnumber = selected.driver_contractnumber,
+            driver_licence_number = selected.driver_licence_number,
+            driver_licence_issuedate = selected.driver_licence_issuedate,
+            driver_licence_lastVerifiedDate = selected.driver_licence_lastVerifiedDate,
+            driver_hasPDP = selected.driver_hasPDP,
+            driver_PDP_ExpiryDate = selected.driver_PDP_ExpiryDate,
+            driver_licence_ExpiryDate = selected.driver_licence_ExpiryDate,
+            driver_active = selected.driver_active
+        };
+
+        var created = await TripDriverService.CreateAsync(payload);
+        if (created == null)
+        {
+            _isError = true;
+            _message = "Unable to add driver to trip.";
+            return;
+        }
+
+        _isError = false;
+        _message = "Request completed successfully.";
+        await LoadTripDriversAsync();
+    }
+
+    private async Task RemoveTripDriverAsync(int tripDriverCode)
+    {
+        if (tripDriverCode <= 0)
+        {
+            return;
+        }
+
+        var success = await TripDriverService.DeleteAsync(tripDriverCode);
+        if (!success)
+        {
+            _isError = true;
+            _message = "Unable to remove driver from trip.";
+            return;
+        }
+
+        _isError = false;
+        _message = "Request completed successfully.";
+        await LoadTripDriversAsync();
+    }
+
+    private async Task LoadTripDriversAsync()
+    {
+        if (_createdTrip is null)
+        {
+            _tripDrivers = new();
+            return;
+        }
+
+        var all = await TripDriverService.GetAllAsync();
+        _tripDrivers = all
+            .Where(driver => driver.trip_authority_code == _createdTrip.TripId)
+            .OrderByDescending(driver => driver.trip_driver_primary)
+            .ThenBy(driver => driver.trip_driver_name)
+            .ToList();
     }
 
     private static string ApproverLabel(UserSummaryDto user)
         => string.IsNullOrWhiteSpace(user.UserName)
             ? $"User {user.UserAccessCode}"
             : $"{user.UserName} ({user.UserAccessCode})";
+
+    private static string DriverLabel(DriverDto driver)
+    {
+        var name = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = "Unnamed Driver";
+        }
+
+        return $"{name} ({driver.site_driver_code})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _selectedVehicleVmfCode = null;
+    }
+
+    private static List<UserSummaryDto> FilterApprovers(List<UserSummaryDto> users)
+    {
+        if (users.Count == 0)
+        {
+            return users;
+        }
+
+        var contractApprovers = users
+            .Where(user => (user.AccessLevel & LegacyPermissionBits.ContractManagement) == LegacyPermissionBits.ContractManagement)
+            .ToList();
+
+        return contractApprovers.Count > 0 ? contractApprovers : users;
+    }
+
+    private void RemoveCurrentUserFromApprovers()
+    {
+        if (_currentUserAccessCode is not > 0)
+        {
+            return;
+        }
+
+        _approvers = _approvers
+            .Where(x => x.UserAccessCode != _currentUserAccessCode.Value)
+            .ToList();
+    }
+
+    private bool IsSelfApproverSelection()
+    {
+        if (_currentUserAccessCode is not > 0 || string.IsNullOrWhiteSpace(_selectedApproverUserCode))
+        {
+            return false;
+        }
+
+        return short.TryParse(_selectedApproverUserCode, out var selectedUserCode)
+            && selectedUserCode == _currentUserAccessCode.Value;
+    }
 
     private async Task ResolveCurrentUserAsync()
     {

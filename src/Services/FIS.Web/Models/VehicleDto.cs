@@ -85,6 +85,8 @@ public record VehicleDto
     public decimal? purchase_amount { get; set; }
     public string? purchased_from { get; set; }
     public string? invoice_number { get; set; }
+    public string? ifms_vehicle_register_number { get; set; }
+    public string? natis_model_number { get; set; }
     public decimal? book_value { get; set; }
     public DateTime? book_value_date { get; set; }
     public string? sold_to { get; set; }

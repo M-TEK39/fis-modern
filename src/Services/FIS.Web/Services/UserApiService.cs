@@ -31,15 +31,38 @@ public class UserApiService
         }
     }
 
-    public async Task<ApiUserDto?> CreateAsync(string? email, string? telephone)
+    public async Task<List<UserProfileDto>> GetAllProfilesAsync()
     {
         try
         {
-            var firstName = ResolveFirstName(email);
+            return await _httpClient.GetFromJsonAsync<List<UserProfileDto>>("api/userprofile")
+                ?? new List<UserProfileDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching detailed user profiles");
+            return new List<UserProfileDto>();
+        }
+    }
+
+    public Task<ApiUserDto?> CreateAsync(string? email, string? telephone)
+        => CreateAsync(email, telephone, null, null);
+
+    public async Task<ApiUserDto?> CreateAsync(string? email, string? telephone, string? firstName, string? lastName)
+    {
+        try
+        {
+            var resolvedFirstName = string.IsNullOrWhiteSpace(firstName)
+                ? ResolveFirstName(email)
+                : firstName.Trim();
+            var resolvedLastName = string.IsNullOrWhiteSpace(lastName)
+                ? "User"
+                : lastName.Trim();
+
             var response = await _httpClient.PostAsJsonAsync("api/userprofile", new CreateUserProfileRequest
             {
-                FirstName = firstName,
-                LastName = "User",
+                FirstName = resolvedFirstName,
+                LastName = resolvedLastName,
                 Email = email,
                 Telephone = telephone,
                 Password = "Temp#1234",
@@ -128,7 +151,8 @@ public class UserApiService
             FirstName = profile.FirstName,
             LastName = profile.LastName,
             Telephone = profile.Telephone,
-            LastLoginDate = profile.LastLogOn?.ToString("yyyy-MM-dd HH:mm")
+            LastLoginDate = profile.LastLogOn?.ToString("yyyy-MM-dd HH:mm"),
+            AccessLevel = profile.AccessLevel
         };
     }
 

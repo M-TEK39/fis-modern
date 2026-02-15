@@ -18,6 +18,9 @@ public class VehiclesController : BaseApiController
     private readonly VehicleService _vehicleService;
     private readonly FisDbContext _context; // Keep for db-status endpoint
     private readonly IVehicleTariffRepository _tariffRepository;
+    private readonly IContractRepository _contractRepository;
+    private readonly IVehicleRemarkRepository _remarkRepository;
+    private readonly IVehicleLicenceHistoryRepository _licenceHistory;
     private readonly ILogger<VehiclesController> _logger;
 
     public VehiclesController(
@@ -25,6 +28,9 @@ public class VehiclesController : BaseApiController
         VehicleService vehicleService,
         FisDbContext context,
         IVehicleTariffRepository tariffRepository,
+        IContractRepository contractRepository,
+        IVehicleRemarkRepository remarkRepository,
+        IVehicleLicenceHistoryRepository licenceHistory,
         ILogger<VehiclesController> logger
     )
     {
@@ -32,6 +38,9 @@ public class VehiclesController : BaseApiController
         _vehicleService = vehicleService;
         _context = context;
         _tariffRepository = tariffRepository;
+        _contractRepository = contractRepository;
+        _remarkRepository = remarkRepository;
+        _licenceHistory = licenceHistory;
         _logger = logger;
     }
 
@@ -214,6 +223,8 @@ public class VehiclesController : BaseApiController
                 year_manufactured = request.year_manufactured,
                 purchase_date = request.purchase_date,
                 purchase_amount = request.purchase_amount,
+                ifms_vehicle_register_number = request.ifms_vehicle_register_number,
+                natis_model_number = request.natis_model_number,
                 date_created = DateTime.UtcNow,
                 created_by_user_code = currentUserId,
                 is_deleted = false
@@ -269,6 +280,8 @@ public class VehiclesController : BaseApiController
             existing.tare = request.tare ?? existing.tare;
             existing.gvm = request.gvm ?? existing.gvm;
             existing.year_manufactured = request.year_manufactured ?? existing.year_manufactured;
+            existing.ifms_vehicle_register_number = request.ifms_vehicle_register_number ?? existing.ifms_vehicle_register_number;
+            existing.natis_model_number = request.natis_model_number ?? existing.natis_model_number;
             existing.date_updated = DateTime.UtcNow;
             existing.modified_by_user_code = currentUserId;
 
@@ -288,6 +301,174 @@ public class VehiclesController : BaseApiController
         {
             _logger.LogError(ex, "Error updating vehicle {VmfCode}", vmfCode);
             return StatusCode(500, "An error occurred while updating the vehicle");
+        }
+    }
+
+    /// <summary>
+    /// Correct model code on a NEW vehicle (no active contract).
+    /// Capturer/authorizer self-service — no RFC to admin required.
+    /// </summary>
+    [HttpPatch("{vmfCode}/correct-model")]
+    public async Task<ActionResult> CorrectVehicleModel(int vmfCode, [FromBody] CorrectModelDto request)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            if (existing == null)
+                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+
+            // Only allowed when vehicle has no active contract (i.e. still "new")
+            var hasActiveContract = await _contractRepository.HasActiveContractAsync(vmfCode);
+            if (hasActiveContract)
+            {
+                _logger.LogWarning(
+                    "Model correction blocked: Vehicle {VmfCode} has an active contract",
+                    vmfCode
+                );
+                return StatusCode(403, new
+                {
+                    error = "Model correction is only allowed for vehicles that have no active contract. Please submit an RFC for this change.",
+                    vmf_code = vmfCode
+                });
+            }
+
+            existing.model_code = request.model_code;
+            existing.date_updated = DateTime.UtcNow;
+            existing.modified_by_user_code = currentUserId;
+
+            await _vehicleRepository.UpdateAsync(existing, currentUserId);
+            _logger.LogInformation(
+                "Corrected model_code for vehicle {VmfCode} to {ModelCode} by user {UserId}",
+                vmfCode, request.model_code, currentUserId
+            );
+
+            return Ok(new { vmf_code = vmfCode, model_code = existing.model_code });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error correcting model for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "An error occurred while correcting the vehicle model");
+        }
+    }
+
+    /// <summary>
+    /// Correct GG/fleet number on a NEW vehicle (no active contract).
+    /// Capturer/authorizer self-service — no RFC to admin required.
+    /// </summary>
+    [HttpPatch("{vmfCode}/correct-gg")]
+    public async Task<ActionResult> CorrectVehicleGG(int vmfCode, [FromBody] CorrectGGDto request)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            if (existing == null)
+                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+
+            // Only allowed when vehicle has no active contract (i.e. still "new")
+            var hasActiveContract = await _contractRepository.HasActiveContractAsync(vmfCode);
+            if (hasActiveContract)
+            {
+                _logger.LogWarning(
+                    "GG number correction blocked: Vehicle {VmfCode} has an active contract",
+                    vmfCode
+                );
+                return StatusCode(403, new
+                {
+                    error = "GG number correction is only allowed for vehicles that have no active contract. Please submit an RFC for this change.",
+                    vmf_code = vmfCode
+                });
+            }
+
+            existing.fleet_number = request.fleet_number;
+            existing.date_updated = DateTime.UtcNow;
+            existing.modified_by_user_code = currentUserId;
+
+            await _vehicleRepository.UpdateAsync(existing, currentUserId);
+            _logger.LogInformation(
+                "Corrected fleet_number for vehicle {VmfCode} to '{FleetNumber}' by user {UserId}",
+                vmfCode, request.fleet_number, currentUserId
+            );
+
+            return Ok(new { vmf_code = vmfCode, fleet_number = existing.fleet_number });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error correcting GG number for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "An error occurred while correcting the vehicle GG number");
+        }
+    }
+
+    /// <summary>
+    /// Search vehicles by invoice number
+    /// </summary>
+    [HttpGet("by-invoice/{invoiceNumber}")]
+    public async Task<ActionResult<IEnumerable<VehicleSearchResultDto>>> GetVehiclesByInvoiceNumber(string invoiceNumber)
+    {
+        try
+        {
+            var vehicles = await _vehicleRepository.GetByInvoiceNumberAsync(invoiceNumber);
+            var results = vehicles.Select(v => new VehicleSearchResultDto
+            {
+                VmfCode            = v.vmf_code,
+                FleetNumber        = v.fleet_number ?? string.Empty,
+                RegistrationNumber = v.registration_number,
+                MakeCode           = v.Model?.make_code,
+                ModelCode          = v.model_code,
+                CurrentOdometer    = v.current_odo,
+                VehicleStatusCode  = v.vehicle_status_code,
+                IsAvailable        = !v.is_deleted && v.vehicle_status_code == 1,
+                InvoiceNumber      = v.invoice_number,
+                DisplayText        = $"{v.fleet_number} - {v.registration_number}"
+            });
+            _logger.LogInformation(
+                "Found {Count} vehicles with invoice number '{InvoiceNumber}'",
+                results.Count(),
+                invoiceNumber
+            );
+            return Ok(results);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving vehicles with invoice number '{InvoiceNumber}'", invoiceNumber);
+            return StatusCode(500, "An error occurred while retrieving vehicles");
+        }
+    }
+
+    /// <summary>
+    /// Update invoice number for a vehicle
+    /// </summary>
+    [HttpPatch("{vmfCode}/invoice")]
+    public async Task<ActionResult> UpdateVehicleInvoice(int vmfCode, [FromBody] UpdateInvoiceDto request)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var existing = await _vehicleRepository.GetByIdAsync(vmfCode);
+            if (existing == null)
+                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+
+            existing.invoice_number = request.invoice_number;
+            existing.date_updated = DateTime.UtcNow;
+            existing.modified_by_user_code = currentUserId;
+
+            await _vehicleRepository.UpdateAsync(existing, currentUserId);
+            _logger.LogInformation(
+                "Updated invoice number for vehicle {VmfCode} to '{InvoiceNumber}'",
+                vmfCode,
+                request.invoice_number
+            );
+
+            return Ok(new { vmf_code = vmfCode, invoice_number = existing.invoice_number });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating invoice number for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "An error occurred while updating the invoice number");
         }
     }
 
@@ -318,6 +499,443 @@ public class VehiclesController : BaseApiController
             return StatusCode(500, "An error occurred while deleting the vehicle");
         }
     }
+
+    // ──────────────────────────────────────────────────────────
+    // VEHICLE STATUS CHANGE  (with automatic side-effects)
+    // ──────────────────────────────────────────────────────────
+
+    private static string GetVehicleStatusDescription(short code) => code switch
+    {
+        0  => "New",
+        1  => "In Service",
+        2  => "Withdrawn",
+        3  => "Board of Survey",
+        4  => "Stolen",
+        5  => "Sold",
+        6  => "Transferred",
+        7  => "Subsidized",
+        8  => "From Focus",
+        9  => "Privatised",
+        10 => "Recovered",
+        11 => "Missing",
+        12 => "Destroyed",
+        _  => "Unknown"
+    };
+
+    /// <summary>
+    /// Change a vehicle's status with automatic side-effects.
+    ///
+    /// When status is set to STOLEN (4):
+    ///   1. Any active contract for the vehicle is automatically closed.
+    ///   2. The vehicle is booked under the supplied site_code.
+    ///   3. A VehicleStatusHistory entry is created.
+    ///
+    /// site_code is required when marking a vehicle as Stolen, optional otherwise.
+    /// </summary>
+    [HttpPatch("{vmfCode:int}/status")]
+    public async Task<ActionResult> ChangeStatus(int vmfCode,
+        [FromBody] ChangeVehicleStatusDto dto)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+
+            var vehicle = await _context.Vehicles
+                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
+
+            if (vehicle == null)
+                return NotFound(new { error = $"Vehicle {vmfCode} not found." });
+
+            if (dto.new_status_code == 4 && dto.site_code == null)
+                return BadRequest(new { error = "site_code is required when marking a vehicle as Stolen." });
+
+            var previousStatusCode = vehicle.vehicle_status_code;
+            var previousStatusDesc = GetVehicleStatusDescription(previousStatusCode);
+            var newStatusDesc = GetVehicleStatusDescription(dto.new_status_code);
+            var effectiveDate = dto.effective_date ?? DateTime.UtcNow;
+
+            // ── Actions list returned in response ──────────────────────
+            var actionsPerformed = new List<string>();
+
+            // ── STOLEN-specific side effects ───────────────────────────
+            int? closedContractCode = null;
+            if (dto.new_status_code == 4)
+            {
+                // 1. Close any active contract
+                var activeContract = await _contractRepository.GetActiveContractByVehicleAsync(vmfCode);
+                if (activeContract != null)
+                {
+                    var closeNotes = $"Auto-closed: vehicle {vehicle.fleet_number ?? vmfCode.ToString()} reported stolen. {dto.notes}".Trim();
+                    await _contractRepository.EndContractAsync(
+                        activeContract.contract_code,
+                        effectiveDate,
+                        currentUserId,
+                        endOdometer: vehicle.current_odo > 0 ? vehicle.current_odo : null,
+                        notes: closeNotes);
+
+                    closedContractCode = activeContract.contract_code;
+                    actionsPerformed.Add($"Contract {activeContract.contract_code} closed automatically (vehicle reported stolen).");
+                }
+
+                // 2. Book vehicle under the specified site
+                vehicle.location_code = dto.site_code!.Value;
+                actionsPerformed.Add($"Vehicle location updated to site {dto.site_code.Value}.");
+            }
+
+            // ── Update vehicle status ──────────────────────────────────
+            vehicle.vehicle_status_code = dto.new_status_code;
+            vehicle.vehicle_status_date = effectiveDate;
+            vehicle.date_updated = DateTime.UtcNow;
+            vehicle.modified_by_user_code = currentUserId;
+
+            // ── Record status history ──────────────────────────────────
+            var historyEntry = new FIS.Core.Domain.Entities.Vehicles.VehicleStatusHistory
+            {
+                vmf_code = vmfCode,
+                vehicle_status_code = dto.new_status_code,
+                vehicle_status_description = newStatusDesc,
+                status_start_date = effectiveDate,
+                // status_end_date is non-nullable — use far-future sentinel for "open" status
+                status_end_date = new DateTime(2099, 12, 31),
+                date_created = DateTime.UtcNow,
+                created_by_user_code = currentUserId
+            };
+
+            _context.VehicleStatusHistories.Add(historyEntry);
+            await _context.SaveChangesAsync();
+
+            actionsPerformed.Add($"Vehicle status changed from '{previousStatusDesc}' ({previousStatusCode}) to '{newStatusDesc}' ({dto.new_status_code}).");
+
+            _logger.LogInformation(
+                "Vehicle {VmfCode} status changed to {NewStatus} by user {UserId}. Actions: {Actions}",
+                vmfCode, newStatusDesc, currentUserId, string.Join(" | ", actionsPerformed));
+
+            return Ok(new
+            {
+                vmf_code = vmfCode,
+                fleet_number = vehicle.fleet_number,
+                registration_number = vehicle.registration_number,
+                previous_status_code = previousStatusCode,
+                previous_status_description = previousStatusDesc,
+                new_status_code = dto.new_status_code,
+                new_status_description = newStatusDesc,
+                effective_date = effectiveDate,
+                location_code = vehicle.location_code,
+                closed_contract_code = closedContractCode,
+                actions_performed = actionsPerformed
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error changing status for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to change vehicle status", detail = ex.Message });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // VEHICLE LICENCE CAPTURE  (history-preserving update)
+    // ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Capture a new licence for a vehicle.
+    /// The current licence values are snapshotted to vehicle_licence_history BEFORE
+    /// the vehicle record is updated, so the full renewal history is never lost.
+    /// </summary>
+    [HttpPatch("{vmfCode:int}/licence")]
+    public async Task<ActionResult> CaptureLicence(int vmfCode,
+        [FromBody] FIS.Api.DTOs.CaptureLicenceDto dto)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+
+            var vehicle = await _context.Vehicles
+                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
+
+            if (vehicle == null)
+                return NotFound(new { error = $"Vehicle {vmfCode} not found." });
+
+            // Snapshot current values BEFORE overwriting
+            var snapshot = new FIS.Core.Domain.Entities.VehicleLicenceHistory
+            {
+                vmf_code = vmfCode,
+                licence_due_date = vehicle.licence_due_date,
+                lic_register_number = vehicle.lic_register_number,
+                lic_registration_doc = vehicle.lic_registration_doc,
+                licence_comments = vehicle.licence_comments,
+                cof_last_done = vehicle.cof_last_done,
+                cof_required = vehicle.cof_required,
+                tare = vehicle.tare,
+                Licence_receiver = vehicle.Licence_receiver,
+                Licence_receiver_id = vehicle.Licence_receiver_id,
+                Licence_receiver_tel = vehicle.Licence_receiver_tel,
+                Licence_receiver_site = vehicle.Licence_receiver_site,
+                Licence_date_taken = vehicle.Licence_date_taken,
+                captured_by_user_code = currentUserId,
+                update_notes = dto.update_notes
+            };
+
+            // Only save a snapshot if there is something worth preserving
+            if (snapshot.licence_due_date.HasValue || snapshot.lic_register_number != null)
+                await _licenceHistory.CreateAsync(snapshot);
+
+            // Apply new licence values
+            vehicle.licence_due_date = dto.licence_due_date;
+            vehicle.lic_register_number = dto.lic_register_number;
+            vehicle.lic_registration_doc = dto.lic_registration_doc;
+            vehicle.licence_comments = dto.licence_comments;
+            vehicle.cof_last_done = dto.cof_last_done;
+            vehicle.cof_required = dto.cof_required;
+            vehicle.Licence_receiver = dto.Licence_receiver;
+            vehicle.Licence_receiver_id = dto.Licence_receiver_id;
+            vehicle.Licence_receiver_tel = dto.Licence_receiver_tel;
+            vehicle.Licence_receiver_site = dto.Licence_receiver_site;
+            vehicle.Licence_date_taken = dto.Licence_date_taken;
+            if (dto.tare.HasValue) vehicle.tare = dto.tare;
+
+            vehicle.date_updated = DateTime.UtcNow;
+            vehicle.modified_by_user_code = currentUserId;
+
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "Licence captured for vehicle {VmfCode} by user {UserId}. New due date: {DueDate}",
+                vmfCode, currentUserId, dto.licence_due_date);
+
+            return Ok(new
+            {
+                vmf_code = vmfCode,
+                fleet_number = vehicle.fleet_number,
+                registration_number = vehicle.registration_number,
+                licence_due_date = vehicle.licence_due_date,
+                lic_register_number = vehicle.lic_register_number,
+                Licence_receiver = vehicle.Licence_receiver,
+                Licence_date_taken = vehicle.Licence_date_taken,
+                message = "Licence captured successfully. Previous licence saved to history."
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error capturing licence for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to capture licence" });
+        }
+    }
+
+    /// <summary>
+    /// Get the full licence history for a vehicle — all previous licence records,
+    /// newest first.
+    /// </summary>
+    [HttpGet("{vmfCode:int}/licence/history")]
+    public async Task<ActionResult> GetLicenceHistory(int vmfCode)
+    {
+        try
+        {
+            var history = await _licenceHistory.GetByVehicleAsync(vmfCode);
+            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+
+            return Ok(new
+            {
+                vmf_code = vmfCode,
+                fleet_number = vehicle?.fleet_number,
+                registration_number = vehicle?.registration_number,
+                // Current live licence values
+                current = vehicle == null ? null : new
+                {
+                    vehicle.licence_due_date,
+                    vehicle.lic_register_number,
+                    vehicle.lic_registration_doc,
+                    vehicle.licence_comments,
+                    vehicle.cof_last_done,
+                    vehicle.cof_required,
+                    vehicle.Licence_receiver,
+                    vehicle.Licence_receiver_id,
+                    vehicle.Licence_date_taken
+                },
+                // Historical snapshots
+                history_count = history.Count(),
+                history = history.Select(h => new FIS.Api.DTOs.VehicleLicenceHistoryDto
+                {
+                    licence_history_id = h.licence_history_id,
+                    vmf_code = h.vmf_code,
+                    fleet_number = h.Vehicle?.fleet_number,
+                    registration_number = h.Vehicle?.registration_number,
+                    licence_due_date = h.licence_due_date,
+                    lic_register_number = h.lic_register_number,
+                    lic_registration_doc = h.lic_registration_doc,
+                    licence_comments = h.licence_comments,
+                    cof_last_done = h.cof_last_done,
+                    cof_required = h.cof_required,
+                    tare = h.tare,
+                    Licence_receiver = h.Licence_receiver,
+                    Licence_receiver_id = h.Licence_receiver_id,
+                    Licence_receiver_tel = h.Licence_receiver_tel,
+                    Licence_receiver_site = h.Licence_receiver_site,
+                    Licence_date_taken = h.Licence_date_taken,
+                    captured_at = h.captured_at,
+                    captured_by_user_code = h.captured_by_user_code,
+                    captured_by_user_email = h.CapturedByUser?.email,
+                    update_notes = h.update_notes
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching licence history for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to fetch licence history" });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
+    // VEHICLE REMARKS  (missing, under investigation, general notes)
+    // ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Get all remarks for a vehicle (history — open and resolved).
+    /// </summary>
+    [HttpGet("{vmfCode:int}/remarks")]
+    public async Task<ActionResult> GetRemarks(int vmfCode)
+    {
+        try
+        {
+            var remarks = await _remarkRepository.GetByVehicleAsync(vmfCode);
+            return Ok(remarks.Select(MapRemark));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching remarks for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to fetch vehicle remarks" });
+        }
+    }
+
+    /// <summary>
+    /// Get only active (unresolved) remarks for a vehicle.
+    /// </summary>
+    [HttpGet("{vmfCode:int}/remarks/active")]
+    public async Task<ActionResult> GetActiveRemarks(int vmfCode)
+    {
+        try
+        {
+            var remarks = await _remarkRepository.GetActiveByVehicleAsync(vmfCode);
+            return Ok(remarks.Select(MapRemark));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching active remarks for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to fetch active vehicle remarks" });
+        }
+    }
+
+    /// <summary>
+    /// Add a remark to a vehicle (e.g. missing, under investigation).
+    /// Categories: General | Missing | UnderInvestigation | AccidentHold | Other
+    /// </summary>
+    [HttpPost("{vmfCode:int}/remarks")]
+    public async Task<ActionResult> AddRemark(int vmfCode, [FromBody] FIS.Api.DTOs.CreateVehicleRemarkDto dto)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var remark = new FIS.Core.Domain.Entities.VehicleRemark
+            {
+                vmf_code = vmfCode,
+                remark_category = dto.remark_category,
+                remark_text = dto.remark_text
+            };
+
+            var created = await _remarkRepository.CreateAsync(remark, currentUserId);
+            _logger.LogInformation(
+                "Vehicle remark added: vmf={VmfCode}, category={Category}, by user {UserId}",
+                vmfCode, dto.remark_category, currentUserId);
+
+            return CreatedAtAction(nameof(GetRemarks), new { vmfCode },
+                MapRemark(created));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding remark to vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to add vehicle remark" });
+        }
+    }
+
+    /// <summary>
+    /// Resolve (close) a vehicle remark — e.g. vehicle found, investigation concluded.
+    /// </summary>
+    [HttpPost("{vmfCode:int}/remarks/{remarkId:int}/resolve")]
+    public async Task<ActionResult> ResolveRemark(int vmfCode, int remarkId,
+        [FromBody] FIS.Api.DTOs.ResolveVehicleRemarkDto dto)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var resolved = await _remarkRepository.ResolveAsync(remarkId, currentUserId, dto.resolution_notes);
+
+            if (resolved.vmf_code != vmfCode)
+                return BadRequest(new { error = "Remark does not belong to this vehicle." });
+
+            _logger.LogInformation(
+                "Vehicle remark {RemarkId} resolved by user {UserId}", remarkId, currentUserId);
+
+            return Ok(MapRemark(resolved));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error resolving remark {RemarkId}", remarkId);
+            return StatusCode(500, new { error = "Failed to resolve vehicle remark" });
+        }
+    }
+
+    /// <summary>
+    /// Delete a vehicle remark (soft delete — for data entry errors only).
+    /// </summary>
+    [HttpDelete("{vmfCode:int}/remarks/{remarkId:int}")]
+    public async Task<ActionResult> DeleteRemark(int vmfCode, int remarkId)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            await _remarkRepository.DeleteAsync(remarkId, currentUserId);
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting remark {RemarkId}", remarkId);
+            return StatusCode(500, new { error = "Failed to delete vehicle remark" });
+        }
+    }
+
+    private static FIS.Api.DTOs.VehicleRemarkResponseDto MapRemark(FIS.Core.Domain.Entities.VehicleRemark r) => new()
+    {
+        remark_id = r.remark_id,
+        vmf_code = r.vmf_code,
+        fleet_number = r.Vehicle?.fleet_number,
+        registration_number = r.Vehicle?.registration_number,
+        remark_category = r.remark_category,
+        remark_text = r.remark_text,
+        is_resolved = r.is_resolved,
+        resolved_date = r.resolved_date,
+        resolved_by_user_email = r.ResolvedByUser?.email,
+        resolution_notes = r.resolution_notes,
+        date_created = r.date_created,
+        date_updated = r.date_updated,
+        created_by_user_code = r.created_by_user_code,
+        created_by_user_email = r.CreatedByUser?.email
+    };
 }
 
 /// <summary>
@@ -348,6 +966,12 @@ public class VehicleCreationApiRequest
     public DateTime? purchase_date { get; set; }
     public decimal? purchase_amount { get; set; }
 
+    [StringLength(50)]
+    public string? ifms_vehicle_register_number { get; set; }
+
+    [StringLength(50)]
+    public string? natis_model_number { get; set; }
+
     /// <summary>
     /// Flag to trigger tariff recalculation for this vehicle
     /// </summary>
@@ -374,10 +998,44 @@ public class VehicleUpdateApiRequest
     public short? year_manufactured { get; set; }
     public string? colour { get; set; }
 
+    [StringLength(50)]
+    public string? ifms_vehicle_register_number { get; set; }
+
+    [StringLength(50)]
+    public string? natis_model_number { get; set; }
+
     /// <summary>
     /// Flag to trigger tariff recalculation for this vehicle
     /// </summary>
     public bool recalculate_tariff { get; set; } = false;
+}
+
+/// <summary>
+/// DTO for correcting model code on a new vehicle (no active contract)
+/// </summary>
+public class CorrectModelDto
+{
+    [Required]
+    public short model_code { get; set; }
+}
+
+/// <summary>
+/// DTO for correcting GG/fleet number on a new vehicle (no active contract)
+/// </summary>
+public class CorrectGGDto
+{
+    [Required]
+    [StringLength(20)]
+    public string fleet_number { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// DTO for invoice number update requests
+/// </summary>
+public class UpdateInvoiceDto
+{
+    [StringLength(50)]
+    public string? invoice_number { get; set; }
 }
 
 /// <summary>
@@ -397,4 +1055,36 @@ public class UpdateOdometerDto
     /// </summary>
     [StringLength(200)]
     public string? Notes { get; set; }
+}
+
+/// <summary>
+/// DTO for PATCH /api/vehicles/{vmfCode}/status
+/// </summary>
+public class ChangeVehicleStatusDto
+{
+    /// <summary>
+    /// Target status code.
+    /// Known values: 0=New, 1=In Service, 2=Withdrawn, 3=Board of Survey,
+    /// 4=Stolen, 5=Sold, 6=Transferred, 7=Subsidized, 8=From Focus,
+    /// 9=Privatised, 10=Recovered, 11=Missing, 12=Destroyed
+    /// </summary>
+    [Required]
+    public short new_status_code { get; set; }
+
+    /// <summary>
+    /// Site under which the vehicle should be booked after the status change.
+    /// REQUIRED when new_status_code = 4 (Stolen).
+    /// </summary>
+    public short? site_code { get; set; }
+
+    /// <summary>
+    /// Optional date/time the status change took effect (defaults to now).
+    /// </summary>
+    public DateTime? effective_date { get; set; }
+
+    /// <summary>
+    /// Optional notes — appended to the auto-closed contract's closure notes when stolen.
+    /// </summary>
+    [StringLength(2000)]
+    public string? notes { get; set; }
 }

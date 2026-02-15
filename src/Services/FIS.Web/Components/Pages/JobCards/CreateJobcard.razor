@@ -53,11 +53,43 @@
     }
     else if (_vehicle is null)
     {
-        <div class="empty-state">
-            <i class="bx bx-error-circle"></i>
-            <h3>Vehicle not found</h3>
-            <p>Select a vehicle first to create a job card.</p>
-            <a class="btn btn-primary" href="/job-cards/select-vehicle">Select Vehicle</a>
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Select Vehicle</h2>
+            </div>
+            <div class="form-card-body">
+                <p class="form-hint">Search by GG number or registration, then select vehicle to continue.</p>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Vehicle</label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                GP
+                            </label>
+                        </div>
+                        <div class="fis-input-group-compact">
+                            <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                            <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync">Find</button>
+                        </div>
+                        <select class="form-select fis-mt-05" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                            <option value="">Select vehicle...</option>
+                            @foreach (var vehicle in _vehicleMatches)
+                            {
+                                <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary" @onclick="ContinueWithSelectedVehicle" disabled="@(!_selectedVmfCode.HasValue)">Continue</button>
+                    <a class="btn btn-secondary" href="/job-cards/select-vehicle">Back to Vehicle List</a>
+                </div>
+            </div>
         </div>
     }
     else
@@ -102,16 +134,23 @@
             </div>
             <div class="form-card-body">
                 <div class="form-grid">
-                    @foreach (var category in _jobCategories)
+                    @if (_jobCategories.Count == 0)
                     {
-                        <label class="form-label form-checkbox">
-                            <input type="checkbox" checked="@category.Selected" @onchange="(e) => SetCategory(category.ExtraCode, e.Value)" />
-                            @category.Label
-                        </label>
+                        <p class="form-hint">No job categories configured. Configure extra codes in Validation Data.</p>
+                    }
+                    else
+                    {
+                        @foreach (var category in _jobCategories)
+                        {
+                            <label class="form-label form-checkbox">
+                                <input type="checkbox" checked="@category.Selected" @onchange="(e) => SetCategory(category.ExtraCode, e.Value)" />
+                                @category.Label
+                            </label>
+                        }
                     }
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary" @onclick="CreateAsync" disabled="@_saving">Create</button>
+                    <button class="btn btn-primary" @onclick="CreateAsync" disabled="@(_saving || _jobCategories.Count == 0)">Create</button>
                     <button class="btn btn-secondary" @onclick="ViewExisting">View created job cards for this vehicle</button>
                 </div>
             </div>
@@ -139,6 +178,10 @@
     private string _message = string.Empty;
     private VehicleDto? _vehicle;
     private List<JobCategoryOption> _jobCategories = new();
+    private string _vehicleSearchTerm = string.Empty;
+    private string _searchMode = "GG";
+    private List<VehicleDto> _vehicleMatches = new();
+    private int? _selectedVmfCode;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -158,12 +201,57 @@
         if (!VmfCode.HasValue || VmfCode.Value <= 0)
         {
             _vehicle = null;
+            _vehicleMatches = new();
+            _selectedVmfCode = null;
             _loading = false;
             return;
         }
 
         _vehicle = await VehicleService.GetVehicleAsync(VmfCode.Value);
         _loading = false;
+    }
+
+    private async Task SearchVehiclesAsync()
+    {
+        _isError = false;
+        _message = string.Empty;
+        var keyword = _vehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            _vehicleMatches = new();
+            _selectedVmfCode = null;
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleService.SearchVehiclesAsync(keyword);
+            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+            if (_vehicleMatches.All(v => v.vmf_code != _selectedVmfCode))
+            {
+                _selectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleMatches = new();
+            _selectedVmfCode = null;
+            _isError = true;
+            _message = "Unable to search vehicles.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void ContinueWithSelectedVehicle()
+    {
+        if (!_selectedVmfCode.HasValue || _selectedVmfCode.Value <= 0)
+        {
+            _isError = true;
+            _message = "Select a vehicle to continue.";
+            return;
+        }
+
+        Navigation.NavigateTo($"/job-cards/create?vmfCode={_selectedVmfCode.Value}");
     }
 
     private void SetCategory(short extraCode, object? value)
@@ -224,9 +312,7 @@
                 return;
             }
 
-            _message = createdCount == 1
-                ? "Request completed successfully."
-                : $"Request completed successfully. {createdCount} job cards were created.";
+            _message = "Request completed successfully.";
         }
         catch (Exception ex)
         {
@@ -247,16 +333,23 @@
             return;
         }
 
-        var extras = await ExtraCodeService.GetAllAsync();
+        List<ExtraCodeDto> extras;
+        try
+        {
+            extras = await ExtraCodeService.GetAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _jobCategories = new();
+            _isError = true;
+            _message = "Unable to load job card categories.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+            return;
+        }
+
         if (extras.Count == 0)
         {
-            _jobCategories =
-            [
-                new() { ExtraCode = 1, Label = "Service" },
-                new() { ExtraCode = 2, Label = "Mechanical Repair" },
-                new() { ExtraCode = 3, Label = "Electrical" },
-                new() { ExtraCode = 4, Label = "Body Work" }
-            ];
+            _jobCategories = new();
             return;
         }
 
@@ -266,7 +359,7 @@
             {
                 ExtraCode = (short)x.extra_code,
                 Label = string.IsNullOrWhiteSpace(x.extra_description)
-                    ? $"Extra {x.extra_code}"
+                    ? $"Extra Code {x.extra_code}"
                     : x.extra_description
             }).ToList();
     }
@@ -285,6 +378,32 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _selectedVmfCode = null;
+    }
 
     private async Task ResolveAccessAsync()
     {

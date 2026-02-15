@@ -1,12 +1,330 @@
 @page "/reports/taxis-financial"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using System.Text.Json
+@using FIS.Web.Services
+@inject TaxiApiService TaxiService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Financial Reports: Taxis"
-    Description="Legacy placeholder for Taxis/Taxi_Fin_reports.aspx."
-    LegacyPath="Taxis/Taxi_Fin_reports.aspx"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="taxis-financial"
-    Icon="bx-file" />
+<PageTitle>Financial Reports: Taxis - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-money"></i>
+            Financial Reports: Taxis
+        </h1>
+        <p class="page-description">Taxi requisitions with financial capture details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/taxis">Taxi Module</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Search</label>
+                    <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Req #, GG/GP, official, company" />
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-container fis-mt-15">
+        <div class="table-header">
+            <span class="table-title">Taxi Financial Report</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Request ID</th>
+                        <th>Requisition Number</th>
+                        <th>Official</th>
+                        <th>Vehicle</th>
+                        <th>Company</th>
+                        <th>Date Required</th>
+                        <th>Status</th>
+                        <th>Amount (R)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="8">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="8">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.RequestId</td>
+                                <td>@ValueOrDash(row.RequisitionNumber)</td>
+                                <td>@ValueOrDash(row.Official)</td>
+                                <td>@GetVehicleLabel(row.Vehicle)</td>
+                                <td>@ValueOrDash(row.Company)</td>
+                                <td>@FormatDate(row.DateRequired)</td>
+                                <td>@ValueOrDash(row.Status)</td>
+                                <td>@(row.Amount?.ToString("N2") ?? "-")</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination-meta">Total records: @_rows.Count | Total amount: @TotalAmount.ToString("N2")</div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private string _searchTerm = string.Empty;
+    private List<TaxiFinancialRow> _rows = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<TaxiFinancialRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    private decimal TotalAmount => _rows.Sum(r => r.Amount ?? 0m);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _vehicleLabels = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
+
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var raw = await TaxiService.GetAllAsync<Dictionary<string, JsonElement>>();
+            var rows = raw.Select(MapTaxiFinancialRow);
+            var q = _searchTerm.Trim();
+
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                rows = rows.Where(r =>
+                    r.RequestId.ToString().Contains(q, StringComparison.OrdinalIgnoreCase)
+                    || Contains(r.RequisitionNumber, q)
+                    || Contains(r.Official, q)
+                    || Contains(r.Vehicle, q)
+                    || Contains(r.Company, q));
+            }
+
+            _rows = rows
+                .OrderByDescending(r => r.DateRequired)
+                .ThenByDescending(r => r.RequestId)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading taxis financial report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        _searchTerm = string.Empty;
+    }
+
+    private string GetVehicleLabel(string? rawVehicle)
+    {
+        if (int.TryParse(rawVehicle, out var vmfCode) && _vehicleLabels.TryGetValue(vmfCode, out var label))
+        {
+            return label;
+        }
+
+        return ValueOrDash(rawVehicle);
+    }
+
+    private static TaxiFinancialRow MapTaxiFinancialRow(Dictionary<string, JsonElement> row)
+    {
+        return new TaxiFinancialRow
+        {
+            RequestId = GetInt(row, "request_id", "requestId"),
+            RequisitionNumber = GetString(row, "rek_num", "requisition_number", "request_number"),
+            Official = GetString(row, "official", "official_name", "driver_name"),
+            Vehicle = GetString(row, "vmf_code", "fleet_number", "registration_number", "gg_number"),
+            Company = GetString(row, "company_name", "company", "supplier_name", "address_1"),
+            DateRequired = GetDate(row, "date_required", "date_captured", "request_date"),
+            Status = GetString(row, "rank", "status", "request_status"),
+            Amount = GetDecimal(row, "total_amount", "amount", "taxi_amount", "invoice_amount", "cost")
+        };
+    }
+
+    private static string? GetString(Dictionary<string, JsonElement> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (TryGetCaseInsensitive(row, key, out var value))
+            {
+                if (value.ValueKind == JsonValueKind.String)
+                {
+                    var stringValue = value.GetString();
+                    if (!string.IsNullOrWhiteSpace(stringValue))
+                    {
+                        return stringValue;
+                    }
+                }
+                else if (value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
+                {
+                    return value.ToString();
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static int GetInt(Dictionary<string, JsonElement> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!TryGetCaseInsensitive(row, key, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var intValue))
+            {
+                return intValue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out intValue))
+            {
+                return intValue;
+            }
+        }
+
+        return 0;
+    }
+
+    private static DateTime? GetDate(Dictionary<string, JsonElement> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!TryGetCaseInsensitive(row, key, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String && DateTime.TryParse(value.GetString(), out var dateValue))
+            {
+                return dateValue;
+            }
+        }
+
+        return null;
+    }
+
+    private static decimal? GetDecimal(Dictionary<string, JsonElement> row, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!TryGetCaseInsensitive(row, key, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var decimalValue))
+            {
+                return decimalValue;
+            }
+
+            if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out decimalValue))
+            {
+                return decimalValue;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool TryGetCaseInsensitive(Dictionary<string, JsonElement> row, string key, out JsonElement value)
+    {
+        if (row.TryGetValue(key, out value))
+        {
+            return true;
+        }
+
+        var match = row.FirstOrDefault(pair => pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(match.Key))
+        {
+            value = match.Value;
+            return true;
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static bool Contains(string? value, string term)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? value)
+        => value?.ToString("yyyy-MM-dd") ?? "-";
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed class TaxiFinancialRow
+    {
+        public int RequestId { get; set; }
+        public string? RequisitionNumber { get; set; }
+        public string? Official { get; set; }
+        public string? Vehicle { get; set; }
+        public string? Company { get; set; }
+        public DateTime? DateRequired { get; set; }
+        public string? Status { get; set; }
+        public decimal? Amount { get; set; }
+    }
+}

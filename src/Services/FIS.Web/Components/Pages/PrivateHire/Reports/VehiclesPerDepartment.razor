@@ -1,6 +1,10 @@
 @page "/private-hire/reports/vehicles-per-department"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject DepartmentApiService DepartmentService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Private Hire Vehicles Per Department - Fleet Information System</PageTitle>
 
@@ -24,29 +28,27 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Department</label>
-                    <select class="form-select">
+                    <select class="form-select" @bind="_selectedDepartmentCode">
                         <option value="0">Select...</option>
+                        @foreach (var departmentCode in _departmentCodes)
+                        {
+                            <option value="@departmentCode">@GetDepartmentLabel(departmentCode)</option>
+                        }
                     </select>
                 </div>
             </div>
             <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm">Submit</button>
+                <button class="btn btn-primary btn-sm" @onclick="ApplyFilter">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
-            <LegacyEndpointActionPanel
-                LegacyPath="Private_Hire/RPT_phv_vehicle_per_dept1.aspx"
-                Endpoint="api/privatehire/reports/vehicles-per-department"
-                HttpMethod="GET"
-                ButtonText="Run Vehicles per Department API"
-                ReportType="private-hire-report-per-department" />
-            <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: [Legacy timestamp]</div>
+            <div class="form-hint" style="margin-top: 1rem;">Date Last Modified: @DateTime.Now</div>
 
             <div class="form-section" style="margin-top: 2rem;">
                 <h3 class="form-section-title">
                     <i class="bx bx-buildings"></i>
-                    Department / Site Results
+                    Department Results
                 </h3>
-                <p class="form-hint">Department: [Code] [Description] • Site: [Number] [Description]</p>
+                <p class="form-hint">Department: @(_selectedDepartmentCode > 0 ? GetDepartmentLabel(_selectedDepartmentCode) : "-")</p>
                 <div class="table-container">
                     <div class="table-wrapper">
                         <table class="data-table">
@@ -64,17 +66,145 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="9">No records found.</td>
-                                </tr>
+                                @if (_loading)
+                                {
+                                    <tr>
+                                        <td colspan="9">Loading records...</td>
+                                    </tr>
+                                }
+                                else if (_filtered.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="9">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in PagedVehicles)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(row.registration_number)</td>
+                                            <td>@ValueOrDash(row.make_model)</td>
+                                            <td>-</td>
+                                            <td>-</td>
+                                            <td>-</td>
+                                            <td>@FormatDate(row.hire_start_date)</td>
+                                            <td>-</td>
+                                            <td>@FormatDate(row.hire_end_date)</td>
+                                            <td>-</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
                 </div>
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
                 <div class="form-hint" style="margin-top: 1rem; color: var(--fis-danger);">
-                    Total Number of Vehicles: 0
+                    Total Number of Vehicles: @_filtered.Count
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+@code {
+    private bool _loading = true;
+    private int _selectedDepartmentCode;
+    private List<int> _departmentCodes = new();
+    private Dictionary<int, DepartmentDto> _departmentsByCode = new();
+    private List<PrivateHireVehicleDto> _allVehicles = new();
+    private List<PrivateHireVehicleDto> _filtered = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<PrivateHireVehicleDto> PagedVehicles => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _allVehicles = await PrivateHireService.GetVehiclesAsync();
+            var departments = await DepartmentService.GetDepartmentsAsync();
+            _departmentsByCode = departments
+                .Where(d => d.department_code > 0)
+                .GroupBy(d => d.department_code)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            _departmentCodes = _allVehicles
+                .Where(v => v.department_code > 0)
+                .Select(v => v.department_code)
+                .Distinct()
+                .OrderBy(code => code)
+                .ToList();
+
+            _filtered = new();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            _allVehicles = new();
+            _filtered = new();
+            _departmentCodes = new();
+            _departmentsByCode = new();
+            _page = 1;
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-per-department report: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ApplyFilter()
+    {
+        _filtered = _selectedDepartmentCode > 0
+            ? _allVehicles.Where(v => v.department_code == _selectedDepartmentCode).ToList()
+            : new();
+
+        _page = 1;
+    }
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetDepartmentLabel(int departmentCode)
+    {
+        if (_departmentsByCode.TryGetValue(departmentCode, out var department))
+        {
+            return $"{department.department_description} ({departmentCode})";
+        }
+
+        return $"Department ({departmentCode})";
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

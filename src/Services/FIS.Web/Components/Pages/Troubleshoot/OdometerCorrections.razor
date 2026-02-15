@@ -13,7 +13,7 @@
             <i class="bx bx-tachometer"></i>
             ODOMeter Corrections
         </h1>
-        <p class="page-description">Legacy flow for TS_Log/SearchTrip.aspx.</p>
+        <p class="page-description">Search and review vehicle odometer corrections.</p>
     </div>
 </div>
 
@@ -72,7 +72,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var row in _results)
+                        @foreach (var row in PagedResults)
                         {
                             <tr>
                                 <td>@(row.VehicleIdentifier ?? "-")</td>
@@ -83,6 +83,11 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -101,6 +106,11 @@
     private string? _errorMessage;
     private OdometerCorrectionSearchRequest _searchRequest = new();
     private List<OdometerCorrectionResultDto> _results = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<OdometerCorrectionResultDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private async Task SearchOdometer()
     {
@@ -115,6 +125,7 @@
         try
         {
             _results = await TroubleshootService.SearchOdometerCorrectionsAsync(_searchRequest);
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -124,6 +135,22 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
         }
     }
 }

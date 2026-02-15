@@ -3,6 +3,10 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject AccidentApiService AccidentService
+@inject SiteApiService SiteService
+@inject VehicleLookupApiService VehicleLookupService
+@inject DriverApiService DriverService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -12,7 +16,7 @@
             <i class="bx bx-file"></i>
             @_pageTitle
         </h1>
-        <p class="page-description">Legacy accident report parameters will be aligned here.</p>
+        <p class="page-description">Accident report parameters and output.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/accidents/reports">Back to Accident Reports</a>
@@ -29,19 +33,29 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="oneVehicleType" checked />
+                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gp")" @onchange='() => SetOneVehicleSearchMode("gp")' />
                                 GP
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="oneVehicleType" />
+                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gg")" @onchange='() => SetOneVehicleSearchMode("gg")' />
                                 GG
                             </label>
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Number</label>
-                            <input class="form-input" />
+                            <label class="form-label">@(_oneVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_oneVehicleSearchTerm" placeholder="@(_oneVehicleSearchMode == "gg" ? "GG number" : "Registration number")" />
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchOneVehicleAsync">Find</button>
+                            </div>
+                            <select class="form-select fis-mt-05" @bind="_oneVehicleSelectedVmfCode" disabled="@(_oneVehicleMatches.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var vehicle in _oneVehicleMatches)
+                                {
+                                    <option value="@vehicle.VmfCode">@VehicleOptionLabel(vehicle)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -73,7 +87,7 @@
                                         <tr>
                                             <td colspan="2"><strong>Recent Reports</strong></td>
                                         </tr>
-                                        @foreach (var report in _recentReports)
+                                        @foreach (var report in PagedRecentReports)
                                         {
                                             <tr>
                                                 <td>@report.Name</td>
@@ -126,7 +140,7 @@
                                         <tr>
                                             <td colspan="2"><strong>Recent Reports</strong></td>
                                         </tr>
-                                        @foreach (var report in _recentReports)
+                                        @foreach (var report in PagedRecentReports)
                                         {
                                             <tr>
                                                 <td>@report.Name</td>
@@ -206,7 +220,7 @@
                                         <td>Front bumper</td>
                                         <td>TP-9912</td>
                                     </tr>
-                                    @foreach (var report in _recentReports)
+                                    @foreach (var report in PagedRecentReports)
                                     {
                                         <tr>
                                             <td>@report.ReportType</td>
@@ -299,7 +313,7 @@
                                         <td>2024/03/15</td>
                                         <td>Under assessment</td>
                                     </tr>
-                                    @foreach (var report in _recentReports)
+                                    @foreach (var report in PagedRecentReports)
                                     {
                                         <tr>
                                             <td>@report.ReportType</td>
@@ -396,7 +410,7 @@
                                         <td>2024/04/02</td>
                                         <td>Pending police report</td>
                                     </tr>
-                                    @foreach (var report in _recentReports)
+                                    @foreach (var report in PagedRecentReports)
                                     {
                                         <tr>
                                             <td>@report.ReportType</td>
@@ -443,8 +457,14 @@
                             <input class="form-input" />
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Dept/Site Code (first 5 characters)</label>
-                            <input class="form-input" />
+                            <label class="form-label">Department/Site (first 5 characters)</label>
+                            <select class="form-select" @bind="_departmentPeriodSiteCode">
+                                <option value="">Select site...</option>
+                                @foreach (var site in _sites)
+                                {
+                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -488,7 +508,7 @@
                                         <td>5000</td>
                                         <td>Settled by insurer</td>
                                     </tr>
-                                    @foreach (var report in _recentReports)
+                                    @foreach (var report in PagedRecentReports)
                                     {
                                         <tr>
                                             <td>@report.ReportType</td>
@@ -524,8 +544,14 @@
                             </div>
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Site Code</label>
-                            <input class="form-input" />
+                            <label class="form-label">Site</label>
+                            <select class="form-select" @bind="_sitePeriodVipSiteCode">
+                                <option value="">Select site...</option>
+                                @foreach (var site in _sites)
+                                {
+                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
+                                }
+                            </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Begin Date</label>
@@ -590,7 +616,7 @@
                                         <td>12000</td>
                                         <td>3500</td>
                                     </tr>
-                                    @foreach (var report in _recentReports)
+                                    @foreach (var report in PagedRecentReports)
                                     {
                                         <tr>
                                             <td>@report.ReportType</td>
@@ -657,8 +683,14 @@
                             <input class="form-input" />
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Dept/Site Code (first 5 characters)</label>
-                            <input class="form-input" />
+                            <label class="form-label">Department/Site (first 5 characters)</label>
+                            <select class="form-select" @bind="_departmentMonthSiteCode">
+                                <option value="">Select site...</option>
+                                @foreach (var site in _sites)
+                                {
+                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -701,7 +733,7 @@
                                         <td>2100</td>
                                         <td>Awaiting claim</td>
                                     </tr>
-                                    @foreach (var report in _recentReports)
+                                    @foreach (var report in PagedRecentReports)
                                     {
                                         <tr>
                                             <td>@report.ReportType</td>
@@ -744,8 +776,14 @@
                             <input class="form-input" />
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Dept/Site Code (first 5 characters)</label>
-                            <input class="form-input" />
+                            <label class="form-label">Department/Site (first 5 characters)</label>
+                            <select class="form-select" @bind="_departmentFinYearSiteCode">
+                                <option value="">Select site...</option>
+                                @foreach (var site in _sites)
+                                {
+                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -854,19 +892,19 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="letterType" checked />
+                                <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gp")" @onchange='() => SetLetterVehicleSearchMode("gp")' />
                                 GP
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="letterType" />
+                                <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gg")" @onchange='() => SetLetterVehicleSearchMode("gg")' />
                                 GG
                             </label>
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Number</label>
-                            <input class="form-input" />
+                            <label class="form-label">@(_letterVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
+                            <input class="form-input" placeholder="@(_letterVehicleSearchMode == "gg" ? "Enter GG number" : "Enter GP number")" />
                         </div>
                     </div>
                     <div class="form-actions">
@@ -979,8 +1017,14 @@
                             </div>
                         </div>
                         <div class="form-field">
-                            <label class="form-label">Site Code</label>
-                            <input class="form-input" />
+                            <label class="form-label">Site</label>
+                            <select class="form-select" @bind="_weeklyPeriodSiteCode">
+                                <option value="">Select site...</option>
+                                @foreach (var site in _sites)
+                                {
+                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
+                                }
+                            </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Begin Date</label>
@@ -1062,7 +1106,13 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">Driver Name or ID Number</label>
-                            <input class="form-input" />
+                            <select class="form-select" @bind="_selectedDriverCode">
+                                <option value="">Select driver...</option>
+                                @foreach (var driver in _drivers)
+                                {
+                                    <option value="@driver.site_driver_code">@DriverOptionLabel(driver)</option>
+                                }
+                            </select>
                         </div>
                     </div>
                     <div class="form-actions">
@@ -1102,22 +1152,156 @@
             }
             else
             {
-                <p class="form-hint">This report screen will be aligned to the legacy report parameters and output tables.</p>
+                <p class="form-hint">Use the filters above to run and review accident report output.</p>
             }
         </div>
     </div>
+    @if (_recentReports.Count > 0 && TotalPages > 1)
+    {
+        <div class="pagination-controls">
+            <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <span>Page @_page of @TotalPages</span>
+            <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+        </div>
+    }
 </div>
 
 @code {
     private List<ReportDto> _recentReports = new();
+    private List<SiteResponseDto> _sites = new();
+    private List<DriverDto> _drivers = new();
+    private string _oneVehicleSearchMode = "gp";
+    private string _letterVehicleSearchMode = "gp";
+    private string _oneVehicleSearchTerm = string.Empty;
+    private List<VehicleLookupDto> _oneVehicleMatches = new();
+    private int? _oneVehicleSelectedVmfCode;
+    private int? _selectedDriverCode;
+    private short? _departmentPeriodSiteCode;
+    private short? _sitePeriodVipSiteCode;
+    private short? _departmentMonthSiteCode;
+    private short? _departmentFinYearSiteCode;
+    private short? _weeklyPeriodSiteCode;
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<ReportDto> PagedRecentReports => _recentReports.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_recentReports.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+        _drivers = await DriverService.GetDriversAsync();
+    }
 
     private async Task LoadReports()
     {
         _recentReports = await AccidentService.GetRecentReportsAsync();
+        _page = 1;
     }
 
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string SiteOptionLabel(SiteResponseDto site)
+        => $"{site.Description} ({site.SiteCode})";
+
+    private static string VehicleOptionLabel(VehicleLookupDto vehicle)
+    {
+        var gg = ValueOrDash(vehicle.GGNumber);
+        var reg = ValueOrDash(vehicle.RegistrationNumber);
+        return $"{gg} / {reg} ({vehicle.VmfCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string DriverOptionLabel(DriverDto driver)
+    {
+        var fullName = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            fullName = "Unknown Driver";
+        }
+
+        return $"{fullName} ({driver.site_driver_code}) [{ValueOrDash(driver.driver_SA_id)}]";
+    }
+
+    private async Task SearchOneVehicleAsync()
+    {
+        _oneVehicleMatches = new();
+        _oneVehicleSelectedVmfCode = null;
+        var keyword = _oneVehicleSearchTerm.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return;
+        }
+
+        try
+        {
+            var matches = await VehicleLookupService.SearchAsync(keyword);
+            _oneVehicleMatches = RankVehicleMatches(matches, keyword, _oneVehicleSearchMode == "gg");
+            if (_oneVehicleMatches.All(vehicle => vehicle.VmfCode != _oneVehicleSelectedVmfCode))
+            {
+                _oneVehicleSelectedVmfCode = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void SetOneVehicleSearchMode(string mode)
+    {
+        if (_oneVehicleSearchMode == mode)
+        {
+            return;
+        }
+
+        _oneVehicleSearchMode = mode;
+        _oneVehicleSearchTerm = string.Empty;
+        _oneVehicleMatches = new();
+        _oneVehicleSelectedVmfCode = null;
+    }
+
+    private void SetLetterVehicleSearchMode(string mode)
+    {
+        if (_letterVehicleSearchMode == mode)
+        {
+            return;
+        }
+
+        _letterVehicleSearchMode = mode;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static List<VehicleLookupDto> RankVehicleMatches(List<VehicleLookupDto> matches, string query, bool preferGg)
+    {
+        return (preferGg
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : matches.Where(v => !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(v =>
+                preferGg
+                    ? string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    : string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => preferGg ? v.GGNumber : v.RegistrationNumber)
+            .ToList();
+    }
+
     [Parameter]
     public string? Mode { get; set; }
 
@@ -1347,7 +1531,7 @@
         "Accident Category",
         "Trip Auth",
         "Driver Name",
-        "Dept/Site Code",
+        "Dept/Site ID",
         "Dept/Site",
         "Trans Officer",
         "TO Tel",
@@ -1365,7 +1549,7 @@
         "Reg Number",
         "GG Number",
         "Accid Date",
-        "Dept/Site Code",
+        "Dept/Site ID",
         "Dept/Site",
         "Hire Type",
         "Accident Description",
@@ -1386,7 +1570,7 @@
         "Fin Year",
         "Trip Auth",
         "Driver Name",
-        "Dept/Site Code",
+        "Dept/Site ID",
         "Dept/Site",
         "Trans Officer",
         "TO Tel",
@@ -1410,7 +1594,7 @@
         "Accident Category",
         "Trip Auth",
         "Driver Name",
-        "Dept/Site Code",
+        "Dept/Site ID",
         "Dept/Site",
         "Trans Officer",
         "TO Tel",
@@ -1469,7 +1653,7 @@
         "Reg Number",
         "GG Number",
         "Accid Date",
-        "Dept/Site Code",
+        "Dept/Site ID",
         "Dept/Site",
         "Hire Type",
         "Accident Description",

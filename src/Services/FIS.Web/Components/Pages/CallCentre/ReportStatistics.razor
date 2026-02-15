@@ -72,7 +72,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _stats.OrderByDescending(x => x.Value))
+                        @foreach (var item in PagedStats)
                         {
                             <tr>
                                 <td>@item.Key</td>
@@ -82,6 +82,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_stats.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_stats.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -94,6 +103,13 @@
     private string _endDateText = DateTime.Today.ToString("yyyy/MM/dd");
     private string _captureLastName = string.Empty;
     private Dictionary<string, int> _stats = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<KeyValuePair<string, int>> PagedStats
+        => _stats.OrderByDescending(x => x.Value).Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_stats.Count / (double)_pageSize));
 
     private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
 
@@ -131,6 +147,7 @@
             _stats = query
                 .GroupBy(c => string.IsNullOrWhiteSpace(c.Capture_name) ? "(Unknown)" : c.Capture_name!)
                 .ToDictionary(g => g.Key, g => g.Count());
+            _page = 1;
 
             _message = $"Loaded {_stats.Values.Sum()} incident(s) across {_stats.Count} capture person(s).";
             _messageIsError = false;
@@ -157,5 +174,21 @@
 
         var normalized = value.Trim().Replace("-", "/");
         return DateTime.TryParse(normalized, out parsedDate);
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

@@ -10,7 +10,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>Legacy Sign In - Fleet Information System</PageTitle>
+<PageTitle>Password Sign In - Fleet Information System</PageTitle>
 
 <div class="auth-card auth-card-wide">
     @if (_isAuthenticated)
@@ -31,8 +31,8 @@
     else
     {
         <div class="auth-header">
-            <h1>Legacy Sign In</h1>
-            <p>Use your legacy fleet credentials to access the system.</p>
+            <h1>Password Sign In</h1>
+            <p>Use your fleet credentials to access the system.</p>
         </div>
 
         <EditForm Model="_model" OnValidSubmit="HandleSubmit">

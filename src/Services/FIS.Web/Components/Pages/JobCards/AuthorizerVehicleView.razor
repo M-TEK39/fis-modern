@@ -3,7 +3,9 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @using FIS.Web.Services
+@using FIS.Web.Models
 @inject JobCardApiService JobCardService
+@inject UserApiService UserService
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -13,7 +15,7 @@
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title"><i class="bx bx-search-alt"></i>Jobcard Authoriser</h1>
-        <p class="page-description">Filter job cards by GG number.</p>
+        <p class="page-description">Filter job cards by GG/GP number.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/job-cards/authorizer-dashboard">Back</a>
@@ -39,8 +41,18 @@
         <div class="form-card">
             <div class="form-card-body">
                 <div class="form-row">
-                    <label class="form-label">GG Number</label>
-                    <input class="form-input" @bind="_ggNumber" />
+                    <label class="form-label">@(_searchMode == "GG" ? "GG Number" : "GP Number")</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                            GP
+                        </label>
+                    </div>
+                    <input class="form-input" @bind="_vehicleNumber" placeholder="@(_searchMode == "GG" ? "Enter GG number" : "Enter GP number")" />
                 </div>
                 <div class="form-actions">
                     <button class="btn btn-primary" @onclick="ApplyFilter">Search</button>
@@ -66,6 +78,7 @@
                             <tr>
                                 <th>Job Card ID</th>
                                 <th>GG Number</th>
+                                <th>Registration</th>
                                 <th>Description</th>
                                 <th>Status</th>
                                 <th>Authorizer</th>
@@ -75,19 +88,20 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var item in _filtered)
+                            @foreach (var item in PagedItems)
                             {
                                 <tr>
                                     <td>@item.JobCardId</td>
                                     <td>@ValueOrDash(item.GGNumber)</td>
+                                    <td>@ValueOrDash(item.RegistrationNumber)</td>
                                     <td>@ValueOrDash(item.JobDescription)</td>
                                     <td>@ValueOrDash(item.Status)</td>
-                                    <td>@ValueOrDash(item.AuthorizerName ?? item.Authorizer?.ToString())</td>
+                                    <td>@FormatUser(item.Authorizer, item.AuthorizerName)</td>
                                     <td>
-                                        <input class="form-input" @bind="_reviewComments[item.JobCardId]" placeholder="Optional comment" />
+                                        <input class="form-input" @bind="_reviewComments[item.JobCardId]" placeholder="Optional comment" disabled="@(!CanReview(item))" />
                                     </td>
                                     <td>
-                                        <input class="form-input" @bind="_declineReasons[item.JobCardId]" placeholder="Required when declining" />
+                                        <input class="form-input" @bind="_declineReasons[item.JobCardId]" placeholder="Required when declining" disabled="@(!CanReview(item))" />
                                     </td>
                                     <td class="actions-column">
                                         <div class="table-actions">
@@ -101,6 +115,10 @@
                                                     @onclick="() => DeclineAsync(item)">
                                                 Decline
                                             </button>
+                                            @if (!CanReview(item))
+                                            {
+                                                <span class="form-hint">Captured by you</span>
+                                            }
                                         </div>
                                     </td>
                                 </tr>
@@ -108,6 +126,15 @@
                         </tbody>
                     </table>
                 </div>
+                @if (_filtered.Count > _pageSize)
+                {
+                    <div class="pagination">
+                        <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_page of @TotalPages</div>
+                        <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                    </div>
+                    <div class="pagination-meta">Total records: @_filtered.Count | Page size: @_pageSize</div>
+                }
             </div>
         }
     }
@@ -121,11 +148,17 @@
     private bool _isError;
     private int? _currentUserAccessCode;
     private string _message = string.Empty;
-    private string _ggNumber = string.Empty;
+    private string _searchMode = "GG";
+    private string _vehicleNumber = string.Empty;
     private List<JobCardDto> _all = new();
     private List<JobCardDto> _filtered = new();
+    private Dictionary<short, UserProfileDto> _userProfilesByCode = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
     private readonly Dictionary<int, string> _reviewComments = new();
     private readonly Dictionary<int, string> _declineReasons = new();
+    private IEnumerable<JobCardDto> PagedItems => _filtered.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filtered.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -136,11 +169,18 @@
             return;
         }
 
+        var profiles = await UserService.GetAllProfilesAsync();
+        _userProfilesByCode = profiles
+            .Where(x => x.UserAccessCode > 0)
+            .GroupBy(x => x.UserAccessCode)
+            .ToDictionary(g => g.Key, g => g.First());
+
         try
         {
             _all = await JobCardService.GetAllAsync();
             _filtered = new List<JobCardDto>(_all);
             EnsureInputState();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -156,11 +196,23 @@
 
     private void ApplyFilter()
     {
-        var query = _ggNumber.Trim();
+        var query = _vehicleNumber.Trim();
+        var isGp = string.Equals(_searchMode, "GP", StringComparison.OrdinalIgnoreCase);
         _filtered = string.IsNullOrWhiteSpace(query)
             ? new List<JobCardDto>(_all)
-            : _all.Where(x => string.Equals(x.GGNumber, query, StringComparison.OrdinalIgnoreCase)).ToList();
+            : _all.Where(x => isGp
+                ? string.Equals(x.RegistrationNumber, query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(x.GGNumber, query, StringComparison.OrdinalIgnoreCase)).ToList();
         EnsureInputState();
+        _page = 1;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleNumber = string.Empty;
+        _filtered = new List<JobCardDto>(_all);
+        _page = 1;
     }
 
     private void EnsureInputState()
@@ -317,6 +369,46 @@
 
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private string FormatUser(int? userCode, string? fallback)
+    {
+        if (!userCode.HasValue || userCode.Value <= 0)
+        {
+            return ValueOrDash(fallback);
+        }
+
+        if (_userProfilesByCode.TryGetValue((short)userCode.Value, out var user))
+        {
+            var fullName = $"{user.FirstName} {user.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return fullName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                return user.Email;
+            }
+        }
+
+        return !string.IsNullOrWhiteSpace(fallback) ? fallback : $"User {userCode.Value}";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

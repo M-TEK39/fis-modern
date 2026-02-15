@@ -1,12 +1,156 @@
 @page "/reports/asset-verification"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AssetVerificationApiService AssetVerificationService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Asset Verification Report"
-    Description="Legacy placeholder for Asset_Verification/RPT_Asset_Verification.aspx."
-    LegacyPath="Asset_Verification/RPT_Asset_Verification.aspx"
-    Endpoint="api/assetverification"
-    HttpMethod="GET"
-    ReportType="asset-verification"
-    Icon="bx-file" />
+<PageTitle>Asset Verification Report - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-check-shield"></i>
+            Asset Verification Report
+        </h1>
+        <p class="page-description">Verification records for vehicle assets.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/asset-verification">Asset Verification</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Asset Verification Records</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Verification ID</th>
+                        <th>Vehicle</th>
+                        <th>Vehicle Reg</th>
+                        <th>Department</th>
+                        <th>Site</th>
+                        <th>Verification Date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="7">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="7">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.asset_verification_code</td>
+                                <td>@GetVehicleLabel(row)</td>
+                                <td>@ValueOrDash(row.vehicle_reg_no)</td>
+                                <td>@ValueOrDash(row.department_name)</td>
+                                <td>@ValueOrDash(row.site_name)</td>
+                                <td>@(row.verification_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@ValueOrDash(row.verification_status)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<AssetVerificationRecord> _rows = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<AssetVerificationRecord> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            if (_vehicleLabels.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabels = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
+            }
+
+            _rows = (await AssetVerificationService.GetAllAsync<AssetVerificationRecord>())
+                .OrderByDescending(r => r.verification_date)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading asset verification report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetVehicleLabel(AssetVerificationRecord row)
+    {
+        if (row.vmf_code.HasValue && _vehicleLabels.TryGetValue(row.vmf_code.Value, out var label))
+        {
+            return label;
+        }
+
+        var vmf = row.vmf_code?.ToString() ?? "-";
+        var reg = ValueOrDash(row.vehicle_reg_no);
+        return $"{reg} ({vmf})";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

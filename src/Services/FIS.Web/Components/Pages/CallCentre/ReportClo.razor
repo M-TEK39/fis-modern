@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject CallCentreApiService CallCentreService
+@inject SiteApiService SiteService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
@@ -14,7 +15,7 @@
             <i class="bx bx-id-card"></i>
             CALL CENTRE Client Relations Officer's REPORT
         </h1>
-        <p class="page-description">CLO report by period and department code.</p>
+        <p class="page-description">CLO report by period and site.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu">Report Menu</button>
@@ -34,8 +35,16 @@
                     <td><input class="form-input" style="max-width: 12rem;" placeholder="e.g. 2002/03/31" @bind="_endDateText" /></td>
                 </tr>
                 <tr>
-                    <th>DEPT Code</th>
-                    <td><input class="form-input" style="max-width: 10rem;" @bind="_departmentCode" /></td>
+                    <th>Site</th>
+                    <td>
+                        <select class="form-select" style="max-width: 24rem;" @bind="_siteCode">
+                            <option value="">All Sites</option>
+                            @foreach (var site in _sites.OrderBy(s => s.Description))
+                            {
+                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                            }
+                        </select>
+                    </td>
                 </tr>
                 <tr>
                     <td colspan="2">
@@ -76,19 +85,28 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.Call_centre_code</td>
                                 <td>@FormatDate(item.Call_date)</td>
                                 <td>@ValueOrDash(item.Capture_name)</td>
-                                <td>@(item.Driver_Site?.ToString() ?? "-")</td>
+                                <td>@GetSiteText(item.Driver_Site)</td>
                                 <td>@ValueOrDash(item.GG_number)</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -99,8 +117,19 @@
     private string _message = string.Empty;
     private string _beginDateText = string.Empty;
     private string _endDateText = DateTime.Today.ToString("yyyy/MM/dd");
-    private string _departmentCode = string.Empty;
+    private short? _siteCode;
+    private List<SiteResponseDto> _sites = new();
     private List<CallCentreDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<CallCentreDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _sites = await SiteService.GetAllAsync();
+    }
 
     private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
 
@@ -129,14 +158,13 @@
             var all = await CallCentreService.GetAllAsync<CallCentreDto>();
             var query = all.Where(c => c.Call_date.HasValue && c.Call_date.Value.Date >= beginDate.Date && c.Call_date.Value.Date <= endDate.Date);
 
-            if (!string.IsNullOrWhiteSpace(_departmentCode))
+            if (_siteCode.HasValue)
             {
-                query = query.Where(c =>
-                    string.Equals((c.Driver_Site?.ToString() ?? string.Empty).Trim(), _departmentCode.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                    (!string.IsNullOrWhiteSpace(c.Driver_base_station) && c.Driver_base_station.Contains(_departmentCode.Trim(), StringComparison.OrdinalIgnoreCase)));
+                query = query.Where(c => c.Driver_Site == _siteCode.Value);
             }
 
             _results = query.OrderByDescending(c => c.Call_date).ThenByDescending(c => c.Call_centre_code).ToList();
+            _page = 1;
             _message = $"Loaded {_results.Count} CLO record(s).";
             _messageIsError = false;
         }
@@ -166,4 +194,30 @@
 
     private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+    private string GetSiteText(short? siteCode)
+    {
+        if (!siteCode.HasValue)
+        {
+            return "-";
+        }
+
+        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
+        return site == null ? siteCode.Value.ToString() : $"{site.DepartmentNumber} - {site.Description}";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

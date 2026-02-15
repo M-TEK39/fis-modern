@@ -3,6 +3,8 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject SiteApiService SiteService
+@inject ReferenceDataApiService ReferenceDataService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicle List by Status - Fleet Information System</PageTitle>
@@ -13,7 +15,7 @@
             <i class="bx bx-list-check"></i>
             Vehicle List by Status Selection
         </h1>
-        <p class="page-description">Filter vehicles by status and status date.</p>
+        <p class="page-description">All New and In Service vehicles with live filters.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/vehicles">Back</a>
@@ -21,22 +23,66 @@
 </div>
 
 <div class="page-content">
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="alert @(_statusError ? "alert-error" : "alert-success")">@_statusMessage</div>
+    }
+
     <div class="form-card">
         <div class="form-card-body">
-            <div class="form-row">
-                <label class="form-label">Status Contains</label>
-                <input class="form-input" @bind="_statusText" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">From Date</label>
-                <input type="date" class="form-input" @bind="_fromDate" />
-            </div>
-            <div class="form-row">
-                <label class="form-label">To Date</label>
-                <input type="date" class="form-input" @bind="_toDate" />
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Search</label>
+                    <input class="form-input"
+                           @bind="_search"
+                           @bind:event="oninput"
+                           @bind:after="OnFilterChanged"
+                           placeholder="GG, GP, VIN, Engine, Invoice" />
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Site</label>
+                    <select class="form-select" @bind="_locationCode" @bind:after="OnFilterChanged">
+                        <option value="">All sites</option>
+                        @foreach (var site in _sites.OrderBy(s => s.Description))
+                        {
+                            <option value="@site.SiteCode">@($"{ValueOrDash(site.Description)} ({site.SiteCode})")</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Type</label>
+                    <select class="form-select" @bind="_typeCode" @bind:after="OnFilterChanged">
+                        <option value="">All types</option>
+                        @foreach (var type in _types.OrderBy(t => t.type_name))
+                        {
+                            <option value="@type.type_code">@ValueOrDash(type.type_name)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Make</label>
+                    <select class="form-select" @bind="_makeCode" @bind:after="OnFilterChanged">
+                        <option value="">All makes</option>
+                        @foreach (var make in _makes.OrderBy(m => m.make_name))
+                        {
+                            <option value="@make.make_code">@ValueOrDash(make.make_name)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" @bind="_vehicleStatusCode" @bind:after="OnFilterChanged">
+                        <option value="">All New + In Service</option>
+                        @foreach (var status in _statusOptions)
+                        {
+                            <option value="@status.Code">@status.Label</option>
+                        }
+                    </select>
+                </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary" @onclick="LoadReportAsync">Submit</button>
+                <button class="btn btn-secondary btn-sm" @onclick="ResetFilters" disabled="@_loading">Reset Filters</button>
+                <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Refresh</button>
             </div>
         </div>
     </div>
@@ -53,14 +99,14 @@
         <div class="empty-state">
             <i class="bx bx-error-circle"></i>
             <h3>No vehicles found</h3>
-            <p>No vehicles matched the selected status filters.</p>
+            <p>No vehicles matched the selected filters.</p>
         </div>
     }
     else if (_results.Count > 0)
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@_results.Count vehicle(s)</span>
+                <span class="table-title">Showing @_totalCount vehicle(s)</span>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
@@ -68,24 +114,94 @@
                         <tr>
                             <th>GG Number</th>
                             <th>Registration Number</th>
+                            <th>Invoice Number</th>
+                            <th>Make &amp; Model</th>
                             <th>Status</th>
-                            <th>Status Date</th>
-                            <th>Location</th>
+                            <th>Site</th>
+                            <th>Active Remark</th>
+                            <th>Remark Category</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var vehicle in _results)
+                        @foreach (var vehicle in PagedResults)
                         {
                             <tr>
-                                <td>@vehicle.fleet_number</td>
-                                <td>@vehicle.registration_number</td>
-                                <td>@vehicle.status_description</td>
-                                <td>@(vehicle.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                                <td>@vehicle.location_description</td>
+                                <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                <td>@ValueOrDash(vehicle.registration_number)</td>
+                                <td>@ValueOrDash(vehicle.invoice_number)</td>
+                                <td>@GetMakeModel(vehicle)</td>
+                                <td>@GetStatusLabel(vehicle)</td>
+                                <td>@GetSiteLabel(vehicle)</td>
+                                <td>@ValueOrDash(vehicle.active_remark?.remark_text)</td>
+                                <td>@ValueOrDash(vehicle.active_remark?.remark_category)</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn btn-secondary btn-sm"
+                                                @onclick="() => StartRemark(vehicle)">
+                                            Add Remark
+                                        </button>
+                                        @if (vehicle.active_remark?.remark_id > 0)
+                                        {
+                                            <button class="btn btn-primary btn-sm"
+                                                    @onclick="() => StartResolve(vehicle)">
+                                                Resolve
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
+            </div>
+            @if (TotalPages > 1)
+            {
+                <div class="pagination-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <span>Page @_page of @TotalPages</span>
+                    <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_remarkTarget is not null)
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>@(_resolveMode ? "Resolve Vehicle Remark" : "Add Vehicle Remark")</h2>
+            </div>
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Vehicle</label>
+                        <input class="form-input" value="@GetVehicleContextLabel(_remarkTarget)" readonly />
+                    </div>
+                    @if (!_resolveMode)
+                    {
+                        <div class="form-field">
+                            <label class="form-label">Remark Category</label>
+                            <select class="form-select" @bind="_remarkCategory">
+                                <option value="General">General</option>
+                                <option value="Missing">Missing</option>
+                                <option value="UnderInvestigation">Under Investigation</option>
+                                <option value="AccidentHold">Accident Hold</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    }
+                    <div class="form-field">
+                        <label class="form-label">@(_resolveMode ? "Resolution Notes" : "Remark")</label>
+                        <textarea class="form-input" rows="3" maxlength="500" @bind="_remarkText"></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" disabled="@_loading" @onclick="SubmitRemarkAsync">
+                        @(_resolveMode ? "Resolve Remark" : "Save Remark")
+                    </button>
+                    <button class="btn btn-secondary" @onclick="CancelRemark">Cancel</button>
+                </div>
             </div>
         </div>
     }
@@ -94,24 +210,90 @@
 @code {
     private bool _loading;
     private bool _hasSearched;
-    private string _statusText = string.Empty;
-    private DateTime? _fromDate;
-    private DateTime? _toDate;
-    private List<VehicleDto> _results = new();
+    private bool _statusError;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private string _search = string.Empty;
+    private short? _locationCode;
+    private short? _typeCode;
+    private short? _makeCode;
+    private short? _vehicleStatusCode;
+
+    private string _statusMessage = string.Empty;
+    private int _totalCount;
+
+    private List<SiteResponseDto> _sites = new();
+    private List<VehicleTypeDto> _types = new();
+    private List<MakeDto> _makes = new();
+    private readonly List<StatusOption> _statusOptions =
+    [
+        new(1, "In Service"),
+        new(2, "Out of Service"),
+        new(3, "Board of Survey"),
+        new(4, "Stolen"),
+        new(5, "Sold"),
+        new(6, "Transferred"),
+        new(7, "Subsidized"),
+        new(8, "From Focus"),
+        new(9, "Privatised"),
+        new(10, "Recovered"),
+        new(11, "Missing"),
+        new(12, "Destroyed")
+    ];
+
+    private List<VehicleStatusReportRowDto> _results = new();
+    private IEnumerable<VehicleStatusReportRowDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
+    private VehicleStatusReportRowDto? _remarkTarget;
+    private bool _resolveMode;
+    private string _remarkCategory = "General";
+    private string _remarkText = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadReportAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        var sitesTask = SiteService.GetAllAsync();
+        var typesTask = ReferenceDataService.GetTypesAsync();
+        var makesTask = ReferenceDataService.GetMakesAsync();
+        await Task.WhenAll(sitesTask, typesTask, makesTask);
+
+        _sites = sitesTask.Result ?? new List<SiteResponseDto>();
+        _types = typesTask.Result ?? new List<VehicleTypeDto>();
+        _makes = makesTask.Result ?? new List<MakeDto>();
+    }
+
+    private async Task OnFilterChanged()
+    {
+        await LoadReportAsync();
+    }
 
     private async Task LoadReportAsync()
     {
         _loading = true;
         _hasSearched = true;
+        _statusError = false;
+        _statusMessage = string.Empty;
         _results = new();
         try
         {
-            var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-            _results = page.Data
-                .Where(v => string.IsNullOrWhiteSpace(_statusText) || (v.status_description ?? string.Empty).Contains(_statusText, StringComparison.OrdinalIgnoreCase))
-                .Where(v => !_fromDate.HasValue || (v.vehicle_status_date.HasValue && v.vehicle_status_date.Value.Date >= _fromDate.Value.Date))
-                .Where(v => !_toDate.HasValue || (v.vehicle_status_date.HasValue && v.vehicle_status_date.Value.Date <= _toDate.Value.Date))
-                .ToList();
+            var result = await VehicleService.GetNewInServiceReportAsync(new NewInServiceReportFilter
+            {
+                search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                location_code = _locationCode,
+                type_code = _typeCode,
+                make_code = _makeCode,
+                vehicle_status_code = _vehicleStatusCode
+            });
+
+            _results = result.rows ?? new List<VehicleStatusReportRowDto>();
+            _totalCount = result.total_count > 0 ? result.total_count : _results.Count;
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -122,4 +304,133 @@
             _loading = false;
         }
     }
+
+    private async Task ResetFilters()
+    {
+        _search = string.Empty;
+        _locationCode = null;
+        _typeCode = null;
+        _makeCode = null;
+        _vehicleStatusCode = null;
+        await LoadReportAsync();
+    }
+
+    private void StartRemark(VehicleStatusReportRowDto row)
+    {
+        _remarkTarget = row;
+        _resolveMode = false;
+        _remarkCategory = "General";
+        _remarkText = string.Empty;
+        _statusMessage = string.Empty;
+    }
+
+    private void StartResolve(VehicleStatusReportRowDto row)
+    {
+        if (row.active_remark?.remark_id is null or <= 0)
+        {
+            return;
+        }
+
+        _remarkTarget = row;
+        _resolveMode = true;
+        _remarkText = string.Empty;
+        _statusMessage = string.Empty;
+    }
+
+    private async Task SubmitRemarkAsync()
+    {
+        if (_remarkTarget is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_remarkText))
+        {
+            _statusError = true;
+            _statusMessage = _resolveMode ? "Resolution notes are required." : "Remark text is required.";
+            return;
+        }
+
+        _loading = true;
+        _statusError = false;
+        _statusMessage = string.Empty;
+        try
+        {
+            FinanceApiResult result;
+            if (_resolveMode)
+            {
+                var remarkId = _remarkTarget.active_remark?.remark_id ?? 0;
+                result = await VehicleService.ResolveVehicleRemarkAsync(_remarkTarget.vmf_code, remarkId, _remarkText.Trim());
+            }
+            else
+            {
+                result = await VehicleService.AddVehicleRemarkAsync(_remarkTarget.vmf_code, _remarkCategory, _remarkText.Trim());
+            }
+
+            if (!result.Success)
+            {
+                _statusError = true;
+                _statusMessage = result.Message;
+                return;
+            }
+
+            _statusMessage = "Request completed successfully.";
+            await LoadReportAsync();
+            CancelRemark();
+        }
+        catch (Exception ex)
+        {
+            _statusError = true;
+            _statusMessage = "Could not submit vehicle remark.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void CancelRemark()
+    {
+        _remarkTarget = null;
+        _resolveMode = false;
+        _remarkCategory = "General";
+        _remarkText = string.Empty;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private string GetStatusLabel(VehicleStatusReportRowDto row)
+        => ValueOrDash(row.status_text ?? row.status_description);
+
+    private static string GetMakeModel(VehicleStatusReportRowDto row)
+    {
+        var make = ValueOrDash(row.make_description);
+        var model = ValueOrDash(row.model_description ?? row.model_name);
+        return $"{make} / {model}";
+    }
+
+    private static string GetSiteLabel(VehicleStatusReportRowDto row)
+        => ValueOrDash(row.site_name ?? row.location_description);
+
+    private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string GetVehicleContextLabel(VehicleStatusReportRowDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private sealed record StatusOption(short Code, string Label);
 }

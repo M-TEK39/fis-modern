@@ -1,12 +1,159 @@
 @page "/reports/auction"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AuctionApiService AuctionService
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Auction Reports"
-    Description="Legacy placeholder for Auction/RPTAuction.aspx."
-    LegacyPath="Auction/RPTAuction.aspx"
-    Endpoint="api/auction"
-    HttpMethod="GET"
-    ReportType="auction-reports"
-    Icon="bx-file" />
+<PageTitle>Auction Reports - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-hammer"></i>
+            Auction Reports
+        </h1>
+        <p class="page-description">Auction disposal reporting with value and authorization details.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/auction">Auction</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Auction Records</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Auction ID</th>
+                        <th>Vehicle</th>
+                        <th>Auction Number</th>
+                        <th>Auth Number</th>
+                        <th>Auth Date</th>
+                        <th>Estimate (R)</th>
+                        <th>Reserve (R)</th>
+                        <th>Reason Sold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="8">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="8">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.auction_code</td>
+                                <td>@GetVehicleLabel(row.vmf_code)</td>
+                                <td>@ValueOrDash(row.auction_number)</td>
+                                <td>@ValueOrDash(row.auth_number)</td>
+                                <td>@(row.auth_date?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                <td>@(row.estimate_amount?.ToString("N2") ?? "-")</td>
+                                <td>@(row.reserve_amount?.ToString("N2") ?? "-")</td>
+                                <td>@ValueOrDash(row.reason_sold)</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<AuctionDto> _rows = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<AuctionDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            if (_vehicleLabels.Count == 0)
+            {
+                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLabels = vehicles.Data
+                    .GroupBy(v => v.vmf_code)
+                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
+            }
+
+            _rows = (await AuctionService.GetAllAsync<AuctionDto>())
+                .OrderByDescending(r => r.auth_date)
+                .ThenByDescending(r => r.auction_code)
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading auction report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabels.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : $"- / - ({vmfCode.Value})";
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+}

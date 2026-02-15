@@ -23,7 +23,7 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">Vehicle Code</label>
+                    <label class="form-label">Vehicle</label>
                     <input class="form-input" type="text" value="@VmfCode" readonly />
                 </div>
                 @if (!string.IsNullOrWhiteSpace(Keyword))
@@ -126,7 +126,7 @@
                     }
                     else
                     {
-                        @foreach (var photo in _photos)
+                        @foreach (var photo in PagedPhotos)
                         {
                             <tr>
                                 <td>@GetOrientationLabel(photo.Orientation)</td>
@@ -158,6 +158,11 @@
             </table>
         </div>
     </div>
+    <div class="pagination-controls" style="margin-top: 1rem;">
+        <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+        <div class="pagination-info">Page @_page of @TotalPages</div>
+        <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+    </div>
 </div>
 
 @code {
@@ -173,6 +178,8 @@
     private readonly PhotoEditorModel _editor = new();
     private int _editingId;
     private string? _editorError;
+    private int _page = 1;
+    private const int _pageSize = 12;
 
     private static readonly (int Value, string Label)[] OrientationOptions =
     [
@@ -184,6 +191,8 @@
         (5, "Interior"),
         (6, "Other")
     ];
+    private IEnumerable<VehiclePhotoDto> PagedPhotos => _photos.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_photos.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -197,11 +206,13 @@
         try
         {
             _photos = await VehiclePhotoService.GetByVehicleAsync<VehiclePhotoDto>(VmfCode);
+            _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
             await JS.InvokeVoidAsync("console.error", $"Error loading vehicle photos: {ex.Message}");
             _photos = new();
+            _page = 1;
         }
         finally
         {
@@ -316,6 +327,22 @@
     }
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 
     private sealed class PhotoEditorModel
     {

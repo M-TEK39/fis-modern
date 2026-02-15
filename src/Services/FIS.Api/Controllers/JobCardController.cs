@@ -1,8 +1,10 @@
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -16,13 +18,16 @@ namespace FIS.Api.Controllers;
 public class JobCardController : BaseApiController
 {
     private readonly IJobCardRepository _repository;
+    private readonly FisDbContext _context;
     private readonly ILogger<JobCardController> _logger;
 
     public JobCardController(
         IJobCardRepository repository,
+        FisDbContext context,
         ILogger<JobCardController> logger)
     {
         _repository = repository;
+        _context = context;
         _logger = logger;
     }
 
@@ -360,7 +365,13 @@ public class JobCardController : BaseApiController
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} closing job card {JobCardId}", currentUserId, id);
 
-            var closed = await _repository.CloseAsync(id, currentUserId, closeDto?.close_notes);
+            var closed = await _repository.CloseAsync(id, currentUserId, closeDto?.close_notes,
+                labourCost: closeDto?.labour_cost,
+                partsCost: closeDto?.parts_cost,
+                otherCost: closeDto?.other_cost,
+                invoiceNumber: closeDto?.invoice_number,
+                invoiceDate: closeDto?.invoice_date,
+                serviceProvider: closeDto?.service_provider);
             var dto = MapToDto(closed);
 
             _logger.LogInformation("Job card {JobCardId} closed by user {UserId}", id, currentUserId);
@@ -406,6 +417,127 @@ public class JobCardController : BaseApiController
         {
             _logger.LogError(ex, "Error deleting job card {JobCardId}", id);
             return StatusCode(500, new { error = "An error occurred while deleting the job card", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Amend repair costs on a job card (including after it is closed).
+    /// Used when the invoice arrives after the job card was already closed,
+    /// or to correct a capturing error.
+    /// Only provided fields are updated — omit any field to leave it unchanged.
+    /// Assumption: post-close amendment allowed. Confirm with users (QUESTIONS.md MX-1).
+    /// </summary>
+    [HttpPatch("{id}/costs")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<JobCardResponseDto>> UpdateCosts(
+        int id,
+        [FromBody] JobCardCostDto costDto)
+    {
+        try
+        {
+            int currentUserId = GetCurrentUserId();
+            var updated = await _repository.UpdateCostsAsync(
+                id, currentUserId,
+                labourCost: costDto.labour_cost,
+                partsCost: costDto.parts_cost,
+                otherCost: costDto.other_cost,
+                invoiceNumber: costDto.invoice_number,
+                invoiceDate: costDto.invoice_date,
+                serviceProvider: costDto.service_provider);
+
+            _logger.LogInformation("Repair costs updated on job card {JobCardId} by user {UserId}", id, currentUserId);
+            return Ok(MapToDto(updated));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating costs on job card {JobCardId}", id);
+            return StatusCode(500, new { error = "Failed to update costs", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Repair cost report — returns all closed job cards with their captured costs,
+    /// filterable by vehicle, site/department, and date range.
+    /// Used by client departments to query repair expenditure on their vehicles.
+    /// Assumption: site_code filter uses the vehicle's current contract site.
+    /// Confirm scope with users (QUESTIONS.md MX-3).
+    /// </summary>
+    [HttpGet("repair-cost-report")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult> RepairCostReport(
+        [FromQuery] int? vmfCode = null,
+        [FromQuery] short? siteCode = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null)
+    {
+        try
+        {
+            var query = _context.JobCards
+                .Include(j => j.Vehicle)
+                .Where(j => !j.is_deleted && j.status_code == 5) // 5 = Complete
+                .AsQueryable();
+
+            if (vmfCode.HasValue)
+                query = query.Where(j => j.vmf_code == vmfCode.Value);
+
+            if (fromDate.HasValue)
+                query = query.Where(j => j.date_updated >= fromDate.Value);
+
+            if (toDate.HasValue)
+                query = query.Where(j => j.date_updated <= toDate.Value.AddDays(1));
+
+            // Site filter: find vehicles currently or recently on contract to the given site
+            if (siteCode.HasValue)
+            {
+                var vehiclesAtSite = await _context.Contracts
+                    .Where(c => c.site_code == siteCode.Value && !c.is_deleted)
+                    .Select(c => c.vmf_code)
+                    .Distinct()
+                    .ToListAsync();
+                query = query.Where(j => vehiclesAtSite.Contains(j.vmf_code));
+            }
+
+            var results = await query
+                .OrderByDescending(j => j.date_updated)
+                .ToListAsync();
+
+            var lineItems = results.Select(j => new
+            {
+                job_card_id = j.job_card_id,
+                vmf_code = j.vmf_code,
+                fleet_number = j.Vehicle?.fleet_number,
+                registration = j.Vehicle?.registration_number,
+                damages = j.damages,
+                service_provider = j.service_provider,
+                invoice_number = j.invoice_number,
+                invoice_date = j.invoice_date?.ToString("yyyy-MM-dd"),
+                labour_cost = j.labour_cost,
+                parts_cost = j.parts_cost,
+                other_cost = j.other_cost,
+                total_cost = j.total_cost,
+                closed_date = j.date_updated?.ToString("yyyy-MM-dd"),
+            }).ToList();
+
+            return Ok(new
+            {
+                filters_applied = new { vmfCode, siteCode, fromDate, toDate },
+                total_records = lineItems.Count,
+                grand_total = lineItems.Sum(i => i.total_cost ?? 0),
+                total_labour = lineItems.Sum(i => i.labour_cost ?? 0),
+                total_parts = lineItems.Sum(i => i.parts_cost ?? 0),
+                total_other = lineItems.Sum(i => i.other_cost ?? 0),
+                line_items = lineItems
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating repair cost report");
+            return StatusCode(500, new { error = "Failed to generate report", message = ex.Message });
         }
     }
 
@@ -483,7 +615,15 @@ public class JobCardController : BaseApiController
             date_created = jobCard.date_created,
             date_updated = jobCard.date_updated,
             created_by_user_code = jobCard.created_by_user_code,
-            modified_by_user_code = jobCard.modified_by_user_code
+            modified_by_user_code = jobCard.modified_by_user_code,
+            // Repair costs
+            labour_cost = jobCard.labour_cost,
+            parts_cost = jobCard.parts_cost,
+            other_cost = jobCard.other_cost,
+            total_cost = jobCard.total_cost,
+            invoice_number = jobCard.invoice_number,
+            invoice_date = jobCard.invoice_date,
+            service_provider = jobCard.service_provider,
         };
     }
 }

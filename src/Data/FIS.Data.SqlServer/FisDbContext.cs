@@ -134,6 +134,7 @@ public class FisDbContext : DbContext
     public DbSet<Tyda> Tydas { get; set; } = null!;
     public DbSet<Tyda1> Tyda1s { get; set; } = null!;
     public DbSet<InvalidSegmentNumber> InvalidSegmentNumbers { get; set; } = null!;
+    public DbSet<Tariff> Tariffs { get; set; } = null!;
     public DbSet<LastMonthlyTariff> LastMonthlyTariffs { get; set; } = null!;
     public DbSet<LeaseTariff> LeaseTariffs { get; set; } = null!;
     public DbSet<LeaseTariffHistory> LeaseTariffHistories { get; set; } = null!;
@@ -149,6 +150,7 @@ public class FisDbContext : DbContext
     public DbSet<ParameterValue> ParameterValues { get; set; } = null!;
     public DbSet<UserCompany> UserCompanies { get; set; } = null!;
     public DbSet<ContractStatusHistory> ContractStatusHistories { get; set; } = null!;
+    public DbSet<ContractAuditLog> ContractAuditLogs { get; set; } = null!;
     public DbSet<ContractTypeGrouping> ContractTypeGroupings { get; set; } = null!;
     public DbSet<ContractTypeMap> ContractTypeMaps { get; set; } = null!;
     public DbSet<ContractTypeMapping> ContractTypeMappings { get; set; } = null!;
@@ -289,6 +291,8 @@ public class FisDbContext : DbContext
     public DbSet<EnjinNumber> EnjinNumbers { get; set; } = null!;
     public DbSet<FleetNote> FleetNotes { get; set; } = null!;
     public DbSet<TempVehicleExtra> TempVehicleExtras { get; set; } = null!;
+    public DbSet<VehicleRemark> VehicleRemarks { get; set; } = null!;
+    public DbSet<VehicleLicenceHistory> VehicleLicenceHistories { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -416,6 +420,25 @@ public class FisDbContext : DbContext
             // Index for authorizer queries
             entity.HasIndex(e => new { e.authorizer, e.status_code })
                 .HasDatabaseName("IX_JobCard_Authorizer_Status");
+        });
+
+        // VehicleLicenceHistory index — fast lookup per vehicle ordered by date
+        modelBuilder.Entity<VehicleLicenceHistory>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.captured_at })
+                .HasDatabaseName("IX_VehicleLicenceHistory_Vehicle_Date");
+        });
+
+        // VehicleRemark indexes
+        modelBuilder.Entity<VehicleRemark>(entity =>
+        {
+            // Fast lookup: all open remarks for a vehicle
+            entity.HasIndex(e => new { e.vmf_code, e.is_resolved, e.is_deleted })
+                .HasDatabaseName("IX_VehicleRemark_Vehicle_Active");
+
+            // For the fleet-wide active remarks query
+            entity.HasIndex(e => new { e.is_resolved, e.is_deleted })
+                .HasDatabaseName("IX_VehicleRemark_Active");
         });
 
         modelBuilder.HasDefaultSchema("dbo");

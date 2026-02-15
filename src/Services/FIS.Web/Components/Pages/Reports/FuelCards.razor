@@ -2,8 +2,9 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject FleetManagementApiService FleetService
+@inject SiteApiService SiteService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JS
 
 <PageTitle>Fuel Card Reports - Fleet Information System</PageTitle>
@@ -14,7 +15,7 @@
             <i class="bx bx-file"></i>
             Fuel Card Reports
         </h1>
-        <p class="page-description">Legacy report summary for Fuelcard/RPTFuelcard.aspx.</p>
+        <p class="page-description">Fuel card allocation summary and recent activity.</p>
     </div>
 </div>
 
@@ -26,8 +27,14 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">Site Code (optional)</label>
-                    <input class="form-input" type="number" @bind="_siteCodeInput" />
+                    <label class="form-label">Site (optional)</label>
+                    <select class="form-select" @bind="_siteCodeInput">
+                        <option value="">All sites</option>
+                        @foreach (var site in _sites.OrderBy(s => s.Description))
+                        {
+                            <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
+                        }
+                    </select>
                 </div>
             </div>
             <div class="contract-action-group">
@@ -53,7 +60,7 @@
     {
         <div class="empty-state">
             <i class="bx bx-file"></i>
-            <h3>Fuel Card Reports pending</h3>
+            <h3>Fuel Card Reports</h3>
             <p>Load a report to view allocation details.</p>
         </div>
     }
@@ -92,7 +99,7 @@
                     <thead>
                         <tr>
                             <th>Card Number</th>
-                            <th>VMF Code</th>
+                            <th>Vehicle</th>
                             <th>Action</th>
                             <th>Date</th>
                             <th>Receiver</th>
@@ -107,11 +114,11 @@
                         }
                         else
                         {
-                            @foreach (var activity in _report.Report.RecentActivity)
+                            @foreach (var activity in PagedActivity)
                             {
                                 <tr>
                                     <td>@activity.CardNumber</td>
-                                    <td>@activity.VmfCode</td>
+                                    <td>@GetVehicleLabel(activity.VmfCode)</td>
                                     <td>@activity.Action</td>
                                     <td>@activity.Date.ToString("yyyy-MM-dd")</td>
                                     <td>@activity.Receiver</td>
@@ -121,29 +128,13 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
     }
-
-    <LegacyEndpointActionPanel
-        LegacyPath="fuelcard/RPTFuelcard.aspx"
-        Endpoint="api/fuelcard/reports/menu"
-        HttpMethod="GET"
-        ButtonText="Test Fuelcard Reports Menu Endpoint"
-        ReportType="fuelcard-reports-menu" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="fuelcard/RPT_one_vehicle_main_FuelCard.htm"
-        Endpoint="api/fuelcard/reports/one-vehicle"
-        HttpMethod="POST"
-        ButtonText="Test One Vehicle Fuelcard Report Endpoint"
-        ReportType="fuelcard-report-one-vehicle" />
-
-    <LegacyEndpointActionPanel
-        LegacyPath="fuelcard/RPT_all_vehicles_main_FuelCard.htm"
-        Endpoint="api/fuelcard/reports/all-vehicles"
-        HttpMethod="POST"
-        ButtonText="Test All Vehicles Fuelcard Report Endpoint"
-        ReportType="fuelcard-report-all-vehicles" />
 </div>
 
 @code {
@@ -151,9 +142,32 @@
     private bool _loading;
     private string? _errorMessage;
     private int? _siteCodeInput;
+    private List<SiteResponseDto> _sites = new();
+    private Dictionary<int, string> _vehicleLabels = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<FuelCardActivityDto> PagedActivity =>
+        (_report?.Report?.RecentActivity ?? new List<FuelCardActivityDto>())
+        .Skip((_page - 1) * _pageSize)
+        .Take(_pageSize);
+
+    private int TotalPages
+    {
+        get
+        {
+            var total = _report?.Report?.RecentActivity.Count ?? 0;
+            return Math.Max(1, (int)Math.Ceiling(total / (double)_pageSize));
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        _sites = await SiteService.GetAllAsync();
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _vehicleLabels = vehicles.Data
+            .GroupBy(v => v.vmf_code)
+            .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
         await LoadReport();
     }
 
@@ -169,6 +183,7 @@
             {
                 _errorMessage = _report?.Message ?? "Unable to load fuel card report.";
             }
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -180,4 +195,35 @@
             _loading = false;
         }
     }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private string GetVehicleLabel(int? vmfCode)
+    {
+        if (!vmfCode.HasValue)
+        {
+            return "-";
+        }
+
+        return _vehicleLabels.TryGetValue(vmfCode.Value, out var label)
+            ? label
+            : $"- / - ({vmfCode.Value})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

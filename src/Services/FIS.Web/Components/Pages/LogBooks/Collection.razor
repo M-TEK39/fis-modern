@@ -2,9 +2,9 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject LogbookApiService LogbookService
 @inject SiteApiService SiteService
+@inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Logbook Collection - Fleet Information System</PageTitle>
@@ -15,7 +15,7 @@
             <i class="bx bx-collection"></i>
             Collection for Two or More Logbooks
         </h1>
-        <p class="page-description">Legacy Logbook/MNT_logb2j_getpersdetail.aspx workflow.</p>
+        <p class="page-description">Logbook collection workflow.</p>
     </div>
 </div>
 
@@ -35,7 +35,7 @@
                 <option value="">Select site</option>
                 @foreach (var site in _sites)
                 {
-                    <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                 }
             </select>
         </div>
@@ -44,8 +44,62 @@
             <input type="date" class="form-input" @bind="_handoutDate" />
         </div>
         <div class="form-row">
-            <label class="form-label">VMF Codes (comma-separated)</label>
-            <input class="form-input" @bind="_vmfCodes" placeholder="e.g. 123,456" />
+            <label class="form-label">Vehicle Search</label>
+            <div class="contract-search-radio">
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                    GG
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                    GP
+                </label>
+            </div>
+            <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+            <div class="form-actions" style="margin-top: 0.5rem;">
+                <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchVehiclesAsync" disabled="@_loading">Search vehicle</button>
+            </div>
+        </div>
+        <div class="form-row">
+            <label class="form-label">Vehicle Matches</label>
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Select</th>
+                                <th>GG Number</th>
+                                <th>Registration</th>
+                                <th>Vehicle</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (_vehicleMatches.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="4">Search to load vehicles.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var vehicle in _vehicleMatches)
+                                {
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox"
+                                                   checked="@_selectedVmfCodes.Contains(vehicle.vmf_code)"
+                                                   @onchange="e => ToggleVehicleSelection(vehicle.vmf_code, e.Value)" />
+                                        </td>
+                                        <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                        <td>@ValueOrDash(vehicle.registration_number)</td>
+                                        <td>@GetVehicleLabel(vehicle)</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         <div class="form-actions">
             <button class="btn btn-primary" @onclick="SubmitCollection">Submit</button>
@@ -61,22 +115,17 @@
     }
 </div>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Logbook/MNT_logb2j_getpersdetail.aspx"
-        Endpoint="api/logbook/collection"
-        HttpMethod="POST"
-        ButtonText="Test Logbook Collection Endpoint"
-        ReportType="logbook-collection" />
-
 @code {
     private bool _loading;
+    private string _searchMode = "GG";
     private string _receiverName = string.Empty;
     private string _receiverTel = string.Empty;
-    private string _vmfCodes = string.Empty;
+    private string _vehicleSearchTerm = string.Empty;
     private short? _siteCode;
     private DateTime? _handoutDate;
     private List<SiteResponseDto> _sites = new();
+    private List<VehicleDto> _vehicleMatches = new();
+    private HashSet<int> _selectedVmfCodes = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,7 +137,7 @@
         _loading = true;
         try
         {
-            var vmfList = ParseVmfCodes();
+            var vmfList = _selectedVmfCodes.OrderBy(code => code).ToList();
             foreach (var vmfCode in vmfList)
             {
                 var payload = new LogbookDto
@@ -105,9 +154,11 @@
 
             _receiverName = string.Empty;
             _receiverTel = string.Empty;
-            _vmfCodes = string.Empty;
+            _vehicleSearchTerm = string.Empty;
             _siteCode = null;
             _handoutDate = null;
+            _vehicleMatches = new();
+            _selectedVmfCodes = new();
         }
         catch (Exception ex)
         {
@@ -119,22 +170,59 @@
         }
     }
 
-    private List<int> ParseVmfCodes()
+    private async Task SearchVehiclesAsync()
     {
-        var list = new List<int>();
-        if (string.IsNullOrWhiteSpace(_vmfCodes))
+        if (string.IsNullOrWhiteSpace(_vehicleSearchTerm))
         {
-            return list;
+            _vehicleMatches = new();
+            _selectedVmfCodes.Clear();
+            return;
         }
 
-        foreach (var part in _vmfCodes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        var searchTerm = _vehicleSearchTerm.Trim();
+        var matches = await VehicleService.SearchVehiclesAsync(searchTerm);
+        _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _searchMode);
+        _selectedVmfCodes = _vehicleMatches.Select(vehicle => vehicle.vmf_code).ToHashSet();
+    }
+
+    private void ToggleVehicleSelection(int vmfCode, object? value)
+    {
+        var isChecked = value is bool checkedValue && checkedValue;
+        if (isChecked)
         {
-            if (int.TryParse(part, out var vmfCode))
-            {
-                list.Add(vmfCode);
-            }
+            _selectedVmfCodes.Add(vmfCode);
+            return;
         }
 
-        return list;
+        _selectedVmfCodes.Remove(vmfCode);
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
+    {
+        var query = keyword.Trim();
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
+
+        return matches
+            .Where(v => isGp
+                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
+                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(v => isGp
+                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(v => v.vmf_code)
+            .ToList();
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _searchMode = mode;
+        _vehicleMatches = new();
+        _selectedVmfCodes.Clear();
     }
 }

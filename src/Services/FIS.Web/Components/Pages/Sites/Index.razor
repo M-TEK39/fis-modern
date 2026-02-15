@@ -56,7 +56,7 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Site Code</th>
+                            <th>Site ID</th>
                             <th>Site Name</th>
                             <th>Address</th>
                             <th>Contact Info</th>
@@ -64,7 +64,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var site in _sites)
+                        @foreach (var site in PagedSites)
                         {
                             <tr>
                                 <td>@site.SiteCode</td>
@@ -92,6 +92,11 @@
                         }
                     </tbody>
                 </table>
+            </div>
+            <div class="pagination-controls" style="margin-top: 1rem;">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
     }
@@ -129,14 +134,6 @@
     <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Validation/MNT_Site.aspx"
-        Endpoint="api/site"
-        HttpMethod="GET"
-        ButtonText="Test Site Endpoint"
-        ReportType="site-reference" />
-
 @code {
     private List<SiteViewModel> _sites = new();
     private SiteViewModel _currentSite = new();
@@ -145,6 +142,10 @@
     private bool _showDeleteConfirm = false;
     private bool _isEdit = false;
     private bool _saving = false;
+    private int _page = 1;
+    private const int _pageSize = 12;
+    private IEnumerable<SiteViewModel> PagedSites => _sites.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_sites.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -166,10 +167,12 @@
                 Telephone = s.Telephone,
                 IsActive = s.SiteActive
             }).ToList();
+            _page = Math.Min(_page, TotalPages);
         }
         catch
         {
             _sites = new List<SiteViewModel>();
+            _page = 1;
         }
         finally
         {
@@ -270,6 +273,22 @@
             .Where(p => !string.IsNullOrWhiteSpace(p));
         var combined = string.Join(", ", parts);
         return string.IsNullOrWhiteSpace(combined) ? null : combined;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 
     private class SiteViewModel

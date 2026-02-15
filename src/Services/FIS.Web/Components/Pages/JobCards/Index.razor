@@ -5,6 +5,8 @@
 @using FIS.Web.Services
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
+@inject JobCardApiService JobCardService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Job Cards - Fleet Information System</PageTitle>
 
@@ -48,6 +50,75 @@
                 </div>
             </div>
         </div>
+
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">All Job Cards Snapshot</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="RefreshJobCardOverviewAsync" disabled="@_loadingOverview">
+                        <i class="bx bx-refresh"></i>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_overviewMessage))
+            {
+                <div class="alert @(_overviewError ? "alert-error" : "alert-success")" style="margin:0.75rem 0;">@_overviewMessage</div>
+            }
+
+            @if (_loadingOverview)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading job cards...</p>
+                </div>
+            }
+            else if (_jobCardOverview.Count == 0)
+            {
+                <div class="empty-state">
+                    <i class="bx bx-info-circle"></i>
+                    <h3>No job cards found</h3>
+                    <p>No job cards match the current filter selection.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Job Card #</th>
+                                <th>GG Number</th>
+                                <th>Registration</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Captured Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in PagedJobCards)
+                            {
+                                <tr>
+                                    <td>@row.JobCardId</td>
+                                    <td>@ValueOrDash(row.GGNumber)</td>
+                                    <td>@ValueOrDash(row.RegistrationNumber)</td>
+                                    <td>@ValueOrDash(row.JobDescription)</td>
+                                    <td>@ValueOrDash(row.Status)</td>
+                                    <td>@FormatDate(row.DateCreated)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevOverviewPage" disabled="@(_overviewPage <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_overviewPage of @OverviewTotalPages</div>
+                    <button class="pagination-btn" @onclick="NextOverviewPage" disabled="@(_overviewPage >= OverviewTotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_jobCardOverview.Count | Page size: @_overviewPageSize</div>
+            }
+        </div>
     }
 </div>
 
@@ -56,10 +127,28 @@
     private bool _hasJobCardAccess;
     private bool _canCapturer;
     private bool _canAuthorizer;
+    private bool _loadingOverview;
+    private bool _overviewError;
+    private string _overviewMessage = string.Empty;
+    private List<JobCardDto> _jobCardOverview = new();
+    private int _overviewPage = 1;
+    private readonly int _overviewPageSize = 12;
+
+    private IEnumerable<JobCardDto> PagedJobCards
+        => _jobCardOverview
+            .Skip((_overviewPage - 1) * _overviewPageSize)
+            .Take(_overviewPageSize);
+
+    private int OverviewTotalPages
+        => Math.Max(1, (int)Math.Ceiling(_jobCardOverview.Count / (double)_overviewPageSize));
 
     protected override async Task OnInitializedAsync()
     {
         await ResolveAccessAsync();
+        if (_hasJobCardAccess)
+        {
+            await LoadOverviewAsync();
+        }
     }
 
     private async Task ResolveAccessAsync()
@@ -115,4 +204,54 @@
 
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private async Task LoadOverviewAsync()
+    {
+        _loadingOverview = true;
+        _overviewError = false;
+        _overviewMessage = string.Empty;
+        try
+        {
+            _jobCardOverview = await JobCardService.GetAllAsync();
+            _overviewPage = 1;
+        }
+        catch (Exception ex)
+        {
+            _jobCardOverview = new();
+            _overviewError = true;
+            _overviewMessage = "Unable to load job card overview.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loadingOverview = false;
+        }
+    }
+
+    private async Task RefreshJobCardOverviewAsync()
+    {
+        await LoadOverviewAsync();
+    }
+
+    private void PrevOverviewPage()
+    {
+        if (_overviewPage > 1)
+        {
+            _overviewPage--;
+        }
+    }
+
+    private void NextOverviewPage()
+    {
+        if (_overviewPage < OverviewTotalPages)
+        {
+            _overviewPage++;
+        }
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 }

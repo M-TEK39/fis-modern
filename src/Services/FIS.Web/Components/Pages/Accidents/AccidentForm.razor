@@ -59,7 +59,7 @@
                         <option value="">Select Vehicle</option>
                         @foreach (var vehicle in AvailableVehicles)
                         {
-                            <option value="@vehicle.vmf_code">@vehicle.registration_number - @(vehicle.model_name ?? "Unknown")</option>
+                            <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
                         }
                     </select>
                     <ValidationMessage For="() => Accident.vehicle_id" />
@@ -71,7 +71,7 @@
                         <option value="">Select Driver (if known)</option>
                         @foreach (var driver in AvailableDrivers)
                         {
-                            <option value="@driver.site_driver_code">@driver.driver_firstname @driver.driver_surname</option>
+                            <option value="@driver.site_driver_code">@($"{driver.driver_firstname} {driver.driver_surname}".Trim()) (@driver.site_driver_code)</option>
                         }
                     </select>
                 </div>
@@ -264,4 +264,10 @@
     {
         await OnSave.InvokeAsync();
     }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
 }

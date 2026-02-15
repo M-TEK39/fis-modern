@@ -2,7 +2,6 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@using FIS.Web.Components.Shared
 @inject MonitorApiService MonitorService
 @inject SiteApiService SiteService
 @inject IJSRuntime JSRuntime
@@ -15,7 +14,7 @@
             <i class="bx bx-buildings"></i>
             Inquiry Info, for a Dept / Site, for a period
         </h1>
-        <p class="page-description">Legacy placeholder for Monitor/RPT_mon_dept_period_main.aspx.</p>
+        <p class="page-description">Department/site inquiry report workflow.</p>
     </div>
 </div>
 
@@ -27,7 +26,7 @@
                 <option value="">Select site</option>
                 @foreach (var site in _sites)
                 {
-                    <option value="@site.SiteCode">@site.DepartmentNumber - @site.Description</option>
+                    <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
                 }
             </select>
         </div>
@@ -72,7 +71,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.monitor_code</td>
@@ -83,17 +82,18 @@
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
-
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Monitor/RPT_Mon_dept_period_main.aspx"
-        Endpoint="api/monitor/reports/dept-site-period"
-        HttpMethod="POST"
-        ButtonText="Test Monitor Dept/Site Period Endpoint"
-        ReportType="monitor-report-dept-site-period" />
 
 @code {
     private bool _loading;
@@ -102,6 +102,11 @@
     private DateTime? _toDate;
     private List<SiteResponseDto> _sites = new();
     private List<MonitorDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<MonitorDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -119,6 +124,7 @@
                                       (!_fromDate.HasValue || (m.Capture_dat.HasValue && m.Capture_dat.Value.Date >= _fromDate.Value.Date)) &&
                                       (!_toDate.HasValue || (m.Capture_dat.HasValue && m.Capture_dat.Value.Date <= _toDate.Value.Date)))
                 .ToList();
+            _page = 1;
         }
         catch (Exception ex)
         {
@@ -132,4 +138,20 @@
 
     private static string FormatDate(DateTime? date) =>
         date.HasValue ? date.Value.ToString("yyyy-MM-dd") : string.Empty;
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

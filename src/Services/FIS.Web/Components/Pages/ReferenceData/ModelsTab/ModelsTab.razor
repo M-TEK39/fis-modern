@@ -49,7 +49,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var model in _models)
+                    @foreach (var model in PagedModels)
                     {
                         <tr>
                             <td>@model.model_name</td>
@@ -70,6 +70,11 @@ else
                     }
                 </tbody>
             </table>
+        </div>
+        <div class="pagination-controls" style="margin-top: 1rem;">
+            <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+            <div class="pagination-info">Page @_page of @TotalPages</div>
+            <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
         </div>
     </div>
 }
@@ -97,84 +102,84 @@ else
             </div>
             <div class="form-field">
                 <label class="form-label">Make <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.make_code">
+                <select class="form-select" @bind="_currentModel.make_code">
                     <option value="">Select make</option>
                     @foreach (var make in _makes)
                     {
-                        <option value="@make.make_code">@make.make_name</option>
+                        <option value="@make.make_code">@($"{make.make_name} ({make.make_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.make_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">Vehicle Type <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.type_code">
+                <select class="form-select" @bind="_currentModel.type_code">
                     <option value="">Select type</option>
                     @foreach (var type in _vehicleTypes)
                     {
-                        <option value="@type.type_code">@type.type_name</option>
+                        <option value="@type.type_code">@($"{type.type_name} ({type.type_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.type_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">Fuel Type <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.fuel_type_code">
+                <select class="form-select" @bind="_currentModel.fuel_type_code">
                     <option value="">Select fuel type</option>
                     @foreach (var fuelType in _fuelTypes)
                     {
-                        <option value="@fuelType.fuel_type_code">@fuelType.fuel_type_name</option>
+                        <option value="@fuelType.fuel_type_code">@($"{fuelType.fuel_type_name} ({fuelType.fuel_type_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.fuel_type_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">Vehicle Class <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.class_code">
+                <select class="form-select" @bind="_currentModel.class_code">
                     <option value="">Select class</option>
                     @foreach (var item in _classes)
                     {
-                        <option value="@item.class_code">@item.class_description</option>
+                        <option value="@item.class_code">@($"{item.class_description} ({item.class_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.class_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">Unit of Measure <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.unit_of_measure_code">
+                <select class="form-select" @bind="_currentModel.unit_of_measure_code">
                     <option value="">Select unit</option>
                     @foreach (var item in _unitMeasures)
                     {
-                        <option value="@item.unit_of_measure_code">@item.unit_description (@item.unit_abbreviation)</option>
+                        <option value="@item.unit_of_measure_code">@($"{item.unit_description} ({item.unit_of_measure_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.unit_of_measure_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">License Fee (Cost) <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.licence_fee_code">
+                <select class="form-select" @bind="_currentModel.licence_fee_code">
                     <option value="">Select license fee</option>
                     @foreach (var item in _licenseFees)
                     {
-                        <option value="@item.licence_fee_code">@item.licence_description</option>
+                        <option value="@item.licence_fee_code">@($"{item.licence_description} ({item.licence_fee_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.licence_fee_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">Driver License <span class="required">*</span></label>
-                <select class="form-input" @bind="_currentModel.licence_code">
+                <select class="form-select" @bind="_currentModel.licence_code">
                     <option value="">Select license</option>
                     @foreach (var item in _driverLicences)
                     {
-                        <option value="@item.licence_code">@item.description</option>
+                        <option value="@item.licence_code">@($"{item.description} ({item.licence_code})")</option>
                     }
                 </select>
                 <ValidationMessage For="() => _currentModel.licence_code" />
             </div>
             <div class="form-field">
                 <label class="form-label">Maintenance Trigger</label>
-                <select class="form-input" @bind="_currentModel.maint_trigger_code">
+                <select class="form-select" @bind="_currentModel.maint_trigger_code">
                     <option value="">Select trigger</option>
                     @foreach (var trigger in _maintenanceTriggers)
                     {
@@ -216,7 +221,7 @@ else
                 <input type="number" class="form-input" @bind="_currentModel.service_interval" />
             </div>
             <div class="form-field">
-                <label class="form-label">VEMM Code</label>
+                <label class="form-label">VEMM ID</label>
                 <input type="text" class="form-input" @bind="_currentModel.vemm_code" />
             </div>
             <div class="form-field">
@@ -225,7 +230,7 @@ else
             </div>
             <div class="form-field">
                 <label class="form-label">Transmission</label>
-                <select class="form-input" @bind="_currentModel.transmission">
+                <select class="form-select" @bind="_currentModel.transmission">
                     <option value="">Select</option>
                     <option value="M">Manual</option>
                     <option value="A">Automatic</option>
@@ -265,6 +270,11 @@ else
     private bool _isEdit = false;
     private bool _saving = false;
     private bool _modelPrereqsMissing = false;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<ModelDto> PagedModels => _models.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_models.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -278,6 +288,7 @@ else
         _loading = true;
         _models = await RefDataService.GetModelsAsync();
         _loading = false;
+        _page = Math.Min(_page, TotalPages);
         StateHasChanged();
     }
 
@@ -407,5 +418,21 @@ else
 
         var fuelType = _fuelTypes.FirstOrDefault(f => f.fuel_type_code == model.fuel_type_code);
         return fuelType?.fuel_type_name ?? "N/A";
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

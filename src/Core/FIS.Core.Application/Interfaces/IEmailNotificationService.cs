@@ -79,6 +79,25 @@ public interface IEmailNotificationService
     /// Send contract expiry notification
     /// </summary>
     Task<bool> SendContractExpiryNotificationAsync(int contractId, string emailAddress, string recipientName);
+
+    /// <summary>
+    /// Send notification when a contract is opened (activated).
+    /// Notifies the capturer and approver by looking up their email from TS_Users.
+    /// </summary>
+    Task<bool> SendContractOpenedNotificationAsync(int contractId, int capturerUserId, int approverUserId);
+
+    /// <summary>
+    /// Send notification when a contract is closed or cancelled.
+    /// Notifies the capturer, approver, and site contact (net_address) by looking up their emails.
+    /// </summary>
+    Task<bool> SendContractClosedNotificationAsync(int contractId, int performedByUserId, string closureReason);
+
+    /// <summary>
+    /// Send a contract expiry reminder to the site contact (client) and the capturer.
+    /// Called by the daily background job at milestone intervals: 90, 60, 30, 14, and 7 days before target_return_date.
+    /// The message instructs the client to submit a letter of extension if they wish to keep the vehicle.
+    /// </summary>
+    Task<bool> SendContractExpiryReminderAsync(int contractId, int daysRemaining);
     
     /// <summary>
     /// Send trip summary report via email

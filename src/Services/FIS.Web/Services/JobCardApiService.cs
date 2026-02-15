@@ -5,7 +5,7 @@ using FIS.Web.Models;
 
 namespace FIS.Web.Services;
 
-public class JobCardApiService : BaseApiService
+public partial class JobCardApiService : BaseApiService
 {
     private const string BasePath = "api/jobcards";
     private readonly HttpClient _httpClient;
@@ -54,11 +54,61 @@ public class JobCardApiService : BaseApiService
             cancel_reason = reason
         });
 
-    public Task<FinanceApiResult> CloseAsync(int id, string? notes)
-        => SendActionAsync(HttpMethod.Post, $"{BasePath}/{id}/close", new JobCardCloseRequest
+    public Task<FinanceApiResult> CloseAsync(int id, JobCardCloseRequest payload)
+        => SendActionAsync(HttpMethod.Post, $"{BasePath}/{id}/close", payload);
+
+    public Task<FinanceApiResult> UpdateCostsAsync(int id, JobCardCostRequest payload)
+        => SendActionAsync(HttpMethod.Patch, $"{BasePath}/{id}/costs", payload);
+
+    public async Task<JobCardRepairCostReportDto> GetRepairCostReportAsync(
+        int? vmfCode = null,
+        int? siteCode = null,
+        DateTime? fromDate = null,
+        DateTime? toDate = null)
+    {
+        var queryParts = new List<string>();
+        if (vmfCode.HasValue && vmfCode.Value > 0)
         {
-            close_notes = notes
-        });
+            queryParts.Add($"vmfCode={vmfCode.Value}");
+        }
+        if (siteCode.HasValue && siteCode.Value > 0)
+        {
+            queryParts.Add($"siteCode={siteCode.Value}");
+        }
+        if (fromDate.HasValue)
+        {
+            queryParts.Add($"fromDate={fromDate.Value:yyyy-MM-dd}");
+        }
+        if (toDate.HasValue)
+        {
+            queryParts.Add($"toDate={toDate.Value:yyyy-MM-dd}");
+        }
+
+        var endpoint = $"{BasePath}/repair-cost-report";
+        if (queryParts.Count > 0)
+        {
+            endpoint = $"{endpoint}?{string.Join("&", queryParts)}";
+        }
+
+        var response = await _httpClient.GetAsync(endpoint);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return new JobCardRepairCostReportDto();
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            return ParseRepairCostReport(doc.RootElement);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to parse repair cost report response.");
+            return new JobCardRepairCostReportDto();
+        }
+    }
 
     public async Task<FinanceApiResult> DeleteAsync(int id)
         => await SendActionAsync(HttpMethod.Delete, $"{BasePath}/{id}", null);
@@ -86,18 +136,18 @@ public class JobCardApiService : BaseApiService
                 Endpoint = endpoint,
                 Message = response.IsSuccessStatusCode
                     ? "Request completed successfully."
-                    : ExtractApiErrorMessage(body) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
+                    : SanitizeUserMessage(ExtractApiErrorMessage(body)) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
                 ResponseBody = body
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "JobCard request failed for {Endpoint}", endpoint);
+            _logger.LogError(ex, "JobCard request failed.");
             return new FinanceApiResult
             {
                 Success = false,
                 Endpoint = endpoint,
-                Message = ex.Message
+                Message = SanitizeUserMessage(ex.Message) ?? "Request failed."
             };
         }
     }
@@ -139,6 +189,23 @@ public class JobCardApiService : BaseApiService
 
         return null;
     }
+
+    private static string? SanitizeUserMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var trimmed = message.Trim();
+        var endpointIndex = trimmed.IndexOf("Endpoint:", StringComparison.OrdinalIgnoreCase);
+        if (endpointIndex >= 0)
+        {
+            trimmed = trimmed[..endpointIndex].Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
 }
 
 public class CreateJobCardRequest
@@ -178,6 +245,22 @@ public class JobCardCancelRequest
 public class JobCardCloseRequest
 {
     public string? close_notes { get; set; }
+    public decimal? labour_cost { get; set; }
+    public decimal? parts_cost { get; set; }
+    public decimal? other_cost { get; set; }
+    public string? invoice_number { get; set; }
+    public DateTime? invoice_date { get; set; }
+    public string? service_provider { get; set; }
+}
+
+public class JobCardCostRequest
+{
+    public decimal? labour_cost { get; set; }
+    public decimal? parts_cost { get; set; }
+    public decimal? other_cost { get; set; }
+    public string? invoice_number { get; set; }
+    public DateTime? invoice_date { get; set; }
+    public string? service_provider { get; set; }
 }
 
 public class JobCardDto
@@ -245,6 +328,178 @@ public class JobCardDto
     [JsonPropertyName("reviewed")]
     public string? ReviewedFlag { get; set; }
 
+    [JsonPropertyName("labour_cost")]
+    public decimal? LabourCost { get; set; }
+
+    [JsonPropertyName("parts_cost")]
+    public decimal? PartsCost { get; set; }
+
+    [JsonPropertyName("other_cost")]
+    public decimal? OtherCost { get; set; }
+
+    [JsonPropertyName("total_cost")]
+    public decimal? TotalCost { get; set; }
+
+    [JsonPropertyName("invoice_number")]
+    public string? InvoiceNumber { get; set; }
+
+    [JsonPropertyName("invoice_date")]
+    public DateTime? InvoiceDate { get; set; }
+
+    [JsonPropertyName("service_provider")]
+    public string? ServiceProvider { get; set; }
+
     public string? CapturedBy => CapturedByUserCode?.ToString();
     public bool? Reviewed => ReviewedFlag?.Equals("Y", StringComparison.OrdinalIgnoreCase);
+}
+
+public class JobCardRepairCostReportDto
+{
+    public List<JobCardRepairCostLineDto> Items { get; set; } = new();
+    public decimal GrandTotal { get; set; }
+    public decimal TotalLabour { get; set; }
+    public decimal TotalParts { get; set; }
+    public decimal TotalOther { get; set; }
+}
+
+public class JobCardRepairCostLineDto
+{
+    public int JobCardId { get; set; }
+    public int? VmfCode { get; set; }
+    public int? SiteCode { get; set; }
+    public string? GGNumber { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public string? ServiceProvider { get; set; }
+    public string? InvoiceNumber { get; set; }
+    public DateTime? InvoiceDate { get; set; }
+    public decimal LabourCost { get; set; }
+    public decimal PartsCost { get; set; }
+    public decimal OtherCost { get; set; }
+    public decimal TotalCost { get; set; }
+    public DateTime? DateClosed { get; set; }
+}
+
+public partial class JobCardApiService
+{
+    private static JobCardRepairCostReportDto ParseRepairCostReport(JsonElement root)
+    {
+        var result = new JobCardRepairCostReportDto();
+        var itemsElement = TryGetProperty(root, "items")
+                           ?? TryGetProperty(root, "lineItems")
+                           ?? TryGetProperty(root, "records")
+                           ?? TryGetProperty(root, "data");
+
+        if (itemsElement.HasValue && itemsElement.Value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var row in itemsElement.Value.EnumerateArray())
+            {
+                result.Items.Add(new JobCardRepairCostLineDto
+                {
+                    JobCardId = ReadInt(row, "job_card_id", "jobCardId"),
+                    VmfCode = ReadNullableInt(row, "vmf_code", "vmfCode"),
+                    SiteCode = ReadNullableInt(row, "site_code", "siteCode"),
+                    GGNumber = ReadString(row, "gg_number", "ggNumber"),
+                    RegistrationNumber = ReadString(row, "registration_number", "registrationNumber"),
+                    ServiceProvider = ReadString(row, "service_provider", "serviceProvider"),
+                    InvoiceNumber = ReadString(row, "invoice_number", "invoiceNumber"),
+                    InvoiceDate = ReadNullableDate(row, "invoice_date", "invoiceDate"),
+                    LabourCost = ReadDecimal(row, "labour_cost", "labourCost"),
+                    PartsCost = ReadDecimal(row, "parts_cost", "partsCost"),
+                    OtherCost = ReadDecimal(row, "other_cost", "otherCost"),
+                    TotalCost = ReadDecimal(row, "total_cost", "totalCost"),
+                    DateClosed = ReadNullableDate(row, "date_closed", "dateClosed")
+                });
+            }
+        }
+
+        result.GrandTotal = ReadDecimal(root, "grand_total", "grandTotal");
+        result.TotalLabour = ReadDecimal(root, "total_labour", "totalLabour");
+        result.TotalParts = ReadDecimal(root, "total_parts", "totalParts");
+        result.TotalOther = ReadDecimal(root, "total_other", "totalOther");
+        return result;
+    }
+
+    private static JsonElement? TryGetProperty(JsonElement element, string name)
+        => element.TryGetProperty(name, out var value) ? value : null;
+
+    private static string? ReadString(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out var property))
+            {
+                var value = property.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int ReadInt(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out var property) && property.TryGetInt32(out var value))
+            {
+                return value;
+            }
+        }
+        return 0;
+    }
+
+    private static int? ReadNullableInt(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (element.TryGetProperty(name, out var property) && property.TryGetInt32(out var value))
+            {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static decimal ReadDecimal(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var property))
+            {
+                continue;
+            }
+
+            if (property.ValueKind == JsonValueKind.Number && property.TryGetDecimal(out var decimalValue))
+            {
+                return decimalValue;
+            }
+
+            if (property.ValueKind == JsonValueKind.String
+                && decimal.TryParse(property.GetString(), out decimalValue))
+            {
+                return decimalValue;
+            }
+        }
+        return 0m;
+    }
+
+    private static DateTime? ReadNullableDate(JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var property))
+            {
+                continue;
+            }
+
+            if (property.ValueKind == JsonValueKind.String
+                && DateTime.TryParse(property.GetString(), out var dateValue))
+            {
+                return dateValue;
+            }
+        }
+        return null;
+    }
 }

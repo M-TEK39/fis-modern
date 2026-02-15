@@ -62,7 +62,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var location in _locations)
+                        @foreach (var location in PagedLocations)
                         {
                             <tr>
                                 <td>@location.LocationName</td>
@@ -90,6 +90,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_locations.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_locations.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -130,14 +139,6 @@
     <p class="warning-text">This action cannot be undone.</p>
 </ConfirmationModal>
 
-
-    <LegacyEndpointActionPanel
-        LegacyPath="Shared/sites.aspx"
-        Endpoint="api/location"
-        HttpMethod="GET"
-        ButtonText="Test Location Endpoint"
-        ReportType="location-reference" />
-
 @code {
     private List<LocationViewDto> _locations = new();
     private LocationViewDto _currentLocation = new();
@@ -146,6 +147,11 @@
     private bool _showDeleteConfirm = false;
     private bool _isEdit = false;
     private bool _saving = false;
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<LocationViewDto> PagedLocations => _locations.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_locations.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -158,6 +164,10 @@
         try
         {
             _locations = await LocationService.GetAllAsync();
+            if (_page > TotalPages)
+            {
+                _page = TotalPages;
+            }
         }
         catch
         {
@@ -227,6 +237,7 @@
         }
         HideDialog();
         await LoadLocations();
+        _page = 1;
     }
 
     private async Task DeleteLocation()
@@ -241,5 +252,25 @@
         }
         HideDeleteDialog();
         await LoadLocations();
+        if (_page > TotalPages)
+        {
+            _page = TotalPages;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
     }
 }

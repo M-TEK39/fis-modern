@@ -1,6 +1,9 @@
 @page "/fuel-cards/private-hire/vehicle"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject VehicleApiService VehicleService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Private Hire Vehicle Fuelcards for a Vehicle</PageTitle>
 
@@ -26,49 +29,181 @@
                     <div class="contract-search-inputs">
                         <div class="contract-search-radio">
                             <label class="form-label">
-                                <input type="radio" name="searchType" value="GG" checked />
+                                <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='@(() => SetSearchType("GG"))' />
                                 GG
                             </label>
                             <label class="form-label">
-                                <input type="radio" name="searchType" value="GP" />
+                                <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='@(() => SetSearchType("GP"))' />
                                 GP Number
                             </label>
                         </div>
-                        <input class="form-input" placeholder="Enter number" />
-                        <button class="btn btn-primary btn-sm" type="button">Submit</button>
+                        <input class="form-input" placeholder="@(_searchType == "GG" ? "Enter GG number" : "Enter GP number")" @bind="_searchTerm" />
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadVehiclesAsync" disabled="_loading">
+                            @(_loading ? "Loading..." : "Submit")
+                        </button>
                         <a class="btn btn-secondary btn-sm" href="/fuel-cards">Menu</a>
                     </div>
                 </div>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_message))
+            {
+                <div class="alert alert-info" style="margin-top: 1rem;">@_message</div>
+            }
             <div class="table-container" style="margin-top: 1rem;">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Vehicle Number</th>
+                                <th>Vehicle</th>
+                                <th>GG Number</th>
+                                <th>GP Number</th>
                                 <th>Hire Type</th>
-                                <th>GG Counter</th>
+                                <th>Status</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="4">No records found.</td>
-                            </tr>
+                            @if (PagedResults.Any())
+                            {
+                                @foreach (var vehicle in PagedResults)
+                                {
+                                    <tr class="@GetRowClass(vehicle)">
+                                        <td>@GetVehicleLabel(vehicle)</td>
+                                        <td>@ValueOrDash(vehicle.fleet_number)</td>
+                                        <td>@ValueOrDash(vehicle.registration_number)</td>
+                                        <td>@vehicle.type_name</td>
+                                        <td>@vehicle.status_description</td>
+                                        <td>
+                                            <button class="btn btn-secondary btn-sm" @onclick="() => SelectVehicle(vehicle)">
+                                                Select
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="6">No records found.</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
+            @if (_results.Count > 0)
+            {
+                <div class="pagination-controls" style="margin-top: 1rem;">
+                    <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+            }
             <div style="margin-top: 1rem;">
-                <button class="btn btn-primary btn-sm">Add</button>
+                <button class="btn btn-primary btn-sm" disabled="@(_selectedVehicle is null)">Add</button>
             </div>
         </div>
     </div>
-
-    <LegacyEndpointActionPanel
-        LegacyPath="fuelcard/MNT_fuelh_getreg.aspx"
-        Endpoint="api/fuelcard/privatehire/maintenance/vehicle/search"
-        HttpMethod="POST"
-        ButtonText="Test Private Hire Maintenance Endpoint"
-        ReportType="fuelcard-privatehire-maintenance" />
 </div>
+
+@code {
+    private string _searchType = "GG";
+    private string _searchTerm = string.Empty;
+    private List<VehicleDto> _results = new();
+    private VehicleDto? _selectedVehicle;
+    private string _message = string.Empty;
+    private bool _loading;
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private IEnumerable<VehicleDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
+
+    private void SetSearchType(string value)
+    {
+        _searchType = value;
+        _results = new();
+        _selectedVehicle = null;
+        _page = 1;
+    }
+
+    private async Task LoadVehiclesAsync()
+    {
+        _loading = true;
+        _message = string.Empty;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_searchTerm))
+            {
+                _results = new();
+                _selectedVehicle = null;
+                return;
+            }
+
+            var searchTerm = _searchTerm.Trim();
+            var list = await VehicleService.SearchVehiclesAsync(searchTerm);
+            _results = FilterVehicleMatchesByNumberType(list, searchTerm, _searchType);
+
+            _page = 1;
+            _selectedVehicle = null;
+            _message = "Request completed successfully.";
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to load vehicles.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectVehicle(VehicleDto vehicle)
+    {
+        _selectedVehicle = vehicle;
+        _message = $"Selected vehicle {GetVehicleLabel(vehicle)}.";
+    }
+
+    private string GetRowClass(VehicleDto vehicle)
+    {
+        return _selectedVehicle?.vmf_code == vehicle.vmf_code ? "row-selected" : string.Empty;
+    }
+
+    private void PreviousPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private static string GetVehicleLabel(VehicleDto vehicle)
+        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static List<VehicleDto> FilterVehicleMatchesByNumberType(List<VehicleDto> matches, string term, string searchType)
+    {
+        return searchType == "GG"
+            ? matches
+                .Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(v => string.Equals(v.fleet_number?.Trim(), term, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(v => v.vmf_code)
+                .ToList()
+            : matches
+                .Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(v => string.Equals(v.registration_number?.Trim(), term, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(v => v.vmf_code)
+                .ToList();
+    }
+}

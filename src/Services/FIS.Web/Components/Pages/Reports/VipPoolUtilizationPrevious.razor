@@ -1,12 +1,159 @@
 @page "/reports/vip-pool-utilization-previous"
 @rendermode InteractiveServer
-@using FIS.Web.Components.Shared
+@using FIS.Web.Services
+@inject TripApiService TripService
+@inject IJSRuntime JSRuntime
 
-<LegacyReportEndpointPage
-    Title="Utilization of VIP and Pool vehicles (previous months)"
-    Description="Legacy placeholder for Finance/GeneratedReports.aspx?folder=9.5."
-    LegacyPath="Finance/GeneratedReports.aspx?folder=9.5"
-    Endpoint="api/Report/universal"
-    HttpMethod="POST"
-    ReportType="vip-pool-utilization-previous"
-    Icon="bx-file" />
+<PageTitle>VIP/Pool Utilization (Previous Months) - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-calendar-minus"></i>
+            VIP and Pool Utilization (Previous Months)
+        </h1>
+        <p class="page-description">Historical monthly utilization trend from trip records.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-primary btn-sm" href="/trip-authorities">Trip Authorities</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="table-container">
+        <div class="table-header">
+            <span class="table-title">Historical Utilization (Previous Months)</span>
+        </div>
+        <div class="table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Month</th>
+                        <th>Active Vehicles</th>
+                        <th>Total Trips</th>
+                        <th>Monthly Trips</th>
+                        <th>Open Trips</th>
+                        <th>Utilization %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="6">Loading report...</td></tr>
+                    }
+                    else if (PagedRows.Count == 0)
+                    {
+                        <tr><td colspan="6">No records found.</td></tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in PagedRows)
+                        {
+                            <tr>
+                                <td>@row.MonthLabel</td>
+                                <td>@row.ActiveVehicles</td>
+                                <td>@row.TotalTrips</td>
+                                <td>@row.MonthlyTrips</td>
+                                <td>@row.OpenTrips</td>
+                                <td>@row.UtilizationPercent.ToString("0.0")%</td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+        @if (_rows.Count > _pageSize)
+        {
+            <div class="pagination">
+                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
+            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading;
+    private List<MonthUtilizationRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 12;
+
+    private List<MonthUtilizationRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadReportAsync();
+    }
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        try
+        {
+            var end = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1);
+            var start = end.AddMonths(-11);
+            var trips = await TripService.GetDateRangeAsync(start, end);
+
+            _rows = trips
+                .Where(t => t.VmfCode > 0)
+                .GroupBy(t => new DateTime(t.TripDate.Year, t.TripDate.Month, 1))
+                .OrderByDescending(g => g.Key)
+                .Select(g =>
+                {
+                    var all = g.ToList();
+                    var activeVehicles = all.Select(t => t.VmfCode).Distinct().Count();
+                    var totalTrips = all.Count;
+                    var monthlyTrips = all.Count(t => t.TripIsMonthly);
+                    var openTrips = all.Count(t => !string.Equals(t.Status, "Closed", StringComparison.OrdinalIgnoreCase));
+                    var activeDays = all.Select(t => t.TripDate.Date).Distinct().Count();
+                    var daysInMonth = DateTime.DaysInMonth(g.Key.Year, g.Key.Month);
+                    return new MonthUtilizationRow(
+                        MonthLabel: g.Key.ToString("yyyy-MM"),
+                        ActiveVehicles: activeVehicles,
+                        TotalTrips: totalTrips,
+                        MonthlyTrips: monthlyTrips,
+                        OpenTrips: openTrips,
+                        UtilizationPercent: activeDays * 100d / Math.Max(1, daysInMonth));
+                })
+                .ToList();
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading VIP/pool previous utilization report: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
+
+    private sealed record MonthUtilizationRow(
+        string MonthLabel,
+        int ActiveVehicles,
+        int TotalTrips,
+        int MonthlyTrips,
+        int OpenTrips,
+        double UtilizationPercent);
+}

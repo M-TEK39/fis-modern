@@ -84,7 +84,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in _results)
+                        @foreach (var item in PagedResults)
                         {
                             <tr>
                                 <td>@item.Call_centre_code</td>
@@ -97,6 +97,15 @@
                     </tbody>
                 </table>
             </div>
+            @if (_results.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_results.Count | Page size: @_pageSize</div>
+            }
         </div>
     }
 </div>
@@ -109,6 +118,11 @@
     private string _beginDateText = string.Empty;
     private string _endDateText = DateTime.Today.ToString("yyyy/MM/dd");
     private List<CallCentreDto> _results = new();
+    private int _page = 1;
+    private readonly int _pageSize = 12;
+
+    private IEnumerable<CallCentreDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
 
     private void GoReportMenu() => Navigation.NavigateTo("/call-centre/reports");
 
@@ -143,6 +157,7 @@
             }
 
             _results = query.OrderByDescending(c => c.Call_date).ThenByDescending(c => c.Call_centre_code).ToList();
+            _page = 1;
             _message = $"Loaded {_results.Count} incident(s).";
             _messageIsError = false;
         }
@@ -185,4 +200,20 @@
 
     private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void PrevPage()
+    {
+        if (_page > 1)
+        {
+            _page--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages)
+        {
+            _page++;
+        }
+    }
 }

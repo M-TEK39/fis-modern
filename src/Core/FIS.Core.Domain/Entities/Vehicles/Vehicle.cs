@@ -309,6 +309,15 @@ public class Vehicle
     [Column("invoice_number")]
     public string? invoice_number { get; set; }
 
+    // IFMS / NATIS acquisition identifiers (Fleet Acquisition capture)
+    [Column("ifms_vehicle_register_number")]
+    [StringLength(50)]
+    public string? ifms_vehicle_register_number { get; set; }
+
+    [Column("natis_model_number")]
+    [StringLength(50)]
+    public string? natis_model_number { get; set; }
+
     [Column("RelieveVehicle")]
     public bool? RelieveVehicle { get; set; }
 
