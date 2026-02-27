@@ -98,10 +98,10 @@ services:
   db-migrate:
     image: mcr.microsoft.com/dotnet/sdk:8.0
     container_name: fis-db-migrate
-    working_dir: /src
+    working_dir: /tmp
     volumes:
       - ..:/src
-    command: ["dotnet", "run", "--project", "src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj"]
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj"]
     environment:
       - ConnectionStrings__Default=Server=mssql,1433;Database=${MSSQL_DB_NAME:-legacy};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=True;TrustServerCertificate=True;
       - DOTNET_ENVIRONMENT=Development
@@ -120,10 +120,10 @@ services:
   db-seed:
     image: mcr.microsoft.com/dotnet/sdk:8.0
     container_name: fis-db-seed
-    working_dir: /src
+    working_dir: /tmp
     volumes:
       - ..:/src
-    command: ["dotnet", "run", "--project", "src/Tools/DatabaseSeederTool/DatabaseSeederTool.csproj"]
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseSeederTool/DatabaseSeederTool.csproj"]
     environment:
       - ConnectionStrings__Default=Server=mssql,1433;Database=${MSSQL_DB_NAME:-legacy};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=True;TrustServerCertificate=True;
       - DOTNET_ENVIRONMENT=Development

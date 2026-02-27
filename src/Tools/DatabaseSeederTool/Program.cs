@@ -1025,10 +1025,10 @@ public class Program
         {
              await dbContext.Database.ExecuteSqlRawAsync(@"
                 SET IDENTITY_INSERT Suppliers ON;
-                INSERT INTO Suppliers (supplier_id, name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted) VALUES 
-                (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 'Manufacturer', 1, GETDATE(), 0),
-                (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 'Manufacturer', 1, GETDATE(), 0),
-                (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 'Leasing', 1, GETDATE(), 0);
+                INSERT INTO Suppliers (supplier_id, supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted) VALUES 
+                (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0),
+                (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0),
+                (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
                 SET IDENTITY_INSERT Suppliers OFF;
             ");
             Console.WriteLine("  ✓ Suppliers seeded.");
@@ -4494,15 +4494,30 @@ public class Program
                 IF OBJECT_ID('contract_status', 'U') IS NOT NULL
                 BEGIN
                     SET IDENTITY_INSERT contract_status ON;
-                    IF NOT EXISTS (SELECT 1 FROM contract_status WHERE status_description = 'Pending Approval' AND ISNULL(is_deleted, 0) = 0)
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM contract_status
+                        WHERE ISNULL(is_deleted, 0) = 0
+                          AND (contract_status_code = 1 OR status_description = 'Pending Approval')
+                    )
                         INSERT INTO contract_status
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (1, 'Pending Approval', 'PEND', 0, 0, GETDATE(), {defaultUserCode}, 0);
-                    IF NOT EXISTS (SELECT 1 FROM contract_status WHERE status_description = 'Approved Active' AND ISNULL(is_deleted, 0) = 0)
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM contract_status
+                        WHERE ISNULL(is_deleted, 0) = 0
+                          AND (contract_status_code = 3 OR status_description IN ('Active', 'Approved Active'))
+                    )
                         INSERT INTO contract_status
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (3, 'Approved Active', 'ACT', 1, 0, GETDATE(), {defaultUserCode}, 0);
-                    IF NOT EXISTS (SELECT 1 FROM contract_status WHERE status_description = 'Closed' AND ISNULL(is_deleted, 0) = 0)
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM contract_status
+                        WHERE ISNULL(is_deleted, 0) = 0
+                          AND (contract_status_code = 7 OR status_description = 'Closed')
+                    )
                         INSERT INTO contract_status
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (7, 'Closed', 'CLS', 0, 1, GETDATE(), {defaultUserCode}, 0);
@@ -4513,15 +4528,30 @@ public class Program
                 IF OBJECT_ID('contract_status', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @csCode int = ISNULL((SELECT MAX(contract_status_code) FROM contract_status), 0);
-                    IF NOT EXISTS (SELECT 1 FROM contract_status WHERE status_description = 'Pending Approval' AND ISNULL(is_deleted, 0) = 0)
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM contract_status
+                        WHERE ISNULL(is_deleted, 0) = 0
+                          AND (contract_status_code = 1 OR status_description = 'Pending Approval')
+                    )
                         INSERT INTO contract_status
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (@csCode + 1, 'Pending Approval', 'PEND', 0, 0, GETDATE(), {defaultUserCode}, 0);
-                    IF NOT EXISTS (SELECT 1 FROM contract_status WHERE status_description = 'Approved Active' AND ISNULL(is_deleted, 0) = 0)
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM contract_status
+                        WHERE ISNULL(is_deleted, 0) = 0
+                          AND (contract_status_code = 3 OR status_description IN ('Active', 'Approved Active'))
+                    )
                         INSERT INTO contract_status
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (@csCode + 2, 'Approved Active', 'ACT', 1, 0, GETDATE(), {defaultUserCode}, 0);
-                    IF NOT EXISTS (SELECT 1 FROM contract_status WHERE status_description = 'Closed' AND ISNULL(is_deleted, 0) = 0)
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM contract_status
+                        WHERE ISNULL(is_deleted, 0) = 0
+                          AND (contract_status_code = 7 OR status_description = 'Closed')
+                    )
                         INSERT INTO contract_status
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (@csCode + 3, 'Closed', 'CLS', 0, 1, GETDATE(), {defaultUserCode}, 0);
@@ -6249,42 +6279,58 @@ public class Program
         await dbContext.Database.ExecuteSqlRawAsync(@"
             IF OBJECT_ID('Temp_Vehicle_extras', 'U') IS NOT NULL
             BEGIN
-                DECLARE @tempExtraId int = ISNULL((SELECT MAX(extras_code) FROM Temp_Vehicle_extras), 0);
+                DECLARE @defaultVehicleCode int = {0};
+                DECLARE @defaultTempVmfCode int = {1};
+                DECLARE @defaultExtraCode int = {2};
+                DECLARE @defaultUserCode int = {3};
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('Temp_Vehicle_extras'), 'extras_code', 'IsIdentity');
+                DECLARE @sql nvarchar(max);
 
                 IF COL_LENGTH('Temp_Vehicle_extras', 'vmf_code') IS NOT NULL
                 BEGIN
                     IF @isIdentity = 1
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE vmf_code = {0} AND extra_code = CAST({2} AS smallint) AND ISNULL(is_deleted, 0) = 0)
-                            INSERT INTO Temp_Vehicle_extras
-                            (vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
-                            VALUES ({0}, CAST({2} AS smallint), 1, 350.00, GETDATE(), {3}, 0);
-                    END
+                        SET @sql = N'
+                            IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE vmf_code = @vehicleCode AND extra_code = CAST(@extraCode AS smallint) AND ISNULL(is_deleted, 0) = 0)
+                                INSERT INTO Temp_Vehicle_extras
+                                (vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
+                                VALUES (@vehicleCode, CAST(@extraCode AS smallint), 1, 350.00, GETDATE(), @userCode, 0);';
                     ELSE
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE vmf_code = {0} AND extra_code = CAST({2} AS smallint) AND ISNULL(is_deleted, 0) = 0)
-                            INSERT INTO Temp_Vehicle_extras
-                            (extras_code, vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
-                            VALUES (@tempExtraId + 1, {0}, CAST({2} AS smallint), 1, 350.00, GETDATE(), {3}, 0);
-                    END
+                        SET @sql = N'
+                            IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE vmf_code = @vehicleCode AND extra_code = CAST(@extraCode AS smallint) AND ISNULL(is_deleted, 0) = 0)
+                                INSERT INTO Temp_Vehicle_extras
+                                (extras_code, vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
+                                VALUES ((SELECT ISNULL(MAX(extras_code), 0) + 1 FROM Temp_Vehicle_extras), @vehicleCode, CAST(@extraCode AS smallint), 1, 350.00, GETDATE(), @userCode, 0);';
+
+                    EXEC sp_executesql
+                        @sql,
+                        N'@vehicleCode int, @tempVmfCode int, @extraCode int, @userCode int',
+                        @vehicleCode = @defaultVehicleCode,
+                        @tempVmfCode = @defaultTempVmfCode,
+                        @extraCode = @defaultExtraCode,
+                        @userCode = @defaultUserCode;
                 END
                 ELSE IF COL_LENGTH('Temp_Vehicle_extras', 'temp_vmf_code') IS NOT NULL
                 BEGIN
                     IF @isIdentity = 1
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE temp_vmf_code = {1} AND extra_code = CAST({2} AS smallint) AND ISNULL(is_deleted, 0) = 0)
-                            INSERT INTO Temp_Vehicle_extras
-                            (temp_vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
-                            VALUES ({1}, CAST({2} AS smallint), 1, 350.00, GETDATE(), {3}, 0);
-                    END
+                        SET @sql = N'
+                            IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE temp_vmf_code = @tempVmfCode AND extra_code = CAST(@extraCode AS smallint) AND ISNULL(is_deleted, 0) = 0)
+                                INSERT INTO Temp_Vehicle_extras
+                                (temp_vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
+                                VALUES (@tempVmfCode, CAST(@extraCode AS smallint), 1, 350.00, GETDATE(), @userCode, 0);';
                     ELSE
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE temp_vmf_code = {1} AND extra_code = CAST({2} AS smallint) AND ISNULL(is_deleted, 0) = 0)
-                            INSERT INTO Temp_Vehicle_extras
-                            (extras_code, temp_vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
-                            VALUES (@tempExtraId + 1, {1}, CAST({2} AS smallint), 1, 350.00, GETDATE(), {3}, 0);
-                    END
+                        SET @sql = N'
+                            IF NOT EXISTS (SELECT 1 FROM Temp_Vehicle_extras WHERE temp_vmf_code = @tempVmfCode AND extra_code = CAST(@extraCode AS smallint) AND ISNULL(is_deleted, 0) = 0)
+                                INSERT INTO Temp_Vehicle_extras
+                                (extras_code, temp_vmf_code, extra_code, quantity, amount, date_created, created_by_user_code, is_deleted)
+                                VALUES ((SELECT ISNULL(MAX(extras_code), 0) + 1 FROM Temp_Vehicle_extras), @tempVmfCode, CAST(@extraCode AS smallint), 1, 350.00, GETDATE(), @userCode, 0);';
+
+                    EXEC sp_executesql
+                        @sql,
+                        N'@vehicleCode int, @tempVmfCode int, @extraCode int, @userCode int',
+                        @vehicleCode = @defaultVehicleCode,
+                        @tempVmfCode = @defaultTempVmfCode,
+                        @extraCode = @defaultExtraCode,
+                        @userCode = @defaultUserCode;
                 END
             END
         ", defaultVehicleCode, defaultTempVmfCode, defaultExtraCode, defaultUserCode);
@@ -7801,7 +7847,7 @@ public class Program
         Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
-                var connectionString = context.Configuration.GetConnectionString("Default");
+                var connectionString = context.Configuration["ConnectionStrings:Default"];
                 if (string.IsNullOrWhiteSpace(connectionString))
                 {
                     connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";

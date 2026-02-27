@@ -1257,7 +1257,10 @@
           "Microsoft.Extensions.Options.ConfigurationExtensions": "8.0.0"
         },
         "runtime": {
-          "FIS.Core.Domain.dll": {}
+          "FIS.Core.Domain.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       },
       "FIS.Data/1.0.0": {
@@ -1269,7 +1272,10 @@
           "Microsoft.Extensions.Options.ConfigurationExtensions": "8.0.0"
         },
         "runtime": {
-          "FIS.Data.dll": {}
+          "FIS.Data.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       },
       "FIS.Data.SqlServer/1.0.0": {
@@ -1281,7 +1287,10 @@
           "Microsoft.Extensions.Options.ConfigurationExtensions": "8.0.0"
         },
         "runtime": {
-          "FIS.Data.SqlServer.dll": {}
+          "FIS.Data.SqlServer.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       }
     }

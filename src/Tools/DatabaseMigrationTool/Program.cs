@@ -90,6 +90,9 @@ public class Program
 
             Console.WriteLine($"  🔍 Checking table [{schema}].[{tableName}]...");
 
+            // Ensure non-default schemas exist before checking/creating tables.
+            await EnsureSchemaExistsAsync(connection, schema);
+
             // Check if table exists
             bool tableExists = await TableExistsAsync(connection, tableName, schema);
 
@@ -144,6 +147,25 @@ public class Program
 
         var result = await cmd.ExecuteScalarAsync();
         return Convert.ToInt32(result) == 1;
+    }
+
+    private static async Task EnsureSchemaExistsAsync(SqlConnection connection, string schema)
+    {
+        if (string.Equals(schema, "dbo", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        const string sql = @"
+            IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = @SchemaName)
+            BEGIN
+                DECLARE @createSql NVARCHAR(MAX) = N'CREATE SCHEMA ' + QUOTENAME(@SchemaName);
+                EXEC (@createSql);
+            END";
+
+        using var cmd = new SqlCommand(sql, connection);
+        cmd.Parameters.AddWithValue("@SchemaName", schema);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static async Task CreateTableAsync(FisDbContext dbContext, IEntityType entityType, string schema, string tableName)
@@ -354,7 +376,7 @@ public class Program
         Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
-                var connectionString = context.Configuration.GetConnectionString("Default");
+                var connectionString = context.Configuration["ConnectionStrings:Default"];
                 if (string.IsNullOrWhiteSpace(connectionString))
                 {
                     connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
