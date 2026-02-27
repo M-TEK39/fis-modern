@@ -4,7 +4,6 @@ WORKDIR /src
 
 # Copy solution file
 COPY FIS.sln .
-COPY global.json .
 COPY Directory.Build.props .
 COPY CodeAnalysis.ruleset .
 COPY nuget.config .

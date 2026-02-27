@@ -4,7 +4,6 @@ WORKDIR /src
 
 # Copy solution file
 COPY FIS.sln .
-COPY global.json .
 COPY Directory.Build.props .
 COPY CodeAnalysis.ruleset .
 COPY nuget.config .
@@ -14,6 +13,7 @@ COPY src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj src/Core/FIS.Core.Domain/
 COPY src/Core/FIS.Core.Application/FIS.Core.Application.csproj src/Core/FIS.Core.Application/
 COPY src/Core/FIS.Core.Infrastructure/FIS.Core.Infrastructure.csproj src/Core/FIS.Core.Infrastructure/
 COPY src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj src/Data/FIS.Data.SqlServer/
+COPY src/Data/FIS.Data/FIS.Data.csproj src/Data/FIS.Data/
 COPY src/Services/FIS.Api/FIS.Api.csproj src/Services/FIS.Api/
 
 # Restore packages
