@@ -7,6 +7,9 @@ set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+MSSQL_HOST_PORT="${MSSQL_HOST_PORT:-1433}"
+MSSQL_DB_NAME="${MSSQL_DB_NAME:-legacy}"
+MSSQL_SA_PASSWORD="${MSSQL_SA_PASSWORD:-Behox@1903}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -30,6 +33,24 @@ print_error() {
 
 print_header() {
     echo -e "${BLUE}=== $1 ===${NC}"
+}
+
+get_compose_cmd() {
+    if docker compose version >/dev/null 2>&1; then
+        echo "docker compose"
+    elif command -v docker-compose >/dev/null 2>&1; then
+        echo "docker-compose"
+    else
+        print_error "Docker Compose is not available. Install Docker Desktop with Compose support."
+        exit 1
+    fi
+}
+
+run_compose() {
+    local compose_cmd
+    compose_cmd="$(get_compose_cmd)"
+    # shellcheck disable=SC2086
+    $compose_cmd "$@"
 }
 
 # Function to show usage
@@ -81,15 +102,15 @@ check_docker() {
 start_db() {
     print_header "Starting SQL Server Database"
     cd "$PROJECT_ROOT"
-    docker-compose -f docker/docker-compose.dev.yml up -d
+    run_compose -f docker/docker-compose.dev.yml up -d
     print_status "Database started successfully!"
-    print_status "Connection string: Server=localhost,1433;Database=IFMS;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;"
+    print_status "Connection string: Server=localhost,${MSSQL_HOST_PORT};Database=${MSSQL_DB_NAME};User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
 }
 
 stop_db() {
     print_header "Stopping SQL Server Database"
     cd "$PROJECT_ROOT"
-    docker-compose -f docker/docker-compose.dev.yml down
+    run_compose -f docker/docker-compose.dev.yml down
     print_status "Database stopped successfully!"
 }
 
@@ -102,24 +123,24 @@ restart_db() {
 logs_db() {
     print_header "Database Logs"
     cd "$PROJECT_ROOT"
-    docker-compose -f docker/docker-compose.dev.yml logs -f
+    run_compose -f docker/docker-compose.dev.yml logs -f
 }
 
 # Full application operations
 start_full() {
     print_header "Starting Full Application Stack"
     cd "$PROJECT_ROOT"
-    docker-compose -f docker/docker-compose.yml up -d
+    run_compose -f docker/docker-compose.yml up -d
     print_status "Full application started successfully!"
     print_status "API: http://localhost:5000"
     print_status "Web: http://localhost:5001"
-    print_status "Database: localhost:1433"
+    print_status "Database: localhost:${MSSQL_HOST_PORT}"
 }
 
 stop_full() {
     print_header "Stopping Full Application Stack"
     cd "$PROJECT_ROOT"
-    docker-compose -f docker/docker-compose.yml down
+    run_compose -f docker/docker-compose.yml down
     print_status "Full application stopped successfully!"
 }
 
@@ -132,7 +153,7 @@ restart_full() {
 logs_full() {
     print_header "Application Logs"
     cd "$PROJECT_ROOT"
-    docker-compose -f docker/docker-compose.yml logs -f
+    run_compose -f docker/docker-compose.yml logs -f
 }
 
 # Build operations
@@ -170,7 +191,7 @@ show_status() {
 shell_db() {
     print_header "Connecting to SQL Server Database"
     print_status "Connecting to database... (Use 'exit' to quit)"
-    docker exec -it fis-mssql19-dev /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'Behox@1903'
+    docker exec -it fis-mssql19-dev /bin/sh -c "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${MSSQL_SA_PASSWORD}' || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P '${MSSQL_SA_PASSWORD}'"
 }
 
 clean_all() {
@@ -183,8 +204,8 @@ clean_all() {
             cd "$PROJECT_ROOT"
             
             # Stop and remove containers
-            docker-compose -f docker/docker-compose.yml down
-            docker-compose -f docker/docker-compose.dev.yml down
+            run_compose -f docker/docker-compose.yml down
+            run_compose -f docker/docker-compose.dev.yml down
             
             # Remove FIS containers
             docker ps -a --filter "name=fis-" -q | xargs -r docker rm -f
@@ -210,8 +231,8 @@ reset_all() {
             cd "$PROJECT_ROOT"
             
             # Stop everything
-            docker-compose -f docker/docker-compose.yml down -v
-            docker-compose -f docker/docker-compose.dev.yml down -v
+            run_compose -f docker/docker-compose.yml down -v
+            run_compose -f docker/docker-compose.dev.yml down -v
             
             # Remove volumes
             docker volume rm -f fis-mssql-data fis-mssql-dev-data 2>/dev/null || true

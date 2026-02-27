@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # SQL Server 2019 Database Only - for local development
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: fis-mssql19-dev
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Behox@1903}"
+      MSSQL_PID: "Developer"
+      MSSQL_TCP_PORT: "1433"
+      TZ: "Africa/Johannesburg"
+    ports:
+      - "${MSSQL_HOST_PORT:-1433}:1433"
+    volumes:
+      - fis-mssql-dev-data:/var/opt/mssql
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "(/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\") >/dev/null 2>&1"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Database initialization
+  db-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+    environment:
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Behox@1903}"
+      MSSQL_DB_NAME: "${MSSQL_DB_NAME:-legacy}"
+      MSSQL_APP_LOGIN: "${MSSQL_APP_LOGIN:-legacy}"
+      MSSQL_APP_PASSWORD: "${MSSQL_APP_PASSWORD:-legacy@1903}"
+    depends_on:
+      mssql:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        SQLCMD="/opt/mssql-tools18/bin/sqlcmd"; [ -x "$$SQLCMD" ] || SQLCMD="/opt/mssql-tools/bin/sqlcmd"; until "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" >/dev/null 2>&1; do echo 'Waiting for SQL Server to be ready...'; sleep 5; done; echo 'SQL Server is ready. Initializing database...'; "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "IF DB_ID('$$MSSQL_DB_NAME') IS NULL CREATE DATABASE [$$MSSQL_DB_NAME];" && "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -d "$$MSSQL_DB_NAME" -Q "IF NOT EXISTS (SELECT name FROM sys.sql_logins WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE LOGIN [$$MSSQL_APP_LOGIN] WITH PASSWORD = '$$MSSQL_APP_PASSWORD', CHECK_POLICY = ON; END IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE USER [$$MSSQL_APP_LOGIN] FOR LOGIN [$$MSSQL_APP_LOGIN]; EXEC sp_addrolemember N'db_owner', N'$$MSSQL_APP_LOGIN'; END" && echo 'Database initialization completed successfully.';
+
+volumes:
+  fis-mssql-dev-data:
+    driver: local

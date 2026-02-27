@@ -2771,7 +2771,7 @@
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/dev/work/fis-modern/nuget.config",
-        "/root/.nuget/NuGet/NuGet.Config"
+        "/home/dev/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
