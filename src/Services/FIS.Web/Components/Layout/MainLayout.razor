@@ -1,17 +1,25 @@
 ﻿@inherits LayoutComponentBase
-@using Microsoft.AspNetCore.Authorization
 @using FIS.Web.Components.Pages.Users
+@using FIS.Web.Services
 @inject NavigationManager Navigation
-@attribute [Authorize]
+@inject TokenService TokenService
 
 <div class="legacy-shell">
     <aside class="legacy-sidebar" aria-label="Primary navigation">
-        <NavLink class="legacy-brand legacy-brand-link" href="/home" Match="NavLinkMatch.All">
-            <span class="brand-short">FIS</span>
-            <p class="brand-line">Gauteng Provincial Government</p>
-            <p class="brand-line strong">g-FleeT Management</p>
-            <p class="brand-caption">Fleet Information System</p>
-        </NavLink>
+        <div class="legacy-sidebar-header">
+            <NavLink class="legacy-brand legacy-brand-link" href="/home" Match="NavLinkMatch.All">
+                <span class="brand-short">FIS</span>
+                <p class="brand-line">Gauteng Provincial Government</p>
+                <p class="brand-line strong">g-FleeT Management</p>
+                <p class="brand-caption">Fleet Information System</p>
+            </NavLink>
+            <button class="sidebar-toggle sidebar-toggle-inline"
+                    type="button"
+                    onclick="window.fisLayout.toggleSidebar(); return false;"
+                    aria-label="Toggle sidebar">
+                <i class="bx bx-menu" aria-hidden="true"></i>
+            </button>
+        </div>
 
         <div class="legacy-nav-container">
             <NavMenu />
@@ -30,6 +38,10 @@
         </main>
     </div>
 </div>
+<button class="sidebar-mobile-scrim"
+    type="button"
+    onclick="window.fisLayout.closeSidebar(); return false;"
+    aria-label="Close sidebar"></button>
 
 <div id="blazor-error-ui">
     <div>
@@ -46,6 +58,16 @@
     {
         UpdateBodyVisibility();
         Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Restore JWT token from ProtectedSessionStorage into the circuit-scoped
+            // TokenService (and HttpContext.Items relay) after a page refresh.
+            await TokenService.InitializeAsync();
+        }
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)

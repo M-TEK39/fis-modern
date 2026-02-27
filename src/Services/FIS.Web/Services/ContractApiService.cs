@@ -43,6 +43,12 @@ internal class ApiContractResponse
     [JsonPropertyName("modifiedByUserCode")]
     public int? ModifiedByUserCode { get; set; }
 
+    [JsonPropertyName("dateCreated")]
+    public DateTime? DateCreated { get; set; }
+
+    [JsonPropertyName("dateUpdated")]
+    public DateTime? DateUpdated { get; set; }
+
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }
 
@@ -60,6 +66,11 @@ public class ContractApiService
 {
     private readonly HttpClient _httpClient;
     private const int RecentContractWindow = 80;
+    private static readonly TimeSpan ContractCacheTtl = TimeSpan.FromSeconds(30);
+    private List<ContractDto>? _cachedActiveContracts;
+    private DateTime _cachedActiveContractsAtUtc;
+    private List<ContractDto>? _cachedRecentContracts;
+    private DateTime _cachedRecentContractsAtUtc;
 
     public ContractApiService(HttpClient httpClient)
     {
@@ -68,18 +79,21 @@ public class ContractApiService
 
     public async Task<List<FIS.Web.Models.ContractDto>> GetContractsAsync()
     {
+        if (IsCacheValid(_cachedActiveContractsAtUtc) && _cachedActiveContracts is not null)
+        {
+            return _cachedActiveContracts;
+        }
+
         try
         {
-            var response = await _httpClient.GetAsync("api/Contracts/active");
-            response.EnsureSuccessStatusCode();
-
-            var apiContracts = await response.Content.ReadFromJsonAsync<List<ApiContractResponse>>();
-            if (apiContracts == null)
+            if (IsCacheValid(_cachedActiveContractsAtUtc) && _cachedActiveContracts is not null)
             {
-                return new List<FIS.Web.Models.ContractDto>();
+                return _cachedActiveContracts;
             }
 
-            return apiContracts.Select(MapToDto).ToList();
+            _cachedActiveContracts = await FetchActiveContractsFromApiAsync();
+            _cachedActiveContractsAtUtc = DateTime.UtcNow;
+            return _cachedActiveContracts;
         }
         catch (HttpRequestException)
         {
@@ -160,30 +174,55 @@ public class ContractApiService
 
     public async Task<List<FIS.Web.Models.ContractDto>> GetRecentContractsWindowAsync()
     {
-        var active = await GetContractsAsync();
-        var results = new List<ContractDto>();
-        if (active.Count == 0)
+        if (IsCacheValid(_cachedRecentContractsAtUtc) && _cachedRecentContracts is not null)
         {
-            return results;
+            return _cachedRecentContracts;
         }
 
-        var maxId = active.Max(c => c.contract_id);
-        var minId = Math.Max(1, maxId - RecentContractWindow);
-        var upperId = maxId + 10;
-
-        for (var id = minId; id <= upperId; id++)
+        try
         {
-            var contract = await GetContractAsync(id);
-            if (contract != null)
+            if (IsCacheValid(_cachedRecentContractsAtUtc) && _cachedRecentContracts is not null)
             {
-                results.Add(contract);
+                return _cachedRecentContracts;
             }
-        }
 
-        return results
-            .GroupBy(c => c.contract_id)
-            .Select(g => g.First())
-            .ToList();
+            if (!IsCacheValid(_cachedActiveContractsAtUtc) || _cachedActiveContracts is null)
+            {
+                _cachedActiveContracts = await FetchActiveContractsFromApiAsync();
+                _cachedActiveContractsAtUtc = DateTime.UtcNow;
+            }
+
+            var active = _cachedActiveContracts;
+            var results = new List<ContractDto>();
+            if (active.Count == 0)
+            {
+                return results;
+            }
+
+            var maxId = active.Max(c => c.contract_id);
+            var minId = Math.Max(1, maxId - RecentContractWindow);
+            var upperId = maxId + 10;
+
+            for (var id = minId; id <= upperId; id++)
+            {
+                var contract = await GetContractAsync(id);
+                if (contract != null)
+                {
+                    results.Add(contract);
+                }
+            }
+
+            _cachedRecentContracts = results
+                .GroupBy(c => c.contract_id)
+                .Select(g => g.First())
+                .ToList();
+            _cachedRecentContractsAtUtc = DateTime.UtcNow;
+            return _cachedRecentContracts;
+        }
+        catch
+        {
+            return new List<ContractDto>();
+        }
     }
 
     public async Task<ContractDto?> GetLatestContractForVehicleAsync(int vmfCode)
@@ -236,6 +275,7 @@ public class ContractApiService
         {
             var response = await _httpClient.PostAsJsonAsync("api/Contracts", contract);
             response.EnsureSuccessStatusCode();
+            InvalidateCaches();
             
             var createdContract = await response.Content.ReadFromJsonAsync<FIS.Web.Models.ContractDto>();
             return createdContract ?? throw new InvalidOperationException("Failed to create contract");
@@ -252,6 +292,7 @@ public class ContractApiService
         {
             var response = await _httpClient.PutAsJsonAsync($"api/Contracts/{contractId}", contract);
             response.EnsureSuccessStatusCode();
+            InvalidateCaches();
             
             var updatedContract = await response.Content.ReadFromJsonAsync<FIS.Web.Models.ContractDto>();
             return updatedContract ?? throw new InvalidOperationException("Failed to update contract");
@@ -268,6 +309,7 @@ public class ContractApiService
         {
             var response = await _httpClient.DeleteAsync($"api/Contracts/{contractId}");
             response.EnsureSuccessStatusCode();
+            InvalidateCaches();
         }
         catch (HttpRequestException)
         {
@@ -280,6 +322,10 @@ public class ContractApiService
         try
         {
             var response = await _httpClient.PostAsJsonAsync("api/Contracts/hire", request);
+            if (response.IsSuccessStatusCode)
+            {
+                InvalidateCaches();
+            }
             return response.IsSuccessStatusCode;
         }
         catch (HttpRequestException)
@@ -446,6 +492,8 @@ public class ContractApiService
             approver_code = api.ApproverCode,
             created_by_user_code = api.CreatedByUserCode,
             modified_by_user_code = api.ModifiedByUserCode,
+            date_created = api.DateCreated,
+            date_updated = api.DateUpdated,
             contract_number = api.ContractCode.ToString(),
             vehicle_registration = api.VmfCode.ToString(),
             department_code = 0,
@@ -476,6 +524,8 @@ public class ContractApiService
             approver_code = api.ApproverCode,
             created_by_user_code = api.CreatedByUserCode,
             modified_by_user_code = api.ModifiedByUserCode,
+            date_created = api.DateCreated,
+            date_updated = api.DateUpdated,
             contract_number = api.ContractCode.ToString(),
             vehicle_registration = api.RegistrationNumber ?? string.Empty,
             vehicle_make = api.Make ?? string.Empty,
@@ -506,6 +556,30 @@ public class ContractApiService
             7 => "Closed",
             _ => string.Equals(stillCurrent, "Y", StringComparison.OrdinalIgnoreCase) ? "Active" : "Unknown"
         };
+
+    private static bool IsCacheValid(DateTime cacheCreatedAtUtc)
+        => cacheCreatedAtUtc != default
+           && (DateTime.UtcNow - cacheCreatedAtUtc) < ContractCacheTtl;
+
+    private async Task<List<ContractDto>> FetchActiveContractsFromApiAsync()
+    {
+        var response = await _httpClient.GetAsync("api/Contracts/active");
+        if (!response.IsSuccessStatusCode)
+        {
+            return new List<ContractDto>();
+        }
+
+        var apiContracts = await response.Content.ReadFromJsonAsync<List<ApiContractResponse>>() ?? new List<ApiContractResponse>();
+        return apiContracts.Select(MapToDto).ToList();
+    }
+
+    private void InvalidateCaches()
+    {
+        _cachedActiveContracts = null;
+        _cachedActiveContractsAtUtc = default;
+        _cachedRecentContracts = null;
+        _cachedRecentContractsAtUtc = default;
+    }
 }
 
 public class ContractCreateDto
@@ -680,6 +754,26 @@ internal class PagedContractResponse
 
     [JsonPropertyName("modifiedByUserCode")]
     public int? ModifiedByUserCode { get; set; }
+
+    [JsonPropertyName("dateCreated")]
+    public DateTime? DateCreated { get; set; }
+
+    [JsonPropertyName("date_created")]
+    public DateTime? DateCreatedLegacy
+    {
+        get => DateCreated;
+        set => DateCreated = value;
+    }
+
+    [JsonPropertyName("dateUpdated")]
+    public DateTime? DateUpdated { get; set; }
+
+    [JsonPropertyName("date_updated")]
+    public DateTime? DateUpdatedLegacy
+    {
+        get => DateUpdated;
+        set => DateUpdated = value;
+    }
 
     [JsonPropertyName("notes")]
     public string? Notes { get; set; }

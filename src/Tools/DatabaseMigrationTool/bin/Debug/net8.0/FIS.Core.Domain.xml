@@ -1764,6 +1764,49 @@
             Maps to 'temp_fleet_note' table
             </summary>
         </member>
+        <member name="T:FIS.Core.Domain.Entities.Vehicles.VehicleDocument">
+             <summary>
+             Stores metadata for documents/scans attached to a vehicle.
+             The physical file lives on the filesystem under DocumentStorage:BasePath.
+            
+             Document categories correspond to FIS modules so all documents for a vehicle
+             (accidents, licences, fines, job cards, etc.) can be retrieved under one vehicle file.
+            
+             Camera/scan support: the upload endpoint accepts multipart/form-data.
+             On mobile/tablet the frontend uses input[capture="environment"] to open the camera.
+             </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.vmf_code">
+            <summary>FK → vehicle_master.vmf_code</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.document_category">
+            <summary>
+            Module category: Accident | Licence | Fine | Logbook | Maintenance |
+                             Contract | Registration | Insurance | RoadWorthy | Other
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.document_description">
+            <summary>Free-text description of what the document is.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.original_file_name">
+            <summary>Original filename as uploaded by the user.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.stored_file_path">
+            <summary>Relative path under the DocumentStorage:BasePath directory.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.mime_type">
+            <summary>MIME type (e.g. image/jpeg, application/pdf).</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.file_size_bytes">
+            <summary>File size in bytes.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Vehicles.VehicleDocument.reference_type">
+            <summary>
+            Optional: link to a specific record in another table.
+            e.g. reference_type="Accident", reference_id=42 links to accident 42.
+            Allows fetching all documents for a specific accident/fine/job card.
+            </summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Make">
             <summary>
             Make Entity - Vehicle manufacturer/brand definitions

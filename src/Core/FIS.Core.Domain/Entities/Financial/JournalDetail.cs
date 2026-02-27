@@ -23,7 +23,7 @@ public class JournalDetail
     public long? journal_code { get; set; }
 
     [Column("department_code")]
-    public int department_code { get; set; }
+    public short department_code { get; set; } // FK type fixed: matches Department.department_code (short)
 
     [Column("site_code")]
     public short site_code { get; set; }

@@ -107,7 +107,29 @@
         <div class="table-container">
             <div class="table-header">
                 <span class="table-title">Showing @_totalCount vehicle(s)</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                    <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _results.Count == 0)">Download CSV</button>
+                </div>
             </div>
+            @if (_showFieldSelector)
+            {
+                <div class="form-card" style="margin:0 0 0.75rem 0;">
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            @foreach (var field in _exportFields)
+                            {
+                                <div class="form-field">
+                                    <label class="form-label">
+                                        <input type="checkbox" @bind="field.Selected" />
+                                        @field.Label
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
@@ -211,6 +233,7 @@
     private bool _loading;
     private bool _hasSearched;
     private bool _statusError;
+    private bool _showFieldSelector;
     private int _page = 1;
     private const int _pageSize = 12;
 
@@ -240,6 +263,17 @@
         new(10, "Recovered"),
         new(11, "Missing"),
         new(12, "Destroyed")
+    ];
+    private readonly List<ExportField> _exportFields =
+    [
+        new("fleet_number", "GG Number", true),
+        new("registration_number", "Registration Number", true),
+        new("invoice_number", "Invoice Number", true),
+        new("make_model", "Make & Model", true),
+        new("status", "Status", true),
+        new("site", "Site", true),
+        new("remark_text", "Active Remark", true),
+        new("remark_category", "Remark Category", true)
     ];
 
     private List<VehicleStatusReportRowDto> _results = new();
@@ -313,6 +347,46 @@
         _makeCode = null;
         _vehicleStatusCode = null;
         await LoadReportAsync();
+    }
+
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _results)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "fleet_number" => ValueOrDash(row.fleet_number),
+                "registration_number" => ValueOrDash(row.registration_number),
+                "invoice_number" => ValueOrDash(row.invoice_number),
+                "make_model" => GetMakeModel(row),
+                "status" => GetStatusLabel(row),
+                "site" => GetSiteLabel(row),
+                "remark_text" => ValueOrDash(row.active_remark?.remark_text),
+                "remark_category" => ValueOrDash(row.active_remark?.remark_category),
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"vehicles_status_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
     }
 
     private void StartRemark(VehicleStatusReportRowDto row)
@@ -429,8 +503,28 @@
 
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
     private static string GetVehicleContextLabel(VehicleStatusReportRowDto vehicle)
         => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
 
     private sealed record StatusOption(short Code, string Label);
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
+    }
 }

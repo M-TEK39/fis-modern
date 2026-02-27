@@ -75,7 +75,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Contract Report</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _contracts.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -121,6 +143,7 @@
 
 @code {
     private bool _loading;
+    private bool _showFieldSelector;
     private List<ContractDto> _contracts = new();
     private List<SiteResponseDto> _sites = new();
     private string _statusCode = string.Empty;
@@ -128,6 +151,16 @@
     private string _siteCode = string.Empty;
     private DateTime? _startFrom;
     private DateTime? _startTo;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("contract_id", "Contract ID", true),
+        new("fleet_number", "GG Number", true),
+        new("vehicle_registration", "GP Number", true),
+        new("status", "Status", true),
+        new("still_current", "Current", true),
+        new("start_date", "Start Date", true),
+        new("site", "Site", true)
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -174,6 +207,45 @@
         _startTo = null;
     }
 
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _contracts)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "contract_id" => row.contract_id.ToString(),
+                "fleet_number" => ValueOrDash(row.fleet_number),
+                "vehicle_registration" => ValueOrDash(row.vehicle_registration),
+                "status" => ValueOrDash(row.status),
+                "still_current" => ValueOrDash(row.still_current),
+                "start_date" => row.start_date.ToString("yyyy-MM-dd"),
+                "site" => ValueOrDash(GetSiteName(row.site_code)),
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"contracts_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
     private string GetSiteName(short? siteCode)
     {
         if (!siteCode.HasValue)
@@ -187,4 +259,24 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
+    }
 }

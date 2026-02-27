@@ -260,6 +260,8 @@
     private readonly int _overviewPageSize = 12;
     private int _overviewTotalPages = 1;
     private int _overviewTotalRecords;
+    private bool _overviewClientPaging;
+    private List<FIS.Web.Models.VehicleDto> _overviewAll = new();
     private List<FIS.Web.Models.VehicleDto> _vehicleOverview = new();
     private readonly Dictionary<int, string> _contractStateByVmf = new();
     private readonly Dictionary<int, DateTime?> _contractReturnByVmf = new();
@@ -342,9 +344,33 @@
         try
         {
             var page = await VehicleService.GetVehiclesAsync(_overviewPage, _overviewPageSize);
-            _vehicleOverview = page.Data ?? new List<FIS.Web.Models.VehicleDto>();
-            _overviewTotalRecords = Math.Max(page.TotalCount, _vehicleOverview.Count);
-            _overviewTotalPages = Math.Max(1, page.TotalPages);
+            var vehicles = page.Data ?? new List<FIS.Web.Models.VehicleDto>();
+
+            // Backend fallback: if pagination metadata is not honored and full data comes back,
+            // enforce 12-per-page on the UI to keep a uniform experience.
+            if (vehicles.Count > _overviewPageSize && (page.TotalPages <= 1 || page.TotalCount <= vehicles.Count))
+            {
+                _overviewClientPaging = true;
+                _overviewAll = vehicles;
+                _overviewTotalRecords = _overviewAll.Count;
+                _overviewTotalPages = Math.Max(1, (int)Math.Ceiling(_overviewTotalRecords / (double)_overviewPageSize));
+                _overviewPage = Math.Clamp(_overviewPage, 1, _overviewTotalPages);
+                _vehicleOverview = _overviewAll
+                    .Skip((_overviewPage - 1) * _overviewPageSize)
+                    .Take(_overviewPageSize)
+                    .ToList();
+            }
+            else
+            {
+                _overviewClientPaging = false;
+                _overviewAll = new();
+                _vehicleOverview = vehicles;
+                _overviewTotalRecords = Math.Max(page.TotalCount, _vehicleOverview.Count);
+                _overviewTotalPages = page.TotalPages > 0
+                    ? page.TotalPages
+                    : Math.Max(1, (int)Math.Ceiling(_overviewTotalRecords / (double)_overviewPageSize));
+            }
+
             await LoadContractStatesForCurrentPageAsync();
         }
         catch (Exception ex)
@@ -367,10 +393,16 @@
         _contractStateByVmf.Clear();
         _contractReturnByVmf.Clear();
 
+        var activeContracts = await ContractService.GetContractsAsync();
+        var latestActiveByVmf = activeContracts
+            .Where(c => c.vmf_code.HasValue)
+            .GroupBy(c => c.vmf_code!.Value)
+            .Select(group => group.OrderByDescending(c => c.contract_id).First())
+            .ToDictionary(c => c.vmf_code!.Value, c => c);
+
         foreach (var vehicle in _vehicleOverview)
         {
-            var latest = await ContractService.GetLatestContractForVehicleAsync(vehicle.vmf_code);
-            if (latest == null)
+            if (!latestActiveByVmf.TryGetValue(vehicle.vmf_code, out var latest))
             {
                 _contractStateByVmf[vehicle.vmf_code] = "No Contract";
                 _contractReturnByVmf[vehicle.vmf_code] = null;
@@ -441,6 +473,16 @@
         }
 
         _overviewPage--;
+        if (_overviewClientPaging)
+        {
+            _vehicleOverview = _overviewAll
+                .Skip((_overviewPage - 1) * _overviewPageSize)
+                .Take(_overviewPageSize)
+                .ToList();
+            await LoadContractStatesForCurrentPageAsync();
+            return;
+        }
+
         await LoadVehicleOverviewAsync();
     }
 
@@ -452,6 +494,16 @@
         }
 
         _overviewPage++;
+        if (_overviewClientPaging)
+        {
+            _vehicleOverview = _overviewAll
+                .Skip((_overviewPage - 1) * _overviewPageSize)
+                .Take(_overviewPageSize)
+                .ToList();
+            await LoadContractStatesForCurrentPageAsync();
+            return;
+        }
+
         await LoadVehicleOverviewAsync();
     }
 

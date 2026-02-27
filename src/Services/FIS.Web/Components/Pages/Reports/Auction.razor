@@ -26,7 +26,29 @@
     <div class="table-container">
         <div class="table-header">
             <span class="table-title">Auction Records</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -83,10 +105,22 @@
 
 @code {
     private bool _loading;
+    private bool _showFieldSelector;
     private List<AuctionDto> _rows = new();
     private Dictionary<int, string> _vehicleLabels = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("auction_id", "Auction ID", true),
+        new("vehicle", "Vehicle", true),
+        new("auction_number", "Auction Number", true),
+        new("auth_number", "Auth Number", true),
+        new("auth_date", "Auth Date", true),
+        new("estimate", "Estimate (R)", true),
+        new("reserve", "Reserve (R)", true),
+        new("reason_sold", "Reason Sold", true)
+    ];
 
     private List<AuctionDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -155,5 +189,65 @@
         {
             _page++;
         }
+    }
+
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "auction_id" => row.auction_code.ToString(),
+                "vehicle" => GetVehicleLabel(row.vmf_code),
+                "auction_number" => ValueOrDash(row.auction_number),
+                "auth_number" => ValueOrDash(row.auth_number),
+                "auth_date" => row.auth_date?.ToString("yyyy-MM-dd") ?? "-",
+                "estimate" => row.estimate_amount?.ToString("N2") ?? "-",
+                "reserve" => row.reserve_amount?.ToString("N2") ?? "-",
+                "reason_sold" => ValueOrDash(row.reason_sold),
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"auction_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
     }
 }

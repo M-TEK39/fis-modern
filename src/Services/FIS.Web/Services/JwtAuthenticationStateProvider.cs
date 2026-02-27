@@ -27,6 +27,9 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
+        // Rehydrate token from ProtectedSessionStorage after full page refresh/new circuit.
+        await _tokenService.InitializeAsync();
+
         ClaimsIdentity identity;
 
         if (_tokenService.IsTokenValid && !string.IsNullOrEmpty(_tokenService.Token))

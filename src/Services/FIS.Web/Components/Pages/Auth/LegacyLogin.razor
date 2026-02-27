@@ -102,15 +102,20 @@
 
         try
         {
-            await AuthService.LoginAsync(new LegacyLoginRequest
+            var response = await AuthService.LoginAsync(new LegacyLoginRequest
             {
                 FirstName = _model.FirstName,
                 Username = _model.FirstName,
                 Password = _model.Password
             });
 
-            // Force reload to ensure auth state is refreshed
-            Navigation.NavigateTo("/home", forceLoad: true);
+            if (response.PasswordExpired)
+            {
+                Navigation.NavigateTo("/change-password");
+                return;
+            }
+
+            Navigation.NavigateTo("/home");
         }
         catch (Exception ex)
         {

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DatabaseMigrationTool")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+370d84320d7357af8510eb4e749a8a9944a344df")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dec4a3aa32f9b10e2ad4d2ac039fe52e865acd4a")]
 [assembly: System.Reflection.AssemblyProductAttribute("DatabaseMigrationTool")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DatabaseMigrationTool")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

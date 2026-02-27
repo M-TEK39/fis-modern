@@ -79,7 +79,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Tariff Snapshot</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -142,6 +164,7 @@
 
 @code {
     private bool _loading;
+    private bool _showFieldSelector;
     private int _page = 1;
     private const int _pageSize = 12;
 
@@ -153,6 +176,20 @@
     private int _totalCount;
     private List<ClassDto> _classes = new();
     private List<TariffManagementItemDto> _rows = new();
+    private readonly List<ExportField> _exportFields =
+    [
+        new("tariff_code", "Tariff ID", true),
+        new("class", "Class", true),
+        new("year_manufactured", "Year", true),
+        new("approval_status_text", "Status", true),
+        new("monthly_fixed_amount", "Monthly Fixed (R)", true),
+        new("monthly_odo_amount", "Monthly ODO (R)", true),
+        new("daily_fixed_amount", "Daily Fixed (R)", true),
+        new("hourly_fixed_amount", "Hourly Fixed (R)", true),
+        new("fuel_kilo_tariff", "Fuel/KM (R)", true),
+        new("effective_start_date", "Effective Start", true),
+        new("effective_end_date", "Effective End", true)
+    ];
 
     private List<TariffManagementItemDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -205,6 +242,50 @@
         await LoadReportAsync();
     }
 
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "tariff_code" => row.tariff_code.ToString(),
+                "class" => GetClassLabel(row.class_code),
+                "year_manufactured" => row.year_manufactured.ToString(),
+                "approval_status_text" => ValueOrDash(row.approval_status_text),
+                "monthly_fixed_amount" => FormatCurrency(row.monthly_fixed_amount),
+                "monthly_odo_amount" => FormatCurrency(row.monthly_odo_amount),
+                "daily_fixed_amount" => FormatCurrency(row.daily_fixed_amount),
+                "hourly_fixed_amount" => FormatCurrency(row.hourly_fixed_amount),
+                "fuel_kilo_tariff" => FormatCurrency(row.fuel_kilo_tariff),
+                "effective_start_date" => FormatDate(row.effective_start_date),
+                "effective_end_date" => FormatDate(row.effective_end_date),
+                _ => "-"
+            });
+
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"tariffs_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
     private string GetClassLabel(short classCode)
     {
         var item = _classes.FirstOrDefault(c => c.class_code == classCode);
@@ -220,6 +301,12 @@
     private static string FormatCurrency(decimal? value)
         => value.HasValue ? value.Value.ToString("N2") : "-";
 
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
     private void PrevPage()
     {
         if (_page > 1)
@@ -234,5 +321,19 @@
         {
             _page++;
         }
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
     }
 }

@@ -158,7 +158,7 @@
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Take On Odo (KM) <span class="required">*</span></label>
-                                <InputNumber @bind-Value="_vehicle.take_on_odo" @bind:after="SyncCurrentOdo" class="form-input" />
+                                <InputNumber @bind-Value="_vehicle.take_on_odo" @bind-Value:after="SyncCurrentOdo" class="form-input" />
                                 <ValidationMessage For="() => _vehicle.take_on_odo" />
                             </div>
                             <div class="form-field">

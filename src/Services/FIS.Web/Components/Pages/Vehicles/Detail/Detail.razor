@@ -2,8 +2,11 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Forms
 @inject VehicleApiService VehicleService
+@inject VehicleDocumentApiService VehicleDocumentService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicle Details - Fleet Information System</PageTitle>
 
@@ -304,6 +307,147 @@ else
                 </div>
             </div>
         </div>
+
+        <div class="detail-card">
+            <div class="card-header">
+                <div class="vehicle-title">
+                    <h2 class="vehicle-reg" style="font-size:1.35rem;">Vehicle Documents</h2>
+                </div>
+                <div class="vehicle-subtitle">
+                    Upload and view all documents linked to VMF @_vehicle.vmf_code.
+                </div>
+            </div>
+            <div class="card-body">
+                @if (!string.IsNullOrWhiteSpace(_documentError))
+                {
+                    <div class="alert alert-error fis-alert-bottom">
+                        <i class="bx bx-error-circle"></i>
+                        <span>@_documentError</span>
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_documentSuccess))
+                {
+                    <div class="alert alert-success fis-alert-bottom">
+                        <i class="bx bx-check-circle"></i>
+                        <span>@_documentSuccess</span>
+                    </div>
+                }
+
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Category Filter</label>
+                        <select class="form-select" @bind="_documentCategoryFilter">
+                            @foreach (var category in _documentCategories)
+                            {
+                                <option value="@category">@category</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Upload Category</label>
+                        <select class="form-select" @bind="_uploadCategory">
+                            @foreach (var category in _documentCategories.Where(c => c != "All"))
+                            {
+                                <option value="@category">@category</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Reference Type (Optional)</label>
+                        <select class="form-select" @bind="_uploadReferenceType">
+                            @foreach (var referenceType in _referenceTypes)
+                            {
+                                <option value="@referenceType">@referenceType</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Reference ID (Optional)</label>
+                        <input class="form-input" type="number" min="1" @bind="_uploadReferenceIdText" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Document File</label>
+                        <InputFile class="form-input"
+                                   accept="@AllowedFileTypes"
+                                   OnChange="OnDocumentSelected"
+                                   @attributes="GetFileInputAttributes()" />
+                        @if (_hasRearCamera)
+                        {
+                            <div class="form-hint">Rear camera detected. Capture is enforced on supported mobile browsers.</div>
+                        }
+                        else
+                        {
+                            <div class="form-hint">No rear camera detected. File upload is enabled.</div>
+                        }
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary btn-sm" @onclick="LoadDocumentsAsync" disabled="_documentsLoading">Refresh</button>
+                    <button class="btn btn-primary btn-sm" @onclick="UploadSelectedDocumentAsync" disabled="@(_selectedUploadFile is null || _documentsLoading)">Upload</button>
+                </div>
+
+                <div class="table-container fis-mt-15">
+                    <div class="table-header">
+                        <span class="table-title">Documents (@_documents.Count)</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Category</th>
+                                    <th>File</th>
+                                    <th>Type</th>
+                                    <th>Size</th>
+                                    <th>Reference</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_documentsLoading)
+                                {
+                                    <tr><td colspan="8">Loading documents...</td></tr>
+                                }
+                                else if (_documents.Count == 0)
+                                {
+                                    <tr><td colspan="8">No documents found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var document in _documents)
+                                    {
+                                        <tr>
+                                            <td>@GetDocumentId(document)</td>
+                                            <td>@ValueOrDash(document.Category)</td>
+                                            <td>@ValueOrDash(document.FileName)</td>
+                                            <td>@ValueOrDash(document.ContentType)</td>
+                                            <td>@FormatFileSize(document.FileSizeBytes)</td>
+                                            <td>@FormatReference(document)</td>
+                                            <td>@(document.DateCreated?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
+                                            <td class="actions-column">
+                                                <div class="table-actions">
+                                                    <button class="btn-icon btn-icon-view"
+                                                            title="Download"
+                                                            @onclick="() => DownloadDocumentAsync(document)">
+                                                        <i class="bx bx-download"></i>
+                                                    </button>
+                                                    <button class="btn-icon btn-icon-delete"
+                                                            title="Delete"
+                                                            @onclick="() => DeleteDocumentAsync(document)">
+                                                        <i class="bx bx-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     @if (_showDeleteDialog)
@@ -353,6 +497,40 @@ else
     private string _invoiceDraft = string.Empty;
     private string? _actionError;
     private string? _actionSuccess;
+    private bool _documentsLoading;
+    private bool _hasRearCamera;
+    private List<VehicleDocumentDto> _documents = new();
+    private string _documentCategoryFilter = "All";
+    private string _uploadCategory = "General";
+    private string _uploadReferenceType = "None";
+    private string _uploadReferenceIdText = string.Empty;
+    private IBrowserFile? _selectedUploadFile;
+    private string? _documentError;
+    private string? _documentSuccess;
+    private const string AllowedFileTypes = ".jpg,.jpeg,.png,.gif,.webp,.heic,.pdf,.doc,.docx";
+    private static readonly List<string> _documentCategories =
+    [
+        "All",
+        "General",
+        "Licence",
+        "Accident",
+        "Fine",
+        "JobCard",
+        "Contract",
+        "TripAuthority",
+        "Other"
+    ];
+    private static readonly List<string> _referenceTypes =
+    [
+        "None",
+        "Accident",
+        "Fine",
+        "Licence",
+        "JobCard",
+        "Contract",
+        "TripAuthority",
+        "Other"
+    ];
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
@@ -367,6 +545,24 @@ else
         await LoadVehicle();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            _hasRearCamera = await JSRuntime.InvokeAsync<bool>("fisDevice.hasRearCamera");
+            await InvokeAsync(StateHasChanged);
+        }
+        catch
+        {
+            _hasRearCamera = false;
+        }
+    }
+
     private async Task LoadVehicle()
     {
         _loading = true;
@@ -375,6 +571,7 @@ else
         _vehicle = await VehicleService.GetVehicleAsync(VmfCode);
         _editingInvoice = false;
         _invoiceDraft = _vehicle?.invoice_number ?? string.Empty;
+        await LoadDocumentsAsync();
         _loading = false;
         StateHasChanged();
     }
@@ -466,5 +663,194 @@ else
         {
             _savingInvoice = false;
         }
+    }
+
+    private Dictionary<string, object> GetFileInputAttributes()
+    {
+        if (_hasRearCamera)
+        {
+            return new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["capture"] = "environment"
+            };
+        }
+
+        return new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private Task OnDocumentSelected(InputFileChangeEventArgs args)
+    {
+        _documentError = null;
+        _documentSuccess = null;
+        _selectedUploadFile = args.FileCount > 0 ? args.File : null;
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadDocumentsAsync()
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        _documentsLoading = true;
+        _documentError = null;
+        try
+        {
+            _documents = _documentCategoryFilter == "All"
+                ? await VehicleDocumentService.GetDocumentsAsync(_vehicle.vmf_code)
+                : await VehicleDocumentService.GetDocumentsAsync(_vehicle.vmf_code, _documentCategoryFilter);
+
+            _documents = _documents
+                .OrderByDescending(d => d.DateCreated ?? DateTime.MinValue)
+                .ThenByDescending(d => GetDocumentId(d))
+                .ToList();
+        }
+        finally
+        {
+            _documentsLoading = false;
+        }
+    }
+
+    private async Task UploadSelectedDocumentAsync()
+    {
+        if (_vehicle == null || _selectedUploadFile == null)
+        {
+            return;
+        }
+
+        _documentError = null;
+        _documentSuccess = null;
+
+        if (_selectedUploadFile.Size > 20 * 1024 * 1024)
+        {
+            _documentError = "File exceeds 20 MB limit.";
+            return;
+        }
+
+        var extension = Path.GetExtension(_selectedUploadFile.Name)?.ToLowerInvariant();
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".pdf", ".doc", ".docx"
+        };
+        if (string.IsNullOrWhiteSpace(extension) || !allowed.Contains(extension))
+        {
+            _documentError = "Unsupported file type.";
+            return;
+        }
+
+        if (_hasRearCamera && !IsImageExtension(extension))
+        {
+            _documentError = "This device has a rear camera. Capture image documents instead of uploading non-image files.";
+            return;
+        }
+
+        var parsedReferenceId = int.TryParse(_uploadReferenceIdText, out var value) && value > 0 ? value : (int?)null;
+        var referenceType = _uploadReferenceType == "None" ? null : _uploadReferenceType;
+
+        _documentsLoading = true;
+        var result = await VehicleDocumentService.UploadAsync(
+            _vehicle.vmf_code,
+            _selectedUploadFile,
+            _uploadCategory,
+            referenceType,
+            parsedReferenceId);
+        _documentsLoading = false;
+
+        if (!result.Success)
+        {
+            _documentError = result.Message;
+            return;
+        }
+
+        _selectedUploadFile = null;
+        _uploadReferenceIdText = string.Empty;
+        _documentSuccess = "Request completed successfully.";
+        await LoadDocumentsAsync();
+    }
+
+    private async Task DownloadDocumentAsync(VehicleDocumentDto document)
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        _documentError = null;
+        var id = GetDocumentId(document);
+        if (id <= 0)
+        {
+            _documentError = "Invalid document id.";
+            return;
+        }
+
+        var file = await VehicleDocumentService.DownloadAsync(_vehicle.vmf_code, id);
+        if (file == null)
+        {
+            _documentError = "Unable to download document.";
+            return;
+        }
+
+        var base64 = Convert.ToBase64String(file.Content);
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadBase64", file.FileName, base64, file.ContentType);
+    }
+
+    private async Task DeleteDocumentAsync(VehicleDocumentDto document)
+    {
+        if (_vehicle == null)
+        {
+            return;
+        }
+
+        _documentError = null;
+        var id = GetDocumentId(document);
+        if (id <= 0)
+        {
+            _documentError = "Invalid document id.";
+            return;
+        }
+
+        var success = await VehicleDocumentService.DeleteAsync(_vehicle.vmf_code, id);
+        if (!success)
+        {
+            _documentError = "Unable to delete document.";
+            return;
+        }
+
+        _documentSuccess = "Request completed successfully.";
+        await LoadDocumentsAsync();
+    }
+
+    private static bool IsImageExtension(string extension)
+        => extension is ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".heic";
+
+    private static int GetDocumentId(VehicleDocumentDto document)
+        => document.Id > 0 ? document.Id : document.DocumentId;
+
+    private static string FormatReference(VehicleDocumentDto document)
+    {
+        if (string.IsNullOrWhiteSpace(document.ReferenceType) || !document.ReferenceId.HasValue)
+        {
+            return "-";
+        }
+
+        return $"{document.ReferenceType} #{document.ReferenceId.Value}";
+    }
+
+    private static string FormatFileSize(long? fileSizeBytes)
+    {
+        if (!fileSizeBytes.HasValue || fileSizeBytes.Value <= 0)
+        {
+            return "-";
+        }
+
+        var kb = fileSizeBytes.Value / 1024d;
+        if (kb < 1024d)
+        {
+            return $"{kb:N0} KB";
+        }
+
+        var mb = kb / 1024d;
+        return $"{mb:N2} MB";
     }
 }

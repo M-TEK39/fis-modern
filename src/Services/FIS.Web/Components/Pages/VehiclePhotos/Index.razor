@@ -97,7 +97,7 @@
                         @foreach (var vehicle in PagedSearchResults)
                         {
                             <tr>
-                                <td>@vehicle.GGNumber</td>
+                                <td>@(GetGGNumber(vehicle) ?? "-")</td>
                                 <td>@vehicle.RegistrationNumber</td>
                                 <td>@vehicle.MakeAndModel</td>
                                 <td>@(vehicle.YearManufactured?.ToString() ?? "N/A")</td>
@@ -223,15 +223,18 @@
     private static List<VehicleLookupDto> RankVehicleMatches(List<VehicleLookupDto> matches, string query, bool preferGg)
     {
         return (preferGg
-                ? matches.Where(v => !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+                ? matches.Where(v => !string.IsNullOrWhiteSpace(GetGGNumber(v)) && GetGGNumber(v)!.Contains(query, StringComparison.OrdinalIgnoreCase))
                 : matches.Where(v => !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(v =>
                 preferGg
-                    ? string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
+                    ? string.Equals(GetGGNumber(v)?.Trim(), query, StringComparison.OrdinalIgnoreCase)
                     : string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
-            .ThenBy(v => preferGg ? v.GGNumber : v.RegistrationNumber)
+            .ThenBy(v => preferGg ? GetGGNumber(v) : v.RegistrationNumber)
             .ToList();
     }
+
+    private static string? GetGGNumber(VehicleLookupDto vehicle)
+        => string.IsNullOrWhiteSpace(vehicle.GGNumber) ? vehicle.FleetNumber : vehicle.GGNumber;
 
     private void ManagePhotos(VehicleLookupDto vehicle)
     {

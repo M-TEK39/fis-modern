@@ -50,7 +50,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Vehicle Information</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -109,11 +131,24 @@
 
 @code {
     private bool _loading;
+    private bool _showFieldSelector;
     private string _searchMode = "GG";
     private string _searchTerm = string.Empty;
     private List<VehicleDto> _rows = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("gg_number", "GG Number", true),
+        new("gp_number", "GP Number", true),
+        new("vehicle", "Vehicle", true),
+        new("status", "Status", true),
+        new("model", "Model", true),
+        new("year", "Year", true),
+        new("purchase_date", "Purchase Date", true),
+        new("purchase_amount", "Purchase Amount", true),
+        new("current_odo", "Current ODO", true)
+    ];
 
     private List<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -194,5 +229,66 @@
         {
             _page++;
         }
+    }
+
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "gg_number" => ValueOrDash(row.fleet_number),
+                "gp_number" => ValueOrDash(row.registration_number),
+                "vehicle" => GetVehicleLabel(row),
+                "status" => ValueOrDash(row.status_description),
+                "model" => ValueOrDash(row.model_name),
+                "year" => row.year_manufactured?.ToString() ?? "-",
+                "purchase_date" => row.purchase_date?.ToString("yyyy-MM-dd") ?? "-",
+                "purchase_amount" => row.purchase_amount?.ToString("N2") ?? "-",
+                "current_odo" => row.current_odo?.ToString("N0") ?? "-",
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"vehicle_information_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
     }
 }

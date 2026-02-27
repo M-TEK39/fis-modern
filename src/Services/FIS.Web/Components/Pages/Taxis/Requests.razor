@@ -1,5 +1,8 @@
 @page "/taxis/requests/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Services
+@inject TaxiApiService TaxiService
+@inject IJSRuntime JS
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -24,8 +27,8 @@
                     Auto update in 11 minute(s). Use the Print button to open the print view.
                 </div>
                 <div class="form-actions" style="justify-content: space-between;">
-                    <button class="btn btn-secondary btn-sm">Print</button>
-                    <button class="btn btn-secondary btn-sm">Refresh</button>
+                    <button class="btn btn-secondary btn-sm" @onclick="PrintPendingAsync">Print</button>
+                    <button class="btn btn-secondary btn-sm" @onclick="LoadTaxiRequestsAsync">Refresh</button>
                 </div>
                 <div class="table-container" style="margin-top: 1rem;">
                     <div class="table-wrapper">
@@ -44,9 +47,29 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="9">No records found.</td>
-                                </tr>
+                                @if (_filteredPending.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="9">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var req in _filteredPending)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(req.rek_num)</td>
+                                            <td>@FormatTime(req.time_required)</td>
+                                            <td>@ValueOrDash(req.official)</td>
+                                            <td>@ValueOrDash(req.address_1)</td>
+                                            <td>@ValueOrDash(req.address_2)</td>
+                                            <td>@ValueOrDash(req.department_code?.ToString())</td>
+                                            <td>@ValueOrDash(req.contractor_id?.ToString())</td>
+                                            <td>@ValueOrDash(req.vmf_code)</td>
+                                            <td>@ValueOrDash(req.rank)</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -65,12 +88,33 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Requisition No.</label>
-                        <input class="form-input" maxlength="8" placeholder="Enter requisition number" />
+                        <input class="form-input" maxlength="8" placeholder="Enter requisition number" @bind="_lookupRekNumber" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary">OK</button>
+                    <button class="btn btn-primary" @onclick="LookupRequestAsync">OK</button>
+                    <button class="btn btn-secondary" @onclick="PrintLookupAsync" disabled="@(_lookupResult == null)">Print</button>
                 </div>
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                }
+                @if (_lookupResult != null)
+                {
+                    <div class="table-container" style="margin-top: 1rem;">
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <tbody>
+                                    <tr><th>Requisition</th><td>@ValueOrDash(_lookupResult.rek_num)</td></tr>
+                                    <tr><th>Official</th><td>@ValueOrDash(_lookupResult.official)</td></tr>
+                                    <tr><th>Date Required</th><td>@FormatDate(_lookupResult.date_required)</td></tr>
+                                    <tr><th>Time Required</th><td>@FormatTime(_lookupResult.time_required)</td></tr>
+                                    <tr><th>Destination</th><td>@ValueOrDash(_lookupResult.address_1)</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -85,12 +129,16 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Requisition Number</label>
-                        <input class="form-input" maxlength="8" placeholder="Enter requisition number" />
+                        <input class="form-input" maxlength="8" placeholder="Enter requisition number" @bind="_lookupRekNumber" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="LookupRequestAsync">Submit</button>
                 </div>
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                }
             </div>
         </div>
 
@@ -111,11 +159,11 @@
                                 <tbody>
                                     <tr>
                                         <th>Service Provider</th>
-                                        <td>Contractor details not loaded • Fax: Not loaded • Tel: Not loaded</td>
+                                        <td>@ValueOrDash(_lookupResult?.contractor_id?.ToString())</td>
                                     </tr>
                                     <tr>
                                         <th>Department</th>
-                                        <td>Not loaded</td>
+                                        <td>@ValueOrDash(_lookupResult?.department_code?.ToString())</td>
                                     </tr>
                                     <tr>
                                         <th>Responsibility</th>
@@ -127,19 +175,19 @@
                                     </tr>
                                     <tr>
                                         <th>Date Required</th>
-                                        <td>Not loaded</td>
+                                        <td>@FormatDate(_lookupResult?.date_required)</td>
                                     </tr>
                                     <tr>
                                         <th>Time Required</th>
-                                        <td>Not loaded</td>
+                                        <td>@FormatTime(_lookupResult?.time_required)</td>
                                     </tr>
                                     <tr>
                                         <th>Official (Primary)</th>
-                                        <td>Not loaded</td>
+                                        <td>@ValueOrDash(_lookupResult?.official)</td>
                                     </tr>
                                     <tr>
                                         <th>Rank</th>
-                                        <td>Not loaded</td>
+                                        <td>@ValueOrDash(_lookupResult?.rank)</td>
                                     </tr>
                                     <tr>
                                         <th>Tel/Cell</th>
@@ -162,8 +210,8 @@
                     </h3>
                     <div class="form-grid">
                         <div class="form-field">
-                            <label class="form-label">Reason</label>
-                            <select class="form-select">
+                        <label class="form-label">Reason</label>
+                            <select class="form-select" @bind="_cancelReason">
                                 <option value="">Select...</option>
                                 <option>Cancellation by client</option>
                                 <option>Cancelled by fax</option>
@@ -181,7 +229,7 @@
                 </div>
 
                 <div class="form-actions">
-                    <button class="btn btn-danger">Cancel Requisition</button>
+                    <button class="btn btn-danger" @onclick="CancelRequestAsync" disabled="@(_lookupResult == null)">Cancel Requisition</button>
                 </div>
             </div>
         </div>
@@ -199,12 +247,16 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Requisition Number</label>
-                            <input class="form-input" maxlength="8" placeholder="Enter requisition number" />
+                            <input class="form-input" maxlength="8" placeholder="Enter requisition number" @bind="_lookupRekNumber" />
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary">Submit</button>
+                        <button class="btn btn-primary" @onclick="LoadEditRequestAsync">Submit</button>
                     </div>
+                    @if (!string.IsNullOrWhiteSpace(_message))
+                    {
+                        <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                    }
                 </div>
             </div>
         }
@@ -230,23 +282,31 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Service Provider</label>
-                            <select class="form-select">
+                            <select class="form-select" @bind="_editForm.contractor_id">
                                 <option value="0">Select...</option>
+                                @foreach (var contractorId in ContractorOptions)
+                                {
+                                    <option value="@contractorId">@contractorId</option>
+                                }
                             </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Class</label>
-                            <select class="form-select">
+                            <select class="form-select" @bind="_editForm.vehicle_type_code">
                                 <option value="">Select class...</option>
+                                @foreach (var classCode in VehicleClassOptions)
+                                {
+                                    <option value="@classCode">@classCode</option>
+                                }
                             </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Registration Number</label>
-                            <input class="form-input" maxlength="8" placeholder="Registration number" />
+                            <input class="form-input" maxlength="20" placeholder="Registration number" @bind="_editForm.vmf_code" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Driver Name</label>
-                            <input class="form-input" maxlength="30" placeholder="Driver name" />
+                            <input class="form-input" maxlength="50" placeholder="Driver name" @bind="_editForm.rank" />
                         </div>
                     </div>
                 </div>
@@ -259,11 +319,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label"><strong>Date</strong></label>
-                            <input class="form-input" placeholder="Select date" />
+                            <input class="form-input" placeholder="YYYY-MM-DD" @bind="_requiredDateText" />
                         </div>
                         <div class="form-field">
                             <label class="form-label"><strong>Time</strong></label>
-                            <input class="form-input" placeholder="Select time" />
+                            <input class="form-input" placeholder="HH:mm" @bind="_requiredTimeText" />
                         </div>
                         <div class="form-field">
                             <label class="form-label form-checkbox">
@@ -296,11 +356,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label"><strong>From</strong></label>
-                            <input class="form-input" maxlength="31" placeholder="Address line 1" />
+                            <input class="form-input" maxlength="200" placeholder="Address line 1" @bind="_editForm.address_1" />
                         </div>
                         <div class="form-field">
                             <label class="form-label"><strong>To</strong></label>
-                            <input class="form-input" maxlength="30" placeholder="Destination line 1" />
+                            <input class="form-input" maxlength="200" placeholder="Destination line 1" @bind="_editForm.address_2" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">From (line 2)</label>
@@ -316,11 +376,11 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">To (line 3)</label>
-                            <input class="form-input" maxlength="30" placeholder="Destination line 3" />
+                            <input class="form-input" maxlength="200" placeholder="Destination line 3" @bind="_editForm.address_3" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Flight</label>
-                            <input class="form-input" maxlength="10" placeholder="Flight number" />
+                            <input class="form-input" maxlength="100" placeholder="Flight number" @bind="_editForm.flight" />
                         </div>
                         <div class="form-field">
                             <label class="form-label">Arrival/Departure Time</label>
@@ -349,11 +409,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label"><strong>Official requiring transport</strong></label>
-                            <input class="form-input" maxlength="50" placeholder="Full names" />
+                            <input class="form-input" maxlength="100" placeholder="Full names" @bind="_editForm.official" />
                         </div>
                         <div class="form-field">
                             <label class="form-label"><strong>Tel/Cell no. of official</strong></label>
-                            <input class="form-input" maxlength="25" placeholder="Tel/Cell number" />
+                            <input class="form-input" maxlength="50" placeholder="Rank / contact" @bind="_editForm.rank" />
                         </div>
                     </div>
                 </div>
@@ -366,14 +426,22 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">Department</label>
-                            <select class="form-select">
+                            <select class="form-select" @bind="_editForm.department_code">
                                 <option value="">Select...</option>
+                                @foreach (var deptCode in DepartmentOptions)
+                                {
+                                    <option value="@deptCode">@deptCode</option>
+                                }
                             </select>
                         </div>
                         <div class="form-field">
                             <label class="form-label">Site</label>
-                            <select class="form-select">
+                            <select class="form-select" @bind="_editForm.site_code">
                                 <option value="">Select...</option>
+                                @foreach (var siteCode in SiteOptions)
+                                {
+                                    <option value="@siteCode">@siteCode</option>
+                                }
                             </select>
                         </div>
                         <div class="form-field">
@@ -438,7 +506,7 @@
                     <div class="form-grid">
                         <div class="form-field form-group-full">
                             <label class="form-label">Notes</label>
-                            <input class="form-input" maxlength="50" placeholder="Notes" />
+                            <input class="form-input" maxlength="200" placeholder="Notes" @bind="_editForm.address_3" />
                         </div>
                     </div>
                 </div>
@@ -491,8 +559,13 @@
                 </div>
 
                 <div class="form-actions">
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="SaveRequestAsync" disabled="@_saving">@(_isEdit || _isEditPrevBas ? "Save Changes" : "Submit")</button>
+                    <button class="btn btn-secondary" @onclick="ResetFormAsync" disabled="_saving">Reset</button>
                 </div>
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                }
             </div>
         </div>
     }
@@ -513,8 +586,19 @@
     private bool _isPending;
     private bool _isPendingJia;
     private bool _showPrevBasBanner;
+    private List<TaxiRequestDto> _allRequests = new();
+    private List<TaxiRequestDto> _filteredPending = new();
+    private TaxiRequestDto? _lookupResult;
+    private string _lookupRekNumber = string.Empty;
+    private string _cancelReason = string.Empty;
+    private string _message = string.Empty;
+    private bool _error;
+    private bool _saving;
+    private TaxiRequestDto _editForm = new();
+    private string _requiredDateText = string.Empty;
+    private string _requiredTimeText = string.Empty;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _isEnter = Mode == "enter";
         _isEnterPrevBas = Mode == "enter-prev-bas";
@@ -547,5 +631,319 @@
             "reprint" => "Reprint a previously captured requisition.",
             _ => "Taxi requisition workflow."
         };
+
+        if (_isPending || _isPendingJia || _isCancel || _isReprint)
+        {
+            await LoadTaxiRequestsAsync();
+        }
+    }
+
+    private async Task LoadTaxiRequestsAsync()
+    {
+        try
+        {
+            _allRequests = await TaxiService.GetAllAsync<TaxiRequestDto>();
+            var basePending = _allRequests
+                .Where(r => !string.IsNullOrWhiteSpace(r.rek_num));
+
+            if (_isPendingJia)
+            {
+                basePending = basePending.Where(r =>
+                    ContainsAny(r.address_1, "JIA", "OR TAMBO", "AIRPORT")
+                    || ContainsAny(r.address_2, "JIA", "OR TAMBO", "AIRPORT")
+                    || ContainsAny(r.address_3, "JIA", "OR TAMBO", "AIRPORT")
+                    || ContainsAny(r.flight, "JIA", "OR TAMBO", "AIRPORT"));
+            }
+
+            _filteredPending = basePending
+                .OrderByDescending(r => r.date_required)
+                .ThenByDescending(r => r.time_required)
+                .Take(300)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = $"Failed to load taxi requests: {ex.Message}";
+        }
+    }
+
+    private Task PrintPendingAsync()
+        => JS.InvokeVoidAsync("window.print").AsTask();
+
+    private async Task LookupRequestAsync()
+    {
+        _error = false;
+        _message = string.Empty;
+        _lookupResult = null;
+
+        if (string.IsNullOrWhiteSpace(_lookupRekNumber))
+        {
+            _error = true;
+            _message = "Enter requisition number.";
+            return;
+        }
+
+        if (_allRequests.Count == 0)
+        {
+            await LoadTaxiRequestsAsync();
+        }
+
+        var key = _lookupRekNumber.Trim();
+        _lookupResult = _allRequests.FirstOrDefault(r =>
+            string.Equals((r.rek_num ?? string.Empty).Trim(), key, StringComparison.OrdinalIgnoreCase));
+
+        if (_lookupResult == null)
+        {
+            _error = true;
+            _message = $"Requisition number {key.ToUpperInvariant()} not found.";
+            return;
+        }
+
+        _message = $"Requisition {(_lookupResult.rek_num ?? _lookupResult.request_id.ToString()).ToUpperInvariant()} loaded.";
+    }
+
+    private Task PrintLookupAsync()
+        => JS.InvokeVoidAsync("window.print").AsTask();
+
+    private async Task CancelRequestAsync()
+    {
+        if (_lookupResult == null)
+        {
+            _error = true;
+            _message = "Load a requisition first.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_cancelReason))
+        {
+            _error = true;
+            _message = "Select cancellation reason.";
+            return;
+        }
+
+        try
+        {
+            await TaxiService.DeleteAsync(_lookupResult.request_id);
+            _allRequests.RemoveAll(r => r.request_id == _lookupResult.request_id);
+            _filteredPending.RemoveAll(r => r.request_id == _lookupResult.request_id);
+            _message = $"Requisition {(_lookupResult.rek_num ?? _lookupResult.request_id.ToString()).ToUpperInvariant()} cancelled.";
+            _lookupResult = null;
+            _lookupRekNumber = string.Empty;
+            _cancelReason = string.Empty;
+            _error = false;
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = $"Cancellation failed: {ex.Message}";
+        }
+    }
+
+    private async Task LoadEditRequestAsync()
+    {
+        await LookupRequestAsync();
+        if (_lookupResult == null)
+        {
+            return;
+        }
+
+        _editForm = CloneTaxi(_lookupResult);
+        _requiredDateText = _editForm.date_required?.ToString("yyyy-MM-dd") ?? string.Empty;
+        _requiredTimeText = _editForm.time_required?.ToString("HH:mm") ?? string.Empty;
+        _error = false;
+        _message = $"Editing requisition {ValueOrDash(_editForm.rek_num).ToUpperInvariant()}.";
+    }
+
+    private async Task SaveRequestAsync()
+    {
+        _saving = true;
+        _error = false;
+        _message = string.Empty;
+
+        try
+        {
+            _editForm.date_required = ParseDate(_requiredDateText) ?? DateTime.Today;
+            _editForm.time_required = ParseTime(_requiredTimeText);
+
+            if (string.IsNullOrWhiteSpace(_editForm.rek_num))
+            {
+                _error = true;
+                _message = "Requisition number is required.";
+                return;
+            }
+
+            if (_isEdit || _isEditPrevBas)
+            {
+                if (_editForm.request_id <= 0)
+                {
+                    _error = true;
+                    _message = "Load an existing requisition first.";
+                    return;
+                }
+
+                var updated = await TaxiService.UpdateAsync(_editForm.request_id, _editForm);
+                if (updated == null)
+                {
+                    _error = true;
+                    _message = "Update failed.";
+                    return;
+                }
+
+                _message = $"Requisition {ValueOrDash(updated.rek_num).ToUpperInvariant()} updated.";
+            }
+            else
+            {
+                var created = await TaxiService.CreateAsync(_editForm);
+                if (created == null)
+                {
+                    _error = true;
+                    _message = "Create failed.";
+                    return;
+                }
+
+                _editForm = CloneTaxi(created);
+                _lookupResult = CloneTaxi(created);
+                _lookupRekNumber = created.rek_num ?? string.Empty;
+                _message = $"Requisition {ValueOrDash(created.rek_num).ToUpperInvariant()} created.";
+            }
+
+            await LoadTaxiRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = true;
+            _message = $"Save failed: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task ResetFormAsync()
+    {
+        if (_isEdit || _isEditPrevBas)
+        {
+            if (_lookupResult != null)
+            {
+                _editForm = CloneTaxi(_lookupResult);
+            }
+        }
+        else
+        {
+            _editForm = new TaxiRequestDto();
+            _lookupResult = null;
+            _lookupRekNumber = string.Empty;
+        }
+
+        _requiredDateText = _editForm.date_required?.ToString("yyyy-MM-dd") ?? string.Empty;
+        _requiredTimeText = _editForm.time_required?.ToString("HH:mm") ?? string.Empty;
+        _message = string.Empty;
+        _error = false;
+        return Task.CompletedTask;
+    }
+
+    private static TaxiRequestDto CloneTaxi(TaxiRequestDto source)
+        => new()
+        {
+            request_id = source.request_id,
+            rek_num = source.rek_num,
+            contractor_id = source.contractor_id,
+            vmf_code = source.vmf_code,
+            department_code = source.department_code,
+            site_code = source.site_code,
+            date_required = source.date_required,
+            time_required = source.time_required,
+            vehicle_type_code = source.vehicle_type_code,
+            official = source.official,
+            rank = source.rank,
+            address_1 = source.address_1,
+            address_2 = source.address_2,
+            address_3 = source.address_3,
+            flight = source.flight
+        };
+
+    private static DateTime? ParseDate(string? value)
+        => DateTime.TryParse(value, out var parsed) ? parsed.Date : null;
+
+    private static DateTime? ParseTime(string? value)
+    {
+        if (!TimeSpan.TryParse(value, out var time))
+        {
+            return null;
+        }
+
+        return DateTime.Today.Add(time);
+    }
+
+    private IEnumerable<short> ContractorOptions =>
+        _allRequests.Where(r => r.contractor_id is > 0)
+            .Select(r => r.contractor_id!.Value)
+            .Distinct()
+            .OrderBy(v => v);
+
+    private IEnumerable<short> VehicleClassOptions =>
+        _allRequests.Where(r => r.vehicle_type_code is > 0)
+            .Select(r => r.vehicle_type_code!.Value)
+            .Distinct()
+            .OrderBy(v => v);
+
+    private IEnumerable<short> DepartmentOptions =>
+        _allRequests.Where(r => r.department_code is > 0)
+            .Select(r => r.department_code!.Value)
+            .Distinct()
+            .OrderBy(v => v);
+
+    private IEnumerable<short> SiteOptions =>
+        _allRequests.Where(r => r.site_code is > 0)
+            .Select(r => r.site_code!.Value)
+            .Distinct()
+            .OrderBy(v => v);
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string FormatTime(DateTime? value)
+        => value.HasValue ? value.Value.ToString("HH:mm") : "-";
+
+    private static bool ContainsAny(string? value, params string[] needles)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var needle in needles)
+        {
+            if (value.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private sealed class TaxiRequestDto
+    {
+        public int request_id { get; set; }
+        public string? rek_num { get; set; }
+        public short? contractor_id { get; set; }
+        public string? vmf_code { get; set; }
+        public short? department_code { get; set; }
+        public short? site_code { get; set; }
+        public DateTime? date_required { get; set; }
+        public DateTime? time_required { get; set; }
+        public short? vehicle_type_code { get; set; }
+        public string? official { get; set; }
+        public string? rank { get; set; }
+        public string? address_1 { get; set; }
+        public string? address_2 { get; set; }
+        public string? address_3 { get; set; }
+        public string? flight { get; set; }
     }
 }

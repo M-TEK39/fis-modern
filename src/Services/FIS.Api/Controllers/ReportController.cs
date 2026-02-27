@@ -630,6 +630,294 @@ public class ReportController : BaseApiController
         return Ok(report);
     }
 
+    /// <summary>
+    /// Capture activity report — shows all records captured within a date range,
+    /// broken down per module with summary counts and individual record details.
+    /// Filters: date_from (required), date_to (default today), module, site_code, vmf_code, captured_by.
+    /// Modules: All | Vehicles | Contracts | Accidents | Fines | JobCards | Logbooks | Documents | Remarks
+    /// </summary>
+    [HttpGet("capture-activity")]
+    public async Task<ActionResult> GetCaptureActivityReport(
+        [FromQuery] DateTime date_from,
+        [FromQuery] DateTime? date_to = null,
+        [FromQuery] string? module = null,
+        [FromQuery] short? site_code = null,
+        [FromQuery] int? vmf_code = null,
+        [FromQuery] int? captured_by = null)
+    {
+        try
+        {
+            var toDate = (date_to ?? DateTime.Today).Date.AddDays(1).AddSeconds(-1); // end of day
+            var fromDate = date_from.Date;
+            var moduleFilter = string.IsNullOrWhiteSpace(module) ? "All" : module.Trim();
+
+            var filtersApplied = new Dictionary<string, object?>();
+            filtersApplied["date_from"] = fromDate.ToString("yyyy-MM-dd");
+            filtersApplied["date_to"] = toDate.Date.ToString("yyyy-MM-dd");
+            if (moduleFilter != "All") filtersApplied["module"] = moduleFilter;
+            if (site_code.HasValue) filtersApplied["site_code"] = site_code;
+            if (vmf_code.HasValue) filtersApplied["vmf_code"] = vmf_code;
+            if (captured_by.HasValue) filtersApplied["captured_by"] = captured_by;
+
+            // Build a lookup of vmf_code → (fleet_number, registration_number, veh_site_code) to enrich results
+            // Only load vehicles that match site/vmf filters to keep query light
+            var vehicleBase = _context.Vehicles.Where(v => !v.is_deleted);
+            if (vmf_code.HasValue) vehicleBase = vehicleBase.Where(v => v.vmf_code == vmf_code.Value);
+            if (site_code.HasValue) vehicleBase = vehicleBase.Where(v => v.veh_site_code == site_code.Value);
+            var vehicleMap = await vehicleBase
+                .Select(v => new { v.vmf_code, v.fleet_number, v.registration_number, v.veh_site_code })
+                .ToDictionaryAsync(v => v.vmf_code, v => v);
+
+            // Helper: resolve vehicle info
+            string? FleetNum(int? code) => (code.HasValue && vehicleMap.TryGetValue(code.Value, out var fv)) ? fv.fleet_number : null;
+            string? RegNum(int? code) => (code.HasValue && vehicleMap.TryGetValue(code.Value, out var rv)) ? rv.registration_number : null;
+
+            // Helper: check if a vmf_code passes site/vmf filter
+            bool VehicleInScope(int? code)
+            {
+                if (!vmf_code.HasValue && !site_code.HasValue) return true;
+                if (code == null) return false;
+                return vehicleMap.ContainsKey(code.Value);
+            }
+
+            var summary = new Dictionary<string, int>();
+            var details = new Dictionary<string, List<object>>();
+
+            // ── Vehicles ─────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Vehicles")
+            {
+                var q = _context.Vehicles
+                    .Where(v => !v.is_deleted
+                        && v.date_created >= fromDate && v.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(v => v.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(v => v.vmf_code == vmf_code.Value);
+                if (site_code.HasValue) q = q.Where(v => v.veh_site_code == site_code.Value);
+                var rows = await q.OrderByDescending(v => v.date_created)
+                    .Select(v => new CaptureActivityEntry
+                    {
+                        record_id = v.vmf_code,
+                        vmf_code = v.vmf_code,
+                        fleet_number = v.fleet_number,
+                        registration_number = v.registration_number,
+                        description = $"Vehicle {v.fleet_number ?? v.registration_number ?? v.vmf_code.ToString()} added",
+                        date_captured = v.date_created,
+                        captured_by_user_code = v.created_by_user_code,
+                        module = "Vehicles"
+                    }).ToListAsync();
+                summary["Vehicles"] = rows.Count;
+                details["Vehicles"] = rows.Cast<object>().ToList();
+            }
+
+            // ── Contracts ────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Contracts")
+            {
+                var q = _context.Contracts
+                    .Where(c => !c.is_deleted
+                        && c.date_created >= fromDate && c.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(c => c.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(c => c.vmf_code == vmf_code.Value);
+                if (site_code.HasValue) q = q.Where(c => c.site_code == site_code.Value);
+                var rows = await q.OrderByDescending(c => c.date_created)
+                    .Select(c => new { c.contract_code, c.vmf_code, c.site_code, c.date_created, c.created_by_user_code, c.still_current })
+                    .ToListAsync();
+                var mapped = rows.Where(c => VehicleInScope(c.vmf_code) || site_code == null)
+                    .Select(c => (object)new CaptureActivityEntry
+                    {
+                        record_id = c.contract_code,
+                        vmf_code = c.vmf_code,
+                        fleet_number = FleetNum(c.vmf_code),
+                        registration_number = RegNum(c.vmf_code),
+                        description = $"Contract captured (status: {(c.still_current == "Y" ? "Active" : "Inactive")})",
+                        date_captured = c.date_created,
+                        captured_by_user_code = c.created_by_user_code,
+                        module = "Contracts"
+                    }).ToList();
+                summary["Contracts"] = mapped.Count;
+                details["Contracts"] = mapped;
+            }
+
+            // ── Accidents ────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Accidents")
+            {
+                var q = _context.Accidents
+                    .Where(a => !a.is_deleted
+                        && a.date_created >= fromDate && a.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(a => a.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(a => a.vmf_code == vmf_code.Value);
+                var rows = await q.OrderByDescending(a => a.date_created)
+                    .Select(a => new { a.accident_code, a.vmf_code, a.description, a.date_created, a.created_by_user_code })
+                    .ToListAsync();
+                var mapped = rows.Where(a => VehicleInScope(a.vmf_code))
+                    .Select(a => (object)new CaptureActivityEntry
+                    {
+                        record_id = a.accident_code,
+                        vmf_code = a.vmf_code,
+                        fleet_number = FleetNum(a.vmf_code),
+                        registration_number = RegNum(a.vmf_code),
+                        description = a.description ?? "Accident recorded",
+                        date_captured = a.date_created,
+                        captured_by_user_code = a.created_by_user_code,
+                        module = "Accidents"
+                    }).ToList();
+                summary["Accidents"] = mapped.Count;
+                details["Accidents"] = mapped;
+            }
+
+            // ── Fines ────────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Fines")
+            {
+                var q = _context.Fines
+                    .Where(f => !f.is_deleted
+                        && f.date_created >= fromDate && f.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(f => f.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(f => f.vmf_code == vmf_code.Value);
+                var rows = await q.OrderByDescending(f => f.date_created)
+                    .Select(f => new { f.Fine_code, f.vmf_code, f.Offence_reference, f.date_created, f.created_by_user_code })
+                    .ToListAsync();
+                var mapped = rows.Where(f => VehicleInScope(f.vmf_code))
+                    .Select(f => (object)new CaptureActivityEntry
+                    {
+                        record_id = f.Fine_code,
+                        vmf_code = f.vmf_code,
+                        fleet_number = FleetNum(f.vmf_code),
+                        registration_number = RegNum(f.vmf_code),
+                        description = $"Fine {f.Offence_reference ?? f.Fine_code.ToString()} captured",
+                        date_captured = f.date_created,
+                        captured_by_user_code = f.created_by_user_code,
+                        module = "Fines"
+                    }).ToList();
+                summary["Fines"] = mapped.Count;
+                details["Fines"] = mapped;
+            }
+
+            // ── Job Cards ────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "JobCards")
+            {
+                var q = _context.JobCards
+                    .Where(j => !j.is_deleted
+                        && j.date_created >= fromDate && j.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(j => j.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(j => j.vmf_code == vmf_code.Value);
+                var rows = await q.OrderByDescending(j => j.date_created)
+                    .Select(j => new { j.job_card_id, j.vmf_code, j.jcs_comment, j.status_code, j.date_created, j.created_by_user_code })
+                    .ToListAsync();
+                var mapped = rows.Where(j => VehicleInScope(j.vmf_code))
+                    .Select(j => (object)new CaptureActivityEntry
+                    {
+                        record_id = j.job_card_id,
+                        vmf_code = j.vmf_code,
+                        fleet_number = FleetNum(j.vmf_code),
+                        registration_number = RegNum(j.vmf_code),
+                        description = j.jcs_comment ?? $"Job card #{j.job_card_id} (status {j.status_code})",
+                        date_captured = j.date_created,
+                        captured_by_user_code = j.created_by_user_code,
+                        module = "JobCards"
+                    }).ToList();
+                summary["JobCards"] = mapped.Count;
+                details["JobCards"] = mapped;
+            }
+
+            // ── Logbooks ─────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Logbooks")
+            {
+                var q = _context.Logbooks
+                    .Where(l => !l.is_deleted
+                        && l.date_created >= fromDate && l.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(l => l.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(l => l.vmf_code == vmf_code.Value);
+                var rows = await q.OrderByDescending(l => l.date_created)
+                    .Select(l => new { l.logbookcode, l.vmf_code, l.date_created, l.created_by_user_code })
+                    .ToListAsync();
+                var mapped = rows.Where(l => VehicleInScope(l.vmf_code))
+                    .Select(l => (object)new CaptureActivityEntry
+                    {
+                        record_id = l.logbookcode,
+                        vmf_code = l.vmf_code,
+                        fleet_number = FleetNum(l.vmf_code),
+                        registration_number = RegNum(l.vmf_code),
+                        description = $"Logbook entry #{l.logbookcode}",
+                        date_captured = l.date_created,
+                        captured_by_user_code = l.created_by_user_code,
+                        module = "Logbooks"
+                    }).ToList();
+                summary["Logbooks"] = mapped.Count;
+                details["Logbooks"] = mapped;
+            }
+
+            // ── Documents ────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Documents")
+            {
+                var q = _context.VehicleDocuments
+                    .Where(d => !d.is_deleted
+                        && d.date_created >= fromDate && d.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(d => d.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(d => d.vmf_code == vmf_code.Value);
+                var rows = await q.OrderByDescending(d => d.date_created)
+                    .Select(d => new { d.document_id, d.vmf_code, d.document_category, d.original_file_name, d.date_created, d.created_by_user_code })
+                    .ToListAsync();
+                var mapped = rows.Where(d => VehicleInScope(d.vmf_code))
+                    .Select(d => (object)new CaptureActivityEntry
+                    {
+                        record_id = d.document_id,
+                        vmf_code = d.vmf_code,
+                        fleet_number = FleetNum(d.vmf_code),
+                        registration_number = RegNum(d.vmf_code),
+                        description = $"{d.document_category} document: {d.original_file_name}",
+                        date_captured = d.date_created,
+                        captured_by_user_code = d.created_by_user_code,
+                        module = "Documents"
+                    }).ToList();
+                summary["Documents"] = mapped.Count;
+                details["Documents"] = mapped;
+            }
+
+            // ── Remarks ──────────────────────────────────────────────────────────
+            if (moduleFilter == "All" || moduleFilter == "Remarks")
+            {
+                var q = _context.VehicleRemarks
+                    .Where(r => !r.is_deleted
+                        && r.date_created >= fromDate && r.date_created <= toDate);
+                if (captured_by.HasValue) q = q.Where(r => r.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue) q = q.Where(r => r.vmf_code == vmf_code.Value);
+                var rows = await q.OrderByDescending(r => r.date_created)
+                    .Select(r => new { r.remark_id, r.vmf_code, r.remark_text, r.date_created, r.created_by_user_code })
+                    .ToListAsync();
+                var mapped = rows.Where(r => VehicleInScope(r.vmf_code))
+                    .Select(r => (object)new CaptureActivityEntry
+                    {
+                        record_id = r.remark_id,
+                        vmf_code = r.vmf_code,
+                        fleet_number = FleetNum(r.vmf_code),
+                        registration_number = RegNum(r.vmf_code),
+                        description = r.remark_text ?? $"Remark #{r.remark_id}",
+                        date_captured = r.date_created,
+                        captured_by_user_code = r.created_by_user_code,
+                        module = "Remarks"
+                    }).ToList();
+                summary["Remarks"] = mapped.Count;
+                details["Remarks"] = mapped;
+            }
+
+            var totalCount = summary.Values.Sum();
+            _logger.LogInformation(
+                "Capture activity report: {From} – {To}, module={Module}, total={Total}",
+                fromDate, toDate.Date, moduleFilter, totalCount);
+
+            return Ok(new
+            {
+                filters_applied = filtersApplied,
+                total_count = totalCount,
+                summary,
+                details
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating capture activity report");
+            return StatusCode(500, new { error = "Failed to generate capture activity report" });
+        }
+    }
+
     #endregion
 }
 
@@ -697,6 +985,18 @@ public class CertificateDto
 }
 
 #endregion
+
+public class CaptureActivityEntry
+{
+    public int record_id { get; set; }
+    public int? vmf_code { get; set; }
+    public string? fleet_number { get; set; }
+    public string? registration_number { get; set; }
+    public string? description { get; set; }
+    public DateTime date_captured { get; set; }
+    public int? captured_by_user_code { get; set; }
+    public string module { get; set; } = "";
+}
 
 // Note: Report model types referenced above should be defined in IReportingService interface
 // VehicleReport, MasterFileReport, UniversalReportRequest, ServiceHistoryReport, etc.

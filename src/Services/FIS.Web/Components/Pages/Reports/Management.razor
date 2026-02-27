@@ -41,7 +41,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Management KPI Summary</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleKpiFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadKpiCsvAsync" disabled="@(_loading || _kpis.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showKpiFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _kpiExportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -73,7 +95,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Top Workshop Cost Vehicles</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleWorkshopFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadWorkshopCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showWorkshopFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _workshopExportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -125,6 +169,19 @@
     private List<CostByVehicleRow> _rows = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private bool _showKpiFieldSelector;
+    private bool _showWorkshopFieldSelector;
+    private readonly List<ExportField> _kpiExportFields =
+    [
+        new("metric", "Metric", true),
+        new("value", "Value", true)
+    ];
+    private readonly List<ExportField> _workshopExportFields =
+    [
+        new("vehicle", "Vehicle", true),
+        new("total_workshop_cost", "Total Workshop Cost (R)", true),
+        new("last_job_card_date", "Last Job Card Date", true)
+    ];
 
     private List<CostByVehicleRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -222,6 +279,73 @@
         }
     }
 
+    private void ToggleKpiFieldSelector()
+    {
+        _showKpiFieldSelector = !_showKpiFieldSelector;
+    }
+
+    private void ToggleWorkshopFieldSelector()
+    {
+        _showWorkshopFieldSelector = !_showWorkshopFieldSelector;
+    }
+
+    private async Task DownloadKpiCsvAsync()
+    {
+        var selected = _kpiExportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
+        foreach (var row in _kpis)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "metric" => row.Label,
+                "value" => row.Value,
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"management_kpi_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private async Task DownloadWorkshopCsvAsync()
+    {
+        var selected = _workshopExportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "vehicle" => GetVehicleLabel(row),
+                "total_workshop_cost" => row.TotalCost.ToString("N2"),
+                "last_job_card_date" => row.LastDate?.ToString("yyyy-MM-dd") ?? "-",
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"management_workshop_cost_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
     private sealed class KpiRow
     {
         public KpiRow(string label, string value)
@@ -241,5 +365,19 @@
         public string? RegistrationNumber { get; set; }
         public decimal TotalCost { get; set; }
         public DateTime? LastDate { get; set; }
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
     }
 }

@@ -1,7 +1,10 @@
 @page "/taxis/reports/{Mode}"
 @rendermode InteractiveServer
+@using FIS.Web.Services
 @using Microsoft.AspNetCore.WebUtilities
 @inject NavigationManager Navigation
+@inject TaxiApiService TaxiService
+@inject IJSRuntime JS
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -30,30 +33,70 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="TaxiNumberType" />
+                            <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "GP")" @onchange='() => SetLookupType("GP")' />
                             GP
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="TaxiNumberType" checked />
+                            <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "GG")" @onchange='() => SetLookupType("GG")' />
                             GG
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">
-                            <input type="radio" name="TaxiNumberType" />
+                            <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "PRIVATE")" @onchange='() => SetLookupType("PRIVATE")' />
                             Private Number
                         </label>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Registration Number</label>
-                        <input class="form-input" maxlength="8" style="text-transform: uppercase" />
+                        <input class="form-input" maxlength="20" style="text-transform: uppercase" @bind="_oneTaxiSearch" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="SearchOneTaxiAsync">Submit</button>
                     <a class="btn btn-secondary" href="/taxis">Menu</a>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_message))
+                {
+                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">@_message</div>
+                }
+                <div class="table-container" style="margin-top:1rem;">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Requisition</th>
+                                    <th>Date</th>
+                                    <th>Official</th>
+                                    <th>Reg / GG</th>
+                                    <th>Contractor</th>
+                                    <th>Department</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_oneTaxiResults.Count == 0)
+                                {
+                                    <tr><td colspan="6">No records found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _oneTaxiResults)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(row.rek_num)</td>
+                                            <td>@FormatDate(row.date_required)</td>
+                                            <td>@ValueOrDash(row.official)</td>
+                                            <td>@ValueOrDash(row.vmf_code)</td>
+                                            <td>@ValueOrDash(row.contractor_id?.ToString())</td>
+                                            <td>@ValueOrDash(row.department_code?.ToString())</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -69,21 +112,26 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">From</label>
-                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                        <input class="form-input" placeholder="YYYY-MM-DD" @bind="_fromDateText" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">To</label>
-                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                        <input class="form-input" placeholder="YYYY-MM-DD" @bind="_toDateText" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">User</label>
-                        <select class="form-select">
-                            <option>All users</option>
+                        <select class="form-select" @bind="_selectedUserFilter">
+                            <option value="">All users</option>
+                            @foreach (var user in UserOptions)
+                            {
+                                <option value="@user">@user</option>
+                            }
                         </select>
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="ApplyLogsPerUserFilterAsync">Submit</button>
+                    <button class="btn btn-secondary" @onclick="PrintAsync">Print</button>
                 </div>
             </div>
         </div>
@@ -109,14 +157,27 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td colspan="2">No records found.</td>
-                                    </tr>
+                                    @if (_userCounts.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="2">No records found.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in _userCounts)
+                                        {
+                                            <tr>
+                                                <td>@row.Key</td>
+                                                <td>@row.Value</td>
+                                            </tr>
+                                        }
+                                    }
                                 </tbody>
                                 <tfoot>
                                     <tr>
                                         <th>Total</th>
-                                        <th>0</th>
+                                        <th>@_userCounts.Values.Sum()</th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -139,14 +200,27 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td colspan="2">No records found.</td>
-                                    </tr>
+                                    @if (_userCounts.Count == 0)
+                                    {
+                                        <tr>
+                                            <td colspan="2">No records found.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in _userCounts)
+                                        {
+                                            <tr>
+                                                <td>@row.Key</td>
+                                                <td>@row.Value</td>
+                                            </tr>
+                                        }
+                                    }
                                 </tbody>
                                 <tfoot>
                                     <tr>
                                         <th>Total</th>
-                                        <th>0</th>
+                                        <th>@_userCounts.Values.Sum()</th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -170,15 +244,16 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">From</label>
-                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                        <input class="form-input" placeholder="YYYY-MM-DD" @bind="_fromDateText" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">To</label>
-                        <input class="form-input" placeholder="YYYY/MM/DD" />
+                        <input class="form-input" placeholder="YYYY-MM-DD" @bind="_toDateText" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="ApplyOldRequisitionsFilterAsync">Submit</button>
+                    <button class="btn btn-secondary" @onclick="PrintAsync">Print</button>
                 </div>
             </div>
         </div>
@@ -199,9 +274,26 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="6">No records found.</td>
-                                </tr>
+                                @if (_oldRequisitionRows.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _oldRequisitionRows)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(row.rek_num)</td>
+                                            <td>@FormatDate(row.date_required)</td>
+                                            <td>@ValueOrDash(row.official)</td>
+                                            <td>@ValueOrDash(row.address_1)</td>
+                                            <td>@ValueOrDash(row.address_2)</td>
+                                            <td>@ValueOrDash(row.department_code?.ToString())</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -220,13 +312,17 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Company</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_selectedContractorFilter">
                             <option value="">Select...</option>
+                            @foreach (var contractor in ContractorOptions)
+                            {
+                                <option value="@contractor">@contractor</option>
+                            }
                         </select>
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="ApplyCompanyFilterAsync">Submit</button>
                     <a class="btn btn-secondary" href="/taxis">Menu</a>
                 </div>
             </div>
@@ -245,9 +341,23 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="3">No records found.</td>
-                                </tr>
+                                @if (_companyRows.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _companyRows.Select((item, index) => new { item, index }))
+                                    {
+                                        <tr>
+                                            <td>@(row.index + 1)</td>
+                                            <td>@ValueOrDash(row.item.vmf_code)</td>
+                                            <td>@ValueOrDash(row.item.contractor_id?.ToString())</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -278,9 +388,23 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="3">No records found.</td>
-                                </tr>
+                                @if (_departmentRows.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _departmentRows.Select((item, index) => new { item, index }))
+                                    {
+                                        <tr>
+                                            <td>@(row.index + 1)</td>
+                                            <td>@ValueOrDash(row.item.rek_num)</td>
+                                            <td>@ValueOrDash(row.item.department_code?.ToString())</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -312,9 +436,23 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td colspan="3">No records found.</td>
-                                </tr>
+                                @if (_inServiceDepartmentRows.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="3">No records found.</td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _inServiceDepartmentRows.Select((item, index) => new { item, index }))
+                                    {
+                                        <tr>
+                                            <td>@(row.index + 1)</td>
+                                            <td>@ValueOrDash(row.item.rek_num)</td>
+                                            <td>@ValueOrDash(row.item.department_code?.ToString())</td>
+                                        </tr>
+                                    }
+                                }
                             </tbody>
                         </table>
                     </div>
@@ -370,11 +508,11 @@
                         <div class="form-grid" style="margin-top: 0.75rem;">
                             <div class="form-field">
                                 <label class="form-label">Start Date</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_statusStartDateText" placeholder="YYYY-MM-DD" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">End Date</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_statusEndDateText" placeholder="YYYY-MM-DD" />
                             </div>
                         </div>
                     </div>
@@ -390,7 +528,39 @@
                 </div>
                 <div class="form-actions">
                     <button class="btn btn-secondary">Back</button>
-                    <button class="btn btn-primary">Submit</button>
+                    <button class="btn btn-primary" @onclick="ApplyStatusFilterAsync">Submit</button>
+                </div>
+                <div class="table-container" style="margin-top:1rem;">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Requisition</th>
+                                    <th>Date</th>
+                                    <th>Official</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (_statusRows.Count == 0)
+                                {
+                                    <tr><td colspan="4">No records found.</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var row in _statusRows)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(row.rek_num)</td>
+                                            <td>@FormatDate(row.date_required)</td>
+                                            <td>@ValueOrDash(row.official)</td>
+                                            <td>@ValueOrDash(GetDerivedStatus(row))</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -411,8 +581,26 @@
     private bool _isTaxisPerDepartment;
     private bool _isTaxisInServicePerDepartment;
     private bool _isLogsRequisitionsStatus;
+    private string _message = string.Empty;
+    private bool _error;
+    private List<TaxiRequestDto> _requests = new();
+    private List<TaxiRequestDto> _oneTaxiResults = new();
+    private Dictionary<string, int> _userCounts = new(StringComparer.OrdinalIgnoreCase);
+    private List<TaxiRequestDto> _oldRequisitionRows = new();
+    private List<TaxiRequestDto> _companyRows = new();
+    private List<TaxiRequestDto> _departmentRows = new();
+    private List<TaxiRequestDto> _inServiceDepartmentRows = new();
+    private List<TaxiRequestDto> _statusRows = new();
+    private string _oneTaxiSearch = string.Empty;
+    private string _oneTaxiLookupType = "GG";
+    private string _fromDateText = string.Empty;
+    private string _toDateText = string.Empty;
+    private string _statusStartDateText = string.Empty;
+    private string _statusEndDateText = string.Empty;
+    private string _selectedUserFilter = string.Empty;
+    private string _selectedContractorFilter = string.Empty;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _isOneTaxiNumber = Mode == "one-taxi-number";
         _isLogsPerUser = Mode == "logs-per-user";
@@ -447,6 +635,9 @@
         };
 
         _statusReportTitle = GetStatusReportTitle();
+
+        await LoadRequestsAsync();
+        ApplyInitialModeData();
     }
 
     private string GetStatusReportTitle()
@@ -466,6 +657,218 @@
         }
 
         return "Report";
+    }
+
+    private async Task LoadRequestsAsync()
+    {
+        try
+        {
+            _requests = await TaxiService.GetAllAsync<TaxiRequestDto>();
+            _error = false;
+            _message = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _requests = new();
+            _error = true;
+            _message = $"Failed to load taxi report data: {ex.Message}";
+        }
+    }
+
+    private void ApplyInitialModeData()
+    {
+        if (_isTaxisPerDepartment)
+        {
+            _departmentRows = _requests.Where(r => r.department_code is > 0).OrderBy(r => r.department_code).ThenByDescending(r => r.date_required).Take(300).ToList();
+        }
+
+        if (_isTaxisInServicePerDepartment)
+        {
+            _inServiceDepartmentRows = _requests.Where(r => r.department_code is > 0).OrderBy(r => r.department_code).ThenByDescending(r => r.date_required).Take(300).ToList();
+        }
+    }
+
+    private async Task SearchOneTaxiAsync()
+    {
+        await Task.CompletedTask;
+
+        var key = (_oneTaxiSearch ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            _oneTaxiResults = new();
+            _error = true;
+            _message = "Enter a registration / GG / private number.";
+            return;
+        }
+
+        _oneTaxiResults = _requests.Where(r => MatchTaxiNumber(r, key)).OrderByDescending(r => r.date_required).Take(200).ToList();
+        _error = false;
+        _message = _oneTaxiResults.Count == 0
+            ? $"No taxi records found for {key.ToUpperInvariant()}."
+            : $"{_oneTaxiResults.Count} record(s) found.";
+    }
+
+    private bool MatchTaxiNumber(TaxiRequestDto request, string value)
+    {
+        var comp = StringComparison.OrdinalIgnoreCase;
+        var trimmed = value.Trim();
+
+        return _oneTaxiLookupType switch
+        {
+            "GP" => (request.vmf_code ?? string.Empty).Contains(trimmed, comp) && (request.vmf_code ?? string.Empty).Contains("GP", comp),
+            "GG" => (request.vmf_code ?? string.Empty).Contains(trimmed, comp) && (request.vmf_code ?? string.Empty).Contains("GG", comp),
+            "PRIVATE" => (request.vmf_code ?? string.Empty).Contains(trimmed, comp),
+            _ => (request.vmf_code ?? string.Empty).Contains(trimmed, comp)
+        };
+    }
+
+    private void SetLookupType(string lookupType)
+        => _oneTaxiLookupType = lookupType;
+
+    private Task ApplyLogsPerUserFilterAsync()
+    {
+        var from = ParseDate(_fromDateText);
+        var to = ParseDate(_toDateText);
+
+        var filtered = _requests.Where(r => IsInDateRange(r.date_required, from, to));
+        if (!string.IsNullOrWhiteSpace(_selectedUserFilter))
+        {
+            filtered = filtered.Where(r => string.Equals((r.official ?? string.Empty).Trim(), _selectedUserFilter.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        _userCounts = filtered
+            .GroupBy(r => ValueOrDash(r.official))
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        return Task.CompletedTask;
+    }
+
+    private Task ApplyOldRequisitionsFilterAsync()
+    {
+        var from = ParseDate(_fromDateText);
+        var to = ParseDate(_toDateText);
+        _oldRequisitionRows = _requests
+            .Where(r => IsInDateRange(r.date_required, from, to))
+            .OrderByDescending(r => r.date_required)
+            .Take(500)
+            .ToList();
+
+        return Task.CompletedTask;
+    }
+
+    private Task ApplyCompanyFilterAsync()
+    {
+        if (short.TryParse(_selectedContractorFilter, out var contractorId))
+        {
+            _companyRows = _requests
+                .Where(r => r.contractor_id == contractorId)
+                .OrderByDescending(r => r.date_required)
+                .Take(500)
+                .ToList();
+        }
+        else
+        {
+            _companyRows = new();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task ApplyStatusFilterAsync()
+    {
+        var from = ParseDate(_statusStartDateText);
+        var to = ParseDate(_statusEndDateText);
+
+        var statusType = GetStatusType();
+        _statusRows = _requests
+            .Where(r => IsInDateRange(r.date_required, from, to))
+            .Where(r => statusType == "all" || string.Equals(GetDerivedStatus(r), statusType, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(r => r.date_required)
+            .Take(500)
+            .ToList();
+
+        return Task.CompletedTask;
+    }
+
+    private string GetStatusType()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (query.TryGetValue("type", out var typeValue))
+        {
+            return typeValue.ToString().Trim().ToLowerInvariant();
+        }
+
+        return "all";
+    }
+
+    private static string GetDerivedStatus(TaxiRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.rek_num))
+        {
+            return "outstanding";
+        }
+
+        return "all";
+    }
+
+    private Task PrintAsync()
+        => JS.InvokeVoidAsync("window.print").AsTask();
+
+    private static bool IsInDateRange(DateTime? value, DateTime? from, DateTime? to)
+    {
+        if (!value.HasValue)
+        {
+            return false;
+        }
+
+        var date = value.Value.Date;
+        if (from.HasValue && date < from.Value.Date)
+        {
+            return false;
+        }
+
+        if (to.HasValue && date > to.Value.Date)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static DateTime? ParseDate(string? value)
+        => DateTime.TryParse(value, out var parsed) ? parsed.Date : null;
+
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private IEnumerable<string> UserOptions =>
+        _requests.Select(r => (r.official ?? string.Empty).Trim())
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v);
+
+    private IEnumerable<short> ContractorOptions =>
+        _requests.Where(r => r.contractor_id is > 0)
+            .Select(r => r.contractor_id!.Value)
+            .Distinct()
+            .OrderBy(v => v);
+
+    private sealed class TaxiRequestDto
+    {
+        public int request_id { get; set; }
+        public string? rek_num { get; set; }
+        public short? contractor_id { get; set; }
+        public string? vmf_code { get; set; }
+        public short? department_code { get; set; }
+        public DateTime? date_required { get; set; }
+        public string? official { get; set; }
+        public string? address_1 { get; set; }
+        public string? address_2 { get; set; }
     }
 
 }

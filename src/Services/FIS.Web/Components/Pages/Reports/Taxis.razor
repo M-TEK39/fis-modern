@@ -25,7 +25,29 @@
     <div class="table-container">
         <div class="table-header">
             <span class="table-title">Taxi Records</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -80,10 +102,21 @@
 
 @code {
     private bool _loading;
+    private bool _showFieldSelector;
     private List<TaxiReportDto> _rows = new();
     private Dictionary<int, string> _vehicleLabels = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("request_id", "Request ID", true),
+        new("requisition", "Requisition #", true),
+        new("official", "Official", true),
+        new("vehicle", "Vehicle", true),
+        new("rank_status", "Rank/Status", true),
+        new("date_required", "Date Required", true),
+        new("address", "Address", true)
+    ];
 
     private List<TaxiReportDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -152,6 +185,65 @@
         {
             _page++;
         }
+    }
+
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "request_id" => row.request_id.ToString(),
+                "requisition" => ValueOrDash(row.rek_num),
+                "official" => ValueOrDash(row.official),
+                "vehicle" => GetVehicleLabel(row.vmf_code),
+                "rank_status" => ValueOrDash(row.rank),
+                "date_required" => row.date_required?.ToString("yyyy-MM-dd") ?? "-",
+                "address" => ValueOrDash(row.address_1),
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"taxis_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
     }
 
     private sealed class TaxiReportDto

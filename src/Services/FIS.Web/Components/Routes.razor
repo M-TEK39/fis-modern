@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
+@inject TokenService TokenService
 
 <CascadingAuthenticationState>
     <Router AppAssembly="typeof(Program).Assembly" OnNavigateAsync="GuardNavigation">
@@ -77,9 +78,7 @@
         ("/job-cards", LegacyPermissionBits.Workshop),
         ("/users", LegacyPermissionBits.UserAdministration),
         ("/troubleshoot", LegacyPermissionBits.UserAdministration),
-        ("/notice-management", LegacyPermissionBits.UserAdministration),
-        ("/change-password", LegacyPermissionBits.UserAdministration),
-        ("/change-password-question", LegacyPermissionBits.UserAdministration)
+        ("/notice-management", LegacyPermissionBits.UserAdministration)
     ];
 
     private static bool IsPublicRoute(string path)
@@ -95,6 +94,8 @@
 
     private async Task GuardNavigation(NavigationContext context)
     {
+        await TokenService.InitializeAsync();
+
         if (IsPublicRoute(context.Path))
         {
             return;
@@ -106,6 +107,19 @@
             try
             {
                 Navigation.NavigateTo("/login", replace: true);
+            }
+            catch (TaskCanceledException)
+            {
+                // Circuit/browser navigation can be canceled during disconnect; no action needed.
+            }
+            return;
+        }
+
+        if (RequiresPasswordChange(authState.User) && !IsPasswordChangeRoute(context.Path))
+        {
+            try
+            {
+                Navigation.NavigateTo("/change-password", replace: true);
             }
             catch (TaskCanceledException)
             {
@@ -173,5 +187,30 @@
     private static int? TryParseInt(string? value)
     {
         return int.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private static bool IsPasswordChangeRoute(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var normalized = "/" + path.Split('?', '#')[0].Trim('/').ToLowerInvariant();
+        return normalized == "/change-password";
+    }
+
+    private static bool RequiresPasswordChange(ClaimsPrincipal user)
+    {
+        var value = user.FindFirst("password_change_required")?.Value;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Equals("true", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("1", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("y", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("yes", StringComparison.OrdinalIgnoreCase);
     }
 }

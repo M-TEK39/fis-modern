@@ -424,15 +424,23 @@
         }
 
         var activeContracts = await ContractService.GetActiveContractsAsync();
-        var contract = activeContracts.FirstOrDefault(c => c.vmf_code == _vehicle.vmf_code);
+        short? siteCode = activeContracts
+            .FirstOrDefault(c => c.vmf_code == _vehicle.vmf_code)?
+            .site_code;
 
-        if (contract == null)
+        if (!siteCode.HasValue)
+        {
+            var latestContract = await ContractService.GetLatestContractForVehicleAsync(_vehicle.vmf_code);
+            siteCode = latestContract?.site_code;
+        }
+
+        if (!siteCode.HasValue)
         {
             _errorMessage = $"No Contract was found for this vehicle '{GG}'. Please contact the HelpDesk to open a contract before editing asset verification.";
             return;
         }
 
-        var site = await SiteService.GetByIdAsync(contract.site_code);
+        var site = await SiteService.GetByIdAsync(siteCode.Value);
         if (site == null)
         {
             _errorMessage = $"No Site found for this vehicle '{GG}'. Please contact the HelpDesk to load or investigate this vehicle.";

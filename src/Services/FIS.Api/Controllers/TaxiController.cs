@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Operations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,11 +12,16 @@ namespace FIS.Api.Controllers;
 public class TaxiController : BaseApiController
 {
     private readonly ITaxiRepository _repository;
+    private readonly ITaxiWhiteLogRepository _whiteLogRepository;
     private readonly ILogger<TaxiController> _logger;
 
-    public TaxiController(ITaxiRepository repository, ILogger<TaxiController> logger)
+    public TaxiController(
+        ITaxiRepository repository,
+        ITaxiWhiteLogRepository whiteLogRepository,
+        ILogger<TaxiController> logger)
     {
         _repository = repository;
+        _whiteLogRepository = whiteLogRepository;
         _logger = logger;
     }
 
@@ -53,4 +59,62 @@ public class TaxiController : BaseApiController
         try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
+
+    // --- White Log endpoints ---
+
+    [HttpPost("white-log")]
+    public async Task<ActionResult> CreateWhiteLog([FromBody] CreateWhiteLogRequest request)
+    {
+        try
+        {
+            if (request.end_odo <= request.start_odo)
+                return BadRequest("End odometer must be greater than start odometer.");
+
+            if (request.end_date < request.start_date)
+                return BadRequest("End date must be on or after start date.");
+
+            var log = new TaxiWhiteLog
+            {
+                vmf_code = request.vmf_code,
+                start_odo = request.start_odo,
+                end_odo = request.end_odo,
+                start_date = request.start_date,
+                end_date = request.end_date,
+                driver = request.driver,
+                user_access_code = (short)GetCurrentUserId()
+            };
+
+            var created = await _whiteLogRepository.CreateAsync(log, GetCurrentUserId());
+            return Ok(created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating white log");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("white-log")]
+    public async Task<ActionResult<IEnumerable<TaxiWhiteLog>>> GetAllWhiteLogs()
+    {
+        try { return Ok(await _whiteLogRepository.GetAllAsync()); }
+        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+    }
+
+    [HttpGet("white-log/vehicle/{vmfCode}")]
+    public async Task<ActionResult<IEnumerable<TaxiWhiteLog>>> GetWhiteLogsByVehicle(int vmfCode)
+    {
+        try { return Ok(await _whiteLogRepository.GetByVehicleAsync(vmfCode)); }
+        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+    }
+}
+
+public class CreateWhiteLogRequest
+{
+    public int vmf_code { get; set; }
+    public long start_odo { get; set; }
+    public long end_odo { get; set; }
+    public DateTime start_date { get; set; }
+    public DateTime end_date { get; set; }
+    public string? driver { get; set; }
 }

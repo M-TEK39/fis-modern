@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Services
 @using Microsoft.AspNetCore.Components
+@using System.Text
 @inject ContractApiService ContractService
 @inject UserApiService UserService
 @inject IJSRuntime JSRuntime
@@ -21,7 +22,7 @@
     </div>
 </div>
 
-<div class="page-content">
+<div class="page-content contract-printout-page">
     @if (_loading)
     {
         <div class="loading-state"><div class="spinner"></div><p>Loading printout...</p></div>
@@ -79,7 +80,6 @@
                             <table class="data-table">
                                 <tbody>
                                     <tr><th>Site</th><td>@ValueOrDash(_printout.Site?.Description)</td></tr>
-                                    <tr><th>Site ID</th><td>@ValueOrDash(_printout.Site?.SiteCode?.ToString())</td></tr>
                                     <tr><th>Responsible</th><td>@ValueOrDash(_printout.Site?.ResponsiblePerson)</td></tr>
                                     <tr><th>Email</th><td>@ValueOrDash(_printout.Site?.NetAddress)</td></tr>
                                     <tr><th>Telephone</th><td>@ValueOrDash(_printout.Site?.Telephone)</td></tr>
@@ -123,8 +123,21 @@
                                         <th>Notes</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody class="screen-only">
                                     @foreach (var item in PagedAuditTrail)
+                                    {
+                                        <tr>
+                                            <td>@ValueOrDash(item.PerformedAt)</td>
+                                            <td>@ValueOrDash(item.Action)</td>
+                                            <td>@FormatUser(item.PerformedByUserCode, null)</td>
+                                            <td>@ValueOrDash(item.OldStatus)</td>
+                                            <td>@ValueOrDash(item.NewStatus)</td>
+                                            <td>@ValueOrDash(item.Notes)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tbody class="print-only">
+                                    @foreach (var item in (_printout.AuditTrail ?? new List<ContractPrintoutAuditDto>()))
                                     {
                                         <tr>
                                             <td>@ValueOrDash(item.PerformedAt)</td>
@@ -223,7 +236,39 @@
 
     private async Task PrintAsync()
     {
-        await JSRuntime.InvokeVoidAsync("window.print");
+        if (_printout == null)
+        {
+            return;
+        }
+
+        await EnsurePrintHelperAsync();
+
+        var html = BuildPrintHtml(_printout);
+        var title = _printout.Contract?.ContractCode is > 0
+            ? $"Contract {_printout.Contract.ContractCode}"
+            : "Contract Printout";
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, title);
+    }
+
+    private async Task EnsurePrintHelperAsync()
+    {
+        const string script = @"
+window.fisPrint = window.fisPrint || {};
+if (!window.fisPrint.printHtml) {
+    window.fisPrint.printHtml = function (html, title) {
+        if (typeof html !== ""string"" || !html.trim()) return;
+        var printWindow = window.open("""", ""_blank"");
+        if (!printWindow) return;
+        printWindow.document.open();
+        printWindow.document.write(""<!doctype html><html><head><meta charset=\""utf-8\""><title>"" + (title || ""Print"") + ""</title></head><body>"" + html + ""</body></html>"");
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+        printWindow.close();
+    };
+}";
+
+        await JSRuntime.InvokeVoidAsync("eval", script);
     }
 
     private async Task DownloadAsync()
@@ -318,7 +363,6 @@
             string.Empty,
             "SITE",
             $"Site: {ValueOrDash(printout.Site?.Description)}",
-            $"Site ID: {ValueOrDash(printout.Site?.SiteCode?.ToString())}",
             $"Responsible: {ValueOrDash(printout.Site?.ResponsiblePerson)}",
             $"Email: {ValueOrDash(printout.Site?.NetAddress)}",
             $"Telephone: {ValueOrDash(printout.Site?.Telephone)}",
@@ -343,5 +387,98 @@
         }
 
         return string.Join(Environment.NewLine, lines);
+    }
+
+    private string BuildPrintHtml(ContractPrintoutDto printout)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<style>");
+        sb.AppendLine("body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#111;margin:20px;}");
+        sb.AppendLine("h1{font-size:20px;margin:0 0 6px 0;}h2{font-size:14px;margin:16px 0 8px 0;}");
+        sb.AppendLine(".muted{color:#555;margin-bottom:12px;}");
+        sb.AppendLine("table{width:100%;border-collapse:collapse;margin-bottom:10px;table-layout:auto;}");
+        sb.AppendLine("th,td{border:1px solid #cfcfcf;padding:6px 8px;text-align:left;vertical-align:top;word-break:break-word;}");
+        sb.AppendLine("th{background:#f5f5f5;width:26%;}");
+        sb.AppendLine("@media print{body{margin:10mm;}thead{display:table-header-group;}tr{page-break-inside:avoid;}}");
+        sb.AppendLine("</style>");
+
+        sb.AppendLine($"<h1>{EscapeHtml(printout.DocumentTitle ?? $"Contract #{printout.Contract?.ContractCode}")}</h1>");
+        sb.AppendLine($"<div class=\"muted\">Printed: {EscapeHtml(ValueOrDash(printout.PrintedAt?.ToString("yyyy-MM-dd HH:mm")))}</div>");
+
+        sb.AppendLine("<h2>Contract</h2><table><tbody>");
+        AppendRow(sb, "Contract #", printout.Contract?.ContractCode.ToString());
+        AppendRow(sb, "Status", printout.Contract?.StatusText);
+        AppendRow(sb, "Start Date", printout.Contract?.StartDate);
+        AppendRow(sb, "End Date", printout.Contract?.EndDate);
+        AppendRow(sb, "Target Return", printout.Contract?.TargetReturnDate);
+        AppendRow(sb, "Start Odometer", printout.Contract?.StartOdometer?.ToString());
+        AppendRow(sb, "End Odometer", printout.Contract?.EndOdometer?.ToString());
+        AppendRow(sb, "Type", printout.Contract?.ContractType);
+        AppendRow(sb, "Driver ID", printout.Contract?.DriverId);
+        AppendRow(sb, "Notes", printout.Contract?.Notes);
+        sb.AppendLine("</tbody></table>");
+
+        sb.AppendLine("<h2>Vehicle</h2><table><tbody>");
+        AppendRow(sb, "Fleet/GG", printout.Vehicle?.FleetNumber);
+        AppendRow(sb, "Registration", printout.Vehicle?.RegistrationNumber);
+        AppendRow(sb, "Vehicle ID", printout.Vehicle?.VmfCode?.ToString());
+        AppendRow(sb, "Year", printout.Vehicle?.YearManufactured?.ToString());
+        AppendRow(sb, "Current ODO", printout.Vehicle?.CurrentOdo?.ToString());
+        sb.AppendLine("</tbody></table>");
+
+        sb.AppendLine("<h2>Site</h2><table><tbody>");
+        AppendRow(sb, "Site", printout.Site?.Description);
+        AppendRow(sb, "Responsible", printout.Site?.ResponsiblePerson);
+        AppendRow(sb, "Email", printout.Site?.NetAddress);
+        AppendRow(sb, "Telephone", printout.Site?.Telephone);
+        sb.AppendLine("</tbody></table>");
+
+        sb.AppendLine("<h2>Parties</h2><table><tbody>");
+        AppendRow(sb, "Capturer", FormatUser(printout.Parties?.Capturer?.UserCode, printout.Parties?.Capturer?.Email));
+        AppendRow(sb, "Approver", FormatUser(printout.Parties?.Approver?.UserCode, printout.Parties?.Approver?.Email));
+        sb.AppendLine("</tbody></table>");
+
+        sb.AppendLine("<h2>Audit Trail</h2>");
+        if (printout.AuditTrail == null || printout.AuditTrail.Count == 0)
+        {
+            sb.AppendLine("<div class=\"muted\">No workflow history entries recorded yet.</div>");
+        }
+        else
+        {
+            sb.AppendLine("<table><thead><tr><th>When</th><th>Action</th><th>User</th><th>From</th><th>To</th><th>Notes</th></tr></thead><tbody>");
+            foreach (var item in printout.AuditTrail)
+            {
+                sb.AppendLine("<tr>");
+                sb.AppendLine($"<td>{EscapeHtml(ValueOrDash(item.PerformedAt))}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(ValueOrDash(item.Action))}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(FormatUser(item.PerformedByUserCode, null))}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(ValueOrDash(item.OldStatus))}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(ValueOrDash(item.NewStatus))}</td>");
+                sb.AppendLine($"<td>{EscapeHtml(ValueOrDash(item.Notes))}</td>");
+                sb.AppendLine("</tr>");
+            }
+            sb.AppendLine("</tbody></table>");
+        }
+
+        return sb.ToString();
+    }
+
+    private static void AppendRow(StringBuilder sb, string label, string? value)
+    {
+        sb.AppendLine("<tr>");
+        sb.AppendLine($"<th>{EscapeHtml(label)}</th>");
+        sb.AppendLine($"<td>{EscapeHtml(ValueOrDash(value))}</td>");
+        sb.AppendLine("</tr>");
+    }
+
+    private static string EscapeHtml(string? value)
+    {
+        var text = value ?? string.Empty;
+        return text
+            .Replace("&", "&amp;", StringComparison.Ordinal)
+            .Replace("<", "&lt;", StringComparison.Ordinal)
+            .Replace(">", "&gt;", StringComparison.Ordinal)
+            .Replace("\"", "&quot;", StringComparison.Ordinal)
+            .Replace("'", "&#39;", StringComparison.Ordinal);
     }
 }

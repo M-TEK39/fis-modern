@@ -3,6 +3,7 @@ namespace FIS.Web.Models;
 public class VehicleLookupDto
 {
     public int VmfCode { get; set; }
+    public string? FleetNumber { get; set; }
     public string? GGNumber { get; set; }
     public string? RegistrationNumber { get; set; }
     public string? MakeAndModel { get; set; }

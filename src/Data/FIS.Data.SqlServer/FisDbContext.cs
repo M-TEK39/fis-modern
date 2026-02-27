@@ -293,6 +293,7 @@ public class FisDbContext : DbContext
     public DbSet<TempVehicleExtra> TempVehicleExtras { get; set; } = null!;
     public DbSet<VehicleRemark> VehicleRemarks { get; set; } = null!;
     public DbSet<VehicleLicenceHistory> VehicleLicenceHistories { get; set; } = null!;
+    public DbSet<VehicleDocument> VehicleDocuments { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -302,6 +303,32 @@ public class FisDbContext : DbContext
         {
             entity.HasIndex(e => e.vmf_code).IsUnique().HasDatabaseName("IX_Vehicle_VmfCode_Unique");
             entity.HasIndex(e => e.registration_number).IsUnique().HasDatabaseName("IX_Vehicle_Registration_Unique");
+
+            // Performance: status/site filtering is on every list and report query
+            entity.HasIndex(e => new { e.vehicle_status_code, e.is_deleted })
+                .HasDatabaseName("IX_Vehicle_Status_Deleted");
+            entity.HasIndex(e => new { e.veh_site_code, e.is_deleted })
+                .HasDatabaseName("IX_Vehicle_Site_Deleted");
+
+            // Performance: fleet_number search (registration already has unique index)
+            entity.HasIndex(e => e.fleet_number)
+                .HasFilter("fleet_number IS NOT NULL")
+                .HasDatabaseName("IX_Vehicle_FleetNumber");
+
+            // Performance: capture activity report + ordering by capture date
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_Vehicle_DateCreated_Deleted");
+
+            // Performance: licence renewal dashboard / expiry reports
+            entity.HasIndex(e => e.licence_due_date)
+                .HasFilter("licence_due_date IS NOT NULL AND is_deleted = 0")
+                .HasDatabaseName("IX_Vehicle_LicenceDueDate");
+
+            // Performance: invoice number search (new feature)
+            entity.HasIndex(e => e.invoice_number)
+                .HasFilter("invoice_number IS NOT NULL")
+                .HasDatabaseName("IX_Vehicle_InvoiceNumber");
+
             entity.ToTable(t =>
             {
                 t.HasCheckConstraint("CK_Vehicle_PurchasePrice", "purchase_amount >= 0");
@@ -315,6 +342,22 @@ public class FisDbContext : DbContext
                 .HasFilter("still_current = 'Y'")
                 .IsUnique()
                 .HasDatabaseName("IX_Contract_ActiveVehicle_Unique");
+
+            // Performance: per-vehicle contract list (loads on every vehicle detail page)
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted })
+                .HasDatabaseName("IX_Contract_VmfCode_Deleted");
+
+            // Performance: site-based contract views + still_current filter
+            entity.HasIndex(e => new { e.site_code, e.still_current, e.is_deleted })
+                .HasDatabaseName("IX_Contract_Site_Current_Deleted");
+
+            // Performance: date-range contract queries
+            entity.HasIndex(e => new { e.start_date, e.is_deleted })
+                .HasDatabaseName("IX_Contract_StartDate_Deleted");
+
+            // Performance: capture activity report
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_Contract_DateCreated_Deleted");
 
             entity.ToTable(t =>
             {
@@ -420,6 +463,10 @@ public class FisDbContext : DbContext
             // Index for authorizer queries
             entity.HasIndex(e => new { e.authorizer, e.status_code })
                 .HasDatabaseName("IX_JobCard_Authorizer_Status");
+
+            // Performance: per-vehicle job card list + capture activity report
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted, e.date_created })
+                .HasDatabaseName("IX_JobCard_VmfCode_Deleted_Date");
         });
 
         // VehicleLicenceHistory index — fast lookup per vehicle ordered by date
@@ -439,6 +486,218 @@ public class FisDbContext : DbContext
             // For the fleet-wide active remarks query
             entity.HasIndex(e => new { e.is_resolved, e.is_deleted })
                 .HasDatabaseName("IX_VehicleRemark_Active");
+
+            // Performance: capture activity report date filter
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_VehicleRemark_DateCreated_Deleted");
+        });
+
+        modelBuilder.Entity<VehicleDocument>(entity =>
+        {
+            // Vehicle document lookup — most common query (all docs for a vehicle)
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted })
+                .HasDatabaseName("IX_VehicleDocument_Vehicle");
+
+            // Category filter — used when filtering by module (Accident, Fine, etc.)
+            entity.HasIndex(e => new { e.vmf_code, e.document_category, e.is_deleted })
+                .HasDatabaseName("IX_VehicleDocument_Vehicle_Category");
+
+            // Reference lookup — used to fetch docs for a specific accident/fine/contract
+            entity.HasIndex(e => new { e.reference_type, e.reference_id, e.is_deleted })
+                .HasDatabaseName("IX_VehicleDocument_Reference");
+
+            // Performance: capture activity report date filter
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_VehicleDocument_DateCreated_Deleted");
+        });
+
+        // Accident indexes — used in reports and capture activity
+        modelBuilder.Entity<Accident>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted })
+                .HasDatabaseName("IX_Accident_VmfCode_Deleted");
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_Accident_DateCreated_Deleted");
+        });
+
+        // Fine indexes — used in reports and capture activity
+        modelBuilder.Entity<Fine>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted })
+                .HasDatabaseName("IX_Fine_VmfCode_Deleted");
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_Fine_DateCreated_Deleted");
+        });
+
+        // Logbook indexes — used in capture activity and per-vehicle lookup
+        modelBuilder.Entity<Logbook>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted })
+                .HasDatabaseName("IX_Logbook_VmfCode_Deleted");
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_Logbook_DateCreated_Deleted");
+        });
+
+        // JournalDetail indexes — financial reports are the heaviest queries in FIS
+        modelBuilder.Entity<JournalDetail>(entity =>
+        {
+            // Per-vehicle billing and cost reports (most common financial query)
+            entity.HasIndex(e => new { e.vmf_code, e.journal_detail_date })
+                .HasDatabaseName("IX_JournalDetail_VmfCode_Date");
+
+            // Site-level cost reports
+            entity.HasIndex(e => new { e.site_code, e.journal_detail_date })
+                .HasDatabaseName("IX_JournalDetail_Site_Date");
+
+            // Financial year reports (FY + site is the standard filter combo)
+            entity.HasIndex(e => new { e.journal_detail_financial_year, e.site_code })
+                .HasDatabaseName("IX_JournalDetail_FY_Site");
+
+            // Department cost reports
+            entity.HasIndex(e => new { e.department_code, e.journal_detail_date })
+                .HasDatabaseName("IX_JournalDetail_Dept_Date");
+
+            // Posting status filter — accepted/unaccepted journals
+            entity.HasIndex(e => new { e.journal_detail_isaccepted, e.journal_detail_date })
+                .HasDatabaseName("IX_JournalDetail_Accepted_Date");
+        });
+
+        // Invoice indexes — billing / invoice reports
+        modelBuilder.Entity<Invoice>(entity =>
+        {
+            entity.HasIndex(e => new { e.posting_month_code, e.department_code, e.is_deleted })
+                .HasDatabaseName("IX_Invoice_PostingMonth_Dept_Deleted");
+            entity.HasIndex(e => new { e.date_created, e.is_deleted })
+                .HasDatabaseName("IX_Invoice_DateCreated_Deleted");
+        });
+
+        // Tariff indexes — approval workflow and class/year lookups
+        modelBuilder.Entity<Tariff>(entity =>
+        {
+            // Status-based filtering (Draft/Pending/Approved/Rejected) — approval workflow
+            entity.HasIndex(e => new { e.tariff_approval_status, e.is_deleted })
+                .HasDatabaseName("IX_Tariff_ApprovalStatus_Deleted");
+            // Tariff lookup by vehicle class + effective date range
+            entity.HasIndex(e => new { e.class_code, e.effective_start_date, e.effective_end_date })
+                .HasDatabaseName("IX_Tariff_Class_EffectiveDates");
+            // Year filter used in tariff report
+            entity.HasIndex(e => new { e.year_manufactured, e.is_deleted })
+                .HasDatabaseName("IX_Tariff_YearManufactured_Deleted");
+        });
+
+        // Logsheet indexes — monthly usage reports by site and date
+        modelBuilder.Entity<Logsheet>(entity =>
+        {
+            entity.HasIndex(e => new { e.site_code, e.month, e.is_deleted })
+                .HasDatabaseName("IX_Logsheet_Site_Month_Deleted");
+            entity.HasIndex(e => new { e.vmf_code, e.is_deleted })
+                .HasDatabaseName("IX_Logsheet_VmfCode_Deleted");
+        });
+
+        // NotificationLog indexes — batch notification processing
+        modelBuilder.Entity<NotificationLog>(entity =>
+        {
+            // Pending/Failed notifications queried on every retry cycle
+            entity.HasIndex(e => new { e.DeliveryStatus, e.date_created })
+                .HasDatabaseName("IX_NotificationLog_Status_Date");
+            entity.HasIndex(e => e.WorkflowID)
+                .HasDatabaseName("IX_NotificationLog_WorkflowID");
+        });
+
+        // CallCentre indexes — call history pagination
+        modelBuilder.Entity<CallCentre>(entity =>
+        {
+            entity.HasIndex(e => new { e.Call_date, e.vmf_code })
+                .HasDatabaseName("IX_CallCentre_Date_VmfCode");
+        });
+
+        // VehicleAssessment indexes — latest assessment per vehicle
+        modelBuilder.Entity<VehicleAssessment>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.assessment_date })
+                .HasDatabaseName("IX_VehicleAssessment_VmfCode_Date");
+        });
+
+        // Workshop indexes — service request history per vehicle
+        modelBuilder.Entity<Workshop>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.receive_date })
+                .HasDatabaseName("IX_Workshop_VmfCode_ReceiveDate");
+        });
+
+        // Towing indexes — towing requests by site and date
+        modelBuilder.Entity<Towing>(entity =>
+        {
+            entity.HasIndex(e => new { e.Site_code, e.Tow_request_date })
+                .HasDatabaseName("IX_Towing_Site_RequestDate");
+            entity.HasIndex(e => e.vmf_code)
+                .HasDatabaseName("IX_Towing_VmfCode");
+        });
+
+        // VehicleDamage indexes — damage status workflow
+        modelBuilder.Entity<VehicleDamage>(entity =>
+        {
+            entity.HasIndex(e => new { e.damage_status, e.vmf_code })
+                .HasDatabaseName("IX_VehicleDamage_Status_VmfCode");
+        });
+
+        // Booking indexes — booking status and date range queries
+        modelBuilder.Entity<Booking>(entity =>
+        {
+            entity.HasIndex(e => new { e.booking_status, e.is_deleted })
+                .HasDatabaseName("IX_Booking_Status_Deleted");
+            entity.HasIndex(e => new { e.start_date, e.end_date, e.is_deleted })
+                .HasDatabaseName("IX_Booking_Dates_Deleted");
+        });
+
+        // Fine — outstanding fines (unpaid) and site-based filtering
+        modelBuilder.Entity<Fine>(entity =>
+        {
+            entity.HasIndex(e => new { e.Fine_pay_date, e.is_deleted })
+                .HasFilter("Fine_pay_date IS NULL AND is_deleted = 0")
+                .HasDatabaseName("IX_Fine_Unpaid");
+            entity.HasIndex(e => new { e.Site_code, e.is_deleted })
+                .HasDatabaseName("IX_Fine_Site_Deleted");
+        });
+
+        // Tracking — active tracking units (remove_date IS NULL = active)
+        modelBuilder.Entity<Tracking>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.remove_date })
+                .HasDatabaseName("IX_Tracking_VmfCode_RemoveDate");
+            entity.HasIndex(e => e.remove_date)
+                .HasFilter("remove_date IS NULL")
+                .HasDatabaseName("IX_Tracking_Active");
+        });
+
+        // AssetVerification indexes — site-based verification queries
+        modelBuilder.Entity<AssetVerification>(entity =>
+        {
+            entity.HasIndex(e => new { e.site_code, e.vmf_code })
+                .HasDatabaseName("IX_AssetVerification_Site_VmfCode");
+        });
+
+        // DailyTransaction indexes — financial cost reporting by vehicle and period
+        modelBuilder.Entity<DailyTransaction>(entity =>
+        {
+            entity.HasIndex(e => new { e.vmf_code, e.posting_month_code })
+                .HasDatabaseName("IX_DailyTransaction_VmfCode_PostingMonth");
+            entity.HasIndex(e => new { e.posting_month_code, e.cost_category_code })
+                .HasDatabaseName("IX_DailyTransaction_PostingMonth_CostCategory");
+        });
+
+        // VehicleHistory indexes — status change history per vehicle
+        modelBuilder.Entity<VehicleHistory>(entity =>
+        {
+            entity.HasIndex(e => new { e.hist_vmf_code, e.hist_date_changed })
+                .HasDatabaseName("IX_VehicleHistory_VmfCode_DateChanged");
+        });
+
+        // Department indexes — company/department lookups
+        modelBuilder.Entity<Department>(entity =>
+        {
+            entity.HasIndex(e => e.company_code)
+                .HasDatabaseName("IX_Department_CompanyCode");
         });
 
         modelBuilder.HasDefaultSchema("dbo");

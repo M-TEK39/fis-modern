@@ -51,6 +51,7 @@ builder.Services.AddHttpContextAccessor();
 
 // Register TokenService (scoped to user circuit)
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<SidebarStateService>();
 
 // Register AuthorizationHeaderHandler (adds JWT to API requests)
 // Transient because it resolves TokenService dynamically from IServiceProvider
@@ -66,6 +67,12 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
 
 // Register API services with AuthorizationHeaderHandler (automatically adds JWT to requests)
 builder.Services.AddHttpClient<VehicleApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
+builder.Services.AddHttpClient<VehicleDocumentApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);
@@ -186,6 +193,12 @@ builder.Services.AddHttpClient<NoticeApiService>(client =>
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<ReportCatalogApiService>(client =>
+{
+    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
+builder.Services.AddHttpClient<CaptureActivityApiService>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5010/");
     client.Timeout = TimeSpan.FromSeconds(30);

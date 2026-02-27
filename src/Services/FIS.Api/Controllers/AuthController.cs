@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using FIS.Core.Application.Interfaces;
+using FIS.Data.SqlServer;
 
 namespace FIS.Api.Controllers;
 
@@ -20,15 +22,18 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly IUserRepository _userRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IConfiguration configuration,
         IUserRepository userRepository,
+        FisDbContext context,
         ILogger<AuthController> logger)
     {
         _configuration = configuration;
         _userRepository = userRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -61,29 +66,83 @@ public class AuthController : ControllerBase
             int userAccessCode = int.TryParse(request.Username, out var code) ? code : 1;
 
             // Check if user exists in database
-            var user = await _userRepository.GetByIdAsync(userAccessCode);
-            if (user == null)
-            {
-                // Create test user data
+            var devUser = await _userRepository.GetByIdAsync(userAccessCode);
+            if (devUser == null)
                 _logger.LogInformation("Creating test token for non-existent user_access_code: {UserAccessCode}", userAccessCode);
-            }
 
-            var token = GenerateJwtToken(userAccessCode, user?.email ?? $"user{userAccessCode}@test.com");
+            var devToken = GenerateJwtToken(userAccessCode, devUser?.email ?? $"user{userAccessCode}@test.com");
 
             return Ok(new LoginResponse
             {
-                Token = token.TokenString,
-                ExpiresAt = token.ExpiresAt,
+                Token = devToken.TokenString,
+                ExpiresAt = devToken.ExpiresAt,
                 UserAccessCode = userAccessCode,
-                Email = user?.email,
+                Email = devUser?.email,
                 Message = "Development mode: Authentication bypassed"
             });
         }
 
-        // PRODUCTION: Implement real credential validation here
-        // TODO: Check against LegacyUserCredential table or external auth system
-        _logger.LogWarning("Production authentication not yet implemented");
-        return Unauthorized(new { error = "Authentication not configured. Contact system administrator." });
+        // Production: validate against LegacyUserCredential table
+        var user = await _userRepository.GetByEmailAsync(request.Username);
+        if (user == null)
+        {
+            _logger.LogWarning("Login failed: user not found for {Username}", request.Username);
+            return Unauthorized(new { error = "Invalid username or password" });
+        }
+
+        var credential = await _context.LegacyUserCredentials
+            .FirstOrDefaultAsync(c => c.user_access_code == user.user_access_code && c.is_active);
+
+        if (credential == null)
+        {
+            _logger.LogWarning("Login failed: no active credential for user {UserAccessCode}", user.user_access_code);
+            return Unauthorized(new { error = "Invalid username or password" });
+        }
+
+        // Account lockout check
+        if (credential.account_locked_until.HasValue && credential.account_locked_until.Value > DateTime.UtcNow)
+        {
+            return Unauthorized(new { error = "Account is temporarily locked. Please try again later." });
+        }
+
+        // Verify password
+        var passwordValid = BCrypt.Net.BCrypt.Verify(request.Password, credential.password_hash);
+        if (!passwordValid)
+        {
+            credential.failed_login_attempts++;
+            if (credential.failed_login_attempts >= 5)
+                credential.account_locked_until = DateTime.UtcNow.AddMinutes(30);
+            _context.LegacyUserCredentials.Update(credential);
+            await _context.SaveChangesAsync();
+            _logger.LogWarning("Login failed: wrong password for user {UserAccessCode}", user.user_access_code);
+            return Unauthorized(new { error = "Invalid username or password" });
+        }
+
+        // Successful login — reset failed attempts
+        credential.failed_login_attempts = 0;
+        credential.account_locked_until = null;
+        _context.LegacyUserCredentials.Update(credential);
+        await _context.SaveChangesAsync();
+
+        // Password expiry check
+        var expiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "30");
+        var passwordAge = (DateTime.UtcNow - credential.last_password_change).TotalDays;
+        var passwordExpired = passwordAge > expiryDays;
+
+        var token = GenerateJwtToken(user.user_access_code, user.email ?? request.Username, passwordExpired);
+
+        return Ok(new LoginResponse
+        {
+            Token = token.TokenString,
+            ExpiresAt = token.ExpiresAt,
+            UserAccessCode = user.user_access_code,
+            Email = user.email,
+            PasswordExpired = passwordExpired,
+            PasswordExpiresIn = Math.Max(0, (int)(expiryDays - passwordAge)),
+            Message = passwordExpired
+                ? "Password has expired. Please change your password to continue."
+                : "Login successful"
+        });
     }
 
     /// <summary>
@@ -206,8 +265,24 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Implement actual password verification and update
-            _logger.LogInformation("Password change requested for user {Username}", request.Username);
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == user.user_access_code && c.is_active);
+
+            if (credential == null)
+                return BadRequest(new ChangePasswordResponse { Success = false, Message = "No credential record found for this user" });
+
+            if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, credential.password_hash))
+                return BadRequest(new ChangePasswordResponse { Success = false, Message = "Current password is incorrect" });
+
+            credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            credential.last_password_change = DateTime.UtcNow;
+            credential.modified_date = DateTime.UtcNow;
+            credential.failed_login_attempts = 0;
+            credential.account_locked_until = null;
+            _context.LegacyUserCredentials.Update(credential);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Password changed successfully for user {Username}", request.Username);
 
             return Ok(new ChangePasswordResponse
             {
@@ -542,7 +617,7 @@ public class AuthController : ControllerBase
 
     #region Private Methods
 
-    private (string TokenString, DateTime ExpiresAt) GenerateJwtToken(int userAccessCode, string email)
+    private (string TokenString, DateTime ExpiresAt) GenerateJwtToken(int userAccessCode, string email, bool passwordExpired = false)
     {
         var jwtSettings = _configuration.GetSection("JwtSettings");
         var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
@@ -557,7 +632,8 @@ public class AuthController : ControllerBase
             new Claim(ClaimTypes.Email, email),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
-            new Claim(ClaimTypes.Name, email)
+            new Claim(ClaimTypes.Name, email),
+            new Claim("password_change_required", passwordExpired.ToString().ToLower())
         };
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
@@ -645,6 +721,17 @@ public class LoginResponse
     /// Optional message
     /// </summary>
     public string? Message { get; set; }
+
+    /// <summary>
+    /// True when the user's password has expired and must be changed before using the system.
+    /// The returned token includes a password_change_required claim for the frontend to enforce redirection.
+    /// </summary>
+    public bool PasswordExpired { get; set; } = false;
+
+    /// <summary>
+    /// Days remaining before the password expires (0 if already expired).
+    /// </summary>
+    public int PasswordExpiresIn { get; set; }
 }
 
 /// <summary>
@@ -653,7 +740,14 @@ public class LoginResponse
 public class ChangePasswordRequest
 {
     public string Username { get; set; } = string.Empty;
-    public string OldPassword { get; set; } = string.Empty;
+    /// <summary>Current (old) password — required to verify identity before changing.</summary>
+    public string CurrentPassword { get; set; } = string.Empty;
+    /// <summary>Kept for backwards compat — maps to CurrentPassword if provided.</summary>
+    public string OldPassword
+    {
+        get => CurrentPassword;
+        set { if (!string.IsNullOrEmpty(value)) CurrentPassword = value; }
+    }
     public string NewPassword { get; set; } = string.Empty;
     public string ConfirmNewPassword { get; set; } = string.Empty;
 }

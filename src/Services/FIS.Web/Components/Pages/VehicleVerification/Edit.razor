@@ -20,7 +20,7 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <EditForm OnValidSubmit="HandleSubmit">
+            <EditForm Model="_formModel" OnValidSubmit="HandleSubmit">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="validation-summary" />
 
@@ -75,6 +75,7 @@
 </div>
 
 @code {
+    private readonly object _formModel = new();
     private string _searchTerm = "";
     private string _searchMode = "GG";
     private List<VehicleLookupDto> _vehicleMatches = new();
@@ -102,10 +103,10 @@
         }
 
         var query = _searchMode == "GG"
-            ? selected.GGNumber
+            ? GetGGNumber(selected)
             : selected.RegistrationNumber;
         query = string.IsNullOrWhiteSpace(query)
-            ? (_searchMode == "GG" ? selected.RegistrationNumber : selected.GGNumber)
+            ? (_searchMode == "GG" ? selected.RegistrationNumber : GetGGNumber(selected))
             : query;
 
         if (string.IsNullOrWhiteSpace(query))
@@ -150,7 +151,7 @@
 
     private static string VehicleOptionLabel(VehicleLookupDto vehicle)
     {
-        var gg = ValueOrDash(vehicle.GGNumber);
+        var gg = ValueOrDash(GetGGNumber(vehicle));
         var reg = ValueOrDash(vehicle.RegistrationNumber);
         return $"{gg} / {reg} ({vehicle.VmfCode})";
     }
@@ -163,13 +164,16 @@
         return matches
             .Where(v => isGp
                 ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
-                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
+                : !string.IsNullOrWhiteSpace(GetGGNumber(v)) && GetGGNumber(v)!.Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(v => isGp
                 ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
+                : string.Equals(GetGGNumber(v)?.Trim(), query, StringComparison.OrdinalIgnoreCase))
             .ThenBy(v => v.VmfCode)
             .ToList();
     }
+
+    private static string? GetGGNumber(VehicleLookupDto vehicle)
+        => string.IsNullOrWhiteSpace(vehicle.GGNumber) ? vehicle.FleetNumber : vehicle.GGNumber;
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;

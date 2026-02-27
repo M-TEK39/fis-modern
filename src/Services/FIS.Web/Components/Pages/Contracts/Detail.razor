@@ -12,6 +12,7 @@
 @inject TariffApiService TariffService
 @inject DepartmentApiService DepartmentService
 @inject SiteApiService SiteService
+@inject UserApiService UserService
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -43,7 +44,7 @@
     {
         <div class="contract-banner contract-banner-warning">
             <i class="bx bx-error"></i>
-            <span>No current tariff found for this vehicle class. Contract can still be created.</span>
+            <span>No current tariff found for this vehicle class. Submit is blocked until a valid tariff is configured.</span>
         </div>
     }
 
@@ -129,10 +130,14 @@
                         else if (IsActiveContractState())
                         {
                             <div class="contract-action-group">
-                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("extend")' disabled="@_actionRunning">Extend Active Contract</button>
-                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("reassign")' disabled="@_actionRunning">Reassign Contract</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("extend")' disabled="@_actionRunning">@(_extendMode ? "Save Extension" : "Extend Active Contract")</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("reassign")' disabled="@_actionRunning">@(_reassignMode ? "Save Reassign" : "Reassign Contract")</button>
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("close")' disabled="@_actionRunning">Close Active Contract</button>
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
+                                @if (_extendMode || _reassignMode)
+                                {
+                                    <button class="btn btn-warning btn-sm" type="button" @onclick="CancelActiveEditMode">Cancel Edit Mode</button>
+                                }
                             </div>
                         }
                         @if (!string.IsNullOrWhiteSpace(_actionStatusMessage))
@@ -286,7 +291,7 @@
                                     <th rowspan="3">Contract Client<br /><span class="contract-muted">* Intended or current active contract</span></th>
                                         <th>Department</th>
                                         <td colspan="2">
-                                            <select class="form-select" @bind="_selectedDepartmentCode" @bind:after="OnDepartmentChanged">
+                                            <select class="form-select" @bind="_selectedDepartmentCode" @bind:after="OnDepartmentChanged" disabled="@(!CanEditContractSite())">
                                                 <option value="0">Select Department</option>
                                                 @foreach (var department in _departments)
                                                 {
@@ -328,9 +333,9 @@
                                 <tr>
                                         <th>Site</th>
                                         <td colspan="2">
-                                            <select class="form-select" @bind="_selectedSiteCode" @bind:after="OnSiteChanged">
+                                            <select class="form-select" @bind="_selectedSiteCode" @bind:after="OnSiteChanged" disabled="@(!CanEditContractSite())">
                                                 <option value="0">Select Site</option>
-                                                @foreach (var site in FilteredSites)
+                                                @foreach (var site in SelectableSites)
                                                 {
                                                     <option value="@site.SiteCode">@SiteDisplay(site)</option>
                                                 }
@@ -617,7 +622,16 @@
                                         <span class="contract-muted">Lease Months</span>
                                     </td>
                                     <th>Return Date</th>
-                                    <td><input type="date" class="form-input" value="@FormatDateForInput(_contract?.end_date)" readonly /></td>
+                                    <td>
+                                        @if (_extendMode)
+                                        {
+                                            <input type="date" class="form-input" @bind-value="_extendTargetReturnDate" @bind-value:format="yyyy-MM-dd" />
+                                        }
+                                        else
+                                        {
+                                            <input type="date" class="form-input" value="@FormatDateForInput(_extendTargetReturnDate)" readonly />
+                                        }
+                                    </td>
                                 </tr>
                                 <tr>
                                     <th>Backdating Required</th>
@@ -715,13 +729,22 @@
     private bool _hasPendingContract;
     private bool _openContractMode;
     private bool _reviewPendingMode;
+    private bool _reassignMode;
+    private bool _extendMode;
+    private short? _reassignOriginalSiteCode;
+    private DateTime? _extendOriginalTargetReturnDate;
+    private DateTime? _extendTargetReturnDate;
     private bool _scrollToTopPending = true;
     private bool _submittedByCurrentUserInSession;
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
+    private bool _isAdminUser;
+    private short? _currentUserSiteCode;
+    private HashSet<string> _currentUserRoleTokens = new(StringComparer.OrdinalIgnoreCase);
     private VehicleTariffPreviewResponseDto? _tariffPreview;
     private bool _showTariffWarning;
+    private Dictionary<int, UserProfileDto> _userProfilesByCode = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -729,6 +752,7 @@
         {
             await ResolveCurrentUserContextAsync();
             await LoadLookupDataAsync();
+            await LoadUserProfilesAsync();
 
             if (int.TryParse(ContractId, out var contractId))
             {
@@ -876,8 +900,17 @@
     {
         var vmfCode = _vehicle?.vmf_code ?? _contract?.vmf_code ?? 0;
 
+        if (RequiresJurisdictionControl(action) && !ValidateJurisdictionAccess(action, out var jurisdictionMessage))
+        {
+            _actionStatusError = true;
+            _actionStatusMessage = jurisdictionMessage;
+            return;
+        }
+
         if (action == "open")
         {
+            _reassignMode = false;
+            _extendMode = false;
             if (vmfCode <= 0)
             {
                 _actionStatusError = true;
@@ -894,6 +927,8 @@
 
         if (action == "review-pending")
         {
+            _reassignMode = false;
+            _extendMode = false;
             if (!CanCurrentUserReviewPendingContract())
             {
                 _actionStatusError = true;
@@ -910,11 +945,67 @@
 
         if (action == "review-correction")
         {
+            _reassignMode = false;
+            _extendMode = false;
             _openContractMode = true;
             _reviewPendingMode = false;
             _actionStatusError = false;
             _actionStatusMessage = "Correction contract loaded. Update details and submit for approval.";
             return;
+        }
+
+        if (action == "reassign")
+        {
+            if (!_reassignMode)
+            {
+                EnterReassignMode();
+                return;
+            }
+
+            if (_selectedSiteCode <= 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a valid site before saving reassignment.";
+                return;
+            }
+
+            if (_reassignOriginalSiteCode.HasValue && _reassignOriginalSiteCode.Value == _selectedSiteCode)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a different site to reassign this contract.";
+                return;
+            }
+
+            if (!ValidateReassignEmailControls(out var emailControlMessage))
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = emailControlMessage;
+                return;
+            }
+        }
+
+        if (action == "extend")
+        {
+            if (!_extendMode)
+            {
+                EnterExtendMode();
+                return;
+            }
+
+            if (!_extendTargetReturnDate.HasValue)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a new return date before saving extension.";
+                return;
+            }
+
+            if (_extendOriginalTargetReturnDate.HasValue
+                && _extendTargetReturnDate.Value.Date <= _extendOriginalTargetReturnDate.Value.Date)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "New return date must be later than the current return date.";
+                return;
+            }
         }
 
         _actionRunning = true;
@@ -970,7 +1061,7 @@
         {
             result = await ContractService.PutActionAsync(endpoint, new
             {
-                NewTargetReturnDate = DateTime.UtcNow.Date.AddDays(30)
+                NewTargetReturnDate = _extendTargetReturnDate?.Date
             });
         }
         else if (action == "close")
@@ -986,8 +1077,8 @@
         {
             result = await ContractService.PostActionAsync(endpoint, new
             {
-                NewVmfCode = vmfCode > 0 ? (int?)vmfCode : null,
-                NewSiteCode = _contract?.site_code,
+                NewVmfCode = (int?)null,
+                NewSiteCode = _selectedSiteCode > 0 ? (short?)_selectedSiteCode : null,
                 Reason = string.IsNullOrWhiteSpace(_approvalNotes) ? "Reassignment requested from contract detail." : _approvalNotes
             });
         }
@@ -1007,6 +1098,14 @@
             {
                 _actionStatusError = true;
                 _actionStatusMessage = "Select a valid vehicle before submitting a contract.";
+                _actionRunning = false;
+                return;
+            }
+
+            if (!HasValidTariffForSubmission())
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = BuildMissingTariffMessage();
                 _actionRunning = false;
                 return;
             }
@@ -1104,6 +1203,14 @@
 
         if (result.Success)
         {
+            if (action is "reassign" or "extend")
+            {
+                _reassignMode = false;
+                _extendMode = false;
+                _reassignOriginalSiteCode = null;
+                _extendOriginalTargetReturnDate = null;
+            }
+
             if (action == "recall")
             {
                 _openContractMode = true;
@@ -1145,10 +1252,39 @@
         }
     }
 
+    private IEnumerable<SiteResponseDto> SelectableSites
+    {
+        get
+        {
+            if (!_reassignMode)
+            {
+                return FilteredSites;
+            }
+
+            var currentSite = _reassignOriginalSiteCode ?? _contract?.site_code;
+            return FilteredSites.Where(s => currentSite == null || s.SiteCode != currentSite.Value);
+        }
+    }
+
     private async Task LoadLookupDataAsync()
     {
         _departments = await DepartmentService.GetDepartmentsAsync();
         _sites = await SiteService.GetAllAsync();
+    }
+
+    private async Task LoadUserProfilesAsync()
+    {
+        var profiles = await UserService.GetAllProfilesAsync();
+        _userProfilesByCode = profiles
+            .Where(x => x.UserAccessCode > 0)
+            .GroupBy(x => (int)x.UserAccessCode)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        if (_currentUserAccessCode is > 0
+            && _userProfilesByCode.TryGetValue(_currentUserAccessCode.Value, out var currentProfile))
+        {
+            _currentUserSiteCode = currentProfile.SiteCode;
+        }
     }
 
     private void SyncContractSelection()
@@ -1173,9 +1309,14 @@
         }
 
         ApplySelectionToContract();
+
+        if (!_extendMode)
+        {
+            _extendTargetReturnDate = _contract?.target_return_date ?? _contract?.end_date;
+        }
     }
 
-    private Task OnDepartmentChanged()
+    private async Task OnDepartmentChanged()
     {
         if (_selectedDepartmentCode > 0 && _selectedSiteCode > 0)
         {
@@ -1187,10 +1328,10 @@
         }
 
         ApplySelectionToContract();
-        return Task.CompletedTask;
+        await LoadTariffPreviewAsync();
     }
 
-    private Task OnSiteChanged()
+    private async Task OnSiteChanged()
     {
         var selectedSite = _sites.FirstOrDefault(s => s.SiteCode == _selectedSiteCode);
         if (selectedSite?.DepartmentCode is > 0)
@@ -1199,7 +1340,7 @@
         }
 
         ApplySelectionToContract();
-        return Task.CompletedTask;
+        await LoadTariffPreviewAsync();
     }
 
     private void ApplySelectionToContract()
@@ -1230,6 +1371,214 @@
     private static string FormatDate(DateTime? date) => date?.ToString("yyyy/MM/dd") ?? "-";
 
     private static string FormatDateForInput(DateTime? date) => date?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private bool CanEditContractSite()
+        => _openContractMode || _reassignMode;
+
+    private void EnterReassignMode()
+    {
+        _reassignMode = true;
+        _extendMode = false;
+        _reassignOriginalSiteCode = _selectedSiteCode > 0
+            ? _selectedSiteCode
+            : _contract?.site_code;
+        _actionStatusError = false;
+        _actionStatusMessage = "Reassign mode enabled. Select an allowed destination site, then click Save Reassign.";
+    }
+
+    private void EnterExtendMode()
+    {
+        _extendMode = true;
+        _reassignMode = false;
+        _extendOriginalTargetReturnDate = _contract?.target_return_date ?? _contract?.end_date;
+        _extendTargetReturnDate = _extendOriginalTargetReturnDate;
+        _actionStatusError = false;
+        _actionStatusMessage = "Extension mode enabled. Set a new return date, then click Save Extension.";
+    }
+
+    private void CancelActiveEditMode()
+    {
+        _reassignMode = false;
+        _extendMode = false;
+        _reassignOriginalSiteCode = null;
+        _extendOriginalTargetReturnDate = null;
+        SyncContractSelection();
+        _actionStatusError = false;
+        _actionStatusMessage = "Edit mode cancelled.";
+    }
+
+    private bool ValidateReassignEmailControls(out string message)
+    {
+        message = string.Empty;
+
+        if (!_currentUserAccessCode.HasValue || _currentUserAccessCode.Value <= 0)
+        {
+            message = "Cannot proceed with reassignment: current user profile is not resolved.";
+            return false;
+        }
+
+        if (!TryGetValidEmail(_currentUserAccessCode.Value, out _))
+        {
+            message = "Cannot proceed with reassignment: requester email is missing or invalid.";
+            return false;
+        }
+
+        if (_contract?.approver_code is > 0)
+        {
+            if (_contract.approver_code.Value == _currentUserAccessCode.Value)
+            {
+                message = "Cannot proceed with reassignment: requester cannot approve own move.";
+                return false;
+            }
+
+            if (!TryGetValidEmail(_contract.approver_code.Value, out _))
+            {
+                message = "Cannot proceed with reassignment: approver email is missing or invalid.";
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool TryGetValidEmail(int userCode, out string? email)
+    {
+        email = null;
+        if (!_userProfilesByCode.TryGetValue(userCode, out var profile))
+        {
+            return false;
+        }
+
+        var candidate = profile.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return false;
+        }
+
+        var at = candidate.IndexOf('@');
+        var dot = candidate.LastIndexOf('.');
+        var valid = at > 0 && dot > at + 1 && dot < candidate.Length - 1;
+        if (!valid)
+        {
+            return false;
+        }
+
+        email = candidate;
+        return true;
+    }
+
+    private bool RequiresJurisdictionControl(string action)
+    {
+        return action is "open" or "submit" or "cancel" or "extend" or "reassign" or "close" or "review-pending" or "review-correction" or "recall" or "approve" or "approve-activate" or "decline" or "decline-correction";
+    }
+
+    private bool ValidateJurisdictionAccess(string action, out string message)
+    {
+        message = string.Empty;
+
+        if (_isAdminUser)
+        {
+            return true;
+        }
+
+        if (_currentUserSiteCode is not > 0)
+        {
+            message = "Access denied: your site jurisdiction is not configured. Contact administrator.";
+            return false;
+        }
+
+        var actionSiteCode = ResolveActionSiteCode(action);
+        if (actionSiteCode is > 0 && actionSiteCode.Value != _currentUserSiteCode.Value)
+        {
+            message = $"Access denied: this contract/site is outside your jurisdiction (your site: {_currentUserSiteCode}).";
+            return false;
+        }
+
+        var category = ResolveContractJurisdictionCategory();
+        if (!HasJurisdictionRoleForCategory(category))
+        {
+            message = $"Access denied: you do not have {category.ToUpperInvariant()} jurisdiction rights.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private short? ResolveActionSiteCode(string action)
+    {
+        if (action == "reassign" && _reassignMode && _selectedSiteCode > 0)
+        {
+            return _selectedSiteCode;
+        }
+
+        if (_contract?.site_code is > 0)
+        {
+            return _contract.site_code;
+        }
+
+        if (_vehicle?.site_code is > 0)
+        {
+            return _vehicle.site_code;
+        }
+
+        return null;
+    }
+
+    private string ResolveContractJurisdictionCategory()
+    {
+        var typeText = (_vehicle?.type_name ?? string.Empty).Trim();
+        var contractTypeCode = (_contract?.contractor_name ?? string.Empty).Trim().ToUpperInvariant();
+        var combined = $"{typeText} {contractTypeCode}".Trim().ToLowerInvariant();
+
+        if (combined.Contains("lease", StringComparison.OrdinalIgnoreCase) || contractTypeCode == "E")
+        {
+            return "lease";
+        }
+
+        if (combined.Contains("tss", StringComparison.OrdinalIgnoreCase))
+        {
+            return "tss";
+        }
+
+        if (combined.Contains("pool", StringComparison.OrdinalIgnoreCase) || combined.Contains("vip", StringComparison.OrdinalIgnoreCase))
+        {
+            return "pool";
+        }
+
+        return "general";
+    }
+
+    private bool HasJurisdictionRoleForCategory(string category)
+    {
+        if (_isAdminUser || _currentUserRoleTokens.Count == 0)
+        {
+            return true;
+        }
+
+        return category switch
+        {
+            "lease" => HasRoleKeyword("lease"),
+            "pool" => HasRoleKeyword("pool", "vip"),
+            "tss" => HasRoleKeyword("tss"),
+            _ => true
+        };
+    }
+
+    private bool HasRoleKeyword(params string[] keywords)
+    {
+        foreach (var role in _currentUserRoleTokens)
+        {
+            foreach (var keyword in keywords)
+            {
+                if (role.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     private static string GetContractTypeLabel(string? contractTypeCode)
     {
@@ -1292,6 +1641,11 @@
         {
             _reviewPendingMode = CanCurrentUserReviewPendingContract() && (action is "review" or "process");
             _openContractMode = false;
+        }
+        else if (IsCorrectionState())
+        {
+            _openContractMode = action is "review-correction" or "edit";
+            _reviewPendingMode = false;
         }
         else if (!_isContractActive)
         {
@@ -1362,6 +1716,18 @@
         {
             _hasContractApproverRole = true;
         }
+
+        _isAdminUser = HasAnyRole(user, "admin", "administrator")
+            || (_currentAccessLevel & LegacyPermissionBits.UserAdministration) == LegacyPermissionBits.UserAdministration;
+
+        _currentUserRoleTokens = user.Claims
+            .Where(c =>
+                c.Type == ClaimTypes.Role
+                || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(c => c.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            .Where(static x => !string.IsNullOrWhiteSpace(x))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     private static int? TryParseInt(string? value)
@@ -1527,6 +1893,21 @@
         var fixedAmount = _tariffPreview.Tariff.MonthlyFixedAmount ?? 0m;
         var kmAmount = _tariffPreview.Tariff.MonthlyOdoAmount ?? 0m;
         return fixedAmount + kmAmount;
+    }
+
+    private bool HasValidTariffForSubmission()
+    {
+        return _tariffPreview?.Tariff != null;
+    }
+
+    private string BuildMissingTariffMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(_tariffPreview?.Note))
+        {
+            return $"Cannot submit contract: {_tariffPreview.Note}";
+        }
+
+        return "Cannot submit contract: no valid tariff found for this vehicle.";
     }
 
     private static int TryExtractContractId(string? responseBody)

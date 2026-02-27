@@ -599,3 +599,15 @@ public interface IVehicleLicenceHistoryRepository
     Task<VehicleLicenceHistory?> GetLatestByVehicleAsync(int vmfCode);
     Task<VehicleLicenceHistory> CreateAsync(VehicleLicenceHistory history);
 }
+
+/// <summary>
+/// Repository for vehicle document attachments (scans, photos, PDFs).
+/// </summary>
+public interface IVehicleDocumentRepository
+{
+    Task<IEnumerable<VehicleDocument>> GetByVehicleAsync(int vmfCode, string? category = null);
+    Task<IEnumerable<VehicleDocument>> GetByReferenceAsync(string referenceType, int referenceId);
+    Task<VehicleDocument?> GetByIdAsync(int documentId);
+    Task<VehicleDocument> CreateAsync(VehicleDocument document);
+    Task DeleteAsync(int documentId);
+}

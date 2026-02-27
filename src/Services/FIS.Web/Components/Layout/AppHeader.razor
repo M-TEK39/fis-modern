@@ -1,13 +1,15 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Routing
+@using FIS.Web.Services
 @inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
+@inject SidebarStateService SidebarState
 @implements IDisposable
 
 <header class="app-header">
     <div class="app-header-left">
         <button class="sidebar-toggle" type="button" @onclick="ToggleSidebar" aria-label="Toggle sidebar">
-            <i class="@(_isCollapsed ? "bx bx-menu-alt-right" : "bx bx-menu-alt-left")" aria-hidden="true"></i>
+            <i class="@(SidebarState.IsCollapsed ? "bx bx-menu-alt-right" : "bx bx-menu-alt-left")" aria-hidden="true"></i>
         </button>
         <div class="app-breadcrumbs">
             <div class="breadcrumb">
@@ -83,12 +85,11 @@
     };
 
     private readonly List<BreadcrumbItem> _breadcrumbs = new();
-    private bool _isCollapsed;
-
     protected override void OnInitialized()
     {
         base.OnInitialized();
         UpdateBreadcrumbs();
+        SidebarState.Changed += HandleSidebarStateChanged;
         NavigationManager.LocationChanged += HandleLocationChanged;
     }
 
@@ -96,7 +97,8 @@
     {
         if (firstRender)
         {
-            await ApplyCollapsedStateAsync();
+            var initialCollapsed = await JSRuntime.InvokeAsync<bool>("fisLayout.getInitialSidebarCollapsed");
+            SidebarState.SetCollapsed(initialCollapsed);
         }
     }
 
@@ -173,17 +175,27 @@
 
     private async Task ToggleSidebar()
     {
-        _isCollapsed = !_isCollapsed;
-        await ApplyCollapsedStateAsync();
+        SidebarState.Toggle();
+        await Task.CompletedTask;
     }
 
     private async Task ApplyCollapsedStateAsync()
     {
-        await JSRuntime.InvokeVoidAsync("fisLayout.setSidebarCollapsed", _isCollapsed);
+        await JSRuntime.InvokeVoidAsync("fisLayout.setSidebarCollapsed", SidebarState.IsCollapsed);
+    }
+
+    private void HandleSidebarStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await ApplyCollapsedStateAsync();
+            StateHasChanged();
+        });
     }
 
     public void Dispose()
     {
+        SidebarState.Changed -= HandleSidebarStateChanged;
         NavigationManager.LocationChanged -= HandleLocationChanged;
     }
 }

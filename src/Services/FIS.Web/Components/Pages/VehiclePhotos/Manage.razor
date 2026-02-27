@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Services
 @using FIS.Web.Models
+@using Microsoft.AspNetCore.Components.Forms
 @inject VehiclePhotoApiService VehiclePhotoService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -61,10 +62,34 @@
                         </InputSelect>
                     </div>
                     <div class="form-field form-group-full">
-                        <label class="form-label">Photo URL <span class="required">*</span></label>
-                        <InputText class="form-input" @bind-Value="_editor.FileUrl" />
-                        <span class="form-hint">Use a full URL or relative path from the image store.</span>
+                        <label class="form-label">Photo Source <span class="required">*</span></label>
+                        <div class="form-grid">
+                            <div class="form-field">
+                                <label class="form-label">Take Photo (Mobile/Tablet)</label>
+                                <InputFile OnChange="HandleImageSelectedAsync" accept="image/*" capture="environment" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Upload Photo</label>
+                                <InputFile OnChange="HandleImageSelectedAsync" accept="image/*" />
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_selectedFileName))
+                        {
+                            <span class="form-hint">Selected: @_selectedFileName</span>
+                        }
                     </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Photo URL / Stored Image Data <span class="required">*</span></label>
+                        <InputText class="form-input" @bind-Value="_editor.FileUrl" />
+                        <span class="form-hint">Legacy mode accepts URL/path. Camera/upload stores file on API server and saves its relative path.</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_previewUrl))
+                    {
+                        <div class="form-field form-group-full">
+                            <label class="form-label">Preview</label>
+                            <img src="@_previewUrl" alt="Photo preview" class="fis-photo-preview" />
+                        </div>
+                    }
                     <div class="form-field form-group-full">
                         <label class="form-label">Description</label>
                         <InputText class="form-input" @bind-Value="_editor.Description" />
@@ -133,7 +158,7 @@
                                 <td>
                                     @if (!string.IsNullOrWhiteSpace(photo.FileUrl))
                                     {
-                                        <a href="@photo.FileUrl" target="_blank" rel="noopener noreferrer">View</a>
+                                        <a href="@GetViewUrl(photo)" target="_blank" rel="noopener noreferrer">View</a>
                                     }
                                     else
                                     {
@@ -178,8 +203,13 @@
     private readonly PhotoEditorModel _editor = new();
     private int _editingId;
     private string? _editorError;
+    private string? _selectedFileName;
+    private string? _previewUrl;
+    private PendingUpload? _pendingUpload;
     private int _page = 1;
     private const int _pageSize = 12;
+    private const long MaxImageSizeBytes = 5 * 1024 * 1024;
+    private const int MaxFileUrlLength = 500;
 
     private static readonly (int Value, string Label)[] OrientationOptions =
     [
@@ -230,15 +260,51 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_editor.FileUrl))
+        var hasPendingUpload = _pendingUpload is not null;
+
+        if (!hasPendingUpload && string.IsNullOrWhiteSpace(_editor.FileUrl))
         {
             _editorError = "Photo URL is required.";
+            return;
+        }
+
+        if (!hasPendingUpload && (_editor.FileUrl?.Length ?? 0) > MaxFileUrlLength)
+        {
+            _editorError = "Photo path/URL is too long (max 500 chars). Upload endpoint is required for direct camera storage.";
             return;
         }
 
         _saving = true;
         try
         {
+            if (_editingId > 0 && hasPendingUpload)
+            {
+                _editorError = "Replacing file on an existing record is not supported yet. Add a new photo, then delete the old one.";
+                return;
+            }
+
+            if (_editingId == 0 && hasPendingUpload)
+            {
+                await using var fileStream = new MemoryStream(_pendingUpload!.Content);
+                var created = await VehiclePhotoService.UploadAsync<VehiclePhotoDto>(
+                    VmfCode,
+                    fileStream,
+                    _pendingUpload.FileName,
+                    _pendingUpload.ContentType,
+                    _editor.Description?.Trim(),
+                    _editor.Orientation > 0 ? _editor.Orientation : null);
+
+                if (created is null)
+                {
+                    _editorError = "Unable to upload photo.";
+                    return;
+                }
+
+                await LoadPhotos();
+                ClearEditor();
+                return;
+            }
+
             var payload = new VehiclePhotoDto
             {
                 VehiclePhotoInfoCode = _editingId,
@@ -277,6 +343,9 @@
         _editor.Orientation = photo.Orientation ?? 0;
         _editor.FileUrl = photo.FileUrl ?? "";
         _editor.Description = photo.Description ?? "";
+        _previewUrl = ResolvePreviewUrl(photo);
+        _selectedFileName = null;
+        _pendingUpload = null;
         _editorError = null;
     }
 
@@ -304,7 +373,62 @@
         _editor.Orientation = 0;
         _editor.FileUrl = "";
         _editor.Description = "";
+        _selectedFileName = null;
+        _pendingUpload = null;
+        _previewUrl = null;
         _editorError = null;
+    }
+
+    private async Task HandleImageSelectedAsync(InputFileChangeEventArgs args)
+    {
+        _editorError = null;
+
+        var file = args.File;
+        if (file == null)
+        {
+            return;
+        }
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            _editorError = "Only image files are allowed.";
+            return;
+        }
+
+        if (file.Size > MaxImageSizeBytes)
+        {
+            _editorError = "Image too large. Max size is 5MB.";
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxImageSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            var base64 = Convert.ToBase64String(ms.ToArray());
+            var dataUrl = $"data:{file.ContentType};base64,{base64}";
+            _previewUrl = dataUrl;
+            _selectedFileName = file.Name;
+            _pendingUpload = new PendingUpload
+            {
+                FileName = BuildSafeFileName(file.Name),
+                ContentType = file.ContentType,
+                Content = ms.ToArray()
+            };
+            _editorError = null;
+
+            if (string.IsNullOrWhiteSpace(_editor.Description))
+            {
+                _editor.Description = file.Name;
+            }
+        }
+        catch (Exception ex)
+        {
+            _editorError = "Unable to read selected image.";
+            await JS.InvokeVoidAsync("console.error", $"Image selection error: {ex.Message}");
+        }
     }
 
     private void BackToSearch()
@@ -342,6 +466,48 @@
         {
             _page++;
         }
+    }
+
+    private static string BuildSafeFileName(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return "image.jpg";
+        }
+
+        var cleaned = new string(fileName
+            .Trim()
+            .Select(ch => char.IsLetterOrDigit(ch) || ch == '.' || ch == '-' || ch == '_' ? ch : '_')
+            .ToArray());
+
+        return string.IsNullOrWhiteSpace(cleaned) ? "image.jpg" : cleaned;
+    }
+
+    private string? ResolvePreviewUrl(VehiclePhotoDto? photo)
+    {
+        if (photo is null || string.IsNullOrWhiteSpace(photo.FileUrl))
+        {
+            return null;
+        }
+
+        var fileUrl = photo.FileUrl;
+        if (fileUrl.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return fileUrl;
+        }
+
+        return Uri.TryCreate(fileUrl, UriKind.Absolute, out _)
+            ? fileUrl
+            : VehiclePhotoService.GetFileUrl(photo.VehiclePhotoInfoCode);
+    }
+
+    private string GetViewUrl(VehiclePhotoDto photo) => ResolvePreviewUrl(photo) ?? "#";
+
+    private sealed class PendingUpload
+    {
+        public string FileName { get; set; } = "";
+        public string ContentType { get; set; } = "image/jpeg";
+        public byte[] Content { get; set; } = [];
     }
 
     private sealed class PhotoEditorModel

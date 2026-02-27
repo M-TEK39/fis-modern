@@ -93,7 +93,29 @@
         <div class="table-container" style="margin-top: 1.5rem;">
             <div class="table-header">
                 <span class="table-title">Recent Activity</span>
+                <div class="table-controls">
+                    <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                    <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || (_report?.Report?.RecentActivity?.Count ?? 0) == 0)">Download CSV</button>
+                </div>
             </div>
+            @if (_showFieldSelector)
+            {
+                <div class="form-card" style="margin:0 0 0.75rem 0;">
+                    <div class="form-card-body">
+                        <div class="form-grid">
+                            @foreach (var field in _exportFields)
+                            {
+                                <div class="form-field">
+                                    <label class="form-label">
+                                        <input type="checkbox" @bind="field.Selected" />
+                                        @field.Label
+                                    </label>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
@@ -106,7 +128,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @if (_report.Report.RecentActivity.Count == 0)
+                        @if ((_report?.Report?.RecentActivity?.Count ?? 0) == 0)
                         {
                             <tr>
                                 <td colspan="5">No recent activity.</td>
@@ -146,6 +168,15 @@
     private Dictionary<int, string> _vehicleLabels = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private bool _showFieldSelector;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("card_number", "Card Number", true),
+        new("vehicle", "Vehicle", true),
+        new("action", "Action", true),
+        new("date", "Date", true),
+        new("receiver", "Receiver", true)
+    ];
 
     private IEnumerable<FuelCardActivityDto> PagedActivity =>
         (_report?.Report?.RecentActivity ?? new List<FuelCardActivityDto>())
@@ -226,4 +257,62 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        var activities = _report?.Report?.RecentActivity ?? new List<FuelCardActivityDto>();
+        if (selected.Count == 0 || activities.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in activities)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "card_number" => row.CardNumber ?? "-",
+                "vehicle" => GetVehicleLabel(row.VmfCode),
+                "action" => row.Action ?? "-",
+                "date" => row.Date.ToString("yyyy-MM-dd"),
+                "receiver" => row.Receiver ?? "-",
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"fuel_cards_activity_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JS.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
+    }
 }

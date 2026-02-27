@@ -55,7 +55,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Departments</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleDepartmentFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadDepartmentCsvAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showDepartmentFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _departmentExportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -106,7 +128,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Sites</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleSiteFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadSiteCsvAsync" disabled="@(_loading || _filteredSites.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showSiteFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _siteExportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -166,6 +210,24 @@
     private int _departmentPage = 1;
     private int _sitePage = 1;
     private const int _pageSize = 12;
+    private bool _showDepartmentFieldSelector;
+    private bool _showSiteFieldSelector;
+    private readonly List<ExportField> _departmentExportFields =
+    [
+        new("department", "Department", true),
+        new("description", "Description", true),
+        new("contact", "Contact Person", true),
+        new("telephone", "Telephone", true),
+        new("status", "Status", true)
+    ];
+    private readonly List<ExportField> _siteExportFields =
+    [
+        new("site", "Site", true),
+        new("department", "Department", true),
+        new("description", "Description", true),
+        new("telephone", "Telephone", true),
+        new("status", "Status", true)
+    ];
 
     private List<DepartmentDto> PagedDepartments => _filteredDepartments.Skip((_departmentPage - 1) * _pageSize).Take(_pageSize).ToList();
     private List<SiteResponseDto> PagedSites => _filteredSites.Skip((_sitePage - 1) * _pageSize).Take(_pageSize).ToList();
@@ -278,4 +340,90 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private void ToggleDepartmentFieldSelector()
+    {
+        _showDepartmentFieldSelector = !_showDepartmentFieldSelector;
+    }
+
+    private void ToggleSiteFieldSelector()
+    {
+        _showSiteFieldSelector = !_showSiteFieldSelector;
+    }
+
+    private async Task DownloadDepartmentCsvAsync()
+    {
+        var selected = _departmentExportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
+        foreach (var row in _filteredDepartments)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "department" => row.department_code.ToString(),
+                "description" => ValueOrDash(row.department_description),
+                "contact" => ValueOrDash(row.contact_person),
+                "telephone" => ValueOrDash(row.telephone),
+                "status" => row.dept_active ? "Active" : "Inactive",
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"departments_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private async Task DownloadSiteCsvAsync()
+    {
+        var selected = _siteExportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
+        foreach (var row in _filteredSites)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "site" => row.SiteCode.ToString(),
+                "department" => GetDepartmentLabel(row.DepartmentCode),
+                "description" => ValueOrDash(row.Description),
+                "telephone" => ValueOrDash(row.Telephone),
+                "status" => row.SiteActive ? "Active" : "Inactive",
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"sites_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
+    }
 }

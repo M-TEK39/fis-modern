@@ -314,8 +314,10 @@ public class JournalDetailService : IJournalDetailService
     /// </summary>
     public string CalculateFinancialYear(DateTime date)
     {
-        // Financial year starts in March
-        int financialYear = date.Month >= 3 ? date.Year + 1 : date.Year;
+        // Financial year starts 1 April, ends 31 March.
+        // Convention: the FY is named after the calendar year it ends in.
+        // e.g. April 2025 – March 2026 = FY2026.
+        int financialYear = date.Month >= 4 ? date.Year + 1 : date.Year;
         return financialYear.ToString();
     }
 

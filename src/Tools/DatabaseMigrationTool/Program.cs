@@ -354,7 +354,11 @@ public class Program
         Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
-                var connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
+                var connectionString = context.Configuration.GetConnectionString("Default");
+                if (string.IsNullOrWhiteSpace(connectionString))
+                {
+                    connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
+                }
 
                 services.AddDbContext<FisDbContext>(options =>
                     options.UseSqlServer(connectionString)

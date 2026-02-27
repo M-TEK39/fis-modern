@@ -231,6 +231,7 @@ builder.Services.AddScoped<IFuelTariffRepository, FuelTariffRepository>();
 builder.Services.AddScoped<IJobCardRepository, JobCardRepository>();
 builder.Services.AddScoped<IVehicleRemarkRepository, VehicleRemarkRepository>();
 builder.Services.AddScoped<IVehicleLicenceHistoryRepository, VehicleLicenceHistoryRepository>();
+builder.Services.AddScoped<IVehicleDocumentRepository, VehicleDocumentRepository>();
 builder.Services.AddScoped<IMaintenanceTriggerRepository, MaintenanceTriggerRepository>();
 builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
 builder.Services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();
@@ -266,6 +267,7 @@ builder.Services.AddScoped<ILogsheetRepository, LogsheetRepository>();
 builder.Services.AddScoped<ILossRepository, LossRepository>();
 builder.Services.AddScoped<IMonitorRepository, MonitorRepository>();
 builder.Services.AddScoped<ITaxiRepository, TaxiRepository>();
+builder.Services.AddScoped<ITaxiWhiteLogRepository, TaxiWhiteLogRepository>();
 builder.Services.AddScoped<ITowingRepository, TowingRepository>();
 // TripAuthorityRepository removed - conflicts with existing Trip entity
 builder.Services.AddScoped<IVehicleOrderRepository, VehicleOrderRepository>();
@@ -366,6 +368,7 @@ builder.Services.AddScoped<IJournalDetailRepository, JournalDetailRepository>();
 builder.Services.AddScoped<WorkflowMetricsJob>();
 builder.Services.AddScoped<ContractExpiryReminderJob>();
 builder.Services.AddScoped<MonthlyBillingJob>();
+builder.Services.AddScoped<FinancialYearRolloverJob>();
 
 // Add health checks
 builder.Services.AddHealthChecks().AddDbContextCheck<FisDbContext>();
@@ -433,5 +436,14 @@ recurringJobManager.AddOrUpdate<MonthlyBillingJob>(
     "monthly-contract-billing",
     job => job.RunAsync(),
     "0 6 1 * *"); // Cron: 1st of each month at 06:00
+
+// Financial year rollover (runs at 00:05 on 1 April every year)
+// Creates the next financial_year record (FY = year it ends in).
+// e.g. runs 1 April 2026 → creates FY2027 (2026-04-01 to 2027-03-31).
+// Idempotent: safe to re-run, skips if record already exists.
+recurringJobManager.AddOrUpdate<FinancialYearRolloverJob>(
+    "financial-year-rollover",
+    job => job.RunAsync(),
+    "5 0 1 4 *"); // Cron: 00:05 on 1 April each year
 
 app.Run();

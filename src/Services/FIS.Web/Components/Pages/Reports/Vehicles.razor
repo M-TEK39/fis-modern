@@ -50,7 +50,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Vehicle Report</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _vehicles.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -96,7 +118,17 @@
     private string _searchTerm = string.Empty;
     private string _searchMode = "GG";
     private bool _loading;
+    private bool _showFieldSelector;
     private List<VehicleDto> _vehicles = new();
+    private readonly List<ExportField> _exportFields =
+    [
+        new("fleet_number", "GG Number", true),
+        new("registration_number", "GP Number", true),
+        new("vehicle", "Vehicle", true),
+        new("model_name", "Make/Model", true),
+        new("status_description", "Status", true),
+        new("location_description", "Site", true)
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -152,9 +184,67 @@
         _vehicles = new();
     }
 
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string>
+        {
+            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+        };
+
+        foreach (var row in _vehicles)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "fleet_number" => ValueOrDash(row.fleet_number),
+                "registration_number" => ValueOrDash(row.registration_number),
+                "vehicle" => GetVehicleLabel(row),
+                "model_name" => ValueOrDash(row.model_name),
+                "status_description" => ValueOrDash(row.status_description),
+                "location_description" => ValueOrDash(row.location_description),
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"vehicles_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
     private static string GetVehicleLabel(VehicleDto vehicle)
         => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
+    }
 }

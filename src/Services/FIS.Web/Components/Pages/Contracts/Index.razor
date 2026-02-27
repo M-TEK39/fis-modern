@@ -10,6 +10,7 @@
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
+@inject UserApiService UserService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -222,6 +223,10 @@
                                 <th>Vehicle (Fleet/GG No)</th>
                                 <th>Site/Dept</th>
                                 <th>Driver</th>
+                                <th>Capturer</th>
+                                <th>Approver</th>
+                                <th>Last Updated By</th>
+                                <th>Last Updated At</th>
                                 <th>Start Date</th>
                                 <th>Target Return</th>
                                 <th>Status</th>
@@ -236,6 +241,10 @@
                                     <td>@GetVehicleDisplay(contract)</td>
                                     <td>@GetSiteDepartmentDisplay(contract)</td>
                                     <td>@ValueOrDash(contract.driver_name)</td>
+                                    <td>@FormatActor(contract.created_by_user_code)</td>
+                                    <td>@FormatActor(contract.approver_code)</td>
+                                    <td>@FormatActor(contract.modified_by_user_code ?? contract.created_by_user_code)</td>
+                                    <td>@FormatDateTime(contract.date_updated ?? contract.date_created)</td>
                                     <td>@FormatDate(contract.start_date)</td>
                                     <td>@FormatDate(contract.target_return_date)</td>
                                     <td>
@@ -365,6 +374,7 @@
     private readonly List<ContractDto> _contracts = new();
     private List<SiteResponseDto> _sites = new();
     private List<DriverDto> _drivers = new();
+    private Dictionary<int, UserProfileDto> _userProfilesByCode = new();
 
     private string _statusFilter = string.Empty;
     private string _siteFilter = string.Empty;
@@ -394,6 +404,11 @@
         await ResolveCurrentUserContextAsync();
         _sites = await SiteService.GetAllAsync();
         _drivers = await DriverService.GetDriversAsync();
+        var userProfiles = await UserService.GetAllProfilesAsync();
+        _userProfilesByCode = userProfiles
+            .Where(x => x.UserAccessCode > 0)
+            .GroupBy(x => (int)x.UserAccessCode)
+            .ToDictionary(g => g.Key, g => g.First());
         await LoadContractsPageAsync();
     }
 
@@ -608,6 +623,14 @@
 
         if (action.Kind == "edit")
         {
+            if ((contract.contract_status_code ?? -1) == 4)
+            {
+                var ggNumber = Uri.EscapeDataString(contract.fleet_number ?? contract.Vehicle?.fleet_number ?? string.Empty);
+                var regNumber = Uri.EscapeDataString(contract.vehicle_registration ?? contract.Vehicle?.registration_number ?? string.Empty);
+                Navigation.NavigateTo($"/contracts/detail?contractId={contract.contract_id}&action=review-correction&ggnumber={ggNumber}&regnumber={regNumber}");
+                return;
+            }
+
             OpenEditModal(contract);
             return;
         }
@@ -934,7 +957,36 @@
         return date.ToString("yyyy/MM/dd");
     }
 
+    private static string FormatDateTime(DateTime? date)
+    {
+        return date.HasValue ? date.Value.ToString("yyyy/MM/dd HH:mm") : "-";
+    }
+
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string FormatActor(int? userCode)
+    {
+        if (!userCode.HasValue || userCode.Value <= 0)
+        {
+            return "-";
+        }
+
+        if (_userProfilesByCode.TryGetValue(userCode.Value, out var profile))
+        {
+            var fullName = $"{profile.FirstName} {profile.LastName}".Trim();
+            if (!string.IsNullOrWhiteSpace(fullName))
+            {
+                return fullName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(profile.Email))
+            {
+                return profile.Email;
+            }
+        }
+
+        return $"User {userCode.Value}";
+    }
 
     private static string GetVehicleContextLabel(VehicleDto vehicle)
         => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";

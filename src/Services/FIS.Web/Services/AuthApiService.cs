@@ -213,6 +213,7 @@ public class LegacyLoginResponse
     public string Token { get; set; } = "";
     public DateTime ExpiresAt { get; set; }
     public int UserAccessCode { get; set; }
+    public bool PasswordExpired { get; set; }
     public string? Email { get; set; }
     public string? Message { get; set; }
 }

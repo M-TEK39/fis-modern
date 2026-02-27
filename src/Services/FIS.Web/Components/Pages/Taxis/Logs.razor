@@ -1,5 +1,12 @@
 @page "/taxis/logs/{Mode}"
 @rendermode InteractiveServer
+@using System.Net
+@using System.Net.Http.Json
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject NavigationManager Navigation
+@inject VehicleApiService VehicleService
+@inject HttpClient Http
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
 
@@ -19,7 +26,52 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <p class="form-hint">Use this screen for taxi logsheet capture, editing, and reprint workflows.</p>
+            @if (_isWhiteLogMode)
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">GG Number</label>
+                        <input class="form-input fis-uppercase" maxlength="8" @bind="_whiteLog.GgNumber" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Driver</label>
+                        <input class="form-input" maxlength="30" @bind="_whiteLog.Driver" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Start Odometer</label>
+                        <input class="form-input" type="number" min="0" @bind="_whiteLog.StartOdo" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Start Date</label>
+                        <input class="form-input" type="date" @bind="_whiteLog.StartDate" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">End Odometer</label>
+                        <input class="form-input" type="number" min="0" @bind="_whiteLog.EndOdo" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">End Date</label>
+                        <input class="form-input" type="date" @bind="_whiteLog.EndDate" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="SaveWhiteLogAsync" disabled="@_savingWhiteLog">Submit</button>
+                    <button class="btn btn-secondary" @onclick="ResetWhiteLog" disabled="@_savingWhiteLog">Reset</button>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(_whiteLogMessage))
+                {
+                    <div class="alert @(_whiteLogError ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">@_whiteLogMessage</div>
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(_targetRoute))
+            {
+                <p class="form-hint">Opening @_pageTitle...</p>
+                <a class="btn btn-primary btn-sm" href="@_targetRoute">Continue</a>
+            }
+            else
+            {
+                <p class="form-hint">No workflow mapping found for this taxi log action.</p>
+            }
         </div>
     </div>
 </div>
@@ -29,9 +81,18 @@
     public string? Mode { get; set; }
 
     private string _pageTitle = "Taxi Logs";
+    private string? _targetRoute;
+    private bool _isWhiteLogMode;
+    private bool _savingWhiteLog;
+    private bool _whiteLogError;
+    private string _whiteLogMessage = string.Empty;
+    private WhiteLogInput _whiteLog = WhiteLogInput.CreateDefault();
 
     protected override void OnParametersSet()
     {
+        var normalized = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        _isWhiteLogMode = normalized == "white-log";
+
         _pageTitle = Mode switch
         {
             "enter" => "Enter Taxi Logsheet",
@@ -40,6 +101,162 @@
             "white-log" => "Enter Taxi White Log (GG vehicles not for claiming)",
             _ => "Taxi Logs"
         };
+
+        _targetRoute = normalized switch
+        {
+            "enter" => "/log-sheets/enter",
+            "edit" => "/log-sheets/edit",
+            "reprint" => "/log-sheets/reports/captured",
+            _ => null
+        };
+
+        if (!string.IsNullOrWhiteSpace(_targetRoute))
+        {
+            Navigation.NavigateTo(_targetRoute);
+        }
+    }
+
+    private async Task SaveWhiteLogAsync()
+    {
+        _whiteLogError = false;
+        _whiteLogMessage = string.Empty;
+
+        var validation = ValidateWhiteLog();
+        if (!string.IsNullOrWhiteSpace(validation))
+        {
+            _whiteLogError = true;
+            _whiteLogMessage = validation;
+            return;
+        }
+
+        _savingWhiteLog = true;
+        try
+        {
+            var gg = (_whiteLog.GgNumber ?? string.Empty).Trim().ToUpperInvariant();
+            var vehicleMatches = await VehicleService.SearchVehiclesAsync(gg);
+            var vehicle = vehicleMatches.FirstOrDefault(v => string.Equals((v.fleet_number ?? string.Empty).Trim(), gg, StringComparison.OrdinalIgnoreCase));
+            if (vehicle == null)
+            {
+                _whiteLogError = true;
+                _whiteLogMessage = $"{gg} not found.";
+                return;
+            }
+
+            if (vehicle.type_code != 2)
+            {
+                _whiteLogError = true;
+                _whiteLogMessage = $"{gg} is not a VIP Service vehicle.";
+                return;
+            }
+
+            var payload = new
+            {
+                vmf_code = vehicle.vmf_code,
+                start_odo = _whiteLog.StartOdo,
+                end_odo = _whiteLog.EndOdo,
+                start_date = _whiteLog.StartDate,
+                end_date = _whiteLog.EndDate,
+                driver = (_whiteLog.Driver ?? string.Empty).Trim()
+            };
+
+            var response = await Http.PostAsJsonAsync("api/taxi/white-log", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                _whiteLogMessage = "White log entered.";
+                _whiteLogError = false;
+                ResetWhiteLog();
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                _whiteLogError = true;
+                _whiteLogMessage = "White log API endpoint is not available yet. UI is ready; backend endpoint `POST api/taxi/white-log` is required.";
+                return;
+            }
+
+            var body = await response.Content.ReadAsStringAsync();
+            _whiteLogError = true;
+            _whiteLogMessage = string.IsNullOrWhiteSpace(body)
+                ? $"White log save failed ({(int)response.StatusCode})."
+                : body;
+        }
+        catch (Exception ex)
+        {
+            _whiteLogError = true;
+            _whiteLogMessage = $"White log save failed: {ex.Message}";
+        }
+        finally
+        {
+            _savingWhiteLog = false;
+        }
+    }
+
+    private string? ValidateWhiteLog()
+    {
+        if (string.IsNullOrWhiteSpace(_whiteLog.GgNumber))
+        {
+            return "GG number required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_whiteLog.Driver))
+        {
+            return "Driver name required.";
+        }
+
+        if (_whiteLog.StartOdo is null)
+        {
+            return "Start odometer required.";
+        }
+
+        if (_whiteLog.EndOdo is null)
+        {
+            return "End odometer required.";
+        }
+
+        if (_whiteLog.StartDate is null)
+        {
+            return "Start date required.";
+        }
+
+        if (_whiteLog.EndDate is null)
+        {
+            return "End date required.";
+        }
+
+        if (_whiteLog.StartOdo >= _whiteLog.EndOdo)
+        {
+            return "End odometer must be more than start odometer.";
+        }
+
+        if (_whiteLog.EndDate < _whiteLog.StartDate)
+        {
+            return "Start date must be before end date.";
+        }
+
+        return null;
+    }
+
+    private void ResetWhiteLog()
+    {
+        _whiteLog = WhiteLogInput.CreateDefault();
+    }
+
+    private sealed class WhiteLogInput
+    {
+        public string GgNumber { get; set; } = string.Empty;
+        public string Driver { get; set; } = string.Empty;
+        public int? StartOdo { get; set; }
+        public DateTime? StartDate { get; set; }
+        public int? EndOdo { get; set; }
+        public DateTime? EndDate { get; set; }
+
+        public static WhiteLogInput CreateDefault()
+            => new()
+            {
+                StartDate = DateTime.Today,
+                EndDate = DateTime.Today
+            };
     }
 
 }

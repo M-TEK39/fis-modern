@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Json;
 using System.Net;
+using System.IdentityModel.Tokens.Jwt;
 
 namespace FIS.Web.Controllers;
 
@@ -130,13 +131,15 @@ public class AuthProxyController : ControllerBase
             {
                 _logger.LogWarning("⚠️ No cookies captured from API response, but login succeeded. Manually setting cookie from token.");
 
+                var tokenExpiry = TryReadJwtExpiry(loginResponse.Token) ?? DateTimeOffset.UtcNow.AddHours(8);
+
                 // Manually create cookie from token in JSON response
                 var cookieOptions = new CookieOptions
                 {
                     HttpOnly = true,
                     Secure = false,
                     SameSite = SameSiteMode.Lax,
-                    Expires = loginResponse.ExpiresAt,
+                    Expires = tokenExpiry,
                     Path = "/",
                     Domain = null
                 };
@@ -178,6 +181,26 @@ public class AuthProxyController : ControllerBase
         _logger.LogInformation("User logged out - JWT cookie cleared");
 
         return Ok(new { message = "Logged out successfully" });
+    }
+
+    private static DateTimeOffset? TryReadJwtExpiry(string token)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(token);
+            var expValue = jwt.Claims.FirstOrDefault(c => c.Type == "exp")?.Value;
+            if (!long.TryParse(expValue, out var expEpoch))
+            {
+                return null;
+            }
+
+            return DateTimeOffset.FromUnixTimeSeconds(expEpoch);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 

@@ -48,7 +48,29 @@
     <div class="table-container fis-mt-15">
         <div class="table-header">
             <span class="table-title">Tariffs in Financial Year</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -109,6 +131,17 @@
     private List<TariffFinYearRow> _rows = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private bool _showFieldSelector;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("gg_number", "GG Number", true),
+        new("gp_number", "GP Number", true),
+        new("vehicle", "Vehicle", true),
+        new("tariff_id", "Tariff ID", true),
+        new("monthly_fixed", "Monthly Fixed (R)", true),
+        new("effective_start", "Effective Start", true),
+        new("effective_end", "Effective End", true)
+    ];
 
     private List<TariffFinYearRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -202,6 +235,61 @@
         {
             _page++;
         }
+    }
+
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "gg_number" => ValueOrDash(row.Vehicle.fleet_number),
+                "gp_number" => ValueOrDash(row.Vehicle.registration_number),
+                "vehicle" => GetVehicleLabel(row.Vehicle),
+                "tariff_id" => row.Tariff.TariffCode?.ToString() ?? "-",
+                "monthly_fixed" => row.Tariff.MonthlyFixedAmount?.ToString("N2") ?? "-",
+                "effective_start" => ValueOrDash(row.Tariff.EffectiveStartDate),
+                "effective_end" => ValueOrDash(row.Tariff.EffectiveEndDate),
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"tariffs_fin_year_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
     }
 
     private sealed record TariffFinYearRow(VehicleDto Vehicle, VehicleTariffPreviewDto Tariff);

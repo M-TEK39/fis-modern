@@ -13,6 +13,8 @@ public class ContractDto
     public int? approver_code { get; set; }
     public int? created_by_user_code { get; set; }
     public int? modified_by_user_code { get; set; }
+    public DateTime? date_created { get; set; }
+    public DateTime? date_updated { get; set; }
     [Required]
     public string contract_number { get; set; } = "";
     [Required]

@@ -294,6 +294,48 @@ public class VehiclePhotoApiService(HttpClient httpClient, TokenService tokenSer
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+    public string GetFileUrl(int id) => new Uri(HttpClient.BaseAddress!, $"{BasePath}/{id}/file").ToString();
+
+    public async Task<T?> UploadAsync<T>(
+        int vmfCode,
+        Stream fileStream,
+        string fileName,
+        string contentType,
+        string? description,
+        int? orientation)
+    {
+        try
+        {
+            if (TokenService.IsTokenValid && !string.IsNullOrEmpty(TokenService.Token))
+            {
+                HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
+            }
+
+            using var form = new MultipartFormDataContent();
+            form.Add(new StringContent(vmfCode.ToString()), "vmfCode");
+            if (!string.IsNullOrWhiteSpace(description))
+            {
+                form.Add(new StringContent(description), "description");
+            }
+            if (orientation.HasValue && orientation.Value > 0)
+            {
+                form.Add(new StringContent(orientation.Value.ToString()), "orientation");
+            }
+
+            using var streamContent = new StreamContent(fileStream);
+            streamContent.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType);
+            form.Add(streamContent, "file", string.IsNullOrWhiteSpace(fileName) ? "image.jpg" : fileName);
+
+            var response = await HttpClient.PostAsync($"{BasePath}/upload", form);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to upload vehicle photo for vmfCode {VmfCode}", vmfCode);
+            throw;
+        }
+    }
 }
 
 public class WorkshopApiService(HttpClient httpClient, TokenService tokenService, ILogger<WorkshopApiService> logger) : BaseApiService(httpClient, tokenService, logger)

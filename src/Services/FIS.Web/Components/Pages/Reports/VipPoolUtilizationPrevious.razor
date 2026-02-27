@@ -24,7 +24,29 @@
     <div class="table-container">
         <div class="table-header">
             <span class="table-title">Historical Utilization (Previous Months)</span>
+            <div class="table-controls">
+                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+            </div>
         </div>
+        @if (_showFieldSelector)
+        {
+            <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card-body">
+                    <div class="form-grid">
+                        @foreach (var field in _exportFields)
+                        {
+                            <div class="form-field">
+                                <label class="form-label">
+                                    <input type="checkbox" @bind="field.Selected" />
+                                    @field.Label
+                                </label>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
         <div class="table-wrapper">
             <table class="data-table">
                 <thead>
@@ -80,6 +102,16 @@
     private List<MonthUtilizationRow> _rows = new();
     private int _page = 1;
     private const int _pageSize = 12;
+    private bool _showFieldSelector;
+    private readonly List<ExportField> _exportFields =
+    [
+        new("month", "Month", true),
+        new("active_vehicles", "Active Vehicles", true),
+        new("total_trips", "Total Trips", true),
+        new("monthly_trips", "Monthly Trips", true),
+        new("open_trips", "Open Trips", true),
+        new("utilization", "Utilization %", true)
+    ];
 
     private List<MonthUtilizationRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
@@ -149,6 +181,46 @@
         }
     }
 
+    private void ToggleFieldSelector()
+    {
+        _showFieldSelector = !_showFieldSelector;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
+        foreach (var row in _rows)
+        {
+            var values = selected.Select(field => field.Key switch
+            {
+                "month" => row.MonthLabel,
+                "active_vehicles" => row.ActiveVehicles.ToString(),
+                "total_trips" => row.TotalTrips.ToString(),
+                "monthly_trips" => row.MonthlyTrips.ToString(),
+                "open_trips" => row.OpenTrips.ToString(),
+                "utilization" => row.UtilizationPercent.ToString("0.0") + "%",
+                _ => "-"
+            });
+            lines.Add(string.Join(",", values.Select(CsvCell)));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"vip_pool_utilization_previous_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
     private sealed record MonthUtilizationRow(
         string MonthLabel,
         int ActiveVehicles,
@@ -156,4 +228,18 @@
         int MonthlyTrips,
         int OpenTrips,
         double UtilizationPercent);
+
+    private sealed class ExportField
+    {
+        public ExportField(string key, string label, bool selected)
+        {
+            Key = key;
+            Label = label;
+            Selected = selected;
+        }
+
+        public string Key { get; }
+        public string Label { get; }
+        public bool Selected { get; set; }
+    }
 }
