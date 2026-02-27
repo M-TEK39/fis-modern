@@ -15,11 +15,13 @@ public class AuthProxyController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthProxyController> _logger;
+    private readonly string _apiBaseUrl;
 
     public AuthProxyController(IConfiguration configuration, ILogger<AuthProxyController> logger)
     {
         _configuration = configuration;
         _logger = logger;
+        _apiBaseUrl = (_configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5010").TrimEnd('/');
     }
 
     /// <summary>
@@ -44,7 +46,7 @@ public class AuthProxyController : ControllerBase
             };
 
             using var client = new HttpClient(handler);
-            var apiUrl = "http://localhost:5010/api/auth/login";
+            var apiUrl = $"{_apiBaseUrl}/api/auth/login";
             var loginIdentifier = request.FirstName;
             if (string.IsNullOrWhiteSpace(loginIdentifier))
             {
@@ -59,7 +61,7 @@ public class AuthProxyController : ControllerBase
 
             // Enforce real credential validation before token issuance.
             var validateResponse = await client.PostAsJsonAsync(
-                "http://localhost:5010/api/userprofile/validate",
+                $"{_apiBaseUrl}/api/userprofile/validate",
                 new
                 {
                     firstName = loginIdentifier,
@@ -168,7 +170,7 @@ public class AuthProxyController : ControllerBase
         {
             // Call API logout endpoint
             using var client = new HttpClient();
-            await client.PostAsync("http://localhost:5010/api/auth/logout", null);
+            await client.PostAsync($"{_apiBaseUrl}/api/auth/logout", null);
         }
         catch (Exception ex)
         {

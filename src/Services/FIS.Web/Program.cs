@@ -65,183 +65,188 @@ builder.Services.AddScoped<DualAuthStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp => 
     sp.GetRequiredService<DualAuthStateProvider>());
 
+var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5010";
+var webBaseUrl = builder.Configuration["ApiSettings:WebBaseUrl"] ?? "http://localhost:5268";
+var apiBaseUri = new Uri($"{apiBaseUrl.TrimEnd('/')}/");
+var webBaseUri = new Uri($"{webBaseUrl.TrimEnd('/')}/");
+
 // Register API services with AuthorizationHeaderHandler (automatically adds JWT to requests)
 builder.Services.AddHttpClient<VehicleApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<VehicleDocumentApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<ReferenceDataApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<DepartmentApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<DriverApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<ContractApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<PrivateHireApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<AccidentApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<FleetManagementApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<LicenseApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LicenseMaintenanceApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LicenseFeeApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<DriverLicenceApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ExtraCodeApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LossTypeApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ProvinceApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<LocationApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<MaintenanceRecordApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<MaintenanceTriggerApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<NotificationApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<TroubleshootApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<NoticeApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<ReportCatalogApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<CaptureActivityApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<TariffApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<FinanceApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<TripApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<TripDriverApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<UnitOfMeasureApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
 builder.Services.AddHttpClient<UserApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<UserProfileApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddScoped<UserAccessContextService>();
@@ -249,157 +254,157 @@ builder.Services.AddHttpClient<AuthApiService>(client =>
 {
     // Point to local web server (AuthProxyController), NOT the API
     // No AuthorizationHeaderHandler needed - this calls local proxy, not API
-    client.BaseAddress = new Uri("http://localhost:5268/");
+    client.BaseAddress = webBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddHttpClient<SiteApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<CallCentreApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ClassApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<FineApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LogbookApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LogsheetApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<MonitorApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<TrackingApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<TowingApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<AuctionApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ClearanceApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<MerchantApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LossApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LossReportApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LicenseReportApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<VehicleOrderApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<VehiclePhotoApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<VehicleLookupApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<WorkshopApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<TaxiApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<AssetVerificationApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<VehicleAssessmentApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<VehicleDamageApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<SupplierApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ThirdPartyApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<BookingApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LeaseContractTermsApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<JobCardApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<TrafficDeptApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ValidationApiService>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5010/");
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
