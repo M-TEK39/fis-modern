@@ -39,7 +39,10 @@ builder.Services.AddCors(options =>
             "http://10.0.0.104:5268",
             "https://10.0.0.104:7259",
             "http://10.0.0.104:5010",
-            "https://10.0.0.104:7188"
+            "https://10.0.0.104:7188",
+            // Production domains via Cloudflare Tunnel
+            "https://fis.irisgroup.co.za",
+            "https://admin.irisgroup.co.za"
         )
         .AllowAnyMethod()
         .AllowAnyHeader()
