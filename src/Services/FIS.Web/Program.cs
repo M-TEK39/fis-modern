@@ -203,6 +203,12 @@ builder.Services.AddHttpClient<ReportCatalogApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
+builder.Services.AddHttpClient<ReportApiService>(client =>
+{
+    client.BaseAddress = apiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
 builder.Services.AddHttpClient<CaptureActivityApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

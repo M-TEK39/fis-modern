@@ -103,14 +103,18 @@
 
             var result = await FinanceService.PostActionAsync("api/report/request-additional", new
             {
-                category = _request.Category,
-                priority = _request.Priority,
+                reportType = string.IsNullOrWhiteSpace(_request.Subject) ? _request.Category : _request.Subject,
                 requestedBy = _request.RequestedBy,
-                email = _request.Email,
-                subject = _request.Subject,
-                module = _request.Module,
-                details = _request.Details,
-                requestedAt = DateTime.UtcNow
+                parameters = new Dictionary<string, object?>
+                {
+                    ["category"] = _request.Category,
+                    ["priority"] = _request.Priority,
+                    ["email"] = _request.Email,
+                    ["subject"] = _request.Subject,
+                    ["module"] = _request.Module,
+                    ["details"] = _request.Details,
+                    ["requestedAt"] = DateTime.UtcNow
+                }
             });
 
             _statusError = !result.Success;

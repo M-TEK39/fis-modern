@@ -23,7 +23,7 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">
+            <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">
                 @(_loading ? "Generating..." : "Generate Report")
             </button>
             @if (!string.IsNullOrWhiteSpace(_message))

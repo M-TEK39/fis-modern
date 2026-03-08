@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject ReportApiService ReportService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Registration Certificates - Fleet Information System</PageTitle>
@@ -49,7 +50,7 @@
                 </div>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Submit</button>
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
             </div>
         </div>
@@ -108,7 +109,7 @@
                                 <td>@GetVehicleLabel(row)</td>
                                 <td>@ValueOrDash(row.lic_register_number)</td>
                                 <td>@FormatDate(row.licence_due_date)</td>
-                                <td>@GetCertificateStatus(row.licence_due_date)</td>
+                                <td>@GetCertificateStatus(row)</td>
                             </tr>
                         }
                     }
@@ -132,7 +133,8 @@
     private string _searchMode = "GG";
     private string _searchTerm = string.Empty;
     private string _dueMode = "all";
-    private List<VehicleDto> _rows = new();
+    private List<RegistrationCertificateRow> _rows = new();
+    private Dictionary<int, VehicleDto> _vehicleLookup = new();
     private int _page = 1;
     private const int _pageSize = 12;
     private bool _showFieldSelector;
@@ -144,7 +146,7 @@
         new("status", "Status", true)
     ];
 
-    private List<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private List<RegistrationCertificateRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
@@ -158,32 +160,47 @@
         try
         {
             var search = _searchTerm.Trim();
-            var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000, search: string.IsNullOrWhiteSpace(search) ? null : search);
-            var today = DateTime.Today;
-            var dueLimit = today.AddDays(30);
+            var report = await ReportService.GetRegistrationCertificatesAsync();
 
-            var filtered = page.Data.Where(v =>
-                !string.IsNullOrWhiteSpace(v.registration_number)
-                || !string.IsNullOrWhiteSpace(v.lic_register_number)
-                || v.licence_due_date.HasValue);
+            if (_vehicleLookup.Count == 0)
+            {
+                var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+                _vehicleLookup = page.Data.ToDictionary(v => v.vmf_code);
+            }
+
+            var rows = report.Certificates.Select(c =>
+            {
+                _vehicleLookup.TryGetValue(c.VmfCode, out var vehicle);
+                return new RegistrationCertificateRow
+                {
+                    vmf_code = c.VmfCode,
+                    fleet_number = vehicle?.fleet_number,
+                    registration_number = string.IsNullOrWhiteSpace(c.RegistrationNumber)
+                        ? vehicle?.registration_number
+                        : c.RegistrationNumber,
+                    lic_register_number = vehicle?.lic_register_number,
+                    licence_due_date = c.ExpiryDate,
+                    status = c.Status
+                };
+            });
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                filtered = filtered.Where(v =>
-                    (_searchMode == "GG"
-                        ? Contains(v.fleet_number, search)
-                        : Contains(v.registration_number, search))
-                    || Contains(v.lic_register_number, search));
+                rows = _searchMode == "GG"
+                    ? rows.Where(r => Contains(r.fleet_number, search))
+                    : rows.Where(r => Contains(r.registration_number, search) || Contains(r.lic_register_number, search));
             }
 
-            filtered = _dueMode switch
+            var today = DateTime.Today;
+            var dueLimit = today.AddDays(30);
+            rows = _dueMode switch
             {
-                "expired" => filtered.Where(v => v.licence_due_date.HasValue && v.licence_due_date.Value.Date < today),
-                "due" => filtered.Where(v => v.licence_due_date.HasValue && v.licence_due_date.Value.Date >= today && v.licence_due_date.Value.Date <= dueLimit),
-                _ => filtered
+                "expired" => rows.Where(r => r.licence_due_date.HasValue && r.licence_due_date.Value.Date < today),
+                "due" => rows.Where(r => r.licence_due_date.HasValue && r.licence_due_date.Value.Date >= today && r.licence_due_date.Value.Date <= dueLimit),
+                _ => rows
             };
 
-            _rows = filtered
+            _rows = rows
                 .OrderBy(v => v.licence_due_date ?? DateTime.MaxValue)
                 .ThenBy(v => v.registration_number)
                 .ToList();
@@ -222,8 +239,18 @@
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
-    private static string GetVehicleLabel(VehicleDto row)
+    private static string GetVehicleLabel(RegistrationCertificateRow row)
         => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
+
+    private static string GetCertificateStatus(RegistrationCertificateRow row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.status))
+        {
+            return row.status;
+        }
+
+        return GetCertificateStatus(row.licence_due_date);
+    }
 
     private static string GetCertificateStatus(DateTime? dueDate)
     {
@@ -312,5 +339,15 @@
         public string Key { get; }
         public string Label { get; }
         public bool Selected { get; set; }
+    }
+
+    private sealed class RegistrationCertificateRow
+    {
+        public int vmf_code { get; set; }
+        public string? fleet_number { get; set; }
+        public string? registration_number { get; set; }
+        public string? lic_register_number { get; set; }
+        public DateTime? licence_due_date { get; set; }
+        public string? status { get; set; }
     }
 }

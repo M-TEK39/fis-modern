@@ -53,7 +53,7 @@
                     </select>
                 </div>
             </div>
-            <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">
+            <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">
                 @(_loading ? "Generating..." : "Generate")
             </button>
             @if (!string.IsNullOrWhiteSpace(_message))

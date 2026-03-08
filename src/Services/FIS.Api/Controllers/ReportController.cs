@@ -167,7 +167,8 @@ public class ReportController : BaseApiController
                     v.year_manufactured,
                     v.take_on_date,
                     v.invoice_number,
-                    v.date_created
+                    v.date_created,
+                    v.current_odo
                 })
                 .ToListAsync();
 
@@ -245,6 +246,7 @@ public class ReportController : BaseApiController
                     v.take_on_date,
                     v.invoice_number,
                     v.date_created,
+                    v.current_odo,
                     // Active remark (null if none)
                     active_remark = remark == null ? null : (object)new
                     {
@@ -597,37 +599,113 @@ public class ReportController : BaseApiController
     }
 
     /// <summary>
-    /// Get audit trail for report access and generation
+    /// Get audit trail sourced from contract audit log entries.
+    /// Filters: startDate, endDate (inclusive), userId (performed_by_user_code).
     /// </summary>
     [HttpGet("audit-trail")]
     [ProducesResponseType(typeof(ReportAuditTrailDto), StatusCodes.Status200OK)]
-    public ActionResult GetAuditTrail([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate, [FromQuery] string? userId)
+    public async Task<ActionResult> GetAuditTrail(
+        [FromQuery] DateTime? startDate,
+        [FromQuery] DateTime? endDate,
+        [FromQuery] string? userId)
     {
-        // TODO: Implement audit trail retrieval
-        _logger.LogInformation("Audit trail requested");
-        var auditTrail = new ReportAuditTrailDto
+        try
         {
-            Entries = new List<AuditEntryDto>(),
-            TotalCount = 0
-        };
-        return Ok(auditTrail);
+            var query = _context.ContractAuditLogs.AsQueryable();
+
+            if (startDate.HasValue)
+                query = query.Where(a => a.performed_at >= startDate.Value.Date);
+
+            if (endDate.HasValue)
+                query = query.Where(a => a.performed_at <= endDate.Value.Date.AddDays(1).AddSeconds(-1));
+
+            if (!string.IsNullOrWhiteSpace(userId) && int.TryParse(userId, out var userCode))
+                query = query.Where(a => a.performed_by_user_code == userCode);
+
+            var entries = await query
+                .OrderByDescending(a => a.performed_at)
+                .Take(500)
+                .Select(a => new AuditEntryDto
+                {
+                    AuditId = a.id,
+                    ReportType = "Contract",
+                    UserId = a.performed_by_user_code.ToString(),
+                    AccessedDate = a.performed_at,
+                    Action = a.action
+                })
+                .ToListAsync();
+
+            _logger.LogInformation("Audit trail requested: {Count} entries", entries.Count);
+            return Ok(new ReportAuditTrailDto { Entries = entries, TotalCount = entries.Count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating audit trail report");
+            return StatusCode(500, new { error = "Failed to generate audit trail report", message = ex.Message });
+        }
     }
 
     /// <summary>
-    /// Get registration certificates report
+    /// Registration certificates report — lists all active vehicles with licence register number,
+    /// licence due date, and derived certificate status (Valid / Due soon / Expired / No due date).
+    /// Filters: vmfCode (optional), departmentCode (reserved — vehicle has no direct department FK).
     /// </summary>
     [HttpGet("registration-certificates")]
     [ProducesResponseType(typeof(RegistrationCertificatesReportDto), StatusCodes.Status200OK)]
-    public ActionResult GetRegistrationCertificates([FromQuery] int? vmfCode, [FromQuery] int? departmentCode)
+    public async Task<ActionResult> GetRegistrationCertificates([FromQuery] int? vmfCode, [FromQuery] int? departmentCode)
     {
-        // TODO: Implement registration certificates report
-        _logger.LogInformation("Registration certificates report requested");
-        var report = new RegistrationCertificatesReportDto
+        try
         {
-            Certificates = new List<CertificateDto>(),
-            TotalCount = 0
-        };
-        return Ok(report);
+            var query = _context.Vehicles.Where(v => !v.is_deleted);
+
+            if (vmfCode.HasValue)
+                query = query.Where(v => v.vmf_code == vmfCode.Value);
+
+            var vehicles = await query
+                .OrderBy(v => v.licence_due_date)
+                .ThenBy(v => v.registration_number)
+                .Select(v => new
+                {
+                    v.vmf_code,
+                    v.registration_number,
+                    v.take_on_date,
+                    v.licence_due_date
+                })
+                .ToListAsync();
+
+            var today = DateTime.Today;
+            var dueSoonLimit = today.AddDays(30);
+
+            var certificates = vehicles.Select(v =>
+            {
+                string status;
+                if (!v.licence_due_date.HasValue)
+                    status = "No due date";
+                else if (v.licence_due_date.Value.Date < today)
+                    status = "Expired";
+                else if (v.licence_due_date.Value.Date <= dueSoonLimit)
+                    status = "Due soon";
+                else
+                    status = "Valid";
+
+                return new CertificateDto
+                {
+                    VmfCode = v.vmf_code,
+                    RegistrationNumber = v.registration_number ?? string.Empty,
+                    IssueDate = v.take_on_date,
+                    ExpiryDate = v.licence_due_date,
+                    Status = status
+                };
+            }).ToList();
+
+            _logger.LogInformation("Registration certificates report: {Count} records", certificates.Count);
+            return Ok(new RegistrationCertificatesReportDto { Certificates = certificates, TotalCount = certificates.Count });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating registration certificates report");
+            return StatusCode(500, new { error = "Failed to generate registration certificates report", message = ex.Message });
+        }
     }
 
     /// <summary>

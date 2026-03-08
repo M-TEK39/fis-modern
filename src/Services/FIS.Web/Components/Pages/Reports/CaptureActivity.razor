@@ -20,7 +20,7 @@
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
-        <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+        <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Submit</button>
     </div>
 </div>
 
@@ -71,7 +71,7 @@
                 </div>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Submit</button>
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || FlattenedRows.Count == 0)">Download CSV</button>
             </div>

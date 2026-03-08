@@ -2,7 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@inject VehicleApiService VehicleService
+@inject ReportApiService ReportService
 @inject SiteApiService SiteService
 @inject IJSRuntime JSRuntime
 
@@ -52,7 +52,7 @@
                 </div>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="_loading">Submit</button>
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Submit</button>
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
             </div>
         </div>
@@ -114,8 +114,8 @@
                                 <td>@ValueOrDash(row.fleet_number)</td>
                                 <td>@ValueOrDash(row.registration_number)</td>
                                 <td>@GetVehicleLabel(row)</td>
-                                <td>@ValueOrDash(row.status_description)</td>
-                                <td>@GetSiteLabel(row.site_code)</td>
+                                <td>@ValueOrDash(row.status_text)</td>
+                                <td>@GetSiteLabel(row)</td>
                                 <td>@(row.year_manufactured?.ToString() ?? "-")</td>
                                 <td>@(row.current_odo?.ToString("N0") ?? "-")</td>
                             </tr>
@@ -142,7 +142,7 @@
     private string _searchMode = "GG";
     private string _searchTerm = string.Empty;
     private string _siteCode = string.Empty;
-    private List<VehicleDto> _rows = new();
+    private List<AssetListRow> _rows = new();
     private List<SiteResponseDto> _sites = new();
     private int _page = 1;
     private const int _pageSize = 12;
@@ -157,7 +157,7 @@
         new("current_odo", "Current ODO", true)
     ];
 
-    private List<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private List<AssetListRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
@@ -171,19 +171,39 @@
         _loading = true;
         try
         {
-            var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-            var selectedSite = short.TryParse(_siteCode, out var siteCode) ? siteCode : (short?)null;
             var search = _searchTerm.Trim();
+            var selectedSite = short.TryParse(_siteCode, out var siteCode) ? siteCode : (short?)null;
 
-            _rows = page.Data
-                .Where(v => IsNewOrInService(v.status_description))
-                .Where(v => !selectedSite.HasValue || v.site_code == selectedSite.Value)
-                .Where(v => string.IsNullOrWhiteSpace(search)
-                    || (_searchMode == "GG"
-                        ? (!string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(search, StringComparison.OrdinalIgnoreCase))
-                        : (!string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(search, StringComparison.OrdinalIgnoreCase))))
-                .OrderBy(v => v.fleet_number)
-                .ThenBy(v => v.registration_number)
+            var report = await ReportService.GetNewInServiceReportAsync(
+                search: string.IsNullOrWhiteSpace(search) ? null : search,
+                location_code: selectedSite);
+
+            var rows = report.vehicles.Select(v =>
+            {
+                return new AssetListRow
+                {
+                    vmf_code = v.vmf_code,
+                    fleet_number = v.fleet_number,
+                    registration_number = v.registration_number,
+                    status_text = v.status_text,
+                    site_name = v.site_name,
+                    location_code = v.location_code,
+                    year_manufactured = v.year_manufactured,
+                    current_odo = v.current_odo
+                };
+            });
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                rows = _searchMode == "GG"
+                    ? rows.Where(r => Contains(r.fleet_number, search))
+                    : rows.Where(r => Contains(r.registration_number, search));
+            }
+
+            _rows = rows
+                .Where(r => !selectedSite.HasValue || r.location_code == selectedSite.Value)
+                .OrderBy(r => r.fleet_number)
+                .ThenBy(r => r.registration_number)
                 .ToList();
 
             _page = 1;
@@ -212,32 +232,29 @@
         _searchMode = mode;
     }
 
-    private string GetSiteLabel(short? siteCode)
+    private string GetSiteLabel(AssetListRow row)
     {
-        if (!siteCode.HasValue)
+        if (!string.IsNullOrWhiteSpace(row.site_name))
+        {
+            return row.site_name!;
+        }
+
+        if (!row.location_code.HasValue)
         {
             return "-";
         }
 
-        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
-        return site == null ? siteCode.Value.ToString() : $"{ValueOrDash(site.Description)} ({site.SiteCode})";
-    }
-
-    private static bool IsNewOrInService(string? status)
-    {
-        if (string.IsNullOrWhiteSpace(status))
-        {
-            return false;
-        }
-
-        return status.Contains("new", StringComparison.OrdinalIgnoreCase)
-            || status.Contains("in service", StringComparison.OrdinalIgnoreCase);
+        var site = _sites.FirstOrDefault(s => s.SiteCode == row.location_code.Value);
+        return site == null ? row.location_code.Value.ToString() : $"{ValueOrDash(site.Description)} ({site.SiteCode})";
     }
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
-    private static string GetVehicleLabel(VehicleDto row)
+    private static bool Contains(string? value, string term)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    private static string GetVehicleLabel(AssetListRow row)
         => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
 
     private void PrevPage()
@@ -281,8 +298,8 @@
                 "gg_number" => ValueOrDash(row.fleet_number),
                 "gp_number" => ValueOrDash(row.registration_number),
                 "vehicle" => GetVehicleLabel(row),
-                "status" => ValueOrDash(row.status_description),
-                "site" => GetSiteLabel(row.site_code),
+                "status" => ValueOrDash(row.status_text),
+                "site" => GetSiteLabel(row),
                 "year" => row.year_manufactured?.ToString() ?? "-",
                 "current_odo" => row.current_odo?.ToString("N0") ?? "-",
                 _ => "-"
@@ -313,5 +330,17 @@
         public string Key { get; }
         public string Label { get; }
         public bool Selected { get; set; }
+    }
+
+    private sealed class AssetListRow
+    {
+        public int vmf_code { get; set; }
+        public string? fleet_number { get; set; }
+        public string? registration_number { get; set; }
+        public string? status_text { get; set; }
+        public short? location_code { get; set; }
+        public string? site_name { get; set; }
+        public short? year_manufactured { get; set; }
+        public int? current_odo { get; set; }
     }
 }

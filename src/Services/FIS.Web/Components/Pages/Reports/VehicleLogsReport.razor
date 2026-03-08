@@ -55,7 +55,7 @@
                 </div>
             </div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="_loading">Find</button>
+                <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_loading">Find</button>
                 <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Submit</button>
                 <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
             </div>
