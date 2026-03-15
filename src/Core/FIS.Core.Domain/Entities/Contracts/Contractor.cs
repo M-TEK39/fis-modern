@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Contracts;
 public class Contractor
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("contractor_id")]
     public short contractor_id { get; set; }
 

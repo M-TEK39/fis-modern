@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj": {}
+    "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj": {}
   },
   "projects": {
-    "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
+    "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj",
+        "projectUniqueName": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj",
         "projectName": "FIS.Core.Domain",
-        "projectPath": "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj",
-        "packagesPath": "/src/packages",
-        "outputPath": "/src/src/Core/FIS.Core.Domain/obj/",
+        "projectPath": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj",
+        "packagesPath": "/home/dev/work/fis-modern/packages",
+        "outputPath": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/src/nuget.config",
+          "/home/dev/work/fis-modern/nuget.config",
           "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -37,11 +37,6 @@
           "warnNotAsError": [
             "NU1701"
           ]
-        },
-        "restoreAuditProperties": {
-          "enableAudit": "true",
-          "auditLevel": "low",
-          "auditMode": "direct"
         }
       },
       "frameworks": {
@@ -78,21 +73,21 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.418/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.124/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj": {
+    "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj",
+        "projectUniqueName": "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj",
         "projectName": "FIS.Data.SqlServer",
-        "projectPath": "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj",
-        "packagesPath": "/src/packages",
-        "outputPath": "/src/src/Data/FIS.Data.SqlServer/obj/",
+        "projectPath": "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj",
+        "packagesPath": "/home/dev/work/fis-modern/packages",
+        "outputPath": "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/src/nuget.config",
+          "/home/dev/work/fis-modern/nuget.config",
           "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -105,11 +100,11 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
-                "projectPath": "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj"
+              "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
+                "projectPath": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj"
               },
-              "/src/src/Data/FIS.Data/FIS.Data.csproj": {
-                "projectPath": "/src/src/Data/FIS.Data/FIS.Data.csproj"
+              "/home/dev/work/fis-modern/src/Data/FIS.Data/FIS.Data.csproj": {
+                "projectPath": "/home/dev/work/fis-modern/src/Data/FIS.Data/FIS.Data.csproj"
               }
             }
           }
@@ -122,11 +117,6 @@
           "warnNotAsError": [
             "NU1701"
           ]
-        },
-        "restoreAuditProperties": {
-          "enableAudit": "true",
-          "auditLevel": "low",
-          "auditMode": "direct"
         }
       },
       "frameworks": {
@@ -173,21 +163,21 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.418/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.124/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/src/src/Data/FIS.Data/FIS.Data.csproj": {
+    "/home/dev/work/fis-modern/src/Data/FIS.Data/FIS.Data.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/src/src/Data/FIS.Data/FIS.Data.csproj",
+        "projectUniqueName": "/home/dev/work/fis-modern/src/Data/FIS.Data/FIS.Data.csproj",
         "projectName": "FIS.Data",
-        "projectPath": "/src/src/Data/FIS.Data/FIS.Data.csproj",
-        "packagesPath": "/src/packages",
-        "outputPath": "/src/src/Data/FIS.Data/obj/",
+        "projectPath": "/home/dev/work/fis-modern/src/Data/FIS.Data/FIS.Data.csproj",
+        "packagesPath": "/home/dev/work/fis-modern/packages",
+        "outputPath": "/home/dev/work/fis-modern/src/Data/FIS.Data/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/src/nuget.config",
+          "/home/dev/work/fis-modern/nuget.config",
           "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -200,8 +190,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
-                "projectPath": "/src/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj"
+              "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj": {
+                "projectPath": "/home/dev/work/fis-modern/src/Core/FIS.Core.Domain/FIS.Core.Domain.csproj"
               }
             }
           }
@@ -214,11 +204,6 @@
           "warnNotAsError": [
             "NU1701"
           ]
-        },
-        "restoreAuditProperties": {
-          "enableAudit": "true",
-          "auditLevel": "low",
-          "auditMode": "direct"
         }
       },
       "frameworks": {
@@ -269,21 +254,21 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.418/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.124/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj": {
+    "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
+        "projectUniqueName": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
         "projectName": "DatabaseMigrationTool",
-        "projectPath": "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
-        "packagesPath": "/src/packages",
-        "outputPath": "/src/src/Tools/DatabaseMigrationTool/obj/",
+        "projectPath": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
+        "packagesPath": "/home/dev/work/fis-modern/packages",
+        "outputPath": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/src/nuget.config",
+          "/home/dev/work/fis-modern/nuget.config",
           "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
@@ -296,8 +281,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj": {
-                "projectPath": "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj"
+              "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj": {
+                "projectPath": "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj"
               }
             }
           }
@@ -310,11 +295,6 @@
           "warnNotAsError": [
             "NU1701"
           ]
-        },
-        "restoreAuditProperties": {
-          "enableAudit": "true",
-          "auditLevel": "low",
-          "auditMode": "direct"
         }
       },
       "frameworks": {
@@ -369,7 +349,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.418/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.124/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class AccType
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("acc_type_code")]
     public short acc_type_code { get; set; }
 

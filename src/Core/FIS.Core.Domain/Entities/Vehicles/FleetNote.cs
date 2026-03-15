@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Vehicles;
 public class FleetNote
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("fleet_notes_code")]
     public int fleet_notes_code { get; set; }
 

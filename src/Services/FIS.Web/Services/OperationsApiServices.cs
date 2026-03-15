@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Net.Http;
+using FIS.Web.Models;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 
@@ -140,6 +141,18 @@ public class FineApiService(HttpClient httpClient, TokenService tokenService, IL
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+}
+
+public class RegistrationApiService(HttpClient httpClient, TokenService tokenService, ILogger<RegistrationApiService> logger) : BaseApiService(httpClient, tokenService, logger)
+{
+    private const string BasePath = "api/registration";
+
+    public async Task<RegistrationSearchResponseDto> SearchAsync(string query)
+        => await GetAsync<RegistrationSearchResponseDto>($"{BasePath}/search?q={Uri.EscapeDataString(query)}")
+            ?? new RegistrationSearchResponseDto();
+
+    public Task<RegistrationHistoryResponseDto?> GetVehicleHistoryAsync(int vmfCode)
+        => GetAsync<RegistrationHistoryResponseDto>($"{BasePath}/vehicle/{vmfCode}");
 }
 
 public class LogbookApiService(HttpClient httpClient, TokenService tokenService, ILogger<LogbookApiService> logger) : BaseApiService(httpClient, tokenService, logger)
@@ -355,9 +368,20 @@ public class TaxiApiService(HttpClient httpClient, TokenService tokenService, IL
 
     public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
     public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
+    public Task<T?> GetByRequisitionAsync<T>(string rekNum) => GetAsync<T>($"{BasePath}/lookup/{Uri.EscapeDataString(rekNum)}");
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+}
+
+public class TaxiLogApiService(HttpClient httpClient, TokenService tokenService, ILogger<TaxiLogApiService> logger) : BaseApiService(httpClient, tokenService, logger)
+{
+    private const string BasePath = "api/taxilog";
+
+    public Task<T?> GetReferencesAsync<T>() => GetAsync<T>($"{BasePath}/references");
+    public Task<T?> LookupAsync<T>(string rekNum, string mode) => GetAsync<T>($"{BasePath}/lookup/{Uri.EscapeDataString(rekNum)}?mode={Uri.EscapeDataString(mode)}");
+    public Task<T?> CreateAsync<TPayload, T>(TPayload payload) => PostAsync<TPayload, T>(BasePath, payload);
+    public Task<T?> UpdateAsync<TPayload, T>(int logId, TPayload payload) => PutAsync<TPayload, T>($"{BasePath}/{logId}", payload);
 }
 
 public class AssetVerificationApiService(HttpClient httpClient, TokenService tokenService, ILogger<AssetVerificationApiService> logger) : BaseApiService(httpClient, tokenService, logger)

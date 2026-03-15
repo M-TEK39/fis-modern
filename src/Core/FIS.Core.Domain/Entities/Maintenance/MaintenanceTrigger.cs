@@ -12,6 +12,7 @@ namespace FIS.Core.Domain.Entities.Maintenance;
 public class MaintenanceTrigger
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("maint_trigger_code")]
     public short maint_trigger_code { get; set; }
 

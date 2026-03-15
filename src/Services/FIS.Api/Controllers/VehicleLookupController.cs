@@ -56,6 +56,8 @@ public class VehicleLookupController : BaseApiController
                     VmfCode = v.vmf_code,
                     FleetNumber = v.fleet_number ?? string.Empty,
                     RegistrationNumber = v.registration_number,
+                    ChassisNumber = v.chassis_number,
+                    EngineNumber = v.engine_number_1,
                     MakeCode = v.Model?.make_code,
                     ModelCode = v.model_code,
                     CurrentOdometer = v.current_odo,
@@ -101,6 +103,8 @@ public class VehicleLookupController : BaseApiController
                 VmfCode = vehicle.vmf_code,
                 FleetNumber = vehicle.fleet_number ?? string.Empty,
                 RegistrationNumber = vehicle.registration_number,
+                ChassisNumber = vehicle.chassis_number,
+                EngineNumber = vehicle.engine_number_1,
                 MakeCode = vehicle.Model?.make_code,
                 ModelCode = vehicle.model_code,
                 CurrentOdometer = vehicle.current_odo,
@@ -129,6 +133,8 @@ public class VehicleSearchResultDto
     public int VmfCode { get; set; }
     public string FleetNumber { get; set; } = string.Empty;
     public string? RegistrationNumber { get; set; }
+    public string? ChassisNumber { get; set; }
+    public string? EngineNumber { get; set; }
     public short? MakeCode { get; set; }
     public short? ModelCode { get; set; }
     public int? CurrentOdometer { get; set; }

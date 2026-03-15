@@ -98,6 +98,9 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "referenceNumber")]
+    public string? ReferenceNumber { get; set; }
+
     private bool _loading;
     private bool _showForm;
     private string _referenceNumber = string.Empty;
@@ -111,6 +114,12 @@
     {
         _sites = await SiteService.GetAllAsync();
         _drivers = await DriverService.GetDriversAsync();
+
+        if (!string.IsNullOrWhiteSpace(ReferenceNumber))
+        {
+            _referenceNumber = ReferenceNumber.Trim();
+            await LoadIncident();
+        }
     }
 
     private async Task LoadIncident()

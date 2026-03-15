@@ -2,9 +2,11 @@
 @rendermode InteractiveServer
 @using System.Text.Json
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject TaxiApiService TaxiService
 @inject VehicleApiService VehicleService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Financial Reports: Taxis - Fleet Information System</PageTitle>
 
@@ -23,20 +25,30 @@
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Search</label>
-                    <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Req #, GG/GP, official, company" />
+    @if (!_isResultView)
+    {
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Search</label>
+                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Req #, GG/GP, official, company" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 </div>
             </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Submit</button>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
-            </div>
         </div>
-    </div>
+    }
+    @if (_isResultView)
+    {
+        <LegacyDynamicReportGrid ReportKey="taxis-financial" FiltersUrl="@_pageRoute" />
+    }
+    else
+    {
 
     <div class="table-container fis-mt-15">
         <div class="table-header">
@@ -117,6 +129,7 @@
             <div class="pagination-meta">Page size: @_pageSize</div>
         }
     </div>
+    }
 </div>
 
 @code {
@@ -143,6 +156,44 @@
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
     private decimal TotalAmount => _rows.Sum(r => r.Amount ?? 0m);
 
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
+    private const string _pageRoute = "/reports/taxis-financial";
+    private string? _lastAutoLoadUri;
+
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "search")]
+    public string? QSearch { get; set; }
+
+    protected override Task OnParametersSetAsync()
+    {
+        var uri = Navigation.Uri;
+        if (_isResultView && uri != _lastAutoLoadUri)
+        {
+            _lastAutoLoadUri = uri;
+            ApplyQueryFilters();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Dictionary<string, string?> BuildQueryFilters() => new()
+    {
+        { "search", _searchTerm },
+    };
+
+    private void ApplyQueryFilters()
+    {
+        _searchTerm = QSearch ?? string.Empty;
+    }
+
+    private void NavigateToResultsAsync()
+    {
+        _lastAutoLoadUri = null;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
+    }
+
     protected override async Task OnInitializedAsync()
     {
         var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
@@ -150,7 +201,6 @@
             .GroupBy(v => v.vmf_code)
             .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
 
-        await LoadReportAsync();
     }
 
     private async Task LoadReportAsync()

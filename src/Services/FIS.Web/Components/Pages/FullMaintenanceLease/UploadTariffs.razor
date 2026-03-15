@@ -1,5 +1,6 @@
 @page "/full-maintenance-lease/upload"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Services
 @inject LeaseContractTermsApiService LeaseService
 @inject IJSRuntime JSRuntime
@@ -20,10 +21,19 @@
 </div>
 
 <div class="page-content">
+    <div class="alert alert-info fis-alert-tight">
+        <i class="bx bx-info-circle"></i>
+        <span>Use the legacy tariff layout when preparing the CSV. Extra legacy columns are accepted and ignored when they are not required by the API.</span>
+    </div>
+
     <div class="form-card">
+        <div class="form-card-header">
+            <h2>Upload instructions</h2>
+            <p>Prepare the tariff file as CSV with the legacy column names, then paste the contents below for import.</p>
+        </div>
         <div class="form-card-body">
-            <p class="form-hint">Expected CSV headers: `VMF_Code,Start_Date,End_Date,Fixed_Tariff,AgreedTerms,AgreedKilos,AppliedInterest`</p>
-            <textarea class="form-input" rows="12" @bind="_csvText" placeholder="VMF_Code,Start_Date,End_Date,Fixed_Tariff,AgreedTerms,AgreedKilos,AppliedInterest"></textarea>
+            <p class="form-hint">Supported headers: <code>No</code>, <code>VMF_Code</code>, <code>GGNumber</code>, <code>GPNumber</code>, <code>Start_Date</code>, <code>End_Date</code>, <code>Fixed_Tariff</code>, <code>Excess_Kilo_Tariff</code>, <code>AgreedTerms</code>, <code>AgreedKilos</code>, <code>AppliedInterest</code>.</p>
+            <textarea class="form-input" rows="12" @bind="_csvText" placeholder="No,VMF_Code,GGNumber,GPNumber,Start_Date,End_Date,Fixed_Tariff,Excess_Kilo_Tariff,AgreedTerms,AgreedKilos,AppliedInterest"></textarea>
             <div class="form-actions">
                 <button class="btn btn-primary" @onclick="ImportAsync" disabled="@_importing">Import</button>
                 <button class="btn btn-secondary" @onclick="ClearAsync" disabled="@_importing">Clear</button>
@@ -69,30 +79,39 @@
         var failed = 0;
         try
         {
+            var headers = ParseHeaders(lines[0]);
+            if (!headers.ContainsKey("vmf_code"))
+            {
+                _error = true;
+                _message = "CSV header must include VMF_Code.";
+                return;
+            }
+
             foreach (var row in lines.Skip(1))
             {
-                var cols = row.Split(',');
-                if (cols.Length < 4)
+                var cols = row.Split(',').Select(value => value.Trim()).ToArray();
+                if (cols.Length == 0)
                 {
                     failed++;
                     continue;
                 }
 
-                if (!int.TryParse(cols[0].Trim(), out var vmfCode))
+                var vmfText = GetColumnValue(cols, headers, "vmf_code");
+                if (!int.TryParse(vmfText, out var vmfCode))
                 {
                     failed++;
                     continue;
                 }
 
-                var payload = new LeaseTermDto
+                var payload = new FullMaintenanceLeaseTermDto
                 {
                     vmf_Code = vmfCode,
-                    StartDate = ParseDate(cols.ElementAtOrDefault(1)),
-                    EndDate = ParseDate(cols.ElementAtOrDefault(2)),
-                    FixedMonthlyAmount = ParseDecimal(cols.ElementAtOrDefault(3)),
-                    AgreedTerms = ParseInt(cols.ElementAtOrDefault(4)),
-                    AgreedKilos = ParseLong(cols.ElementAtOrDefault(5)),
-                    AppliedInterest = ParseDecimal(cols.ElementAtOrDefault(6)),
+                    StartDate = ParseDate(GetColumnValue(cols, headers, "start_date")),
+                    EndDate = ParseDate(GetColumnValue(cols, headers, "end_date")),
+                    FixedMonthlyAmount = ParseDecimal(GetColumnValue(cols, headers, "fixed_tariff")),
+                    AgreedTerms = ParseInt(GetColumnValue(cols, headers, "agreedterms")),
+                    AgreedKilos = ParseLong(GetColumnValue(cols, headers, "agreedkilos")),
+                    AppliedInterest = ParseDecimal(GetColumnValue(cols, headers, "appliedinterest")),
                     AuthorityStatus = 1
                 };
 
@@ -142,16 +161,19 @@
     private static long? ParseLong(string? text)
         => long.TryParse(text?.Trim(), out var parsed) ? parsed : null;
 
-    private sealed class LeaseTermDto
-    {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-        public int? AgreedTerms { get; set; }
-        public long? AgreedKilos { get; set; }
-        public decimal? AppliedInterest { get; set; }
-        public decimal? FixedMonthlyAmount { get; set; }
-        public int? AuthorityStatus { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
-    }
+    private static Dictionary<string, int> ParseHeaders(string headerRow)
+        => headerRow
+            .Split(',')
+            .Select((value, index) => new { Key = NormalizeHeader(value), index })
+            .Where(item => !string.IsNullOrWhiteSpace(item.Key))
+            .GroupBy(item => item.Key)
+            .ToDictionary(group => group.Key, group => group.First().index);
+
+    private static string? GetColumnValue(IReadOnlyList<string> columns, IReadOnlyDictionary<string, int> headers, string key)
+        => headers.TryGetValue(key, out var index) && index >= 0 && index < columns.Count
+            ? columns[index]
+            : null;
+
+    private static string NormalizeHeader(string? header)
+        => (header ?? string.Empty).Trim().Replace(" ", string.Empty).ToLowerInvariant();
 }

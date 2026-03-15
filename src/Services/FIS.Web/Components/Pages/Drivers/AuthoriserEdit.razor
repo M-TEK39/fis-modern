@@ -1,0 +1,252 @@
+@page "/drivers/authorisers/edit"
+@rendermode InteractiveServer
+@using FIS.Web.Components.Pages.Drivers
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject UserApiService UserApiService
+@inject TroubleshootApiService TroubleshootService
+@inject SiteApiService SiteService
+@inject DepartmentApiService DepartmentService
+@inject NavigationManager Navigation
+
+<PageTitle>@PageTitleText - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-user-plus"></i>
+            @PageTitleText
+        </h1>
+        <p class="page-description">Capture authoriser details exactly in the legacy flow order.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="@DriverManagementNavigation.Authorisers(DepartmentCode, SiteCode)">
+            <i class="bx bx-arrow-back"></i>
+            Back
+        </a>
+    </div>
+</div>
+
+<div class="page-content">
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading authoriser details...</p>
+        </div>
+    }
+    else
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Authoriser Details</h2>
+            </div>
+            <div class="form-card-body">
+                @if (_site is not null || _department is not null)
+                {
+                    <div class="alert alert-info fis-mb-1">
+                        <i class="bx bx-map"></i>
+                        <span>@ContextSummary</span>
+                    </div>
+                }
+
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">First Name</label>
+                        <input class="form-input" @bind="_model.FirstName" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Surname</label>
+                        <input class="form-input" @bind="_model.LastName" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Persal Number</label>
+                        <input class="form-input" type="number" @bind="_model.PersalNumber" />
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Telephone Number</label>
+                        <input class="form-input" @bind="_model.Telephone" />
+                    </div>
+                    <div class="form-field form-group-full">
+                        <label class="form-label">Rank</label>
+                        <select class="form-select" @bind="_model.PositionCode">
+                            <option value="">Select rank</option>
+                            @foreach (var rank in _rankOptions)
+                            {
+                                <option value="@rank.Value">@rank.Label</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="button" @onclick="SaveAsync" disabled="@_saving">
+                        @(_saving ? "Saving..." : "Save Changes")
+                    </button>
+                    <a class="btn btn-secondary" href="@DriverManagementNavigation.Authorisers(DepartmentCode, SiteCode)">Cancel</a>
+                </div>
+            </div>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <div class="alert alert-error fis-mt-1">
+                <i class="bx bx-error-circle"></i>
+                <span>@_errorMessage</span>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "departmentCode")]
+    public string? DepartmentCodeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "siteCode")]
+    public string? SiteCodeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "userAccessCode")]
+    public string? UserAccessCodeQuery { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private string? _errorMessage;
+    private SiteResponseDto? _site;
+    private DepartmentDto? _department;
+    private AuthoriserEditorModel _model = new();
+    private IReadOnlyList<RankOption> _rankOptions = Array.Empty<RankOption>();
+    private short? DepartmentCode => DriverManagementNavigation.ParseNullableShort(DepartmentCodeQuery);
+    private short? SiteCode => DriverManagementNavigation.ParseNullableShort(SiteCodeQuery);
+    private short? UserAccessCode => DriverManagementNavigation.ParseNullableShort(UserAccessCodeQuery);
+
+    private string PageTitleText => UserAccessCode.HasValue ? "Edit Authoriser" : "Add Authoriser";
+    private string ContextSummary => $"{DriverManagementNavigation.BuildDepartmentLabel(_department)} / {DriverManagementNavigation.BuildSiteLabel(_site)}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _errorMessage = null;
+
+        try
+        {
+            if (!SiteCode.HasValue)
+            {
+                _errorMessage = "Select a department and site before editing authorisers.";
+                return;
+            }
+
+            _site = await SiteService.GetByIdAsync(SiteCode.Value);
+            var resolvedDepartmentCode = DepartmentCode ?? _site?.DepartmentCode;
+            _department = resolvedDepartmentCode.HasValue
+                ? await DepartmentService.GetDepartmentAsync(resolvedDepartmentCode.Value)
+                : null;
+
+            var profiles = await UserApiService.GetAllProfilesAsync();
+            var rankDtos = await TroubleshootService.GetApproverRanksAsync();
+            _rankOptions = DriverManagementNavigation.BuildRankOptions(rankDtos, profiles);
+
+            if (UserAccessCode.HasValue)
+            {
+                var existing = await UserApiService.GetProfileAsync(UserAccessCode.Value);
+                if (existing is null)
+                {
+                    _errorMessage = "The selected authoriser could not be loaded.";
+                    _model = new AuthoriserEditorModel();
+                    return;
+                }
+
+                _model = AuthoriserEditorModel.FromProfile(existing);
+            }
+            else
+            {
+                _model = new AuthoriserEditorModel();
+            }
+
+            EnsureCurrentRankIsSelectable();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to load authoriser details: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void EnsureCurrentRankIsSelectable()
+    {
+        if (!_model.PositionCode.HasValue || _rankOptions.Any(rank => rank.Value == _model.PositionCode.Value))
+        {
+            return;
+        }
+
+        _rankOptions = _rankOptions
+            .Append(new RankOption(_model.PositionCode.Value, $"Rank {_model.PositionCode.Value}"))
+            .OrderBy(rank => rank.Label)
+            .ThenBy(rank => rank.Value)
+            .ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = Validate();
+        if (!string.IsNullOrWhiteSpace(_errorMessage) || !SiteCode.HasValue)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            if (UserAccessCode.HasValue)
+            {
+                await UserApiService.UpdateProfileAsync(UserAccessCode.Value, _model.ToUpdateRequest(SiteCode.Value));
+            }
+            else
+            {
+                var created = await UserApiService.CreateProfileAsync(_model.ToCreateRequest(SiteCode.Value));
+                if (created is null || created.UserAccessCode <= 0)
+                {
+                    _errorMessage = "Unable to create authoriser.";
+                    return;
+                }
+            }
+
+            Navigation.NavigateTo(DriverManagementNavigation.Authorisers(DepartmentCode, SiteCode));
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Unable to save authoriser: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private string? Validate()
+    {
+        if (string.IsNullOrWhiteSpace(_model.FirstName))
+        {
+            return "The first name is required.";
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.LastName))
+        {
+            return "The surname is required.";
+        }
+
+        if (!_model.PositionCode.HasValue)
+        {
+            return "The rank is required.";
+        }
+
+        return null;
+    }
+}

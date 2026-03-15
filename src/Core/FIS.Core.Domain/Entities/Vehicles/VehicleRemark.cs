@@ -13,6 +13,7 @@ namespace FIS.Core.Domain.Entities;
 public class VehicleRemark
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("remark_id")]
     public int remark_id { get; set; }
 

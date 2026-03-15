@@ -72,11 +72,10 @@ public class ExtraCodeController : BaseApiController
     {
         try
         {
-            _logger.LogInformation("Creating extra code: {Code}", request.ExtraCode);
+            _logger.LogInformation("Creating extra code: {Description}", request.Description);
 
             var code = new ExtraCode
             {
-                extra_code = request.ExtraCode,
                 extra_description = request.Description,
                 category_type_code = request.CategoryTypeCode
             };

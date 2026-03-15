@@ -10,6 +10,7 @@
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
+@inject UserApiService UserService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -219,6 +220,7 @@
 
     private bool _loadingContracts = true;
     private List<ContractDto> _pendingContracts = new();
+    private Dictionary<int, int> _pendingSubmittedByUserCodes = new();
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
@@ -256,6 +258,7 @@
     private async Task<List<ContractDto>> FilterPendingContractsAsync(List<ContractDto> contracts)
     {
         var pending = new List<ContractDto>();
+        _pendingSubmittedByUserCodes.Clear();
         foreach (var contract in contracts)
         {
             var pendingResponse = await ContractService.GetActionAsync($"api/contracts/{contract.contract_id}/pending");
@@ -273,11 +276,11 @@
                     {
                         if (submittedBy.ValueKind == JsonValueKind.Number && submittedBy.TryGetInt32(out var submittedByCode))
                         {
-                            contract.created_by_user_code = submittedByCode;
+                            _pendingSubmittedByUserCodes[contract.contract_id] = submittedByCode;
                         }
                         else if (submittedBy.ValueKind == JsonValueKind.String && int.TryParse(submittedBy.GetString(), out submittedByCode))
                         {
-                            contract.created_by_user_code = submittedByCode;
+                            _pendingSubmittedByUserCodes[contract.contract_id] = submittedByCode;
                         }
                     }
 
@@ -410,13 +413,13 @@
         => ValueOrDash(contract.Vehicle?.status_description ?? contract.status);
 
     private static string GetContractType(ContractDto contract)
-        => ValueOrDash(contract.contractor_name);
+        => GetContractTypeLabel(contract.contract_type_code ?? contract.contractor_name);
 
     private static string GetContractStatus(ContractDto contract)
         => ValueOrDash(contract.status);
 
     private static string GetHireType(ContractDto contract)
-        => ValueOrDash(contract.contractor_name);
+        => ValueOrDash(contract.Vehicle?.type_name ?? GetContractTypeLabel(contract.contract_type_code ?? contract.contractor_name));
 
     private static string GetMake(ContractDto contract)
         => ValueOrDash(contract.vehicle_make);
@@ -428,7 +431,7 @@
         => ValueOrDash(contract.vehicle_model ?? contract.Vehicle?.model_name);
 
     private string GetUserName(ContractDto contract)
-        => ValueOrDash(GetDriverName(contract));
+        => ResolveUserDisplay(GetCapturerUserCode(contract) ?? contract.user_code);
 
     private static string GetDepartment(ContractDto contract)
         => ValueOrDash(contract.department_name ?? contract.Department?.department_description);
@@ -454,6 +457,15 @@
             _drivers = await DriverService.GetDriversAsync();
         }
 
+        if (_userProfilesByCode.Count == 0)
+        {
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(profile => profile.UserAccessCode > 0)
+                .GroupBy(profile => (int)profile.UserAccessCode)
+                .ToDictionary(group => group.Key, group => group.First());
+        }
+
         foreach (var contract in _pendingContracts)
         {
             if (contract.vmf_code.HasValue && contract.Vehicle == null)
@@ -474,26 +486,71 @@
 
     private Dictionary<short, string> _siteNames = new();
     private List<DriverDto> _drivers = new();
+    private Dictionary<int, UserProfileDto> _userProfilesByCode = new();
 
     private string GetDriverName(ContractDto contract)
     {
-        if (_drivers.Count == 0 || contract.contractor_name == null)
+        if (!string.IsNullOrWhiteSpace(contract.driver_name))
+        {
+            return contract.driver_name.Trim();
+        }
+
+        if (_drivers.Count == 0)
         {
             return "-";
         }
 
-        if (!int.TryParse(contract.contractor_name, out var driverCode))
+        if (contract.site_driver_code is > 0)
         {
-            return contract.contractor_name;
+            var matchedDriver = _drivers.FirstOrDefault(d => d.site_driver_code == contract.site_driver_code.Value);
+            if (matchedDriver != null)
+            {
+                return $"{matchedDriver.driver_firstname} {matchedDriver.driver_surname}".Trim();
+            }
         }
 
-        var driver = _drivers.FirstOrDefault(d => d.site_driver_code == driverCode);
+        var driverId = contract.driver_id;
+        if (string.IsNullOrWhiteSpace(driverId))
+        {
+            return "-";
+        }
+
+        var normalizedDriverId = driverId.Trim();
+        var driver = _drivers.FirstOrDefault(d =>
+            string.Equals(d.driver_SA_id, normalizedDriverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(d.driver_passportnumber, normalizedDriverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(d.driver_persalnumber, normalizedDriverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(d.driver_contractnumber, normalizedDriverId, StringComparison.OrdinalIgnoreCase));
         if (driver == null)
         {
-            return contract.contractor_name;
+            return normalizedDriverId;
         }
 
         return $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+    }
+
+    private string ResolveUserDisplay(int? userAccessCode)
+    {
+        if (userAccessCode is > 0 && _userProfilesByCode.TryGetValue(userAccessCode.Value, out var profile))
+        {
+            return ValueOrDash($"{profile.FirstName} {profile.LastName}".Trim());
+        }
+
+        return "-";
+    }
+
+    private static string GetContractTypeLabel(string? contractTypeCode)
+    {
+        var code = (contractTypeCode ?? string.Empty).Trim().ToUpperInvariant();
+        return code switch
+        {
+            "A" => "Daily",
+            "B" => "Hourly",
+            "C" => "Permanent",
+            "D" => "Relieve",
+            "E" => "Lease",
+            _ => string.IsNullOrWhiteSpace(code) ? "-" : code
+        };
     }
 
     private bool CanReviewContract(ContractDto contract)
@@ -514,7 +571,20 @@
             return true;
         }
 
-        return contract.created_by_user_code is > 0 && contract.created_by_user_code.Value == _currentUserAccessCode.Value;
+        var createdByUserCode = GetCapturerUserCode(contract);
+        return createdByUserCode is > 0 && createdByUserCode.Value == _currentUserAccessCode.Value;
+    }
+
+    private int? GetCapturerUserCode(ContractDto contract)
+    {
+        if (contract.created_by_user_code is > 0)
+        {
+            return contract.created_by_user_code;
+        }
+
+        return contract.contract_id > 0 && _pendingSubmittedByUserCodes.TryGetValue(contract.contract_id, out var submittedByUserCode)
+            ? submittedByUserCode
+            : null;
     }
 
     private async Task ResolveCurrentUserContextAsync()

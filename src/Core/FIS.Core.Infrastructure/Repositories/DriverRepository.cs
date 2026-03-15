@@ -51,7 +51,7 @@ public class DriverRepository : IDriverRepository
     public async Task<IEnumerable<Driver>> GetActiveDriversAsync()
     {
         return await _context.Drivers
-            .Where(d => d.driver_active)
+            .Where(d => d.driver_active && !d.is_deleted)
             .OrderBy(d => d.driver_surname)
             .ThenBy(d => d.driver_firstname)
             .ToListAsync();
@@ -67,11 +67,12 @@ public class DriverRepository : IDriverRepository
 
         var search = searchTerm.ToLower();
         return await _context.Drivers
-            .Where(d => d.driver_surname != null && d.driver_surname.ToLower().Contains(search) ||
-                       d.driver_firstname != null && d.driver_firstname.ToLower().Contains(search) ||
-                       d.driver_licence_number != null && d.driver_licence_number.ToLower().Contains(search) ||
-                       d.driver_persalnumber != null && d.driver_persalnumber.ToLower().Contains(search) ||
-                       d.driver_SA_id != null && d.driver_SA_id.ToLower().Contains(search))
+            .Where(d => !d.is_deleted &&
+                       ((d.driver_surname != null && d.driver_surname.ToLower().Contains(search)) ||
+                        (d.driver_firstname != null && d.driver_firstname.ToLower().Contains(search)) ||
+                        (d.driver_licence_number != null && d.driver_licence_number.ToLower().Contains(search)) ||
+                        (d.driver_persalnumber != null && d.driver_persalnumber.ToLower().Contains(search)) ||
+                        (d.driver_SA_id != null && d.driver_SA_id.ToLower().Contains(search))))
             .OrderBy(d => d.driver_surname)
             .ThenBy(d => d.driver_firstname)
             .ToListAsync();
@@ -124,8 +125,9 @@ public class DriverRepository : IDriverRepository
         if (driver != null)
         {
             // Soft delete instead of hard delete
-                driver.is_deleted = true;
-                driver.date_updated = DateTime.UtcNow;
+            driver.is_deleted = true;
+            driver.driver_active = false;
+            driver.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }

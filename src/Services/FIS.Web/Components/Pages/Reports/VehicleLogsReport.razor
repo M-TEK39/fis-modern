@@ -2,12 +2,14 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
-@inject LogbookApiService LogbookService
+@inject TripApiService TripService
 @inject LogsheetApiService LogsheetService
 @inject SiteApiService SiteService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Vehicle Logs Report - Fleet Information System</PageTitle>
 
@@ -15,9 +17,9 @@
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-notepad"></i>
-            Vehicle Report - Contracts, ELS &amp; Manual Logs
+            Vehicle Report - Contracts, ELS &amp; Logsheets
         </h1>
-        <p class="page-description">Combined report per vehicle for contracts, logbooks and logsheets.</p>
+        <p class="page-description">Legacy per-vehicle report for contract details, ELS details, and logsheet details.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
@@ -26,41 +28,63 @@
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Number Type</label>
-                    <div class="contract-search-radio">
-                        <label class="form-radio-label">
-                            <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
-                            GG
-                        </label>
-                        <label class="form-radio-label">
-                            <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
-                            GP
-                        </label>
+    @if (!_isResultView)
+    {
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Number Type</label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
+                                GP
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />
+                                Engine
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />
+                                VIN / Chassis
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="searchMode" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' />
+                                Invoice
+                            </label>
+                        </div>
+                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
                     </div>
-                    <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                    <div class="form-field">
+                        <label class="form-label">Vehicle Match</label>
+                        <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                            <option value="">Select vehicle</option>
+                            @foreach (var vehicle in _vehicleMatches)
+                            {
+                                <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
+                            }
+                        </select>
+                    </div>
                 </div>
-                <div class="form-field">
-                    <label class="form-label">Vehicle Match</label>
-                    <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
-                        <option value="">Select vehicle</option>
-                        @foreach (var vehicle in _vehicleMatches)
-                        {
-                            <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
-                        }
-                    </select>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_loading">Find</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Submit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Preview Modern Table</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 </div>
-            </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_loading">Find</button>
-                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Submit</button>
-                <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
             </div>
         </div>
-    </div>
+    }
+    @if (_isResultView)
+    {
+        <LegacyDynamicReportGrid ReportKey="vehicle-logs-report" FiltersUrl="@_pageRoute" />
+    }
+    else
+    {
 
     <div class="table-container fis-mt-15">
         <div class="table-header">
@@ -95,7 +119,7 @@
                         <th>Vehicle</th>
                         <th>Active Contract</th>
                         <th>Total Contracts (Window)</th>
-                        <th>Manual Logbooks</th>
+                        <th>ELS Trips</th>
                         <th>ELS Logsheets</th>
                         <th>Last Log Month</th>
                     </tr>
@@ -115,7 +139,7 @@
                             <td>@GetVehicleLabel(_selectedVehicle)</td>
                             <td>@(_activeContractId?.ToString() ?? "-")</td>
                             <td>@_contractHistoryCount</td>
-                            <td>@_logbookCount</td>
+                            <td>@_tripCount</td>
                             <td>@_logsheetCount</td>
                             <td>@(_lastLogMonth?.ToString("yyyy-MM") ?? "-")</td>
                         </tr>
@@ -199,6 +223,7 @@
             <div class="pagination-meta">Total records: @_vehicleLogsheets.Count | Page size: @_pageSize</div>
         }
     </div>
+    }
 </div>
 
 @code {
@@ -210,7 +235,7 @@
     private VehicleDto? _selectedVehicle;
     private int? _activeContractId;
     private int _contractHistoryCount;
-    private int _logbookCount;
+    private int _tripCount;
     private int _logsheetCount;
     private DateTime? _lastLogMonth;
     private List<LogsheetDto> _vehicleLogsheets = new();
@@ -224,7 +249,7 @@
         new("vehicle", "Vehicle", true),
         new("active_contract", "Active Contract", true),
         new("total_contracts", "Total Contracts (Window)", true),
-        new("manual_logbooks", "Manual Logbooks", true),
+        new("els_trips", "ELS Trips", true),
         new("els_logsheets", "ELS Logsheets", true),
         new("last_log_month", "Last Log Month", true)
     ];
@@ -241,6 +266,57 @@
     private List<LogsheetDto> PagedLogsheets => _vehicleLogsheets.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_vehicleLogsheets.Count / (double)_pageSize));
 
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
+    private const string _pageRoute = "/reports/vehicle-logs-report";
+    private string? _lastAutoLoadUri;
+
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "mode")]
+    public string? QMode { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "search")]
+    public string? QSearch { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "vmf")]
+    public string? QVmf { get; set; }
+
+    protected override Task OnParametersSetAsync()
+    {
+        var uri = Navigation.Uri;
+        if (_isResultView && uri != _lastAutoLoadUri)
+        {
+            _lastAutoLoadUri = uri;
+            ApplyQueryFilters();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Dictionary<string, string?> BuildQueryFilters() => new()
+    {
+        { "mode", _searchMode },
+        { "search", _searchTerm },
+        { "vmf", _selectedVmfCode?.ToString() },
+    };
+
+    private void ApplyQueryFilters()
+    {
+        _searchMode = QMode ?? "GG";
+        _searchTerm = QSearch ?? string.Empty;
+        _selectedVmfCode = int.TryParse(QVmf, out var v) ? v : null;
+    }
+
+    private void NavigateToResultsAsync()
+    {
+        if (_selectedVmfCode.HasValue)
+        {
+            _lastAutoLoadUri = null;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
+        }
+    }
+
     private async Task SearchVehiclesAsync()
     {
         if (string.IsNullOrWhiteSpace(_searchTerm))
@@ -256,7 +332,7 @@
         {
             var query = _searchTerm.Trim();
             var matches = await VehicleService.SearchVehiclesAsync(query);
-            _vehicleMatches = RankVehicleMatches(matches, query, _searchMode);
+            _vehicleMatches = VehicleSearchHelper.RankVehicleMatches(matches, query, _searchMode);
             _vehicleLogsheets = new();
             _selectedVehicle = null;
 
@@ -309,8 +385,8 @@
             var contractWindow = await ContractService.GetRecentContractsWindowAsync();
             _contractHistoryCount = contractWindow.Count(c => c.vmf_code == _selectedVmfCode.Value);
 
-            var logbooks = await LogbookService.GetAllAsync<LogbookDto>();
-            _logbookCount = logbooks.Count(l => l.vmf_code == _selectedVmfCode.Value);
+            var trips = await TripService.GetByVehicleAsync(_selectedVmfCode.Value);
+            _tripCount = trips.Count;
 
             var logsheets = await LogsheetService.GetAllAsync<LogsheetDto>();
             _vehicleLogsheets = logsheets
@@ -342,25 +418,9 @@
         _vehicleLogsheets = new();
         _activeContractId = null;
         _contractHistoryCount = 0;
-        _logbookCount = 0;
+        _tripCount = 0;
         _logsheetCount = 0;
         _lastLogMonth = null;
-    }
-
-    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, string searchMode)
-    {
-        var keyword = query.Trim();
-        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
-
-        return matches
-            .Where(v => isGp
-                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(v => isGp
-                ? string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
-            .ThenBy(v => v.vmf_code)
-            .ToList();
     }
 
     private void SetSearchMode(string mode)
@@ -435,7 +495,7 @@
             "vehicle" => GetVehicleLabel(_selectedVehicle),
             "active_contract" => _activeContractId?.ToString() ?? "-",
             "total_contracts" => _contractHistoryCount.ToString(),
-            "manual_logbooks" => _logbookCount.ToString(),
+            "els_trips" => _tripCount.ToString(),
             "els_logsheets" => _logsheetCount.ToString(),
             "last_log_month" => _lastLogMonth?.ToString("yyyy-MM") ?? "-",
             _ => "-"

@@ -55,13 +55,22 @@
                         <a class="menu-item-link" href="/full-maintenance-lease/add-lease">4) Add Lease Tariff for In Service Vehicles</a>
                     </div>
                     <div class="menu-item">
-                        <a class="menu-item-link" href="/full-maintenance-lease/reports">4) FML Reports</a>
+                        <a class="menu-item-link" href="/full-maintenance-lease/reports">5) FML Reports</a>
                     </div>
                 </div>
             }
         </div>
     </div>
+    <div class="alert alert-info fis-alert-tight">
+        <i class="bx bx-info-circle"></i>
+        <span>Use quick lookup to isolate a vehicle, then continue into capture, extension, add-tariff, upload, or reporting workflows from the menu above.</span>
+    </div>
+
     <div class="form-card">
+        <div class="form-card-header">
+            <h2>Quick contract lookup</h2>
+            <p>Search by GG or GP number, choose a matched vehicle, and review current lease records in one place.</p>
+        </div>
         <div class="form-card-body">
             <div class="form-row">
                 <label class="form-label">Number Type</label>
@@ -91,6 +100,14 @@
         </div>
     </div>
 
+    @if (_vehicleMatches.Count > 0 && !_selectedVmfCode.HasValue && string.IsNullOrWhiteSpace(_searchError) && !_searching)
+    {
+        <div class="alert alert-info fis-alert-tight">
+            <i class="bx bx-list-ul"></i>
+            <span>@_vehicleMatches.Count vehicle match(es) found. Select one from the list to load its lease contracts.</span>
+        </div>
+    }
+
     @if (_loading || _searching)
     {
         <div class="loading-state">
@@ -110,7 +127,7 @@
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@_leases.Count Lease record(s)</span>
+                <span class="table-title">@_leases.Count lease record(s)</span>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
@@ -130,7 +147,7 @@
                             <tr>
                                 <td>@lease.Number</td>
                                 <td>@lease.Vehicle</td>
-                                <td><span class="badge">@lease.Status</span></td>
+                                <td><span class="@lease.BadgeClass">@lease.Status</span></td>
                                 <td>@FormatDate(lease.Start)</td>
                                 <td>@FormatDate(lease.End)</td>
                                 <td>@ValueOrDash(lease.Notes)</td>
@@ -194,15 +211,16 @@
                         g => FormatVehicleLabel(g.First()));
             }
 
-            var leases = await LeaseService.GetAllAsync<LeaseContractTermsDto>();
+            var leases = await LeaseService.GetAllAsync<FullMaintenanceLeaseTermDto>();
             _allLeases = leases.Select(l => new FmlItem(
-                VmfCode: l.vmf_code,
-                Number: l.leasecontract_code.ToString(),
-                Vehicle: GetVehicleLabel(l.vmf_code),
-                Status: l.lease_status ?? "Unknown",
-                Start: l.lease_startdate,
-                End: l.lease_enddate,
-                Notes: l.lease_notes ?? string.Empty
+                VmfCode: l.VmfCode,
+                Number: l.TermId.ToString(),
+                Vehicle: GetVehicleLabel(l.VmfCode),
+                Status: FullMaintenanceLeaseUi.MapAuthorityStatus(l.AuthorityStatus),
+                BadgeClass: FullMaintenanceLeaseUi.GetAuthorityBadgeClass(l.AuthorityStatus),
+                Start: l.EffectiveStartDate,
+                End: l.EffectiveEndDate,
+                Notes: l.lease_notes ?? l.lease_status ?? string.Empty
             )).ToList();
             _leases = new List<FmlItem>(_allLeases);
             _page = 1;
@@ -220,17 +238,7 @@
         }
     }
 
-    private sealed record FmlItem(int? VmfCode, string Number, string Vehicle, string Status, DateTime? Start, DateTime? End, string Notes);
-
-    private sealed class LeaseContractTermsDto
-    {
-        public int leasecontract_code { get; set; }
-        public int? vmf_code { get; set; }
-        public string? lease_status { get; set; }
-        public DateTime? lease_startdate { get; set; }
-        public DateTime? lease_enddate { get; set; }
-        public string? lease_notes { get; set; }
-    }
+    private sealed record FmlItem(int? VmfCode, string Number, string Vehicle, string Status, string BadgeClass, DateTime? Start, DateTime? End, string Notes);
 
     private void ToggleLeaseInfo()
     {
@@ -257,7 +265,7 @@
         {
             var query = _searchQuery.Trim();
             var matches = await VehicleService.SearchVehiclesAsync(query);
-            _vehicleMatches = RankVehicleMatches(matches, query, _searchMode);
+            _vehicleMatches = FullMaintenanceLeaseUi.FilterVehicleMatches(matches, query, _searchMode);
 
             if (_vehicleMatches.Count == 0)
             {
@@ -274,7 +282,7 @@
             }
 
             _leases = new List<FmlItem>();
-            _searchError = "Select a vehicle from the list, then click Apply to load contracts.";
+            _searchError = "Select a vehicle from the list to load its contracts.";
             _page = 1;
         }
         catch (Exception ex)
@@ -331,25 +339,9 @@
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 
     private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+        => FullMaintenanceLeaseUi.ValueOrDash(value);
     private static string FormatVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
-
-    private static List<VehicleDto> RankVehicleMatches(List<VehicleDto> matches, string query, string searchMode)
-    {
-        var keyword = query.Trim();
-        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
-
-        return matches
-            .Where(v => isGp
-                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(keyword, StringComparison.OrdinalIgnoreCase)
-                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(v => isGp
-                ? string.Equals(v.registration_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(v.fleet_number?.Trim(), keyword, StringComparison.OrdinalIgnoreCase))
-            .ThenBy(v => v.vmf_code)
-            .ToList();
-    }
+        => FullMaintenanceLeaseUi.FormatVehicleLabel(vehicle);
 
     private string GetVehicleLabel(int? vmfCode)
     {

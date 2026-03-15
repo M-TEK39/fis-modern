@@ -12,6 +12,7 @@ namespace FIS.Core.Domain.Entities;
 public class Vehicle
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("vmf_code")]
     public int vmf_code { get; set; }
 

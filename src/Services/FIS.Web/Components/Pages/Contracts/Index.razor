@@ -7,6 +7,7 @@
 @using System.Security.Claims
 @inject VehicleApiService VehicleService
 @inject ContractApiService ContractService
+@inject TariffApiService TariffService
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
@@ -149,7 +150,15 @@
                             <div class="contract-search-result">
                                 <div><strong>Selected Vehicle:</strong> @GetVehicleContextLabel(_selectedVehicle)</div>
                                 <div>Make/Model: @_selectedVehicle.model_name | Status: @_selectedVehicle.status_description</div>
-                                <button class="btn btn-primary btn-sm" type="button" @onclick="OpenSelectedVehicle">Open Contract Management</button>
+                                @if (_selectedVehicleGateLoading)
+                                {
+                                    <div class="contract-muted">Checking contract and tariff availability...</div>
+                                }
+                                else if (IsSelectedVehicleBlockedForNewContract())
+                                {
+                                    <div class="form-error contract-search-error">@BuildSelectedVehicleTariffMessage()</div>
+                                }
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="OpenSelectedVehicle" disabled="@(_selectedVehicleGateLoading || IsSelectedVehicleBlockedForNewContract())">Open Contract Management</button>
                             </div>
                         }
                     </td>
@@ -369,6 +378,9 @@
     private List<VehicleDto> _vehicleSearchMatches = new();
     private int? _selectedVehicleVmfCode;
     private VehicleDto? _selectedVehicle;
+    private ContractDto? _selectedVehicleLatestContract;
+    private VehicleTariffPreviewResponseDto? _selectedVehicleTariffPreview;
+    private bool _selectedVehicleGateLoading;
 
     private bool _loadingContracts = true;
     private readonly List<ContractDto> _contracts = new();
@@ -530,14 +542,35 @@
         _vehicleSearchMatches = new();
         _selectedVehicleVmfCode = null;
         _selectedVehicle = null;
+        _selectedVehicleLatestContract = null;
+        _selectedVehicleTariffPreview = null;
+        _selectedVehicleGateLoading = false;
     }
 
-    private Task OnSelectedVehicleChanged()
+    private async Task OnSelectedVehicleChanged()
     {
         _selectedVehicle = _selectedVehicleVmfCode.HasValue
             ? _vehicleSearchMatches.FirstOrDefault(v => v.vmf_code == _selectedVehicleVmfCode.Value)
             : null;
-        return Task.CompletedTask;
+        _selectedVehicleLatestContract = null;
+        _selectedVehicleTariffPreview = null;
+
+        if (_selectedVehicle == null)
+        {
+            _selectedVehicleGateLoading = false;
+            return;
+        }
+
+        _selectedVehicleGateLoading = true;
+        try
+        {
+            _selectedVehicleLatestContract = await ContractService.GetLatestContractForVehicleAsync(_selectedVehicle.vmf_code);
+            _selectedVehicleTariffPreview = await TariffService.GetPreviewForVehicleAsync(_selectedVehicle.vmf_code);
+        }
+        finally
+        {
+            _selectedVehicleGateLoading = false;
+        }
     }
 
     private static List<VehicleDto> RankVehicleMatchesBySearchType(List<VehicleDto> matches, string query, string searchType)
@@ -564,7 +597,19 @@
             return;
         }
 
-        var contract = await ContractService.GetLatestContractForVehicleAsync(_selectedVehicle.vmf_code);
+        if (_selectedVehicleGateLoading)
+        {
+            return;
+        }
+
+        if (IsSelectedVehicleBlockedForNewContract())
+        {
+            _actionError = true;
+            _actionMessage = BuildSelectedVehicleTariffMessage();
+            return;
+        }
+
+        var contract = _selectedVehicleLatestContract ?? await ContractService.GetLatestContractForVehicleAsync(_selectedVehicle.vmf_code);
         var ggNumber = Uri.EscapeDataString(_selectedVehicle.fleet_number ?? string.Empty);
         var regNumber = Uri.EscapeDataString(_selectedVehicle.registration_number ?? string.Empty);
 
@@ -575,6 +620,23 @@
         }
 
         Navigation.NavigateTo($"/contracts/detail?ggnumber={ggNumber}&regnumber={regNumber}");
+    }
+
+    private bool IsSelectedVehicleBlockedForNewContract()
+    {
+        return _selectedVehicle != null
+            && _selectedVehicleLatestContract == null
+            && _selectedVehicleTariffPreview?.Tariff == null;
+    }
+
+    private string BuildSelectedVehicleTariffMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(_selectedVehicleTariffPreview?.Note))
+        {
+            return _selectedVehicleTariffPreview.Note;
+        }
+
+        return "No approved tariff is captured for this vehicle. Capture the tariff before opening a contract.";
     }
 
     private async Task ApplyFiltersAsync()

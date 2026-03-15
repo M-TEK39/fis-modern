@@ -3,10 +3,17 @@ using FIS.Web.Models;
 
 namespace FIS.Web.Services;
 
+internal class ApiDriverLicenceTypeResponse
+{
+    public int driver_licence_type_id { get; set; }
+    public string? driver_licence_type_code { get; set; }
+    public string? driver_licence_type_description { get; set; }
+}
+
 internal class ApiDriverLicenceResponse
 {
-    public short licence_code { get; set; }
-    public string description { get; set; } = string.Empty;
+    public short LicenceCode { get; set; }
+    public string? Description { get; set; }
 }
 
 public class DriverLicenceApiService
@@ -20,22 +27,26 @@ public class DriverLicenceApiService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Returns driver licence types from driver_licence_types table.
+    /// Used to populate dropdowns where driver_licence_type_id is the FK.
+    /// </summary>
     public async Task<List<DriverLicenceDto>> GetAllAsync()
     {
         try
         {
-            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiDriverLicenceResponse>>("api/driverlicence");
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiDriverLicenceTypeResponse>>("api/driverlicencetype");
             if (apiResponse == null) return new List<DriverLicenceDto>();
 
             return apiResponse.Select(item => new DriverLicenceDto
             {
-                licence_code = item.licence_code,
-                description = item.description
+                licence_code = item.driver_licence_type_id,
+                description = item.driver_licence_type_description
             }).ToList();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error fetching driver licenses");
+            _logger.LogError(ex, "Error fetching driver licence types");
             return new List<DriverLicenceDto>();
         }
     }

@@ -125,6 +125,7 @@ public class FisDbContext : DbContext
     public DbSet<ScanDoc> ScanDocs { get; set; } = null!;
     public DbSet<TaxiScanDoc> TaxiScanDocs { get; set; } = null!;
     public DbSet<TaxiLog> TaxiLogs { get; set; } = null!;
+    public DbSet<TaxiLogNote> TaxiLogNotes { get; set; } = null!;
     public DbSet<TaxiWhiteLog> TaxiWhiteLogs { get; set; } = null!;
     public DbSet<ReportTemp> ReportTemps { get; set; } = null!;
     public DbSet<FleetNoteBackup> FleetNoteBackups { get; set; } = null!;

@@ -9,6 +9,7 @@ namespace FIS.Core.Domain.Entities.Operations;
 public class TaxiWhiteLog
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("Log_id")]
     public int Log_id { get; set; }
 

@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Drivers;
 public class DriverLicence
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("licence_code")]
     public short licence_code { get; set; }
 

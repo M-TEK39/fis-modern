@@ -72,11 +72,10 @@ public class DriverLicenceController : BaseApiController
     {
         try
         {
-            _logger.LogInformation("Creating driver licence type: {Code}", request.LicenceCode);
+            _logger.LogInformation("Creating driver licence type: {Description}", request.Description);
 
             var licence = new DriverLicence
             {
-                licence_code = request.LicenceCode,
                 description = request.Description
             };
 

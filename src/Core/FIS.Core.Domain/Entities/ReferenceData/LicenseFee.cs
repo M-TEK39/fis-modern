@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class LicenseFee
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("licence_fee_code")]
     public short licence_fee_code { get; set; }
 

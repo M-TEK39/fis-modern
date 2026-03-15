@@ -5444,19 +5444,19 @@
     ]
   },
   "packageFolders": {
-    "/src/packages": {}
+    "/home/dev/work/fis-modern/packages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
+      "projectUniqueName": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
       "projectName": "DatabaseMigrationTool",
-      "projectPath": "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
-      "packagesPath": "/src/packages",
-      "outputPath": "/src/src/Tools/DatabaseMigrationTool/obj/",
+      "projectPath": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj",
+      "packagesPath": "/home/dev/work/fis-modern/packages",
+      "outputPath": "/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "/src/nuget.config",
+        "/home/dev/work/fis-modern/nuget.config",
         "/root/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
@@ -5469,8 +5469,8 @@
         "net8.0": {
           "targetAlias": "net8.0",
           "projectReferences": {
-            "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj": {
-              "projectPath": "/src/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj"
+            "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj": {
+              "projectPath": "/home/dev/work/fis-modern/src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj"
             }
           }
         }
@@ -5483,11 +5483,6 @@
         "warnNotAsError": [
           "NU1701"
         ]
-      },
-      "restoreAuditProperties": {
-        "enableAudit": "true",
-        "auditLevel": "low",
-        "auditMode": "direct"
       }
     },
     "frameworks": {
@@ -5542,7 +5537,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/8.0.418/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.124/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

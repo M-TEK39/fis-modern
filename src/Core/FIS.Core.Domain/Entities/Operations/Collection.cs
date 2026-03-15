@@ -9,6 +9,7 @@ namespace FIS.Core.Domain.Entities.Operations;
 public class Collection
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("Collection_code")]
     public int Collection_code { get; set; }
 

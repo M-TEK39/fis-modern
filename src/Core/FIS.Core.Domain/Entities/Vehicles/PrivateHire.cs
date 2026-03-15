@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities;
 public class PrivateHire
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("PHV_code")]
     public short PHV_code { get; set; }
 

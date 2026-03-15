@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class VehicleSource
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("vs_code")]
     public byte vs_code { get; set; }
 

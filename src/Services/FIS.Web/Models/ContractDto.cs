@@ -36,6 +36,13 @@ public class ContractDto
     public string? fleet_number { get; set; }
     public string? site_name { get; set; }
     public string? driver_name { get; set; }
+    public int? site_driver_code { get; set; }
+    public string? contract_type_code { get; set; }
+    public string? authorisation { get; set; }
+    public string? bas_fund_code { get; set; }
+    public string? bas_objective_code { get; set; }
+    public string? bas_project_number { get; set; }
+    public string? bas_responsibility_code { get; set; }
     [Required]
     public string status { get; set; } = "Active";
     public string? contract_notes { get; set; }

@@ -7,6 +7,7 @@
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
+@inject UserApiService UserService
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
@@ -152,9 +153,9 @@
                                     <td>@ValueOrDash(contract.Department?.department_description)</td>
                                     <td>@GetSiteName(contract)</td>
                                     <td>@ValueOrDash(GetDriverName(contract))</td>
-                                    <td>@ValueOrDash(contract.status)</td>
-                                    <td>-</td>
-                                    <td>-</td>
+                                    <td>@ValueOrDash(contract.still_current)</td>
+                                    <td>@GetCapturerLastName(contract)</td>
+                                    <td>@GetCapturerFirstName(contract)</td>
                                     <td>
                                         <button class="btn btn-secondary btn-sm" type="button" @onclick="() => SelectContractForEdit(contract)">View</button>
                                     </td>
@@ -373,6 +374,15 @@
             _drivers = await DriverService.GetDriversAsync();
         }
 
+        if (_userProfilesByCode.Count == 0)
+        {
+            var profiles = await UserService.GetAllProfilesAsync();
+            _userProfilesByCode = profiles
+                .Where(profile => profile.UserAccessCode > 0)
+                .GroupBy(profile => (int)profile.UserAccessCode)
+                .ToDictionary(group => group.Key, group => group.First());
+        }
+
         foreach (var contract in _historyContracts)
         {
             if (contract.vmf_code.HasValue && contract.Vehicle == null)
@@ -396,23 +406,56 @@
 
     private string GetDriverName(ContractDto contract)
     {
-        if (_drivers.Count == 0 || contract.contractor_name == null)
+        if (!string.IsNullOrWhiteSpace(contract.driver_name))
+        {
+            return contract.driver_name.Trim();
+        }
+
+        if (_drivers.Count == 0)
         {
             return "-";
         }
 
-        if (!int.TryParse(contract.contractor_name, out var driverCode))
+        if (contract.site_driver_code is > 0)
         {
-            return contract.contractor_name;
+            var matchedDriver = _drivers.FirstOrDefault(driver => driver.site_driver_code == contract.site_driver_code.Value);
+            if (matchedDriver != null)
+            {
+                return $"{matchedDriver.driver_firstname} {matchedDriver.driver_surname}".Trim();
+            }
         }
 
-        var driver = _drivers.FirstOrDefault(d => d.site_driver_code == driverCode);
+        if (string.IsNullOrWhiteSpace(contract.driver_id))
+        {
+            return "-";
+        }
+
+        var normalizedDriverId = contract.driver_id.Trim();
+        var driver = _drivers.FirstOrDefault(d =>
+            string.Equals(d.driver_SA_id, normalizedDriverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(d.driver_passportnumber, normalizedDriverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(d.driver_persalnumber, normalizedDriverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(d.driver_contractnumber, normalizedDriverId, StringComparison.OrdinalIgnoreCase));
         if (driver == null)
         {
-            return contract.contractor_name;
+            return normalizedDriverId;
         }
 
         return $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+    }
+
+    private string GetCapturerLastName(ContractDto contract)
+        => ResolveCapturerProfile(contract)?.LastName is { Length: > 0 } lastName ? lastName : "-";
+
+    private string GetCapturerFirstName(ContractDto contract)
+        => ResolveCapturerProfile(contract)?.FirstName is { Length: > 0 } firstName ? firstName : "-";
+
+    private UserProfileDto? ResolveCapturerProfile(ContractDto contract)
+    {
+        var userCode = contract.created_by_user_code ?? contract.user_code;
+        return userCode is > 0 && _userProfilesByCode.TryGetValue(userCode.Value, out var profile)
+            ? profile
+            : null;
     }
 
     private static string FormatDate(DateTime? date)
@@ -498,6 +541,8 @@
     {
         return DateTime.TryParse(value, out parsedDate);
     }
+
+    private Dictionary<int, UserProfileDto> _userProfilesByCode = new();
 
     private string GetHistoryRowClass(ContractDto contract)
     {

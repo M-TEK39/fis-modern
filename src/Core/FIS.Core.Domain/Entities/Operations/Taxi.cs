@@ -82,6 +82,27 @@ public class Taxi
     [Column("rank")]
     public string? rank { get; set; }
 
+    [Column("confirmed")]
+    public short? confirmed { get; set; }
+
+    [Column("sub_contractor_id")]
+    public short? sub_contractor_id { get; set; }
+
+    [StringLength(255)]
+    [Column("cancelled")]
+    public string? cancelled { get; set; }
+
+    [StringLength(100)]
+    [Column("driver")]
+    public string? driver { get; set; }
+
+    [StringLength(50)]
+    [Column("reg_num")]
+    public string? reg_num { get; set; }
+
+    [Column("parent_taxi_code")]
+    public int? parent_taxi_code { get; set; }
+
     /// <summary>
     /// Destination address line 1
     /// </summary>

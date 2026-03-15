@@ -31,11 +31,23 @@
                     <input type="radio" name="searchMode" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
                     GP
                 </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "engine")" @onchange='() => SetSearchMode("engine")' />
+                    Engine
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "vin")" @onchange='() => SetSearchMode("vin")' />
+                    VIN / Chassis
+                </label>
+                <label class="form-radio-label">
+                    <input type="radio" name="searchMode" checked="@(_searchMode == "invoice")" @onchange='() => SetSearchMode("invoice")' />
+                    Invoice
+                </label>
             </div>
         </div>
         <div class="form-row">
-            <label class="form-label">@(_searchMode == "gg" ? "GG Number" : "GP Number")</label>
-            <input class="form-input" @bind="_searchTerm" />
+            <label class="form-label">@VehicleSearchHelper.GetSearchLabel(_searchMode)</label>
+            <input class="form-input" @bind="_searchTerm" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
         </div>
         <div class="form-row">
             <label class="form-label">Vehicle Match</label>
@@ -66,7 +78,7 @@
         <div class="empty-state">
             <i class="bx bx-car"></i>
             <h3>No tracking records found</h3>
-            <p>Search by GG or registration number.</p>
+            <p>Search by GG, GP, engine, VIN/chassis, or invoice number.</p>
         </div>
     }
     else
@@ -136,7 +148,7 @@
 
             var searchTerm = _searchTerm.Trim();
             var matches = await VehicleLookupService.SearchAsync(searchTerm);
-            _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _searchMode);
+            _vehicleMatches = VehicleSearchHelper.RankVehicleLookupMatches(matches, searchTerm, _searchMode);
             _results = new();
             _hasSearched = false;
             if (_vehicleMatches.All(vehicle => vehicle.VmfCode != _selectedVmfCode))
@@ -194,22 +206,6 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string searchMode)
-    {
-        var query = keyword.Trim();
-        var isGp = string.Equals(searchMode, "gp", StringComparison.OrdinalIgnoreCase);
-
-        return matches
-            .Where(v => isGp
-                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
-                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(v => isGp
-                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
-            .ThenBy(v => v.VmfCode)
-            .ToList();
-    }
 
     private void SetSearchMode(string mode)
     {

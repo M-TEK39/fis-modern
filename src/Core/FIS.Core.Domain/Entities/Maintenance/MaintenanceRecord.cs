@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities;
 public class MaintenanceRecord
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("maintenance_id")]
     public int MaintenanceId { get; set; }
 

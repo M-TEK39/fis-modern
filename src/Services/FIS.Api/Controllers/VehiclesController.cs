@@ -265,6 +265,25 @@ public class VehiclesController : BaseApiController
                 return NotFound($"Vehicle with vmf_code {vmfCode} not found");
             }
 
+            // If registration number is changing, save the old one to history
+            if (request.registration_number != null &&
+                !string.Equals(request.registration_number, existing.registration_number, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(existing.registration_number))
+            {
+                _context.Registrations.Add(new FIS.Core.Domain.Entities.Vehicles.Registration
+                {
+                    vmf_code = vmfCode,
+                    RegistrationNumber = existing.registration_number,
+                    RegistrationDate = DateTime.UtcNow,
+                    date_created = DateTime.UtcNow,
+                    created_by_user_code = currentUserId,
+                    is_deleted = false
+                });
+                _logger.LogInformation(
+                    "Recording historical registration '{Old}' for vehicle {VmfCode} (replacing with '{New}')",
+                    existing.registration_number, vmfCode, request.registration_number);
+            }
+
             // Update fields (only if provided)
             existing.fleet_number = request.fleet_number ?? existing.fleet_number;
             existing.registration_number = request.registration_number ?? existing.registration_number;

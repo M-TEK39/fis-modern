@@ -22,7 +22,16 @@
 </div>
 
 <div class="page-content">
+    <div class="alert alert-info fis-alert-tight">
+        <i class="bx bx-info-circle"></i>
+        <span>Search for an in-service vehicle first, then capture the tariff details. New entries are created as pending for the approval workflow.</span>
+    </div>
+
     <div class="form-card">
+        <div class="form-card-header">
+            <h2>Vehicle lookup</h2>
+            <p>Locate the vehicle by GG or GP number before capturing the tariff details.</p>
+        </div>
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
@@ -51,7 +60,30 @@
                             <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
                         }
                     </select>
+                    @if (_vehicleMatches.Count > 0)
+                    {
+                        <p class="form-hint">@_vehicleMatches.Count vehicle match(es) found.</p>
+                    }
                 </div>
+            </div>
+        </div>
+    </div>
+
+    @if (_item.vmf_Code > 0)
+    {
+        <div class="alert alert-info fis-alert-tight">
+            <i class="bx bx-car"></i>
+            <span>Selected vehicle: @SelectedVehicleLabel</span>
+        </div>
+    }
+
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Tariff details</h2>
+            <p>Capture the lease period, kilometers, and financial values for the selected vehicle.</p>
+        </div>
+        <div class="form-card-body">
+            <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Start Date</label>
                     <InputDate @bind-Value="_item.StartDate" class="form-input" />
@@ -78,11 +110,8 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Authority Status</label>
-                    <select class="form-select" @bind="_item.AuthorityStatus">
-                        <option value="1">Pending</option>
-                        <option value="2">Approved</option>
-                        <option value="4">Rejected</option>
-                    </select>
+                    <input class="form-input" value="Pending" readonly />
+                    <p class="form-hint">New tariffs enter the approval queue as pending.</p>
                 </div>
             </div>
             <div class="form-actions">
@@ -108,20 +137,39 @@
     private string _message = string.Empty;
     private string _vehicleSearchTerm = string.Empty;
     private List<VehicleDto> _vehicleMatches = new();
-    private LeaseTermDto _item = NewItem();
+    private FullMaintenanceLeaseTermDto _item = NewItem();
+    private string SelectedVehicleLabel
+        => _vehicleMatches.FirstOrDefault(vehicle => vehicle.vmf_code == _item.vmf_Code) is { } vehicle
+            ? GetVehicleLabel(vehicle)
+            : _item.vmf_Code > 0 ? _item.vmf_Code.GetValueOrDefault().ToString() : "-";
 
     private async Task CreateAsync()
     {
+        if (_item.vmf_Code <= 0)
+        {
+            _error = true;
+            _message = "Select a vehicle before submitting the tariff.";
+            return;
+        }
+
+        if (_item.StartDate.HasValue && _item.EndDate.HasValue && _item.EndDate.Value.Date < _item.StartDate.Value.Date)
+        {
+            _error = true;
+            _message = "End date cannot be earlier than the start date.";
+            return;
+        }
+
         _saving = true;
         _error = false;
         _message = string.Empty;
         try
         {
+            _item.AuthorityStatus = 1;
             var created = await LeaseService.CreateAsync(_item);
             _error = created == null;
             _message = _error
                 ? "Failed to create lease tariff."
-                : $"Lease tariff created (ID: {created?.VehicleContractTermID}).";
+                : $"Lease tariff created (ID: {created?.TermId}).";
             if (!_error)
             {
                 _item = NewItem();
@@ -148,7 +196,7 @@
         _error = false;
     }
 
-    private static LeaseTermDto NewItem()
+    private static FullMaintenanceLeaseTermDto NewItem()
         => new()
         {
             StartDate = DateTime.Today,
@@ -169,7 +217,7 @@
         {
             var keyword = _vehicleSearchTerm.Trim();
             var matches = await VehicleService.SearchVehiclesAsync(keyword);
-            _vehicleMatches = FilterVehicleMatches(matches, keyword, _searchMode);
+            _vehicleMatches = FullMaintenanceLeaseUi.FilterVehicleMatches(matches, keyword, _searchMode);
 
             if (_vehicleMatches.All(v => v.vmf_code != _item.vmf_Code))
             {
@@ -183,40 +231,11 @@
         }
     }
 
-    private sealed class LeaseTermDto
-    {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-        public int? AgreedTerms { get; set; }
-        public long? AgreedKilos { get; set; }
-        public decimal? AppliedInterest { get; set; }
-        public decimal? FixedMonthlyAmount { get; set; }
-        public int? AuthorityStatus { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
-    }
-
     private static string GetVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+        => FullMaintenanceLeaseUi.FormatVehicleLabel(vehicle);
 
     private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static List<VehicleDto> FilterVehicleMatches(List<VehicleDto> matches, string keyword, string searchMode)
-    {
-        var query = keyword.Trim();
-        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
-
-        return matches
-            .Where(v => isGp
-                ? !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(query, StringComparison.OrdinalIgnoreCase)
-                : !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(v => isGp
-                ? string.Equals(v.registration_number?.Trim(), query, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(v.fleet_number?.Trim(), query, StringComparison.OrdinalIgnoreCase))
-            .ThenBy(v => v.vmf_code)
-            .ToList();
-    }
+        => FullMaintenanceLeaseUi.ValueOrDash(value);
 
     private void SetSearchMode(string mode)
     {

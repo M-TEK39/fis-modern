@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Logistics;
 public class TripIncidentType
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("trip_incident_type_code")]
     public short trip_incident_type_code { get; set; }
 

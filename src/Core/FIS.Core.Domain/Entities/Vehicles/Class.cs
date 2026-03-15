@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.Vehicles;
 public class Class
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("class_code")]
     public short class_code { get; set; }
 

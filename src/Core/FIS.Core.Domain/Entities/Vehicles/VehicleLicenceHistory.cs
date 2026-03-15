@@ -16,6 +16,7 @@ namespace FIS.Core.Domain.Entities;
 public class VehicleLicenceHistory
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("licence_history_id")]
     public int licence_history_id { get; set; }
 

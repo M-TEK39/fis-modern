@@ -9,6 +9,7 @@ namespace FIS.Core.Application.Interfaces
     public interface ITaxiRepository
     {
         Task<Taxi?> GetByIdAsync(int requestId);
+        Task<Taxi?> GetLatestByRequisitionAsync(string rekNum);
         Task<IEnumerable<Taxi>> GetAllAsync();
         Task<IEnumerable<Taxi>> GetBySiteAsync(short siteCode);
         Task<IEnumerable<Taxi>> GetByDepartmentAsync(short departmentCode);

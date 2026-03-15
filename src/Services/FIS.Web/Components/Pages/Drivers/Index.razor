@@ -1,5 +1,11 @@
 @page "/drivers"
 @rendermode InteractiveServer
+@using FIS.Web.Components.Pages.Drivers
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject DepartmentApiService DepartmentService
+@inject SiteApiService SiteService
+@inject NavigationManager Navigation
 
 <PageTitle>Driver &amp; Authoriser Management - Fleet Information System</PageTitle>
 
@@ -9,14 +15,171 @@
             <i class="bx bx-id-card"></i>
             Driver &amp; Authoriser Management
         </h1>
-        <p class="page-description">Module configuration is pending for this release.</p>
+        <p class="page-description">Match the legacy Driver and Authoriser Management flow by selecting a department and site first.</p>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-time"></i>
-        <h3>Module not available</h3>
-        <p><span>Driver and Authoriser Management will be enabled once module configuration is completed.</span></p>
+    <div class="form-card">
+        <div class="form-card-header">
+            <h2>Driver and Authoriser Management</h2>
+        </div>
+        <div class="form-card-body">
+            @if (_loading)
+            {
+                <div class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Loading departments and sites...</p>
+                </div>
+            }
+            else
+            {
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Department</label>
+                        <select class="form-select" @bind="_selectedDepartmentCode" @bind:after="OnDepartmentChangedAsync">
+                            <option value="">Select department</option>
+                            @foreach (var department in _departments.OrderBy(item => item.department_description))
+                            {
+                                <option value="@department.department_code">@DriverManagementNavigation.BuildDepartmentLabel(department)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="form-label">Site</label>
+                        <select class="form-select" @bind="_selectedSiteCode" disabled="@(!_selectedDepartmentCode.HasValue)">
+                            <option value="">@(_selectedDepartmentCode.HasValue ? "Select site" : "Select department first")</option>
+                            @foreach (var site in AvailableSites)
+                            {
+                                <option value="@site.SiteCode">@DriverManagementNavigation.BuildSiteLabel(site)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (_selectedSiteCode.HasValue)
+                {
+                    <div class="alert alert-info fis-mt-1">
+                        <i class="bx bx-info-circle"></i>
+                        <span>@SelectionSummary</span>
+                    </div>
+                }
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="button" @onclick="OpenAuthorisers" disabled="@(!_selectedSiteCode.HasValue)">
+                        Authoriser Management
+                    </button>
+                    <button class="btn btn-primary" type="button" @onclick="OpenSiteDrivers" disabled="@(!_selectedSiteCode.HasValue)">
+                        Site Driver Management
+                    </button>
+                </div>
+            }
+        </div>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="alert alert-error fis-mt-1">
+            <i class="bx bx-error-circle"></i>
+            <span>@_errorMessage</span>
+        </div>
+    }
 </div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "departmentCode")]
+    public string? DepartmentCodeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "siteCode")]
+    public string? SiteCodeQuery { get; set; }
+
+    private bool _loading = true;
+    private string? _errorMessage;
+    private List<DepartmentDto> _departments = new();
+    private List<SiteResponseDto> _sites = new();
+    private short? _selectedDepartmentCode;
+    private short? _selectedSiteCode;
+    private short? DepartmentCode => DriverManagementNavigation.ParseNullableShort(DepartmentCodeQuery);
+    private short? SiteCode => DriverManagementNavigation.ParseNullableShort(SiteCodeQuery);
+
+    private IEnumerable<SiteResponseDto> AvailableSites => _sites
+        .Where(site => !_selectedDepartmentCode.HasValue || site.DepartmentCode == _selectedDepartmentCode.Value)
+        .OrderBy(site => site.Description);
+
+    private string SelectionSummary
+    {
+        get
+        {
+            var department = _departments.FirstOrDefault(item => item.department_code == _selectedDepartmentCode);
+            var site = _sites.FirstOrDefault(item => item.SiteCode == _selectedSiteCode);
+            return $"Selected {DriverManagementNavigation.BuildDepartmentLabel(department)} / {DriverManagementNavigation.BuildSiteLabel(site)}.";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _departments = await DepartmentService.GetDepartmentsAsync();
+            _sites = await SiteService.GetAllAsync();
+            ApplyIncomingSelection();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Unable to load driver and authoriser selections.";
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        ApplyIncomingSelection();
+    }
+
+    private void ApplyIncomingSelection()
+    {
+        if (DepartmentCode.HasValue)
+        {
+            _selectedDepartmentCode = DepartmentCode.Value;
+        }
+
+        if (SiteCode.HasValue)
+        {
+            _selectedSiteCode = SiteCode.Value;
+            var selectedSite = _sites.FirstOrDefault(site => site.SiteCode == SiteCode.Value);
+            if (selectedSite?.DepartmentCode is short departmentCode)
+            {
+                _selectedDepartmentCode ??= departmentCode;
+            }
+        }
+
+        if (_selectedSiteCode.HasValue && !AvailableSites.Any(site => site.SiteCode == _selectedSiteCode.Value))
+        {
+            _selectedSiteCode = null;
+        }
+    }
+
+    private Task OnDepartmentChangedAsync()
+    {
+        if (_selectedSiteCode.HasValue && !AvailableSites.Any(site => site.SiteCode == _selectedSiteCode.Value))
+        {
+            _selectedSiteCode = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void OpenAuthorisers()
+    {
+        Navigation.NavigateTo(DriverManagementNavigation.Authorisers(_selectedDepartmentCode, _selectedSiteCode));
+    }
+
+    private void OpenSiteDrivers()
+    {
+        Navigation.NavigateTo(DriverManagementNavigation.SiteDrivers(_selectedDepartmentCode, _selectedSiteCode));
+    }
+}

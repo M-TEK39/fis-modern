@@ -12,7 +12,9 @@
 @inject TariffApiService TariffService
 @inject DepartmentApiService DepartmentService
 @inject SiteApiService SiteService
+@inject ProvinceApiService ProvinceService
 @inject UserApiService UserService
+@inject DriverApiService DriverService
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -40,11 +42,11 @@
         <i class="bx bx-info-circle"></i>
         <span>Contract for <strong>@GetVehicleContextLabel()</strong></span>
     </div>
-    @if (_showTariffWarning && ShowContractForm())
+    @if (_showTariffWarning)
     {
         <div class="contract-banner contract-banner-warning">
             <i class="bx bx-error"></i>
-            <span>No current tariff found for this vehicle class. Submit is blocked until a valid tariff is configured.</span>
+            <span>@BuildTariffWarningBannerMessage()</span>
         </div>
     }
 
@@ -116,7 +118,12 @@
                             @if (!_openContractMode)
                             {
                                 <div class="contract-action-group">
-                                    <button class="btn btn-primary btn-sm" type="button" @onclick='() => RunContractActionAsync("open")' disabled="@_actionRunning">Open a Contract</button>
+                                    <button class="btn btn-primary btn-sm" type="button" @onclick='() => RunContractActionAsync("open")' disabled="@(_actionRunning || IsContractOpenBlockedByTariff())">Open a Contract</button>
+                                    <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("site-update")' disabled="@_actionRunning">@(_siteUpdateMode ? "Save Vehicle Site / Custodian" : "Update Vehicle Site / Custodian")</button>
+                                    @if (_siteUpdateMode)
+                                    {
+                                        <button class="btn btn-warning btn-sm" type="button" @onclick="CancelActiveEditMode">Cancel Edit Mode</button>
+                                    }
                                 </div>
                             }
                             else
@@ -132,9 +139,9 @@
                             <div class="contract-action-group">
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("extend")' disabled="@_actionRunning">@(_extendMode ? "Save Extension" : "Extend Active Contract")</button>
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("reassign")' disabled="@_actionRunning">@(_reassignMode ? "Save Reassign" : "Reassign Contract")</button>
-                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("close")' disabled="@_actionRunning">Close Active Contract</button>
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("close")' disabled="@_actionRunning">@(_closeMode ? "Save Close and Return Home" : "Close Active Contract")</button>
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick='() => RunContractActionAsync("cancel")' disabled="@_actionRunning">Cancel Loaded Contract</button>
-                                @if (_extendMode || _reassignMode)
+                                @if (_extendMode || _reassignMode || _closeMode)
                                 {
                                     <button class="btn btn-warning btn-sm" type="button" @onclick="CancelActiveEditMode">Cancel Edit Mode</button>
                                 }
@@ -256,7 +263,7 @@
                                 </tr>
                                 <tr>
                                         <th>Hire Type</th>
-                                        <td>@ValueOrDash(_vehicle?.type_name ?? GetContractTypeLabel(_contract?.contractor_name))</td>
+                                        <td>@ValueOrDash(_vehicle?.type_name ?? GetContractTypeLabel(GetResolvedContractTypeCode()))</td>
                                         <th>Hired From</th>
                                         <td>@ValueOrDash(_vehicle?.purchased_from)</td>
                                 </tr>
@@ -274,6 +281,160 @@
             </tbody>
         </table>
     </div>
+
+    @if (_closeMode)
+    {
+        <div class="contract-section">
+            <table class="contract-legacy-table">
+                <thead>
+                    <tr class="contract-legacy-heading">
+                        <th colspan="4">Close Contract and Return Vehicle Home</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <table class="contract-subtable">
+                                <tbody>
+                                    <tr>
+                                        <th>GFleet Department</th>
+                                        <td>
+                                            <select class="form-select" @bind="_closeHomeDepartmentCode" @bind:after="OnCloseDepartmentChanged">
+                                                <option value="">Select Department</option>
+                                                @foreach (var department in HomeDepartmentOptions)
+                                                {
+                                                    <option value="@department.department_code">@DepartmentDisplay(department)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <th>GFleet Site</th>
+                                        <td>
+                                            <select class="form-select" @bind="_closeHomeSiteCode" @bind:after="OnCloseSiteChanged">
+                                                <option value="">Select Site</option>
+                                                @foreach (var site in HomeSiteOptions)
+                                                {
+                                                    <option value="@site.SiteCode">@SiteDisplay(site)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Custodian Driver</th>
+                                        <td>
+                                            <select class="form-select" @bind="_closeHomeDriverCode" @bind:after="OnCloseDriverChanged">
+                                                <option value="">Select GFleet Driver</option>
+                                                @foreach (var driver in HomeDriverOptions)
+                                                {
+                                                    <option value="@driver.site_driver_code">@DriverDisplay(driver)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <th>Driver Licence</th>
+                                        <td>@SelectedHomeDriverLicenceHint()</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Province Check</th>
+                                        <td colspan="3">@BuildCloseProvinceGuidance()</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Close Date</th>
+                                        <td>
+                                            <input type="date" class="form-input" @bind-value="_closeEndDate" @bind-value:format="yyyy-MM-dd" />
+                                        </td>
+                                        <th>Close Odometer</th>
+                                        <td>
+                                            <input type="number" class="form-input" min="0" @bind="_closeEndOdometer" />
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Create Home Custody Contract</th>
+                                        <td><input type="checkbox" @bind="_createHomeCustodyContract" /></td>
+                                        <th>Selected Home</th>
+                                        <td>@SelectedHomeSummary()</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Close Notes</th>
+                                        <td colspan="3">
+                                            <textarea class="form-input contract-notes" rows="3" @bind="_closeNotes"></textarea>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (_siteUpdateMode)
+    {
+        <div class="contract-section">
+            <table class="contract-legacy-table">
+                <thead>
+                    <tr class="contract-legacy-heading">
+                        <th colspan="4">Update Vehicle Site and Custodian</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>
+                            <table class="contract-subtable">
+                                <tbody>
+                                    <tr>
+                                        <th>Department</th>
+                                        <td>
+                                            <select class="form-select" @bind="_siteUpdateDepartmentCode" @bind:after="OnSiteUpdateDepartmentChanged">
+                                                <option value="">Select Department</option>
+                                                @foreach (var department in HomeDepartmentOptions)
+                                                {
+                                                    <option value="@department.department_code">@DepartmentDisplay(department)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <th>Site</th>
+                                        <td>
+                                            <select class="form-select" @bind="_siteUpdateSiteCode" @bind:after="OnSiteUpdateSiteChanged">
+                                                <option value="">Select Site</option>
+                                                @foreach (var site in SiteUpdateSiteOptions)
+                                                {
+                                                    <option value="@site.SiteCode">@SiteDisplay(site)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Custodian Driver</th>
+                                        <td>
+                                            <select class="form-select" @bind="_siteUpdateDriverCode" @bind:after="OnSiteUpdateDriverChanged">
+                                                <option value="">Select Driver</option>
+                                                @foreach (var driver in SiteUpdateDriverOptions)
+                                                {
+                                                    <option value="@driver.site_driver_code">@DriverDisplay(driver)</option>
+                                                }
+                                            </select>
+                                        </td>
+                                        <th>Create Home Custody Contract</th>
+                                        <td><input type="checkbox" @bind="_siteUpdateCreateHomeContract" /></td>
+                                    </tr>
+                                    <tr>
+                                        <th>Province Check</th>
+                                        <td colspan="3">@BuildSiteUpdateProvinceGuidance()</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Notes</th>
+                                        <td colspan="3">
+                                            <textarea class="form-input contract-notes" rows="3" @bind="_siteUpdateNotes"></textarea>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    }
 
     <div class="contract-section">
         <table class="contract-legacy-table">
@@ -444,13 +605,25 @@
                                     <th rowspan="3">Contract Client</th>
                                     <th>Department</th>
                                     <td colspan="3">
-                                        <input class="form-input" readonly value="@ValueOrDash(_department?.department_description)" />
+                                        <select class="form-select" @bind="_selectedDepartmentCode" @bind:after="OnDepartmentChanged" disabled="@(!CanEditContractSite())">
+                                            <option value="0">Select Department</option>
+                                            @foreach (var department in _departments)
+                                            {
+                                                <option value="@department.department_code">@DepartmentDisplay(department)</option>
+                                            }
+                                        </select>
                                     </td>
                                 </tr>
                                 <tr>
                                     <th>Site</th>
                                     <td colspan="3">
-                                        <input class="form-input" readonly value="@ValueOrDash(_site?.Description)" />
+                                        <select class="form-select" @bind="_selectedSiteCode" @bind:after="OnSiteChanged" disabled="@(!CanEditContractSite())">
+                                            <option value="0">Select Site</option>
+                                            @foreach (var site in SelectableSites)
+                                            {
+                                                <option value="@site.SiteCode">@SiteDisplay(site)</option>
+                                            }
+                                        </select>
                                     </td>
                                 </tr>
                                 <tr>
@@ -459,20 +632,35 @@
                                 <tr>
                                     <th>Authoriser Name</th>
                                     <td colspan="2">
-                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.contractor_name)" />
+                                        <select class="form-select" @bind="_selectedAuthoriserCode" @bind:after="OnAuthoriserChanged" disabled="@(!CanEditContractSite())">
+                                            <option value="">Select Authoriser</option>
+                                            @foreach (var authoriser in AvailableAuthorisers)
+                                            {
+                                                <option value="@authoriser.UserAccessCode">@AuthoriserDisplay(authoriser)</option>
+                                            }
+                                        </select>
                                     </td>
                                     <th>Authorization</th>
                                     <td>
-                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.status)" />
+                                        <input class="form-input"
+                                               value="@(_contract?.authorisation ?? string.Empty)"
+                                               @onchange="OnAuthorisationChanged"
+                                               readonly="@(!CanEditContractSite())" />
                                     </td>
                                 </tr>
                                 <tr>
                                     <th>Driver Name</th>
                                     <td colspan="2">
-                                        <input class="form-input" readonly value="-" />
+                                        <select class="form-select" @bind="_selectedSiteDriverCode" @bind:after="OnDriverChanged" disabled="@(!CanEditContractSite())">
+                                            <option value="">Select Driver</option>
+                                            @foreach (var driver in AvailableSiteDrivers)
+                                            {
+                                                <option value="@driver.site_driver_code">@DriverDisplay(driver)</option>
+                                            }
+                                        </select>
                                     </td>
                                     <td colspan="2">
-                                        <input type="checkbox" /> Valid Driver's License <span class="contract-muted">(expiry)</span>
+                                        <input type="checkbox" checked="@SelectedDriverHasValidLicence()" disabled /> Valid Driver's License <span class="contract-muted">(@SelectedDriverLicenceHint())</span>
                                     </td>
                                 </tr>
                                 <tr>
@@ -592,7 +780,20 @@
                                 <tr>
                                     <th>Contract Type</th>
                                     <td>
-                                        <input class="form-input" readonly value="@GetContractTypeLabel(_contract?.contractor_name)" />
+                                        <select class="form-select" disabled>
+                                            @if (!string.IsNullOrWhiteSpace(GetResolvedContractTypeCode()))
+                                            {
+                                                <option value="@GetResolvedContractTypeCode()">@GetContractTypeLabel(GetResolvedContractTypeCode())</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="">-</option>
+                                            }
+                                            @foreach (var option in ContractTypeOptions.Where(option => !string.Equals(option.Code, GetResolvedContractTypeCode(), StringComparison.OrdinalIgnoreCase)))
+                                            {
+                                                <option value="@option.Code">@option.Label</option>
+                                            }
+                                        </select>
                                     </td>
                                     <td colspan="2">
                                         <input type="checkbox" /> Opt-In for Relief Vehicle
@@ -718,6 +919,7 @@
     private DepartmentDto? _department;
     private List<DepartmentDto> _departments = new();
     private List<SiteResponseDto> _sites = new();
+    private List<ProvinceDto> _provinces = new();
     private int _selectedDepartmentCode;
     private short _selectedSiteCode;
     private bool _actionRunning;
@@ -731,11 +933,26 @@
     private bool _reviewPendingMode;
     private bool _reassignMode;
     private bool _extendMode;
+    private bool _closeMode;
+    private bool _siteUpdateMode;
     private short? _reassignOriginalSiteCode;
     private DateTime? _extendOriginalTargetReturnDate;
     private DateTime? _extendTargetReturnDate;
+    private short? _closeHomeDepartmentCode;
+    private short? _closeHomeSiteCode;
+    private int? _closeHomeDriverCode;
+    private DateTime _closeEndDate = DateTime.Today;
+    private int _closeEndOdometer;
+    private string _closeNotes = string.Empty;
+    private bool _createHomeCustodyContract = true;
+    private short? _siteUpdateDepartmentCode;
+    private short? _siteUpdateSiteCode;
+    private int? _siteUpdateDriverCode;
+    private string _siteUpdateNotes = string.Empty;
+    private bool _siteUpdateCreateHomeContract = true;
     private bool _scrollToTopPending = true;
     private bool _submittedByCurrentUserInSession;
+    private int? _pendingSubmittedByUserCode;
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
@@ -745,6 +962,17 @@
     private VehicleTariffPreviewResponseDto? _tariffPreview;
     private bool _showTariffWarning;
     private Dictionary<int, UserProfileDto> _userProfilesByCode = new();
+    private List<DriverDto> _drivers = new();
+    private short? _selectedAuthoriserCode;
+    private int? _selectedSiteDriverCode;
+    private static readonly (string Code, string Label)[] ContractTypeOptions =
+    {
+        ("A", "Daily"),
+        ("B", "Hourly"),
+        ("C", "Permanent"),
+        ("D", "Relieve"),
+        ("E", "Lease")
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -753,6 +981,7 @@
             await ResolveCurrentUserContextAsync();
             await LoadLookupDataAsync();
             await LoadUserProfilesAsync();
+            await LoadDriverDataAsync();
 
             if (int.TryParse(ContractId, out var contractId))
             {
@@ -911,10 +1140,19 @@
         {
             _reassignMode = false;
             _extendMode = false;
+            _closeMode = false;
+            _siteUpdateMode = false;
             if (vmfCode <= 0)
             {
                 _actionStatusError = true;
                 _actionStatusMessage = "Select a valid vehicle before opening a contract.";
+                return;
+            }
+
+            if (IsContractOpenBlockedByTariff())
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = BuildMissingTariffOpenMessage();
                 return;
             }
 
@@ -929,6 +1167,8 @@
         {
             _reassignMode = false;
             _extendMode = false;
+            _closeMode = false;
+            _siteUpdateMode = false;
             if (!CanCurrentUserReviewPendingContract())
             {
                 _actionStatusError = true;
@@ -947,11 +1187,36 @@
         {
             _reassignMode = false;
             _extendMode = false;
+            _closeMode = false;
+            _siteUpdateMode = false;
             _openContractMode = true;
             _reviewPendingMode = false;
             _actionStatusError = false;
             _actionStatusMessage = "Correction contract loaded. Update details and submit for approval.";
             return;
+        }
+
+        if (action == "site-update")
+        {
+            if (!_siteUpdateMode)
+            {
+                EnterSiteUpdateMode();
+                return;
+            }
+
+            if (_siteUpdateDepartmentCode is not > 0 || _siteUpdateSiteCode is not > 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select the GFleet department and site before saving the vehicle home assignment.";
+                return;
+            }
+
+            if (_siteUpdateCreateHomeContract && _siteUpdateDriverCode is not > 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a custodian driver before creating a home custody contract.";
+                return;
+            }
         }
 
         if (action == "reassign")
@@ -1008,12 +1273,42 @@
             }
         }
 
+        if (action == "close")
+        {
+            if (!_closeMode)
+            {
+                EnterCloseMode();
+                return;
+            }
+
+            if (_closeHomeDepartmentCode is not > 0 || _closeHomeSiteCode is not > 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select the GFleet department and site before closing the contract.";
+                return;
+            }
+
+            if (_closeEndOdometer < 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Close odometer cannot be negative.";
+                return;
+            }
+
+            if (_createHomeCustodyContract && _closeHomeDriverCode is not > 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select a GFleet custodian driver before closing the contract.";
+                return;
+            }
+        }
+
         _actionRunning = true;
         _actionStatusMessage = string.Empty;
 
         var contractId = ResolveContractId();
         var actionContractId = await ResolveActionContractIdAsync(action, contractId);
-        if (actionContractId <= 0 && action != "submit" && action != "cancel")
+        if (actionContractId <= 0 && action is not "submit" and not "cancel" and not "site-update")
         {
             _actionStatusError = true;
             _actionStatusMessage = "Contract ID is required for this action.";
@@ -1045,6 +1340,7 @@
             "extend" => $"api/contracts/{actionContractId}/extend",
             "reassign" => $"api/contracts/{actionContractId}/reassign",
             "close" => $"api/contracts/{actionContractId}/close",
+            "site-update" => $"api/contracts/vehicle/{vmfCode}/site-assignment",
             "relief" => $"api/contracts/{actionContractId}/relief",
             "recall" => $"api/contracts/{actionContractId}/recall",
             "submit" => $"api/contracts/{actionContractId}/submit",
@@ -1068,9 +1364,24 @@
         {
             result = await ContractService.PostActionAsync(endpoint, new
             {
-                EndDate = DateTime.UtcNow.Date,
-                EndOdometer = Math.Max(_vehicle?.current_odo ?? 0, 0),
-                Notes = _approvalNotes
+                EndDate = _closeEndDate.Date,
+                EndOdometer = _closeEndOdometer,
+                Notes = string.IsNullOrWhiteSpace(_closeNotes) ? _approvalNotes : _closeNotes,
+                HomeDepartmentCode = _closeHomeDepartmentCode,
+                HomeSiteCode = _closeHomeSiteCode,
+                HomeSiteDriverCode = _closeHomeDriverCode,
+                CreateHomeCustodyContract = _createHomeCustodyContract
+            });
+        }
+        else if (action == "site-update")
+        {
+            result = await ContractService.PostActionAsync(endpoint, new
+            {
+                DepartmentCode = _siteUpdateDepartmentCode,
+                SiteCode = _siteUpdateSiteCode,
+                SiteDriverCode = _siteUpdateDriverCode,
+                CreateHomeCustodyContract = _siteUpdateCreateHomeContract,
+                Notes = string.IsNullOrWhiteSpace(_siteUpdateNotes) ? _approvalNotes : _siteUpdateNotes
             });
         }
         else if (action == "reassign")
@@ -1102,6 +1413,14 @@
                 return;
             }
 
+            if (_selectedSiteCode <= 0)
+            {
+                _actionStatusError = true;
+                _actionStatusMessage = "Select the client site before submitting a contract.";
+                _actionRunning = false;
+                return;
+            }
+
             if (!HasValidTariffForSubmission())
             {
                 _actionStatusError = true;
@@ -1110,13 +1429,21 @@
                 return;
             }
 
+            ApplySelectionToContract();
+            ApplyClientSelectionToContract();
+
             if (contractId <= 0)
             {
                 var createResult = await ContractService.PostActionAsync("api/contracts/hire", new
                 {
                     VmfCode = vmfCode,
-                    SiteCode = _contract?.site_code ?? (short)0,
-                    StartOdometer = _vehicle?.current_odo,
+                    SiteCode = _selectedSiteCode,
+                    StartOdometer = _contract?.start_odometer ?? _vehicle?.current_odo,
+                    DriverId = _contract?.driver_id,
+                    SiteDriverCode = _selectedSiteDriverCode ?? 0,
+                    UserCode = _selectedAuthoriserCode ?? 0,
+                    Authorisation = _contract?.authorisation,
+                    TargetReturnDate = _extendTargetReturnDate?.Date ?? _contract?.target_return_date?.Date,
                     Notes = _approvalNotes
                 });
 
@@ -1134,6 +1461,18 @@
                     _contract = await ContractService.GetContractAsync(createdContractId);
                     contractId = createdContractId;
                     actionContractId = createdContractId;
+                }
+            }
+
+            if (actionContractId > 0 && ((_contract?.contract_status_code ?? 0) is 0 or 4 || _openContractMode))
+            {
+                var editResult = await SaveEditableContractAsync(actionContractId);
+                if (!editResult.Success)
+                {
+                    _actionStatusError = true;
+                    _actionStatusMessage = editResult.Message;
+                    _actionRunning = false;
+                    return;
                 }
             }
 
@@ -1203,10 +1542,12 @@
 
         if (result.Success)
         {
-            if (action is "reassign" or "extend")
+            if (action is "reassign" or "extend" or "close" or "site-update")
             {
                 _reassignMode = false;
                 _extendMode = false;
+                _closeMode = false;
+                _siteUpdateMode = false;
                 _reassignOriginalSiteCode = null;
                 _extendOriginalTargetReturnDate = null;
             }
@@ -1222,7 +1563,12 @@
                 _submittedByCurrentUserInSession = true;
             }
 
-            await RefreshContractContextAsync(actionContractId);
+            if (action == "site-update")
+            {
+                _contract = null;
+            }
+
+            await RefreshContractContextAsync(action == "site-update" ? 0 : actionContractId);
             await EvaluateContractStateAsync();
             _approvalNotes = string.Empty;
             _declineReason = string.Empty;
@@ -1270,6 +1616,7 @@
     {
         _departments = await DepartmentService.GetDepartmentsAsync();
         _sites = await SiteService.GetAllAsync();
+        _provinces = await ProvinceService.GetAllAsync();
     }
 
     private async Task LoadUserProfilesAsync()
@@ -1308,7 +1655,11 @@
             _selectedDepartmentCode = _contract.department_code;
         }
 
+        _selectedAuthoriserCode = _contract?.user_code;
+        _selectedSiteDriverCode = ResolveSelectedSiteDriverCode();
         ApplySelectionToContract();
+        ResetInvalidClientSelections();
+        ApplyClientSelectionToContract();
 
         if (!_extendMode)
         {
@@ -1328,6 +1679,8 @@
         }
 
         ApplySelectionToContract();
+        ResetInvalidClientSelections();
+        ApplyClientSelectionToContract();
         await LoadTariffPreviewAsync();
     }
 
@@ -1340,8 +1693,76 @@
         }
 
         ApplySelectionToContract();
+        ResetInvalidClientSelections();
+        ApplyClientSelectionToContract();
         await LoadTariffPreviewAsync();
     }
+
+    private Task OnCloseDepartmentChanged()
+    {
+        if (_closeHomeDepartmentCode is > 0 && _closeHomeSiteCode is > 0)
+        {
+            var selectedSite = _sites.FirstOrDefault(site => site.SiteCode == _closeHomeSiteCode);
+            if (selectedSite?.DepartmentCode != _closeHomeDepartmentCode)
+            {
+                _closeHomeSiteCode = null;
+                _closeHomeDriverCode = null;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnCloseSiteChanged()
+    {
+        var selectedSite = _sites.FirstOrDefault(site => site.SiteCode == _closeHomeSiteCode);
+        if (selectedSite?.DepartmentCode is > 0)
+        {
+            _closeHomeDepartmentCode = selectedSite.DepartmentCode.Value;
+        }
+
+        if (_closeHomeDriverCode.HasValue && !HomeDriverOptions.Any(driver => driver.site_driver_code == _closeHomeDriverCode.Value))
+        {
+            _closeHomeDriverCode = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnCloseDriverChanged() => Task.CompletedTask;
+
+    private Task OnSiteUpdateDepartmentChanged()
+    {
+        if (_siteUpdateDepartmentCode is > 0 && _siteUpdateSiteCode is > 0)
+        {
+            var selectedSite = _sites.FirstOrDefault(site => site.SiteCode == _siteUpdateSiteCode);
+            if (selectedSite?.DepartmentCode != _siteUpdateDepartmentCode)
+            {
+                _siteUpdateSiteCode = null;
+                _siteUpdateDriverCode = null;
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnSiteUpdateSiteChanged()
+    {
+        var selectedSite = _sites.FirstOrDefault(site => site.SiteCode == _siteUpdateSiteCode);
+        if (selectedSite?.DepartmentCode is > 0)
+        {
+            _siteUpdateDepartmentCode = selectedSite.DepartmentCode.Value;
+        }
+
+        if (_siteUpdateDriverCode.HasValue && !SiteUpdateDriverOptions.Any(driver => driver.site_driver_code == _siteUpdateDriverCode.Value))
+        {
+            _siteUpdateDriverCode = null;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnSiteUpdateDriverChanged() => Task.CompletedTask;
 
     private void ApplySelectionToContract()
     {
@@ -1352,6 +1773,11 @@
 
         _department = _departments.FirstOrDefault(d => d.department_code == _selectedDepartmentCode);
         _site = _sites.FirstOrDefault(s => s.SiteCode == _selectedSiteCode);
+    }
+
+    private async Task LoadDriverDataAsync()
+    {
+        _drivers = await DriverService.GetDriversAsync();
     }
 
     private static string DepartmentDisplay(DepartmentDto department)
@@ -1366,11 +1792,193 @@
         return $"{number}{site.Description}".Trim();
     }
 
+    private string ProvinceDisplay(string? provinceCode)
+    {
+        if (string.IsNullOrWhiteSpace(provinceCode))
+        {
+            return "unknown province";
+        }
+
+        var province = _provinces.FirstOrDefault(item => string.Equals(item.province_code, provinceCode, StringComparison.OrdinalIgnoreCase));
+        return string.IsNullOrWhiteSpace(province?.province_name)
+            ? $"province {provinceCode}"
+            : province.province_name!;
+    }
+
+    private SiteResponseDto? FindSite(short? siteCode)
+        => siteCode is > 0
+            ? _sites.FirstOrDefault(site => site.SiteCode == siteCode.Value)
+            : null;
+
+    private SiteResponseDto? FindSite(int? siteCode)
+        => siteCode is > 0 && siteCode <= short.MaxValue
+            ? FindSite((short?)siteCode)
+            : null;
+
+    private static bool IsGfleetDepartment(DepartmentDto department)
+        => department.department_code == 147
+           || (!string.IsNullOrWhiteSpace(department.department_description)
+               && department.department_description.Contains("gfleet", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsGfleetSite(SiteResponseDto site)
+        => site.SiteCode is 1619 or 1620 or 1621 or 1622
+           || !string.IsNullOrWhiteSpace(site.Description)
+               && (site.Description.Contains("gfleet", StringComparison.OrdinalIgnoreCase)
+                   || site.Description.Contains("g fleet", StringComparison.OrdinalIgnoreCase)
+                   || site.Description.Contains("hire pool", StringComparison.OrdinalIgnoreCase)
+                   || site.Description.Contains("internal", StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<UserProfileDto> AvailableAuthorisers =>
+        _selectedSiteCode > 0
+            ? _userProfilesByCode.Values
+                .Where(profile => profile.UserActive && profile.SiteCode == _selectedSiteCode)
+                .OrderBy(profile => profile.FirstName)
+                .ThenBy(profile => profile.LastName)
+            : Enumerable.Empty<UserProfileDto>();
+
+    private IEnumerable<DriverDto> AvailableSiteDrivers =>
+        _selectedSiteCode > 0
+            ? _drivers
+                .Where(driver => driver.driver_active && driver.site_code == _selectedSiteCode)
+                .OrderBy(driver => driver.driver_firstname)
+                .ThenBy(driver => driver.driver_surname)
+            : Enumerable.Empty<DriverDto>();
+
+    private IEnumerable<DepartmentDto> HomeDepartmentOptions =>
+        _departments
+            .Where(IsGfleetDepartment)
+            .OrderBy(DepartmentDisplay);
+
+    private IEnumerable<SiteResponseDto> HomeSiteOptions =>
+        _closeHomeDepartmentCode is > 0
+            ? _sites
+                .Where(site => site.DepartmentCode == _closeHomeDepartmentCode && IsGfleetSite(site))
+                .OrderBy(SiteDisplay)
+            : Enumerable.Empty<SiteResponseDto>();
+
+    private IEnumerable<DriverDto> HomeDriverOptions =>
+        _closeHomeSiteCode is > 0
+            ? _drivers
+                .Where(driver => driver.driver_active && driver.site_code == _closeHomeSiteCode)
+                .OrderBy(driver => driver.driver_firstname)
+                .ThenBy(driver => driver.driver_surname)
+            : Enumerable.Empty<DriverDto>();
+
+    private IEnumerable<SiteResponseDto> SiteUpdateSiteOptions =>
+        _siteUpdateDepartmentCode is > 0
+            ? _sites
+                .Where(site => site.DepartmentCode == _siteUpdateDepartmentCode && IsGfleetSite(site))
+                .OrderBy(SiteDisplay)
+            : Enumerable.Empty<SiteResponseDto>();
+
+    private IEnumerable<DriverDto> SiteUpdateDriverOptions =>
+        _siteUpdateSiteCode is > 0
+            ? _drivers
+                .Where(driver => driver.driver_active && driver.site_code == _siteUpdateSiteCode)
+                .OrderBy(driver => driver.driver_firstname)
+                .ThenBy(driver => driver.driver_surname)
+            : Enumerable.Empty<DriverDto>();
+
+    private static string AuthoriserDisplay(UserProfileDto profile)
+        => ValueOrDash($"{profile.FirstName} {profile.LastName}".Trim());
+
+    private static string DriverDisplay(DriverDto driver)
+        => ValueOrDash($"{driver.driver_firstname} {driver.driver_surname}".Trim());
+
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private string SelectedHomeDriverLicenceHint()
+    {
+        var selectedDriver = HomeDriverOptions.FirstOrDefault(driver => driver.site_driver_code == _closeHomeDriverCode);
+        return selectedDriver?.driver_licence_ExpiryDate?.ToString("yyyy/MM/dd") ?? "no expiry";
+    }
+
+    private string SelectedHomeSummary()
+    {
+        var site = HomeSiteOptions.FirstOrDefault(candidate => candidate.SiteCode == _closeHomeSiteCode);
+        var driver = HomeDriverOptions.FirstOrDefault(candidate => candidate.site_driver_code == _closeHomeDriverCode);
+        if (site == null && driver == null)
+        {
+            return "-";
+        }
+
+        return $"{ValueOrDash(site?.Description)} / {ValueOrDash(driver == null ? null : DriverDisplay(driver))}";
+    }
+
+    private string BuildCloseProvinceGuidance()
+    {
+        var homeSite = FindSite(_closeHomeSiteCode);
+        if (homeSite == null)
+        {
+            return "Select a GFleet site to confirm the return-home province.";
+        }
+
+        var homeProvince = ProvinceDisplay(homeSite.ProvinceCode);
+        var currentSite = FindSite(_vehicle?.location_code);
+        var currentProvince = currentSite == null ? "unknown province" : ProvinceDisplay(currentSite.ProvinceCode);
+        var selectedDriver = HomeDriverOptions.FirstOrDefault(driver => driver.site_driver_code == _closeHomeDriverCode);
+
+        if (selectedDriver == null)
+        {
+            return $"Vehicle will return to {ValueOrDash(homeSite.Description)} in {homeProvince}. Select a GFleet custodian driver from the same site/province.";
+        }
+
+        var driverSite = FindSite(selectedDriver.site_code);
+        var driverProvince = driverSite == null ? "unknown province" : ProvinceDisplay(driverSite.ProvinceCode);
+        if (selectedDriver.site_code != homeSite.SiteCode)
+        {
+            return $"Selected driver belongs to {ValueOrDash(driverSite?.Description)} in {driverProvince}. Choose a driver linked to {ValueOrDash(homeSite.Description)} in {homeProvince}.";
+        }
+
+        return $"Vehicle current site: {ValueOrDash(currentSite?.Description)} ({currentProvince}). Return-home site: {ValueOrDash(homeSite.Description)} ({homeProvince}).";
+    }
+
+    private string BuildSiteUpdateProvinceGuidance()
+    {
+        var targetSite = FindSite(_siteUpdateSiteCode);
+        if (targetSite == null)
+        {
+            return "Select the corrected GFleet site to confirm the province.";
+        }
+
+        var targetProvince = ProvinceDisplay(targetSite.ProvinceCode);
+        var selectedDriver = SiteUpdateDriverOptions.FirstOrDefault(driver => driver.site_driver_code == _siteUpdateDriverCode);
+        if (selectedDriver == null)
+        {
+            return $"Vehicle site will be corrected to {ValueOrDash(targetSite.Description)} in {targetProvince}. Select a custodian driver from that same site.";
+        }
+
+        var driverSite = FindSite(selectedDriver.site_code);
+        var driverProvince = driverSite == null ? "unknown province" : ProvinceDisplay(driverSite.ProvinceCode);
+        if (selectedDriver.site_code != targetSite.SiteCode)
+        {
+            return $"Selected driver belongs to {ValueOrDash(driverSite?.Description)} in {driverProvince}. Choose a driver from {ValueOrDash(targetSite.Description)} in {targetProvince}.";
+        }
+
+        return $"Corrected site and custodian are aligned to {ValueOrDash(targetSite.Description)} in {targetProvince}.";
+    }
 
     private static string FormatDate(DateTime? date) => date?.ToString("yyyy/MM/dd") ?? "-";
 
     private static string FormatDateForInput(DateTime? date) => date?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+    private Task OnAuthoriserChanged()
+    {
+        ApplyClientSelectionToContract();
+        return Task.CompletedTask;
+    }
+
+    private Task OnDriverChanged()
+    {
+        ApplyClientSelectionToContract();
+        return Task.CompletedTask;
+    }
+
+    private void OnAuthorisationChanged(ChangeEventArgs args)
+    {
+        _contract ??= new ContractDto();
+        _contract.authorisation = args.Value?.ToString()?.Trim();
+    }
 
     private bool CanEditContractSite()
         => _openContractMode || _reassignMode;
@@ -1379,6 +1987,8 @@
     {
         _reassignMode = true;
         _extendMode = false;
+        _closeMode = false;
+        _siteUpdateMode = false;
         _reassignOriginalSiteCode = _selectedSiteCode > 0
             ? _selectedSiteCode
             : _contract?.site_code;
@@ -1390,21 +2000,87 @@
     {
         _extendMode = true;
         _reassignMode = false;
+        _closeMode = false;
+        _siteUpdateMode = false;
         _extendOriginalTargetReturnDate = _contract?.target_return_date ?? _contract?.end_date;
         _extendTargetReturnDate = _extendOriginalTargetReturnDate;
         _actionStatusError = false;
         _actionStatusMessage = "Extension mode enabled. Set a new return date, then click Save Extension.";
     }
 
+    private void EnterCloseMode()
+    {
+        _closeMode = true;
+        _reassignMode = false;
+        _extendMode = false;
+        _siteUpdateMode = false;
+        InitializeHomeAssignmentDefaults();
+        _actionStatusError = false;
+        _actionStatusMessage = "Close mode enabled. Select the GFleet home site and custodian, then click Save Close and Return Home.";
+    }
+
+    private void EnterSiteUpdateMode()
+    {
+        _siteUpdateMode = true;
+        _closeMode = false;
+        _reassignMode = false;
+        _extendMode = false;
+        InitializeSiteUpdateDefaults();
+        _actionStatusError = false;
+        _actionStatusMessage = "Site update mode enabled. Correct the vehicle home site and custodian, then click Save Vehicle Site / Custodian.";
+    }
+
     private void CancelActiveEditMode()
     {
         _reassignMode = false;
         _extendMode = false;
+        _closeMode = false;
+        _siteUpdateMode = false;
         _reassignOriginalSiteCode = null;
         _extendOriginalTargetReturnDate = null;
         SyncContractSelection();
         _actionStatusError = false;
         _actionStatusMessage = "Edit mode cancelled.";
+    }
+
+    private void InitializeHomeAssignmentDefaults()
+    {
+        _closeEndDate = DateTime.Today;
+        _closeEndOdometer = Math.Max(_vehicle?.current_odo ?? 0, 0);
+        _closeNotes = _approvalNotes;
+        _createHomeCustodyContract = true;
+
+        var defaultDepartment = HomeDepartmentOptions.FirstOrDefault();
+        _closeHomeDepartmentCode ??= defaultDepartment is null ? null : (short?)defaultDepartment.department_code;
+
+        if (_closeHomeDepartmentCode is > 0 && _closeHomeSiteCode is null)
+        {
+            _closeHomeSiteCode = HomeSiteOptions.FirstOrDefault()?.SiteCode;
+        }
+
+        if (_closeHomeSiteCode is > 0 && _closeHomeDriverCode is null)
+        {
+            _closeHomeDriverCode = HomeDriverOptions.FirstOrDefault()?.site_driver_code;
+        }
+    }
+
+    private void InitializeSiteUpdateDefaults()
+    {
+        _siteUpdateNotes = _approvalNotes;
+        _siteUpdateCreateHomeContract = true;
+
+        var defaultDepartment = HomeDepartmentOptions.FirstOrDefault();
+        _siteUpdateDepartmentCode ??= defaultDepartment is null ? null : (short?)defaultDepartment.department_code;
+
+        if (_siteUpdateDepartmentCode is > 0 && _siteUpdateSiteCode is null)
+        {
+            _siteUpdateSiteCode = SiteUpdateSiteOptions.FirstOrDefault()?.SiteCode;
+        }
+
+        if (_siteUpdateSiteCode is > 0 && _siteUpdateDriverCode is null)
+        {
+            _siteUpdateDriverCode = SiteUpdateDriverOptions.FirstOrDefault()?.site_driver_code;
+        }
     }
 
     private bool ValidateReassignEmailControls(out string message)
@@ -1469,7 +2145,7 @@
 
     private bool RequiresJurisdictionControl(string action)
     {
-        return action is "open" or "submit" or "cancel" or "extend" or "reassign" or "close" or "review-pending" or "review-correction" or "recall" or "approve" or "approve-activate" or "decline" or "decline-correction";
+        return action is "open" or "submit" or "cancel" or "extend" or "reassign" or "close" or "site-update" or "review-pending" or "review-correction" or "recall" or "approve" or "approve-activate" or "decline" or "decline-correction";
     }
 
     private bool ValidateJurisdictionAccess(string action, out string message)
@@ -1527,7 +2203,7 @@
     private string ResolveContractJurisdictionCategory()
     {
         var typeText = (_vehicle?.type_name ?? string.Empty).Trim();
-        var contractTypeCode = (_contract?.contractor_name ?? string.Empty).Trim().ToUpperInvariant();
+        var contractTypeCode = (GetResolvedContractTypeCode() ?? string.Empty).Trim().ToUpperInvariant();
         var combined = $"{typeText} {contractTypeCode}".Trim().ToLowerInvariant();
 
         if (combined.Contains("lease", StringComparison.OrdinalIgnoreCase) || contractTypeCode == "E")
@@ -1596,7 +2272,7 @@
 
     private string BuildApprovalSummary()
     {
-        var openedBy = ValueOrDash(_contract?.contractor_name);
+        var openedBy = ResolveUserDisplay(GetCapturerUserCode());
         var openedOn = _contract?.start_date.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy");
         var status = ValueOrDash(_contract?.status);
 
@@ -1629,10 +2305,7 @@
             {
                 var pendingDetails = ExtractPendingDetails(pendingResponse.ResponseBody);
                 _hasPendingContract = pendingDetails.IsPending;
-                if (pendingDetails.SubmittedByUserCode is > 0 && _contract != null)
-                {
-                    _contract.created_by_user_code = pendingDetails.SubmittedByUserCode.Value;
-                }
+                _pendingSubmittedByUserCode = pendingDetails.SubmittedByUserCode;
             }
         }
 
@@ -1669,7 +2342,7 @@
     private bool IsReviewerMode() => IsPendingInReview();
     private bool CanCurrentUserReviewPendingContract() => _hasContractApproverRole && !IsCurrentUserContractCapturer();
     private bool HasReviewerNotes() => !string.IsNullOrWhiteSpace(_contract?.contract_notes);
-    private bool ShowContractForm() => _reviewPendingMode || _openContractMode || IsActiveContractState() || IsApprovedAwaitingActivationState();
+    private bool ShowContractForm() => _reviewPendingMode || _openContractMode || _siteUpdateMode || IsActiveContractState() || IsApprovedAwaitingActivationState();
 
     private bool IsCurrentUserContractCapturer()
     {
@@ -1684,7 +2357,7 @@
             return true;
         }
 
-        var createdByUserCode = _contract?.created_by_user_code;
+        var createdByUserCode = GetCapturerUserCode();
         if (createdByUserCode is > 0 && createdByUserCode.Value == _currentUserAccessCode.Value)
         {
             return true;
@@ -1692,6 +2365,9 @@
 
         return _submittedByCurrentUserInSession;
     }
+
+    private int? GetCapturerUserCode()
+        => _contract?.created_by_user_code ?? _pendingSubmittedByUserCode;
 
     private async Task ResolveCurrentUserContextAsync()
     {
@@ -1735,6 +2411,107 @@
         return int.TryParse(value, out var parsed) ? parsed : null;
     }
 
+    private string? GetResolvedContractTypeCode()
+        => !string.IsNullOrWhiteSpace(_contract?.contract_type_code)
+            ? _contract?.contract_type_code
+            : _contract?.contractor_name;
+
+    private void ResetInvalidClientSelections()
+    {
+        if (_selectedSiteCode <= 0)
+        {
+            _selectedAuthoriserCode = null;
+            _selectedSiteDriverCode = null;
+            return;
+        }
+
+        if (_selectedAuthoriserCode is > 0
+            && !AvailableAuthorisers.Any(profile => profile.UserAccessCode == _selectedAuthoriserCode.Value))
+        {
+            _selectedAuthoriserCode = null;
+        }
+
+        if (_selectedSiteDriverCode is > 0
+            && !AvailableSiteDrivers.Any(driver => driver.site_driver_code == _selectedSiteDriverCode.Value))
+        {
+            _selectedSiteDriverCode = null;
+        }
+    }
+
+    private int? ResolveSelectedSiteDriverCode()
+    {
+        if (_contract?.site_driver_code is > 0)
+        {
+            return _contract.site_driver_code;
+        }
+
+        if (string.IsNullOrWhiteSpace(_contract?.driver_id))
+        {
+            return null;
+        }
+
+        var driverId = _contract.driver_id.Trim();
+        var matchedDriver = _drivers.FirstOrDefault(driver =>
+            string.Equals(driver.driver_SA_id, driverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(driver.driver_passportnumber, driverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(driver.driver_persalnumber, driverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(driver.driver_contractnumber, driverId, StringComparison.OrdinalIgnoreCase));
+
+        return matchedDriver?.site_driver_code;
+    }
+
+    private void ApplyClientSelectionToContract()
+    {
+        _contract ??= new ContractDto();
+        _contract.user_code = _selectedAuthoriserCode;
+
+        if (_selectedSiteDriverCode is > 0)
+        {
+            var selectedDriver = AvailableSiteDrivers.FirstOrDefault(driver => driver.site_driver_code == _selectedSiteDriverCode.Value)
+                ?? _drivers.FirstOrDefault(driver => driver.site_driver_code == _selectedSiteDriverCode.Value);
+
+            if (selectedDriver != null)
+            {
+                _contract.site_driver_code = selectedDriver.site_driver_code;
+                _contract.driver_id = FirstNonEmpty(
+                    selectedDriver.driver_SA_id,
+                    selectedDriver.driver_passportnumber,
+                    selectedDriver.driver_persalnumber,
+                    selectedDriver.driver_contractnumber);
+                _contract.driver_name = DriverDisplay(selectedDriver);
+                return;
+            }
+        }
+
+        _contract.site_driver_code = null;
+        _contract.driver_id = null;
+        _contract.driver_name = null;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private bool SelectedDriverHasValidLicence()
+        => GetSelectedDriver()?.driver_licence_ExpiryDate is DateTime expiry && expiry.Date >= DateTime.Today;
+
+    private string SelectedDriverLicenceHint()
+        => GetSelectedDriver()?.driver_licence_ExpiryDate?.ToString("yyyy/MM/dd") ?? "no expiry";
+
+    private DriverDto? GetSelectedDriver()
+        => _selectedSiteDriverCode is > 0
+            ? _drivers.FirstOrDefault(driver => driver.site_driver_code == _selectedSiteDriverCode.Value)
+            : null;
+
+    private string ResolveUserDisplay(int? userAccessCode)
+    {
+        if (userAccessCode is > 0 && _userProfilesByCode.TryGetValue(userAccessCode.Value, out var profile))
+        {
+            return AuthoriserDisplay(profile);
+        }
+
+        return "-";
+    }
+
     private static bool HasAnyRole(ClaimsPrincipal user, params string[] roles)
     {
         foreach (var role in roles)
@@ -1776,6 +2553,38 @@
 
         SyncContractSelection();
         await LoadTariffPreviewAsync();
+    }
+
+    private FinanceApiResult BuildLocalValidationError(string message)
+        => new()
+        {
+            Success = false,
+            Message = message
+        };
+
+    private async Task<FinanceApiResult> SaveEditableContractAsync(int contractId)
+    {
+        if (contractId <= 0)
+        {
+            return BuildLocalValidationError("Contract could not be resolved before saving.");
+        }
+
+        if (_selectedSiteCode <= 0)
+        {
+            return BuildLocalValidationError("Select a client site before saving the contract.");
+        }
+
+        return await ContractService.PutActionAsync($"api/contracts/{contractId}/edit", new
+        {
+            SiteCode = _selectedSiteCode,
+            DriverId = _contract?.driver_id ?? string.Empty,
+            SiteDriverCode = _selectedSiteDriverCode ?? 0,
+            UserCode = _selectedAuthoriserCode ?? 0,
+            Authorisation = _contract?.authorisation ?? string.Empty,
+            Notes = _approvalNotes,
+            TargetReturnDate = _extendTargetReturnDate?.Date ?? _contract?.target_return_date?.Date,
+            StartOdometer = _contract?.start_odometer ?? _vehicle?.current_odo
+        });
     }
 
     private async Task<int> ResolveActionContractIdAsync(string action, int fallbackContractId)
@@ -1868,7 +2677,14 @@
         }
 
         _tariffPreview = await TariffService.GetPreviewForVehicleAsync(vmfCode.Value);
-        _showTariffWarning = ShowContractForm() && _tariffPreview != null && _tariffPreview.Tariff == null;
+        _showTariffWarning = ShouldShowTariffWarning();
+
+        if (_openContractMode && IsTariffBlockedForCurrentContract())
+        {
+            _openContractMode = false;
+            _actionStatusError = true;
+            _actionStatusMessage = BuildMissingTariffOpenMessage();
+        }
     }
 
     private static string FormatCurrency(decimal? amount)
@@ -1900,6 +2716,21 @@
         return _tariffPreview?.Tariff != null;
     }
 
+    private bool IsTariffBlockedForCurrentContract()
+    {
+        return _tariffPreview?.Tariff == null;
+    }
+
+    private bool IsContractOpenBlockedByTariff()
+    {
+        return IsNewContractState() && IsTariffBlockedForCurrentContract();
+    }
+
+    private bool ShouldShowTariffWarning()
+    {
+        return (IsNewContractState() || ShowContractForm()) && IsTariffBlockedForCurrentContract();
+    }
+
     private string BuildMissingTariffMessage()
     {
         if (!string.IsNullOrWhiteSpace(_tariffPreview?.Note))
@@ -1908,6 +2739,23 @@
         }
 
         return "Cannot submit contract: no valid tariff found for this vehicle.";
+    }
+
+    private string BuildMissingTariffOpenMessage()
+    {
+        if (!string.IsNullOrWhiteSpace(_tariffPreview?.Note))
+        {
+            return $"Cannot open contract: {_tariffPreview.Note}";
+        }
+
+        return "Cannot open contract: no approved tariff is captured for this vehicle.";
+    }
+
+    private string BuildTariffWarningBannerMessage()
+    {
+        return _openContractMode || ShowContractForm()
+            ? BuildMissingTariffMessage().Replace("Cannot submit contract: ", string.Empty, StringComparison.Ordinal)
+            : BuildMissingTariffOpenMessage().Replace("Cannot open contract: ", string.Empty, StringComparison.Ordinal);
     }
 
     private static int TryExtractContractId(string? responseBody)

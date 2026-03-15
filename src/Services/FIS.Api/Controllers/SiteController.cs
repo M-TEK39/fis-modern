@@ -2,6 +2,7 @@ using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Globalization;
 
 namespace FIS.Api.Controllers
 {
@@ -26,6 +27,7 @@ namespace FIS.Api.Controllers
         public string? Fax1 { get; set; }
         public byte? FinancialSystemCode { get; set; }
         public bool? FinancialSystemActive { get; set; }
+        public string? ProvinceCode { get; set; }
     }
 
     public class UpdateSiteDto : CreateSiteDto { }
@@ -52,6 +54,7 @@ namespace FIS.Api.Controllers
         public string? Fax1 { get; set; }
         public byte? FinancialSystemCode { get; set; }
         public bool? FinancialSystemActive { get; set; }
+        public string? ProvinceCode { get; set; }
         public DateTime DateCreated { get; set; }
     }
 
@@ -99,6 +102,7 @@ namespace FIS.Api.Controllers
                     Fax1 = s.fax1,
                     FinancialSystemCode = s.financial_system_code,
                     FinancialSystemActive = s.financial_system_active,
+                    ProvinceCode = FormatProvinceCode(s.province_code),
                     DateCreated = s.date_created,
                 });
                 return Ok(siteDtos);
@@ -145,6 +149,7 @@ namespace FIS.Api.Controllers
                     Fax1 = site.fax1,
                     FinancialSystemCode = site.financial_system_code,
                     FinancialSystemActive = site.financial_system_active,
+                    ProvinceCode = FormatProvinceCode(site.province_code),
                     DateCreated = site.date_created,
                 };
 
@@ -187,6 +192,7 @@ namespace FIS.Api.Controllers
                     Fax1 = s.fax1,
                     FinancialSystemCode = s.financial_system_code,
                     FinancialSystemActive = s.financial_system_active,
+                    ProvinceCode = FormatProvinceCode(s.province_code),
                     DateCreated = s.date_created,
                 });
                 return Ok(siteDtos);
@@ -226,6 +232,7 @@ namespace FIS.Api.Controllers
                     fax1 = createSiteDto.Fax1,
                     financial_system_code = createSiteDto.FinancialSystemCode,
                     financial_system_active = createSiteDto.FinancialSystemActive,
+                    province_code = ParseProvinceCode(createSiteDto.ProvinceCode),
                     date_created = DateTime.Now,
                 };
 
@@ -253,6 +260,7 @@ namespace FIS.Api.Controllers
                     Fax1 = createdSite.fax1,
                     FinancialSystemCode = createdSite.financial_system_code,
                     FinancialSystemActive = createdSite.financial_system_active,
+                    ProvinceCode = FormatProvinceCode(createdSite.province_code),
                     DateCreated = createdSite.date_created,
                 };
 
@@ -304,6 +312,7 @@ namespace FIS.Api.Controllers
                 existingSite.fax1 = updateSiteDto.Fax1;
                 existingSite.financial_system_code = updateSiteDto.FinancialSystemCode;
                 existingSite.financial_system_active = updateSiteDto.FinancialSystemActive;
+                existingSite.province_code = ParseProvinceCode(updateSiteDto.ProvinceCode);
 
                 await _siteRepository.UpdateAsync(existingSite, currentUserId);
 
@@ -329,6 +338,7 @@ namespace FIS.Api.Controllers
                     Fax1 = existingSite.fax1,
                     FinancialSystemCode = existingSite.financial_system_code,
                     FinancialSystemActive = existingSite.financial_system_active,
+                    ProvinceCode = FormatProvinceCode(existingSite.province_code),
                     DateCreated = existingSite.date_created,
                 };
 
@@ -363,5 +373,13 @@ namespace FIS.Api.Controllers
                 return StatusCode(500, "Internal server error");
             }
         }
+
+        private static string? FormatProvinceCode(byte? provinceCode)
+            => provinceCode?.ToString(CultureInfo.InvariantCulture);
+
+        private static byte? ParseProvinceCode(string? provinceCode)
+            => byte.TryParse(provinceCode, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                ? parsed
+                : null;
     }
 }

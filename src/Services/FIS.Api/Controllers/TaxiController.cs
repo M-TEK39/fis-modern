@@ -39,6 +39,21 @@ public class TaxiController : BaseApiController
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
+    [HttpGet("lookup/{rekNum}")]
+    public async Task<ActionResult<Taxi>> GetByRequisition(string rekNum)
+    {
+        try
+        {
+            var item = await _repository.GetLatestByRequisitionAsync(rekNum);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error looking up taxi requisition {RekNum}", rekNum);
+            return StatusCode(500);
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<Taxi>> Create([FromBody] Taxi item)
     {

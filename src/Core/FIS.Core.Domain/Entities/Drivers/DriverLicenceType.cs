@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Drivers;
 public class DriverLicenceType
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("driver_licence_type_id")]
     public int driver_licence_type_id { get; set; }
 

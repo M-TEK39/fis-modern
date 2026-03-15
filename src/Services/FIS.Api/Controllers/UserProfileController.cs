@@ -144,11 +144,13 @@ public class UserProfileController : BaseApiController
             _logger.LogInformation("User {UserId} creating user profile for {FirstName} {LastName}",
                 userId, dto.FirstName, dto.LastName);
 
-            // Check if user already exists
-            var existing = await _repository.GetByFirstNameAsync(dto.FirstName);
-            if (existing != null && !existing.is_deleted)
+            if (!string.IsNullOrWhiteSpace(dto.Email))
             {
-                return Conflict(new { message = $"User profile already exists for first name: {dto.FirstName}" });
+                var existing = await _repository.GetByEmailAsync(dto.Email);
+                if (existing != null)
+                {
+                    return Conflict(new { message = $"User profile already exists for email: {dto.Email}" });
+                }
             }
 
             var userProfile = new UserAccessOld

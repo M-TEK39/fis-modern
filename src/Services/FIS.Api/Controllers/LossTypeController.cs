@@ -76,7 +76,6 @@ public class LossTypeController : BaseApiController
 
             var lossType = new LossType
             {
-                loss_type_code = request.LossTypeCode,
                 loss_description = request.Description
             };
 

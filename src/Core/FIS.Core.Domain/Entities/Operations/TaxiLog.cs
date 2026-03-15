@@ -73,6 +73,18 @@ public class TaxiLog
     [Column("days")]
     public short? days { get; set; }
 
+    [Column("hours")]
+    public double? hours { get; set; }
+
+    [Column("quoted_tariff")]
+    public float? quoted_tariff { get; set; }
+
+    [Column("parent_taxi_log_code")]
+    public int? parent_taxi_log_code { get; set; }
+
+    [Column("taxi_log_note_code")]
+    public short? taxi_log_note_code { get; set; }
+
     // Global audit fields
     [Column("date_created")]
     public DateTime date_created { get; set; }

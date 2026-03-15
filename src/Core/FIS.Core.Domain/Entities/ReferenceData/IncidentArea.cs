@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class IncidentArea
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("Incident_area_code")]
     public short Incident_area_code { get; set; }
 

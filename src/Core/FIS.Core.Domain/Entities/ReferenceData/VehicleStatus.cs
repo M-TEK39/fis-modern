@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class VehicleStatus
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("vehicle_status_code")]
     public short vehicle_status_code { get; set; }
 

@@ -29,6 +29,10 @@ public class HireContractRequest
     public short SiteCode { get; set; }
     public int? StartOdometer { get; set; }
     public string? DriverId { get; set; }
+    public string? DriverName { get; set; }
+    public int? SiteDriverCode { get; set; }
+    public short? UserCode { get; set; }
+    public string? Authorisation { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
     /// <summary>

@@ -28,7 +28,6 @@ public class Program
         {
             Console.WriteLine("🔍 Checking database state...");
 
-            // Check if we can connect
             bool canConnect = await dbContext.Database.CanConnectAsync();
             if (!canConnect)
             {
@@ -44,11 +43,9 @@ public class Program
 
             Console.WriteLine();
 
-            // Verify schema integrity
             Console.WriteLine("🛡️ Verifying schema integrity...");
             await VerifySchemaIntegrity(dbContext);
 
-            // Test connection
             var vehicleCount = await dbContext.Vehicles.CountAsync();
 
             Console.WriteLine();
@@ -74,11 +71,11 @@ public class Program
         using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync();
 
-        // Get all entity types from EF Core model
         var entityTypes = dbContext.Model.GetEntityTypes();
         int tablesCreated = 0;
         int tablesUpdated = 0;
         int columnsAdded = 0;
+        int tablesRebuilt = 0;
 
         foreach (var entityType in entityTypes)
         {
@@ -90,14 +87,22 @@ public class Program
 
             Console.WriteLine($"  🔍 Checking table [{schema}].[{tableName}]...");
 
-            // Ensure non-default schemas exist before checking/creating tables.
             await EnsureSchemaExistsAsync(connection, schema);
 
-            // Check if table exists
             bool tableExists = await TableExistsAsync(connection, tableName, schema);
 
             if (!tableExists)
             {
+                // Clean up any leftover __identity_old table from a previous failed rebuild.
+                // It may still hold the PK constraint name that the new table needs.
+                var leftoverName = $"{tableName}__identity_old";
+                bool leftoverExists = await TableExistsAsync(connection, leftoverName, schema);
+                if (leftoverExists)
+                {
+                    Console.WriteLine($"    🧹 Cleaning up leftover '{leftoverName}' from previous run...");
+                    await DropTableAsync(connection, schema, leftoverName);
+                }
+
                 Console.WriteLine($"    ➕ Table does not exist. Creating...");
                 await CreateTableAsync(dbContext, entityType, schema, tableName);
                 tablesCreated++;
@@ -105,33 +110,230 @@ public class Program
             }
             else
             {
-                // Table exists, check for missing columns
-                var missingColumns = await GetMissingColumnsAsync(connection, entityType, schema, tableName);
+                // Check for IDENTITY mismatches first — requires a table rebuild
+                var identityMismatches = await GetIdentityMismatchColumnsAsync(connection, entityType, schema, tableName);
 
-                if (missingColumns.Any())
+                if (identityMismatches.Any())
                 {
-                    Console.WriteLine($"    🔧 Found {missingColumns.Count} missing columns. Adding...");
-                    foreach (var column in missingColumns)
-                    {
-                        await AddColumnAsync(connection, schema, tableName, column);
-                        columnsAdded++;
-                        Console.WriteLine($"       ✅ Added column: {column.ColumnName} ({column.DataType})");
-                    }
+                    Console.WriteLine($"    ⚠️  IDENTITY missing on: {string.Join(", ", identityMismatches)}");
+                    Console.WriteLine($"    🔄 Rebuilding table to add IDENTITY property (data preserved)...");
+                    await RebuildTableWithIdentityAsync(dbContext, connection, entityType, schema, tableName);
+                    tablesRebuilt++;
                     tablesUpdated++;
+                    Console.WriteLine($"    ✅ Table rebuilt with IDENTITY columns");
                 }
                 else
                 {
-                    Console.WriteLine($"    ✅ Table is up-to-date");
+                    // IDENTITY is fine — just check for missing columns
+                    var missingColumns = await GetMissingColumnsAsync(connection, entityType, schema, tableName);
+
+                    if (missingColumns.Any())
+                    {
+                        Console.WriteLine($"    🔧 Found {missingColumns.Count} missing columns. Adding...");
+                        foreach (var column in missingColumns)
+                        {
+                            await AddColumnAsync(connection, schema, tableName, column);
+                            columnsAdded++;
+                            Console.WriteLine($"       ✅ Added column: {column.ColumnName} ({column.DataType})");
+                        }
+                        tablesUpdated++;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"    ✅ Table is up-to-date");
+                    }
                 }
             }
         }
 
         Console.WriteLine();
         Console.WriteLine("📊 Schema Sync Summary:");
-        Console.WriteLine($"  • Tables created: {tablesCreated}");
-        Console.WriteLine($"  • Tables updated: {tablesUpdated}");
-        Console.WriteLine($"  • Columns added: {columnsAdded}");
+        Console.WriteLine($"  • Tables created:  {tablesCreated}");
+        Console.WriteLine($"  • Tables rebuilt (IDENTITY fix): {tablesRebuilt}");
+        Console.WriteLine($"  • Tables updated (columns added): {tablesUpdated - tablesRebuilt}");
+        Console.WriteLine($"  • Columns added:   {columnsAdded}");
     }
+
+    // -----------------------------------------------------------------------
+    // IDENTITY mismatch detection
+    // -----------------------------------------------------------------------
+
+    private static async Task<List<string>> GetIdentityMismatchColumnsAsync(
+        SqlConnection connection, IEntityType entityType, string schema, string tableName)
+    {
+        var mismatches = new List<string>();
+
+        foreach (var property in entityType.GetProperties())
+        {
+            // Only PK columns should have IDENTITY(1,1) in SQL Server
+            if (property.ValueGenerated != ValueGenerated.OnAdd || !property.IsPrimaryKey())
+                continue;
+
+            var columnName = property.GetColumnName();
+            if (string.IsNullOrEmpty(columnName))
+                continue;
+
+            var sql = @"
+                SELECT COLUMNPROPERTY(OBJECT_ID(@FullName), @Col, 'IsIdentity')";
+
+            using var cmd = new SqlCommand(sql, connection);
+            cmd.Parameters.AddWithValue("@FullName", $"{schema}.{tableName}");
+            cmd.Parameters.AddWithValue("@Col", columnName);
+
+            var result = await cmd.ExecuteScalarAsync();
+            bool isIdentity = result != DBNull.Value && Convert.ToInt32(result) == 1;
+
+            if (!isIdentity)
+                mismatches.Add(columnName);
+        }
+
+        return mismatches;
+    }
+
+    // -----------------------------------------------------------------------
+    // Table rebuild to add IDENTITY — preserves all existing data
+    // -----------------------------------------------------------------------
+
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL is constructed from EF Core metadata, not user input")]
+    private static async Task RebuildTableWithIdentityAsync(
+        FisDbContext dbContext, SqlConnection connection,
+        IEntityType entityType, string schema, string tableName)
+    {
+        var oldName = $"{tableName}__identity_old";
+
+        // Ensure no leftover temp table from a previous failed run
+        bool oldExists = await TableExistsAsync(connection, oldName, schema);
+        if (oldExists)
+            await DropTableAsync(connection, schema, oldName);
+
+        // 1. Rename original → temp
+        using (var cmd = new SqlCommand(
+            $"EXEC sp_rename '[{schema}].[{tableName}]', '{oldName}'", connection))
+            await cmd.ExecuteNonQueryAsync();
+
+        // 1b. Drop the PK constraint on the old table so the new table can reuse the same constraint name
+        var dropPkSql = $@"
+            DECLARE @pkName NVARCHAR(256)
+            SELECT @pkName = kc.name
+            FROM sys.key_constraints kc
+            JOIN sys.tables t ON kc.parent_object_id = t.object_id
+            WHERE kc.type = 'PK'
+              AND t.name = '{oldName}'
+              AND SCHEMA_NAME(t.schema_id) = '{schema}'
+            IF @pkName IS NOT NULL
+            BEGIN
+                DECLARE @dropSql NVARCHAR(MAX) = 'ALTER TABLE [{schema}].[{oldName}] DROP CONSTRAINT [' + @pkName + ']'
+                EXEC (@dropSql)
+            END";
+        using (var cmd = new SqlCommand(dropPkSql, connection))
+            await cmd.ExecuteNonQueryAsync();
+
+        // 2. Create new table with correct schema (IDENTITY included)
+        await CreateTableAsync(dbContext, entityType, schema, tableName);
+
+        // 3. Build column list from EF model (columns that exist in both tables)
+        var efColumns = entityType.GetProperties()
+            .Select(p => p.GetColumnName())
+            .Where(c => !string.IsNullOrEmpty(c))
+            .ToList();
+
+        // Only copy columns that physically exist in the old table
+        var oldColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var colSql = @"
+            SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName";
+        using (var cmd = new SqlCommand(colSql, connection))
+        {
+            cmd.Parameters.AddWithValue("@Schema", schema);
+            cmd.Parameters.AddWithValue("@TableName", oldName);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                oldColumns.Add(reader.GetString(0));
+        }
+
+        var copyColumns = efColumns
+            .Where(c => oldColumns.Contains(c!))
+            .Select(c => $"[{c}]")
+            .ToList();
+
+        if (!copyColumns.Any())
+        {
+            // Nothing to copy (empty table or schema mismatch) — just drop old
+            using var drop = new SqlCommand(
+                $"DROP TABLE [{schema}].[{oldName}]", connection);
+            await drop.ExecuteNonQueryAsync();
+            return;
+        }
+
+        var columnList = string.Join(", ", copyColumns);
+
+        // 4. Copy data — use IDENTITY_INSERT so existing IDs are preserved
+        var identityColumns = entityType.GetProperties()
+            .Where(p => p.ValueGenerated == ValueGenerated.OnAdd && p.IsPrimaryKey())
+            .Select(p => p.GetColumnName())
+            .Where(c => !string.IsNullOrEmpty(c))
+            .ToList();
+
+        if (identityColumns.Any())
+        {
+            using var setOn = new SqlCommand(
+                $"SET IDENTITY_INSERT [{schema}].[{tableName}] ON", connection);
+            await setOn.ExecuteNonQueryAsync();
+        }
+
+        using (var copy = new SqlCommand(
+            $"INSERT INTO [{schema}].[{tableName}] ({columnList}) " +
+            $"SELECT {columnList} FROM [{schema}].[{oldName}]", connection))
+            await copy.ExecuteNonQueryAsync();
+
+        if (identityColumns.Any())
+        {
+            using var setOff = new SqlCommand(
+                $"SET IDENTITY_INSERT [{schema}].[{tableName}] OFF", connection);
+            await setOff.ExecuteNonQueryAsync();
+
+            // Reseed so next INSERT gets MAX + 1
+            foreach (var col in identityColumns)
+            {
+                var reseedSql = $@"
+                    DECLARE @max BIGINT = (SELECT ISNULL(MAX([{col}]), 0) FROM [{schema}].[{tableName}])
+                    DBCC CHECKIDENT('[{schema}].[{tableName}]', RESEED, @max)";
+                using var reseed = new SqlCommand(reseedSql, connection);
+                await reseed.ExecuteNonQueryAsync();
+            }
+        }
+
+        // 5. Drop old table
+        await DropTableAsync(connection, schema, oldName);
+    }
+
+    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL is constructed from EF Core metadata, not user input")]
+    private static async Task DropTableAsync(SqlConnection connection, string schema, string tableName)
+    {
+        // Drop PK constraint first (prevents name conflicts when recreating)
+        var dropPkSql = $@"
+            DECLARE @pkName NVARCHAR(256)
+            SELECT @pkName = kc.name
+            FROM sys.key_constraints kc
+            JOIN sys.tables t ON kc.parent_object_id = t.object_id
+            WHERE kc.type = 'PK' AND t.name = '{tableName}' AND SCHEMA_NAME(t.schema_id) = '{schema}'
+            IF @pkName IS NOT NULL
+            BEGIN
+                DECLARE @sql NVARCHAR(MAX) = 'ALTER TABLE [{schema}].[{tableName}] DROP CONSTRAINT [' + @pkName + ']'
+                EXEC (@sql)
+            END";
+        using (var cmd = new SqlCommand(dropPkSql, connection))
+            await cmd.ExecuteNonQueryAsync();
+
+        using var drop = new SqlCommand($"DROP TABLE [{schema}].[{tableName}]", connection);
+        await drop.ExecuteNonQueryAsync();
+    }
+
+    // -----------------------------------------------------------------------
+    // Existing helpers (unchanged)
+    // -----------------------------------------------------------------------
 
     private static async Task<bool> TableExistsAsync(SqlConnection connection, string tableName, string schema)
     {
@@ -152,9 +354,7 @@ public class Program
     private static async Task EnsureSchemaExistsAsync(SqlConnection connection, string schema)
     {
         if (string.Equals(schema, "dbo", StringComparison.OrdinalIgnoreCase))
-        {
             return;
-        }
 
         const string sql = @"
             IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = @SchemaName)
@@ -170,24 +370,18 @@ public class Program
 
     private static async Task CreateTableAsync(FisDbContext dbContext, IEntityType entityType, string schema, string tableName)
     {
-        // Use EF Core to generate CREATE TABLE script
         var createScript = dbContext.Database.GenerateCreateScript();
 
-        // Extract just the CREATE TABLE statement for this table
         var tableCreateStart = createScript.IndexOf($"CREATE TABLE [{schema}].[{tableName}]");
         if (tableCreateStart == -1)
-        {
             throw new Exception($"Could not find CREATE TABLE script for {schema}.{tableName}");
-        }
 
-        // Find the end of this CREATE TABLE statement (next CREATE TABLE or end of script)
         var tableCreateEnd = createScript.IndexOf("CREATE TABLE", tableCreateStart + 1);
         if (tableCreateEnd == -1)
             tableCreateEnd = createScript.Length;
 
         var tableScript = createScript.Substring(tableCreateStart, tableCreateEnd - tableCreateStart).Trim();
 
-        // Remove any ALTER TABLE statements and inline FOREIGN KEY constraints
         var lines = tableScript.Split('\n');
         var createTableLines = new List<string>();
         bool insideCreateTable = false;
@@ -204,13 +398,10 @@ public class Program
                 if (line.Contains("ALTER TABLE"))
                     break;
 
-                // Skip lines that define FOREIGN KEY constraints (they cause dependency issues)
                 if (line.TrimStart().StartsWith("CONSTRAINT") && line.Contains("FOREIGN KEY"))
                 {
-                    // If this line ends with a comma, we need to handle the previous line's trailing comma
                     if (createTableLines.Count > 0 && createTableLines[^1].TrimEnd().EndsWith(","))
                     {
-                        // Check if the next non-FK line exists - if not, remove the trailing comma
                         var nextNonFkLineIndex = lines.ToList().IndexOf(line) + 1;
                         var hasMoreColumns = false;
                         for (int i = nextNonFkLineIndex; i < lines.Length; i++)
@@ -228,10 +419,7 @@ public class Program
                         }
 
                         if (!hasMoreColumns)
-                        {
-                            // Remove trailing comma from last column
                             createTableLines[^1] = createTableLines[^1].TrimEnd().TrimEnd(',');
-                        }
                     }
                     continue;
                 }
@@ -249,7 +437,6 @@ public class Program
     private static async Task<List<ColumnDefinition>> GetMissingColumnsAsync(
         SqlConnection connection, IEntityType entityType, string schema, string tableName)
     {
-        // Get columns from database
         var dbColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var sql = @"
             SELECT COLUMN_NAME
@@ -263,16 +450,12 @@ public class Program
 
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
-            {
                 dbColumns.Add(reader.GetString(0));
-            }
         }
 
-        // Get columns from EF Core model
         var missingColumns = new List<ColumnDefinition>();
-        var properties = entityType.GetProperties();
 
-        foreach (var property in properties)
+        foreach (var property in entityType.GetProperties())
         {
             var columnName = property.GetColumnName();
             if (string.IsNullOrEmpty(columnName))
@@ -280,14 +463,13 @@ public class Program
 
             if (!dbColumns.Contains(columnName))
             {
-                var columnDef = new ColumnDefinition
+                missingColumns.Add(new ColumnDefinition
                 {
                     ColumnName = columnName,
                     DataType = GetSqlDataType(property),
                     IsNullable = property.IsNullable,
                     DefaultValue = property.GetDefaultValueSql()
-                };
-                missingColumns.Add(columnDef);
+                });
             }
         }
 
@@ -298,13 +480,10 @@ public class Program
         Justification = "SQL is constructed from EF Core metadata, not user input")]
     private static async Task AddColumnAsync(SqlConnection connection, string schema, string tableName, ColumnDefinition column)
     {
-        // For non-nullable columns without an explicit default, provide a sensible default
-        // This allows adding columns to tables with existing data
         string? defaultValue = column.DefaultValue;
 
         if (!column.IsNullable && string.IsNullOrEmpty(defaultValue))
         {
-            // Provide type-appropriate default values
             defaultValue = column.DataType.ToUpperInvariant() switch
             {
                 var t when t.Contains("INT") || t.Contains("NUMERIC") || t.Contains("DECIMAL") => "0",
@@ -333,7 +512,6 @@ public class Program
         if (!string.IsNullOrEmpty(storeType))
             return storeType;
 
-        // Fallback mapping for common types
         var clrType = property.ClrType;
         var underlyingType = Nullable.GetUnderlyingType(clrType) ?? clrType;
 
@@ -355,7 +533,6 @@ public class Program
 
     private static async Task VerifySchemaIntegrity(FisDbContext dbContext)
     {
-        // Verify core legacy tables exist
         var tables = new[] { "vehicle_master", "contract", "site", "TS_Users", "department" };
         foreach (var table in tables)
         {
@@ -378,13 +555,10 @@ public class Program
             {
                 var connectionString = context.Configuration["ConnectionStrings:Default"];
                 if (string.IsNullOrWhiteSpace(connectionString))
-                {
                     connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
-                }
 
                 services.AddDbContext<FisDbContext>(options =>
-                    options.UseSqlServer(connectionString)
-                );
+                    options.UseSqlServer(connectionString));
 
                 services.AddLogging(builder =>
                 {

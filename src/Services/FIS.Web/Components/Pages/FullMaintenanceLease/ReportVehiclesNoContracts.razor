@@ -2,8 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
-@inject LeaseContractTermsApiService LeaseService
-@inject VehicleApiService VehicleService
+@inject ReportApiService ReportService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>List of FML vehicles that do not have contracts with Clients</PageTitle>
@@ -34,16 +33,33 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Vehicle</th><th>GG Number</th><th>Registration</th><th>Status</th></tr>
+                        <tr>
+                            <th>Vehicle Counter</th>
+                            <th>GG Number</th>
+                            <th>Registration Number</th>
+                            <th>Hired From</th>
+                            <th>Vehicle Status</th>
+                            <th>Location</th>
+                            <th>Year Model</th>
+                            <th>Model Description</th>
+                            <th>Class Description</th>
+                            <th>Purchase Amount</th>
+                        </tr>
                     </thead>
                     <tbody>
                         @foreach (var row in PagedRows)
                         {
                             <tr>
-                                <td>@GetVehicleLabel(row)</td>
-                                <td>@ValueOrDash(row.fleet_number)</td>
-                                <td>@ValueOrDash(row.registration_number)</td>
-                                <td>@ValueOrDash(row.status_description)</td>
+                                <td>@(row.VehicleCounter?.ToString() ?? "-")</td>
+                                <td>@ValueOrDash(row.GgNumber)</td>
+                                <td>@ValueOrDash(row.RegistrationNumber)</td>
+                                <td>@ValueOrDash(row.HiredFrom)</td>
+                                <td>@ValueOrDash(row.VehicleStatus)</td>
+                                <td>@ValueOrDash(row.Location)</td>
+                                <td>@(row.YearModel?.ToString() ?? "-")</td>
+                                <td>@ValueOrDash(row.ModelDescription)</td>
+                                <td>@ValueOrDash(row.ClassDescription)</td>
+                                <td>@FormatCurrency(row.PurchaseAmount)</td>
                             </tr>
                         }
                     </tbody>
@@ -60,25 +76,23 @@
 
 @code {
     private bool _loading = true;
-    private List<VehicleDto> _rows = new();
+    private List<FmlVehicleNoContractRow> _rows = new();
     private int _page = 1;
     private const int _pageSize = 12;
-    private IEnumerable<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private IEnumerable<FmlVehicleNoContractRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var leases = await LeaseService.GetAllAsync<LeaseTermDto>();
-            var leasedVmfCodes = leases.Select(x => x.vmf_Code).Where(x => x > 0).Distinct().ToHashSet();
-            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-            _rows = vehicles.Data.Where(v => !leasedVmfCodes.Contains(v.vmf_code)).ToList();
+            var report = await ReportService.GetFmlVehiclesNoContractsAsync();
+            _rows = report.Vehicles;
             _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
-            _rows = new List<VehicleDto>();
+            _rows = new List<FmlVehicleNoContractRow>();
             _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicles-no-contracts report: {ex.Message}");
         }
@@ -88,9 +102,8 @@
         }
     }
 
+    private static string FormatCurrency(decimal? value) => value.HasValue ? $"R {value.Value:N2}" : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
-    private static string GetVehicleLabel(VehicleDto row)
-        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
 
     private void PreviousPage()
     {
@@ -108,9 +121,4 @@
         }
     }
 
-    private sealed class LeaseTermDto
-    {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-    }
 }

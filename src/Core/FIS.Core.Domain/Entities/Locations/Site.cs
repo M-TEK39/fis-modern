@@ -12,6 +12,7 @@ namespace FIS.Core.Domain.Entities;
 public class Site
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("Site_code")]
     public short Site_code { get; set; }
 
@@ -71,6 +72,9 @@ public class Site
 
     [Column("financial_system_active")]
     public bool? financial_system_active { get; set; }
+
+    [Column("province_code")]
+    public byte? province_code { get; set; }
 
     [Column("date_created")]
     public DateTime date_created { get; set; }

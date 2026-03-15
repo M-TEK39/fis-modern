@@ -36,6 +36,19 @@ public class TariffRepository : ITariffRepository
             .FirstOrDefaultAsync();
     }
 
+    public async Task<Tariff?> GetApprovedTariffForClassAsync(short classCode, DateTime effectiveDate)
+    {
+        return await _context.Set<Tariff>()
+            .Where(t => t.class_code == classCode)
+            .Where(t => !t.is_deleted)
+            .Where(t => t.tariff_approval_status == 2)
+            .Where(t => t.effective_start_date <= effectiveDate)
+            .Where(t => t.effective_end_date == null || t.effective_end_date >= effectiveDate)
+            .OrderByDescending(t => t.effective_start_date)
+            .ThenByDescending(t => t.tariff_code)
+            .FirstOrDefaultAsync();
+    }
+
     /// <summary>
     /// Get all tariffs for a vehicle class.
     /// </summary>

@@ -22,6 +22,19 @@ public class TaxiRepository : ITaxiRepository
             .FirstOrDefaultAsync(t => t.request_id == requestId);
     }
 
+    public async Task<Taxi?> GetLatestByRequisitionAsync(string rekNum)
+    {
+        var normalized = (rekNum ?? string.Empty).Trim().ToUpperInvariant();
+
+        return await _context.Set<Taxi>()
+            .Include(t => t.Department)
+            .Include(t => t.Site)
+            .Where(t => t.rek_num != null && t.rek_num.ToUpper() == normalized)
+            .Where(t => !_context.Set<Taxi>().Any(child => child.parent_taxi_code == t.request_id))
+            .OrderByDescending(t => t.request_id)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IEnumerable<Taxi>> GetAllAsync()
     {
         return await _context.Set<Taxi>()

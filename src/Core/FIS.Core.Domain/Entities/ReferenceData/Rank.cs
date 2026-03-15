@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class Rank
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("rank_code")]
     public int rank_code { get; set; }
 

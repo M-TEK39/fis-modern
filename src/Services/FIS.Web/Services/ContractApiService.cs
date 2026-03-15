@@ -58,8 +58,29 @@ internal class ApiContractResponse
     [JsonPropertyName("driverId")]
     public string? DriverId { get; set; }
 
+    [JsonPropertyName("driverName")]
+    public string? DriverName { get; set; }
+
+    [JsonPropertyName("siteDriverCode")]
+    public int? SiteDriverCode { get; set; }
+
     [JsonPropertyName("targetReturnDate")]
     public DateTime? TargetReturnDate { get; set; }
+
+    [JsonPropertyName("authorisation")]
+    public string? Authorisation { get; set; }
+
+    [JsonPropertyName("basFundCode")]
+    public string? BasFundCode { get; set; }
+
+    [JsonPropertyName("basObjectiveCode")]
+    public string? BasObjectiveCode { get; set; }
+
+    [JsonPropertyName("basProjectNumber")]
+    public string? BasProjectNumber { get; set; }
+
+    [JsonPropertyName("basResponsibilityCode")]
+    public string? BasResponsibilityCode { get; set; }
 }
 
 public class ContractApiService
@@ -498,11 +519,19 @@ public class ContractApiService
             vehicle_registration = api.VmfCode.ToString(),
             department_code = 0,
             contractor_name = api.ContractTypeCode ?? "",
+            contract_type_code = api.ContractTypeCode,
             start_date = api.StartDate,
             end_date = api.EndDate,
             start_odometer = api.StartOdometer,
             driver_id = api.DriverId,
+            driver_name = api.DriverName,
+            site_driver_code = api.SiteDriverCode,
             target_return_date = api.TargetReturnDate,
+            authorisation = api.Authorisation,
+            bas_fund_code = api.BasFundCode,
+            bas_objective_code = api.BasObjectiveCode,
+            bas_project_number = api.BasProjectNumber,
+            bas_responsibility_code = api.BasResponsibilityCode,
             status = statusLabel,
             contract_notes = api.Notes
         };
@@ -532,6 +561,7 @@ public class ContractApiService
             vehicle_model = api.Model ?? string.Empty,
             department_name = api.DepartmentName ?? string.Empty,
             contractor_name = api.ContractTypeCode ?? string.Empty,
+            contract_type_code = api.ContractTypeCode,
             start_date = api.StartDate,
             end_date = api.EndDate,
             status = api.ContractStatus ?? StatusLabel(statusCode, stillCurrent),
@@ -614,6 +644,9 @@ public class HireContractRequestDto
     public short SiteCode { get; set; }
     public int? StartOdometer { get; set; }
     public string? DriverId { get; set; }
+    public int? SiteDriverCode { get; set; }
+    public short? UserCode { get; set; }
+    public string? Authorisation { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
 }

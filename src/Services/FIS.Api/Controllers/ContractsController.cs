@@ -1,5 +1,7 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Financial;
+using FIS.Core.Domain.Entities.ReferenceData;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +20,9 @@ namespace FIS.Api.Controllers;
 [Produces("application/json")]
 public class ContractsController : BaseApiController
 {
+    private const short LegacyGfleetDepartmentCode = 147;
+    private static readonly short[] LegacyGfleetSiteCodes = [1619, 1620, 1621, 1622];
+
     private readonly IContractRepository _contractRepository;
     private readonly IContractService _contractService;
     private readonly IVehicleRepository _vehicleRepository;
@@ -68,6 +73,228 @@ public class ContractsController : BaseApiController
         return null; // Validation passed
     }
 
+    private async Task<string?> GetMissingTariffMessageAsync(int vmfCode)
+    {
+        var vehicle = await _context.Set<Vehicle>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(v => v.vmf_code == vmfCode);
+
+        if (vehicle == null)
+        {
+            return "Vehicle not found.";
+        }
+
+        var model = await _context.Set<Model>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.model_code == vehicle.model_code);
+
+        if (model == null)
+        {
+            return "This vehicle cannot be contracted because its model configuration is missing.";
+        }
+
+        var hasApprovedTariff = await _context.Set<Tariff>()
+            .AsNoTracking()
+            .AnyAsync(t =>
+                t.class_code == model.class_code
+                && !t.is_deleted
+                && t.tariff_approval_status == 2
+                && t.effective_start_date <= DateTime.Today
+                && (t.effective_end_date == null || t.effective_end_date >= DateTime.Today));
+
+        return hasApprovedTariff
+            ? null
+            : $"No approved tariff is captured for vehicle class {model.class_code}. Capture the tariff before opening or submitting this contract.";
+    }
+
+    private async Task<short?> ResolveGfleetDepartmentCodeAsync()
+    {
+        var byLegacyCode = await _context.Set<Department>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.department_code == LegacyGfleetDepartmentCode && !d.is_deleted);
+
+        if (byLegacyCode != null)
+        {
+            return byLegacyCode.department_code;
+        }
+
+        var byName = await _context.Set<Department>()
+            .AsNoTracking()
+            .Where(d => !d.is_deleted && d.description != null)
+            .FirstOrDefaultAsync(d =>
+                EF.Functions.Like(d.description!, "%GFLEET%")
+                || EF.Functions.Like(d.description!, "%G-FLEET%")
+                || EF.Functions.Like(d.description!, "%GGMT%"));
+
+        return byName?.department_code;
+    }
+
+    private async Task<bool> IsGfleetInternalSiteAsync(short siteCode, short? departmentCode = null)
+    {
+        if (LegacyGfleetSiteCodes.Contains(siteCode))
+        {
+            return true;
+        }
+
+        var gfleetDepartmentCode = await ResolveGfleetDepartmentCodeAsync();
+        if (gfleetDepartmentCode is null)
+        {
+            return false;
+        }
+
+        if (departmentCode.HasValue)
+        {
+            return departmentCode.Value == gfleetDepartmentCode.Value;
+        }
+
+        var site = await _context.Set<Site>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Site_code == siteCode && !s.is_deleted);
+
+        return site?.Depatrment_code == gfleetDepartmentCode.Value;
+    }
+
+    private async Task<(Site? Site, string? Error)> ResolveValidatedSiteAsync(
+        short? siteCode,
+        short? departmentCode = null,
+        bool restrictToGfleet = false)
+    {
+        if (siteCode is not > 0)
+        {
+            return (null, "Select a valid site.");
+        }
+
+        var site = await _context.Set<Site>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Site_code == siteCode.Value && !s.is_deleted);
+
+        if (site == null)
+        {
+            return (null, "Selected site was not found.");
+        }
+
+        if (departmentCode.HasValue && site.Depatrment_code != departmentCode.Value)
+        {
+            return (null, "Selected site does not belong to the chosen department.");
+        }
+
+        if (restrictToGfleet && !await IsGfleetInternalSiteAsync(site.Site_code, site.Depatrment_code))
+        {
+            return (null, "Select a GFleet home site before closing the contract.");
+        }
+
+        return (site, null);
+    }
+
+    private async Task<string?> ValidateDriverSiteAlignmentAsync(short targetSiteCode, int? siteDriverCode)
+    {
+        if (siteDriverCode is not > 0)
+        {
+            return null;
+        }
+
+        var driver = await ResolveSiteDriverAsync(siteDriverCode);
+        if (driver == null)
+        {
+            return "Selected custodian driver was not found.";
+        }
+
+        if (driver.site_code == targetSiteCode)
+        {
+            return null;
+        }
+
+        var targetSite = await _context.Set<Site>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Site_code == targetSiteCode && !s.is_deleted);
+
+        var driverSite = await _context.Set<Site>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Site_code == driver.site_code && !s.is_deleted);
+
+        var targetProvince = await BuildProvinceSuffixAsync(targetSite?.province_code);
+        var driverProvince = await BuildProvinceSuffixAsync(driverSite?.province_code);
+        var driverName = ResolveDriverName(driver) ?? $"Driver {driver.site_driver_code}";
+        var driverSiteLabel = driverSite?.description ?? $"site {driver.site_code}";
+        var targetSiteLabel = targetSite?.description ?? $"site {targetSiteCode}";
+
+        return $"{driverName} belongs to site {driver.site_code} ({driverSiteLabel}){driverProvince} and cannot be assigned to site {targetSiteCode} ({targetSiteLabel}){targetProvince}. Update the vehicle site first if the vehicle has already moved.";
+    }
+
+    private async Task<string> BuildProvinceSuffixAsync(byte? provinceCode)
+    {
+        if (provinceCode is not > 0)
+        {
+            return string.Empty;
+        }
+
+        var province = await _context.Set<Province>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.province_code == provinceCode.Value && !p.is_deleted);
+
+        var provinceLabel = string.IsNullOrWhiteSpace(province?.province_name)
+            ? $"Province {provinceCode.Value}"
+            : province.province_name;
+
+        return $" ({provinceLabel})";
+    }
+
+    private async Task UpdateVehicleSiteAsync(Vehicle vehicle, short siteCode, int currentUserId)
+    {
+        vehicle.location_code = siteCode;
+        vehicle.veh_site_code = siteCode;
+        vehicle.date_updated = DateTime.UtcNow;
+        vehicle.modified_by_user_code = currentUserId;
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task<Contract> CreateHomeCustodyContractAsync(
+        Vehicle vehicle,
+        short siteCode,
+        int siteDriverCode,
+        DateTime startDate,
+        int startOdometer,
+        int currentUserId,
+        string? notes,
+        int sourceContractCode)
+    {
+        var selectedDriver = await ResolveSiteDriverAsync(siteDriverCode)
+            ?? throw new InvalidOperationException("Selected custodian driver was not found.");
+
+        var contract = new Contract
+        {
+            vmf_code = vehicle.vmf_code,
+            site_code = siteCode,
+            start_date = startDate.Date,
+            start_time = DateTime.UtcNow,
+            start_odometer = startOdometer,
+            end_odometer = 0,
+            still_current = "Y",
+            contract_type = null,
+            Driver_id = ResolveDriverIdentity(selectedDriver, null),
+            Driver_name = ResolveDriverName(selectedDriver),
+            site_driver_code = selectedDriver.site_driver_code,
+            Notes = BuildHomeCustodyNotes(notes, sourceContractCode),
+            locked_for_transfer = false,
+            contract_status_code = 3,
+            contract_status_date = DateTime.UtcNow,
+            created_by_user_code = currentUserId,
+            modified_by_user_code = currentUserId,
+            date_created = DateTime.UtcNow,
+            date_updated = DateTime.UtcNow
+        };
+
+        return await _contractRepository.CreateAsync(contract, currentUserId);
+    }
+
+    private static string BuildHomeCustodyNotes(string? notes, int sourceContractCode)
+    {
+        var baseNote = sourceContractCode > 0
+            ? $"Auto-opened GFleet custody contract after closing contract {sourceContractCode}."
+            : "Auto-opened GFleet custody contract after manual vehicle site update.";
+        return string.IsNullOrWhiteSpace(notes) ? baseNote : $"{baseNote} {notes.Trim()}";
+    }
+
     /// <summary>
     /// Hire a vehicle (create new contract)
     /// Uses ContractService with full validation and journal integration
@@ -84,13 +311,30 @@ public class ContractsController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
+            var driverSiteValidation = await ValidateDriverSiteAlignmentAsync(request.SiteCode, request.SiteDriverCode);
+            if (driverSiteValidation != null)
+            {
+                return BadRequest(new { error = driverSiteValidation, siteCode = request.SiteCode, siteDriverCode = request.SiteDriverCode });
+            }
+
+            var missingTariffMessage = await GetMissingTariffMessageAsync(request.VmfCode);
+            if (missingTariffMessage != null)
+            {
+                return BadRequest(new { error = missingTariffMessage, vmfCode = request.VmfCode });
+            }
+
+            var selectedDriver = await ResolveSiteDriverAsync(request.SiteDriverCode);
 
             var hireRequest = new HireContractRequest
             {
                 VmfCode = request.VmfCode,
                 SiteCode = request.SiteCode,
                 StartOdometer = request.StartOdometer,
-                DriverId = request.DriverId,
+                DriverId = ResolveDriverIdentity(selectedDriver, request.DriverId),
+                DriverName = ResolveDriverName(selectedDriver),
+                SiteDriverCode = selectedDriver?.site_driver_code,
+                UserCode = request.UserCode > 0 ? request.UserCode : null,
+                Authorisation = NormalizeOptionalText(request.Authorisation),
                 Notes = request.Notes,
                 TargetReturnDate = request.TargetReturnDate,
                 CreatedByUserId = currentUserId
@@ -405,13 +649,31 @@ public class ContractsController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
-
-            // Note: This uses the internal AddContractAsync from ContractService
-            // which isn't exposed in IContractService interface but exists in implementation
-            // For now, use repository pattern directly or expose through interface
             var contract = await _contractRepository.GetByIdAsync(contractCode);
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
+
+            var homeSiteResolution = await ResolveValidatedSiteAsync(
+                request.HomeSiteCode,
+                request.HomeDepartmentCode,
+                restrictToGfleet: true);
+
+            if (homeSiteResolution.Error != null)
+            {
+                return BadRequest(new { error = homeSiteResolution.Error });
+            }
+
+            var homeSite = homeSiteResolution.Site!;
+            var driverSiteValidation = await ValidateDriverSiteAlignmentAsync(homeSite.Site_code, request.HomeSiteDriverCode);
+            if (driverSiteValidation != null)
+            {
+                return BadRequest(new { error = driverSiteValidation, siteCode = homeSite.Site_code, siteDriverCode = request.HomeSiteDriverCode });
+            }
+
+            if (request.CreateHomeCustodyContract && request.HomeSiteDriverCode is not > 0)
+            {
+                return BadRequest(new { error = "Select a GFleet custodian driver before closing the contract." });
+            }
 
             var prevStatus = contract.contract_status_code;
 
@@ -422,6 +684,37 @@ public class ContractsController : BaseApiController
                 request.EndOdometer,
                 request.Notes);
 
+            var vehicle = await _context.Set<Vehicle>()
+                .FirstOrDefaultAsync(v => v.vmf_code == contract.vmf_code && !v.is_deleted);
+
+            if (vehicle == null)
+            {
+                return NotFound(new { error = "Vehicle linked to this contract was not found." });
+            }
+
+            await UpdateVehicleSiteAsync(vehicle, homeSite.Site_code, currentUserId);
+
+            Contract? homeCustodyContract = null;
+            if (request.CreateHomeCustodyContract)
+            {
+                var homeDriverCode = request.HomeSiteDriverCode.GetValueOrDefault();
+                var activeContract = await _contractRepository.GetActiveContractByVehicleAsync(contract.vmf_code);
+                if (activeContract != null)
+                {
+                    return Conflict(new { error = "Vehicle still has an active contract after closure. Home custody contract was not created.", contractCode, activeContractCode = activeContract.contract_code });
+                }
+
+                homeCustodyContract = await CreateHomeCustodyContractAsync(
+                    vehicle,
+                    homeSite.Site_code,
+                    homeDriverCode,
+                    request.EndDate,
+                    request.EndOdometer,
+                    currentUserId,
+                    request.Notes,
+                    contractCode);
+            }
+
             await _auditLog.LogAsync(contractCode, "Closed", currentUserId,
                 oldStatus: prevStatus, newStatus: 7,
                 notes: request.Notes);
@@ -429,12 +722,111 @@ public class ContractsController : BaseApiController
             _ = _emailNotification.SendContractClosedNotificationAsync(
                 contractCode, currentUserId, closureReason: "Closed");
 
-            return Ok(new { message = "Contract closed successfully", contractCode });
+            return Ok(new
+            {
+                message = request.CreateHomeCustodyContract
+                    ? "Contract closed successfully and vehicle returned to GFleet custody."
+                    : "Contract closed successfully.",
+                contractCode,
+                vehicleSiteCode = homeSite.Site_code,
+                homeCustodyContractCode = homeCustodyContract?.contract_code
+            });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error closing contract {ContractCode}", contractCode);
             return StatusCode(500, new { error = "Failed to close contract", message = ex.Message });
+        }
+    }
+
+    [HttpPost("vehicle/{vmfCode}/site-assignment")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult> UpdateVehicleSiteAssignment(
+        int vmfCode,
+        [FromBody] VehicleSiteAssignmentRequest request)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var vehicle = await _context.Set<Vehicle>()
+                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
+
+            if (vehicle == null)
+            {
+                return NotFound(new { error = "Vehicle not found.", vmfCode });
+            }
+
+            var activeContract = await _contractRepository.GetActiveContractByVehicleAsync(vmfCode);
+            if (activeContract != null)
+            {
+                return Conflict(new
+                {
+                    error = "Vehicle site can only be updated here when there is no active contract. Use contract reassignment while a contract is active.",
+                    vmfCode,
+                    activeContractCode = activeContract.contract_code
+                });
+            }
+
+            var siteResolution = await ResolveValidatedSiteAsync(request.SiteCode, request.DepartmentCode);
+            if (siteResolution.Error != null)
+            {
+                return BadRequest(new { error = siteResolution.Error });
+            }
+
+            var targetSite = siteResolution.Site!;
+            var driverSiteValidation = await ValidateDriverSiteAlignmentAsync(targetSite.Site_code, request.SiteDriverCode);
+            if (driverSiteValidation != null)
+            {
+                return BadRequest(new { error = driverSiteValidation, siteCode = targetSite.Site_code, siteDriverCode = request.SiteDriverCode });
+            }
+
+            if (request.CreateHomeCustodyContract)
+            {
+                if (!await IsGfleetInternalSiteAsync(targetSite.Site_code, targetSite.Depatrment_code))
+                {
+                    return BadRequest(new { error = "Home custody contracts can only be opened against GFleet internal sites." });
+                }
+
+                if (request.SiteDriverCode is not > 0)
+                {
+                    return BadRequest(new { error = "Select a GFleet custodian driver before opening a home custody contract." });
+                }
+            }
+
+            await UpdateVehicleSiteAsync(vehicle, targetSite.Site_code, currentUserId);
+
+            Contract? homeCustodyContract = null;
+            if (request.CreateHomeCustodyContract)
+            {
+                var siteDriverCode = request.SiteDriverCode.GetValueOrDefault();
+
+                homeCustodyContract = await CreateHomeCustodyContractAsync(
+                    vehicle,
+                    targetSite.Site_code,
+                    siteDriverCode,
+                    DateTime.UtcNow.Date,
+                    Math.Max(vehicle.current_odo, 0),
+                    currentUserId,
+                    request.Notes,
+                    sourceContractCode: 0);
+            }
+
+            return Ok(new
+            {
+                message = request.CreateHomeCustodyContract
+                    ? "Vehicle site updated and GFleet custody contract opened."
+                    : "Vehicle site updated successfully.",
+                vmfCode,
+                siteCode = targetSite.Site_code,
+                homeCustodyContractCode = homeCustodyContract?.contract_code
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating vehicle site assignment for {VmfCode}", vmfCode);
+            return StatusCode(500, new { error = "Failed to update vehicle site assignment", message = ex.Message });
         }
     }
 
@@ -679,6 +1071,12 @@ public class ContractsController : BaseApiController
                     error = "Only the original capturer can submit this contract.",
                     contractId
                 });
+
+            var missingTariffMessage = await GetMissingTariffMessageAsync(contract.vmf_code);
+            if (missingTariffMessage != null)
+            {
+                return BadRequest(new { error = missingTariffMessage, contractId, vmfCode = contract.vmf_code });
+            }
 
             var prevStatus = contract.contract_status_code;
             contract.contract_status_code = 1; // Pending Review
@@ -952,6 +1350,7 @@ public class ContractsController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
+            var selectedDriver = await ResolveSiteDriverAsync(request.SiteDriverCode);
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
@@ -976,9 +1375,45 @@ public class ContractsController : BaseApiController
                     hint = "Recall the contract first (if Pending Review), or contact an admin."
                 });
 
+            var targetSiteCode = request.SiteCode ?? contract.site_code;
+            var driverSiteValidation = await ValidateDriverSiteAlignmentAsync(targetSiteCode, request.SiteDriverCode);
+            if (driverSiteValidation != null)
+            {
+                return BadRequest(new { error = driverSiteValidation, siteCode = targetSiteCode, siteDriverCode = request.SiteDriverCode });
+            }
+
             // Apply updates — only overwrite fields that were provided
             if (request.SiteCode.HasValue) contract.site_code = request.SiteCode.Value;
-            if (request.DriverId != null) contract.Driver_id = request.DriverId;
+            if (request.SiteDriverCode.HasValue)
+            {
+                if (selectedDriver != null)
+                {
+                    contract.site_driver_code = selectedDriver.site_driver_code;
+                    contract.Driver_id = ResolveDriverIdentity(selectedDriver, request.DriverId);
+                    contract.Driver_name = ResolveDriverName(selectedDriver);
+                }
+                else if (request.SiteDriverCode.Value <= 0)
+                {
+                    contract.site_driver_code = null;
+                    contract.Driver_id = null;
+                    contract.Driver_name = null;
+                }
+            }
+            else if (request.DriverId != null)
+            {
+                contract.Driver_id = NormalizeOptionalText(request.DriverId);
+            }
+
+            if (request.UserCode.HasValue)
+            {
+                contract.user_code = request.UserCode.Value > 0 ? request.UserCode : null;
+            }
+
+            if (request.Authorisation != null)
+            {
+                contract.Authorisation = NormalizeOptionalText(request.Authorisation);
+            }
+
             if (request.Notes != null) contract.Notes = request.Notes;
             if (request.TargetReturnDate.HasValue) contract.target_return_date = request.TargetReturnDate;
             if (request.StartOdometer.HasValue) contract.start_odometer = request.StartOdometer.Value;
@@ -1101,6 +1536,45 @@ public class ContractsController : BaseApiController
         7 => "Closed",
         _ => $"Unknown ({status})"
     };
+
+    private async Task<Driver?> ResolveSiteDriverAsync(int? siteDriverCode)
+    {
+        if (siteDriverCode is not > 0)
+        {
+            return null;
+        }
+
+        return await _context.Drivers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(driver => driver.site_driver_code == siteDriverCode.Value && !driver.is_deleted);
+    }
+
+    private static string? ResolveDriverIdentity(Driver? driver, string? fallbackDriverId)
+    {
+        var resolved = driver?.driver_SA_id
+            ?? driver?.driver_passportnumber
+            ?? driver?.driver_persalnumber
+            ?? driver?.driver_contractnumber
+            ?? fallbackDriverId;
+
+        return NormalizeOptionalText(resolved);
+    }
+
+    private static string? ResolveDriverName(Driver? driver)
+    {
+        if (driver == null)
+        {
+            return null;
+        }
+
+        return NormalizeOptionalText($"{driver.driver_firstname} {driver.driver_surname}");
+    }
+
+    private static string? NormalizeOptionalText(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
+    }
 
     /// <summary>
     /// Search for available relief vehicles
@@ -1321,6 +1795,9 @@ public class HireContractDto
     public short SiteCode { get; set; }
     public int? StartOdometer { get; set; }
     public string? DriverId { get; set; }
+    public int? SiteDriverCode { get; set; }
+    public short? UserCode { get; set; }
+    public string? Authorisation { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
 }
@@ -1338,6 +1815,12 @@ public class CloseContractRequest
     [Required]
     public int EndOdometer { get; set; }
     public string? Notes { get; set; }
+    [Required]
+    public short? HomeDepartmentCode { get; set; }
+    [Required]
+    public short? HomeSiteCode { get; set; }
+    public int? HomeSiteDriverCode { get; set; }
+    public bool CreateHomeCustodyContract { get; set; } = true;
 }
 
 public class ExtendContractRequest
@@ -1359,6 +1842,9 @@ public class EditContractDto
 {
     public short? SiteCode { get; set; }
     public string? DriverId { get; set; }
+    public int? SiteDriverCode { get; set; }
+    public short? UserCode { get; set; }
+    public string? Authorisation { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
     public int? StartOdometer { get; set; }
@@ -1372,6 +1858,17 @@ public class ContractReassignDto
     public short? NewSiteCode { get; set; }
     [Required]
     public string Reason { get; set; } = string.Empty;
+}
+
+public class VehicleSiteAssignmentRequest
+{
+    [Required]
+    public short? DepartmentCode { get; set; }
+    [Required]
+    public short? SiteCode { get; set; }
+    public int? SiteDriverCode { get; set; }
+    public bool CreateHomeCustodyContract { get; set; }
+    public string? Notes { get; set; }
 }
 
 public class ReliefVehicleDto

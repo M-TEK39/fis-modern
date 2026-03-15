@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.Vehicles;
 public class VehicleHistory
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("hist_code")]
     public int hist_code { get; set; }
 

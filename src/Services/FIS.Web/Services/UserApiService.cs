@@ -45,38 +45,58 @@ public class UserApiService
         }
     }
 
-    public Task<ApiUserDto?> CreateAsync(string? email, string? telephone)
-        => CreateAsync(email, telephone, null, null);
-
-    public async Task<ApiUserDto?> CreateAsync(string? email, string? telephone, string? firstName, string? lastName)
+    public async Task<List<UserProfileDto>> GetProfilesBySiteAsync(short siteCode)
     {
         try
         {
-            var resolvedFirstName = string.IsNullOrWhiteSpace(firstName)
-                ? ResolveFirstName(email)
-                : firstName.Trim();
-            var resolvedLastName = string.IsNullOrWhiteSpace(lastName)
-                ? "User"
-                : lastName.Trim();
-
-            var response = await _httpClient.PostAsJsonAsync("api/userprofile", new CreateUserProfileRequest
-            {
-                FirstName = resolvedFirstName,
-                LastName = resolvedLastName,
-                Email = email,
-                Telephone = telephone,
-                Password = "Temp#1234",
-                AccessLevel = 1
-            });
-            response.EnsureSuccessStatusCode();
-            var created = await response.Content.ReadFromJsonAsync<UserProfileDto>();
-            return created is null ? null : MapToApiUser(created);
+            return await _httpClient.GetFromJsonAsync<List<UserProfileDto>>($"api/userprofile/by-site/{siteCode}")
+                ?? new List<UserProfileDto>();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating user");
+            _logger.LogError(ex, "Error fetching user profiles for site {SiteCode}", siteCode);
+            return new List<UserProfileDto>();
+        }
+    }
+
+    public Task<ApiUserDto?> CreateAsync(string? email, string? telephone)
+        => CreateAsync(email, telephone, null, null);
+
+    public async Task<UserProfileDto?> CreateProfileAsync(CreateUserProfileRequest request)
+    {
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync("api/userprofile", request);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<UserProfileDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating user profile for {FirstName} {LastName}", request.FirstName, request.LastName);
             throw;
         }
+    }
+
+    public async Task<ApiUserDto?> CreateAsync(string? email, string? telephone, string? firstName, string? lastName)
+    {
+        var resolvedFirstName = string.IsNullOrWhiteSpace(firstName)
+            ? ResolveFirstName(email)
+            : firstName.Trim();
+        var resolvedLastName = string.IsNullOrWhiteSpace(lastName)
+            ? "User"
+            : lastName.Trim();
+
+        var created = await CreateProfileAsync(new CreateUserProfileRequest
+        {
+            FirstName = resolvedFirstName,
+            LastName = resolvedLastName,
+            Email = email,
+            Telephone = telephone,
+            Password = "Temp#1234",
+            AccessLevel = 1
+        });
+
+        return created is null ? null : MapToApiUser(created);
     }
 
     public async Task<ApiUserDto?> UpdateAsync(int userAccessCode, string? email, string? telephone)
@@ -192,6 +212,14 @@ public record CreateUserProfileRequest
     public string Password { get; set; } = string.Empty;
     public string? Telephone { get; set; }
     public string? Email { get; set; }
+    public short? SiteCode { get; set; }
+    public byte? PositionCode { get; set; }
+    public int? PersalNumber { get; set; }
+    public int? ContractNumber { get; set; }
+    public int? SaIdNumber { get; set; }
+    public int? PassportNumber { get; set; }
+    public int? CellphoneNumber { get; set; }
+    public int? FaxNumber { get; set; }
     public long? AccessLevel { get; set; }
 }
 

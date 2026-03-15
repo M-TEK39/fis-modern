@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Logistics;
 public class TripPassenger
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("trip_passenger_code")]
     public int trip_passenger_code { get; set; }
 

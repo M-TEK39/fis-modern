@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities;
 public class Department
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("department_code")]
     public short department_code { get; set; }
 

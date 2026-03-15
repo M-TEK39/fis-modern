@@ -26,7 +26,16 @@
 </div>
 
 <div class="page-content">
+    <div class="alert alert-info fis-alert-tight">
+        <i class="bx bx-info-circle"></i>
+        <span>This screen supports the lease tariff approval workflow. Capturers edit pending or rejected items; financial authorisers review pending items captured by other users.</span>
+    </div>
+
     <div class="form-card">
+        <div class="form-card-header">
+            <h2>Workflow queue</h2>
+            <p>Filter the queue by authority status, then open a record for review, edit, or view-only access.</p>
+        </div>
         <div class="form-card-body">
             <div class="form-row">
                 <label class="form-label">Authority Status</label>
@@ -81,11 +90,11 @@
                         @foreach (var item in PagedFilteredItems)
                         {
                             <tr>
-                                <td>@item.VehicleContractTermID</td>
-                                <td>@GetVehicleLabel(item.vmf_Code)</td>
-                                <td>@MapStatus(item.AuthorityStatus)</td>
-                                <td>@FormatDate(item.StartDate)</td>
-                                <td>@FormatDate(item.EndDate)</td>
+                                <td>@item.TermId</td>
+                                <td>@GetVehicleLabel(item.VmfCode)</td>
+                                <td><span class="@GetStatusBadgeClass(item.AuthorityStatus)">@MapStatus(item.AuthorityStatus)</span></td>
+                                <td>@FormatDate(item.EffectiveStartDate)</td>
+                                <td>@FormatDate(item.EffectiveEndDate)</td>
                                 <td>@FormatCurrency(item.FixedMonthlyAmount)</td>
                                 <td class="actions-column">
                                     <div class="table-actions">
@@ -109,7 +118,7 @@
 @code {
     private bool _loading = true;
     private string _statusFilter = "all";
-    private List<LeaseTermDto> _items = new();
+    private List<FullMaintenanceLeaseTermDto> _items = new();
     private int _page = 1;
     private const int _pageSize = 12;
     private int? _currentUserAccessCode;
@@ -117,7 +126,7 @@
     private bool _hasFinancialAccess;
     private Dictionary<int, string> _vehicleLabelByVmf = new();
 
-    private List<LeaseTermDto> FilteredItemsList =>
+    private List<FullMaintenanceLeaseTermDto> FilteredItemsList =>
         _statusFilter switch
         {
             "pending" => _items.Where(x => (x.AuthorityStatus ?? 0) == 1).ToList(),
@@ -125,7 +134,7 @@
             "rejected" => _items.Where(x => (x.AuthorityStatus ?? 0) == 4).ToList(),
             _ => _items
         };
-    private IEnumerable<LeaseTermDto> PagedFilteredItems => FilteredItemsList.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private IEnumerable<FullMaintenanceLeaseTermDto> PagedFilteredItems => FilteredItemsList.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItemsList.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
@@ -139,7 +148,7 @@
         _loading = true;
         try
         {
-            _items = await LeaseService.GetAllAsync<LeaseTermDto>();
+            _items = await LeaseService.GetAllAsync<FullMaintenanceLeaseTermDto>();
             if (_vehicleLabelByVmf.Count == 0)
             {
                 var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
@@ -153,7 +162,7 @@
         }
         catch (Exception ex)
         {
-            _items = new List<LeaseTermDto>();
+            _items = new List<FullMaintenanceLeaseTermDto>();
             _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lease tariff capture list: {ex.Message}");
         }
@@ -163,13 +172,8 @@
         }
     }
 
-    private static string MapStatus(int? status) => status switch
-    {
-        1 => "Pending",
-        2 => "Approved",
-        4 => "Rejected",
-        _ => "Unknown"
-    };
+    private static string MapStatus(int? status) => FullMaintenanceLeaseUi.MapAuthorityStatus(status);
+    private static string GetStatusBadgeClass(int? status) => FullMaintenanceLeaseUi.GetAuthorityBadgeClass(status);
 
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
@@ -178,20 +182,20 @@
         => value.HasValue ? $"R {value.Value:N2}" : "-";
 
     private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+        => FullMaintenanceLeaseUi.ValueOrDash(value);
     private static string FormatVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+        => FullMaintenanceLeaseUi.FormatVehicleLabel(vehicle);
 
     private string GetVehicleLabel(int vmfCode)
         => _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : $"- / - ({vmfCode})";
 
-    private string BuildDetailsLink(LeaseTermDto item)
+    private string BuildDetailsLink(FullMaintenanceLeaseTermDto item)
     {
         var mode = GetWorkflowMode(item);
-        return $"/full-maintenance-lease/tariffs/details?id={item.VehicleContractTermID}&mode={mode}";
+        return $"/full-maintenance-lease/tariffs/details?id={item.TermId}&mode={mode}";
     }
 
-    private string GetActionLabel(LeaseTermDto item)
+    private string GetActionLabel(FullMaintenanceLeaseTermDto item)
     {
         return GetWorkflowMode(item) switch
         {
@@ -201,7 +205,7 @@
         };
     }
 
-    private string GetWorkflowMode(LeaseTermDto item)
+    private string GetWorkflowMode(FullMaintenanceLeaseTermDto item)
     {
         var status = item.AuthorityStatus ?? 0;
         var isCapturer = IsCurrentUserCapturer(item);
@@ -220,7 +224,7 @@
         return "view";
     }
 
-    private bool IsCurrentUserCapturer(LeaseTermDto item)
+    private bool IsCurrentUserCapturer(FullMaintenanceLeaseTermDto item)
     {
         return _currentUserAccessCode is > 0
             && item.created_by_user_code is > 0
@@ -274,14 +278,4 @@
         }
     }
 
-    private sealed class LeaseTermDto
-    {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-        public int? created_by_user_code { get; set; }
-        public int? AuthorityStatus { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
-        public decimal? FixedMonthlyAmount { get; set; }
-    }
 }

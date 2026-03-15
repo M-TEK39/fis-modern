@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject FineApiService FineService
+@inject RegistrationApiService RegistrationService
 @inject VehicleApiService VehicleService
 
 <PageTitle>Delete Fines - Fleet Information System</PageTitle>
@@ -13,7 +14,7 @@
             <i class="bx bx-trash"></i>
             Delete Fines
         </h1>
-        <p class="page-description">Lookup fines by registration number.</p>
+        <p class="page-description">Lookup fines by GG or current/historical GP number.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/fines">Back to Fines Menu</a>
@@ -47,6 +48,20 @@
                     <button class="btn btn-primary btn-sm" @onclick="SearchFines">Submit</button>
                     <a class="btn btn-secondary btn-sm" href="/fines">Menu</a>
                 </div>
+                @if (SearchResolutionLines.Count > 0)
+                {
+                    <div class="form-card" style="margin-top: 1rem;">
+                        <div class="form-card-body">
+                            <h3 class="form-section-title">Vehicle resolution</h3>
+                            <ul class="form-hint" style="margin: 0; padding-left: 1.25rem;">
+                                @foreach (var line in SearchResolutionLines)
+                                {
+                                    <li>@line</li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
             </div>
 
             <div class="form-section">
@@ -111,11 +126,14 @@
     private bool _loading;
     private List<FineRow> _fines = new();
     private List<FineRow> _allFines = new();
+    private List<VehicleDto> _vehicleMatches = new();
+    private List<RegistrationSearchResultDto> _registrationMatches = new();
     private int _page = 1;
     private readonly int _pageSize = 12;
 
     private IEnumerable<FineRow> PagedFines => _fines.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_fines.Count / (double)_pageSize));
+    private List<string> SearchResolutionLines => BuildSearchResolutionLines();
 
     protected override async Task OnInitializedAsync()
     {
@@ -146,26 +164,51 @@
 
     private async Task SearchFines()
     {
+        _loading = true;
         if (string.IsNullOrWhiteSpace(_searchQuery))
         {
+            _vehicleMatches = new();
+            _registrationMatches = new();
             _fines = new List<FineRow>(_allFines);
             _page = 1;
+            _loading = false;
             return;
         }
 
-        var searchTerm = _searchQuery.Trim();
-        var matches = await VehicleService.SearchVehiclesAsync(searchTerm);
-        matches = FilterVehicleMatchesByNumberType(matches, searchTerm, _searchType);
-        if (matches.Count == 0)
+        try
         {
-            _fines = new();
-            _page = 1;
-            return;
-        }
+            var searchTerm = _searchQuery.Trim();
+            HashSet<int> vmfCodes;
 
-        var vmfCodes = matches.Select(v => v.vmf_code).ToHashSet();
-        _fines = _allFines.Where(f => f.VehicleId.HasValue && vmfCodes.Contains(f.VehicleId.Value)).ToList();
-        _page = 1;
+            if (_searchType == "GG")
+            {
+                _vehicleMatches = VehicleSearchHelper.RankVehicleMatches(
+                    await VehicleService.SearchVehiclesAsync(searchTerm),
+                    searchTerm,
+                    VehicleSearchHelper.GgMode);
+                _registrationMatches = new();
+                vmfCodes = _vehicleMatches.Select(v => v.vmf_code).ToHashSet();
+            }
+            else
+            {
+                var registrationResponse = await RegistrationService.SearchAsync(searchTerm);
+                _registrationMatches = registrationResponse.results
+                    .OrderBy(match => match.is_historical_match)
+                    .ThenBy(match => match.fleet_number)
+                    .ToList();
+                _vehicleMatches = new();
+                vmfCodes = _registrationMatches.Select(match => match.vmf_code).ToHashSet();
+            }
+
+            _fines = vmfCodes.Count == 0
+                ? new()
+                : _allFines.Where(f => f.VehicleId.HasValue && vmfCodes.Contains(f.VehicleId.Value)).ToList();
+            _page = 1;
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private void PrevPage()
@@ -188,6 +231,8 @@
     {
         _searchType = value;
         _searchQuery = string.Empty;
+        _vehicleMatches = new();
+        _registrationMatches = new();
         _fines = new List<FineRow>(_allFines);
         _page = 1;
     }
@@ -198,19 +243,22 @@
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
-    private static List<VehicleDto> FilterVehicleMatchesByNumberType(List<VehicleDto> matches, string searchTerm, string searchType)
+    private List<string> BuildSearchResolutionLines()
     {
-        return searchType == "GG"
-            ? matches
-                .Where(v => !string.IsNullOrWhiteSpace(v.fleet_number) && v.fleet_number.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(v => string.Equals(v.fleet_number?.Trim(), searchTerm, StringComparison.OrdinalIgnoreCase))
-                .ThenBy(v => v.vmf_code)
-                .ToList()
-            : matches
-                .Where(v => !string.IsNullOrWhiteSpace(v.registration_number) && v.registration_number.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(v => string.Equals(v.registration_number?.Trim(), searchTerm, StringComparison.OrdinalIgnoreCase))
-                .ThenBy(v => v.vmf_code)
+        if (_searchType == "GP")
+        {
+            return _registrationMatches
+                .Take(5)
+                .Select(match => match.is_historical_match
+                    ? $"Historical GP {ValueOrDash(match.matched_registration)} now belongs to {ValueOrDash(match.fleet_number)} / current GP {ValueOrDash(match.current_registration)}."
+                    : $"Current GP {ValueOrDash(match.current_registration)} belongs to {ValueOrDash(match.fleet_number)}.")
                 .ToList();
+        }
+
+        return _vehicleMatches
+            .Take(5)
+            .Select(vehicle => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})")
+            .ToList();
     }
 
     private sealed record FineRow(

@@ -13,20 +13,26 @@ public class ContractValidationService : IContractValidationService
 {
     private readonly IContractRepository _contractRepository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly IModelRepository _modelRepository;
     private readonly ISiteRepository _siteRepository;
+    private readonly ITariffRepository _tariffRepository;
     private readonly ITripRepository _tripRepository;
     private readonly ILogger<ContractValidationService> _logger;
 
     public ContractValidationService(
         IContractRepository contractRepository,
         IVehicleRepository vehicleRepository,
+        IModelRepository modelRepository,
         ISiteRepository siteRepository,
+        ITariffRepository tariffRepository,
         ITripRepository tripRepository,
         ILogger<ContractValidationService> logger)
     {
         _contractRepository = contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
         _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _modelRepository = modelRepository ?? throw new ArgumentNullException(nameof(modelRepository));
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
+        _tariffRepository = tariffRepository ?? throw new ArgumentNullException(nameof(tariffRepository));
         _tripRepository = tripRepository ?? throw new ArgumentNullException(nameof(tripRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -437,37 +443,42 @@ public class ContractValidationService : IContractValidationService
             if (!regValidation.IsValid)
                 result.AddErrors(regValidation.Errors);
 
-            // 2. Check for duplicate contracts
+            // 2. Ensure the vehicle has an approved effective tariff before contract capture
+            var tariffValidation = await ValidateVehicleTariffAsync(vehicle, contract.start_date);
+            if (!tariffValidation.IsValid)
+                result.AddErrors(tariffValidation.Errors);
+
+            // 3. Check for duplicate contracts
             var duplicateValidation = await ValidateDuplicateContractAsync(contract.vmf_code);
             if (!duplicateValidation.IsValid)
                 result.AddErrors(duplicateValidation.Errors);
 
-            // 3. Validate site code
+            // 4. Validate site code
             var siteValidation = await ValidateSiteCodeAsync(contract.site_code);
             if (!siteValidation.IsValid)
                 result.AddErrors(siteValidation.Errors);
 
-            // 4. Validate start date
+            // 5. Validate start date
             var startDateValidation = await ValidateStartDateAsync(contract.vmf_code, contract.start_date);
             if (!startDateValidation.IsValid)
                 result.AddErrors(startDateValidation.Errors);
 
-            // 5. Validate start odometer
+            // 6. Validate start odometer
             var startOdoValidation = await ValidateStartOdometerAsync(contract.vmf_code, contract.start_odometer);
             if (!startOdoValidation.IsValid)
                 result.AddErrors(startOdoValidation.Errors);
 
-            // 6. Validate end odometer is zero
+            // 7. Validate end odometer is zero
             var endOdoValidation = await ValidateEndOdometerAddAsync(contract.end_odometer ?? 0);
             if (!endOdoValidation.IsValid)
                 result.AddErrors(endOdoValidation.Errors);
 
-            // 7. Validate still_current is 'Y'
+            // 8. Validate still_current is 'Y'
             var stillCurrentValidation = await ValidateStillCurrentAddAsync(contract.still_current);
             if (!stillCurrentValidation.IsValid)
                 result.AddErrors(stillCurrentValidation.Errors);
 
-            // 8. Validate target return date
+            // 9. Validate target return date
             if (contract.target_return_date.HasValue)
             {
                 var targetDateValidation = await ValidateTargetReturnDateAsync(contract.target_return_date.Value);
@@ -486,6 +497,24 @@ public class ContractValidationService : IContractValidationService
             result.AddError($"Validation error: {ex.Message}");
             return result;
         }
+    }
+
+    private async Task<ContractValidationResult> ValidateVehicleTariffAsync(Vehicle vehicle, DateTime? effectiveDate)
+    {
+        var model = await _modelRepository.GetByIdAsync(vehicle.model_code);
+        if (model == null)
+        {
+            return ContractValidationResult.Failed("This vehicle cannot be contracted because its model configuration is missing.");
+        }
+
+        var approvedTariff = await _tariffRepository.GetApprovedTariffForClassAsync(
+            model.class_code,
+            (effectiveDate ?? DateTime.Today).Date);
+
+        return approvedTariff != null
+            ? ContractValidationResult.Success()
+            : ContractValidationResult.Failed(
+                $"No approved tariff is captured for vehicle class {model.class_code}. Capture the tariff before opening or submitting this contract.");
     }
 
     /// <summary>

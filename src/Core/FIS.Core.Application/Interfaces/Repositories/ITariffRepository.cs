@@ -22,6 +22,15 @@ public interface ITariffRepository
         DateTime effectiveDate);
 
     /// <summary>
+    /// Get the current approved tariff for a vehicle class on a given date.
+    /// Mirrors the contract-capture preview logic used by the legacy workflow.
+    /// </summary>
+    /// <param name="classCode">Vehicle class code</param>
+    /// <param name="effectiveDate">Date tariff should be effective for</param>
+    /// <returns>Approved tariff or null if not found</returns>
+    Task<Tariff?> GetApprovedTariffForClassAsync(short classCode, DateTime effectiveDate);
+
+    /// <summary>
     /// Get all tariffs for a vehicle class.
     /// </summary>
     /// <param name="classCode">Vehicle class code</param>

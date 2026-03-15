@@ -2,8 +2,7 @@
 @rendermode InteractiveServer
 @using FIS.Web.Services
 @using FIS.Web.Models
-@inject LeaseContractTermsApiService LeaseService
-@inject VehicleApiService VehicleService
+@inject ReportApiService ReportService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Expired FML Contracts Still Open Contracts With Clients Report</PageTitle>
@@ -34,17 +33,39 @@
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
-                        <tr><th>Lease ID</th><th>Vehicle</th><th>Start Date</th><th>End Date</th><th>Status</th></tr>
+                        <tr>
+                            <th>No.</th>
+                            <th>GG Number</th>
+                            <th>GP Number</th>
+                            <th>Model</th>
+                            <th>Year Model</th>
+                            <th>Hired From</th>
+                            <th>Hire Type</th>
+                            <th>Still Current</th>
+                            <th>Contract Start Date</th>
+                            <th>Target Return Date</th>
+                            <th>Contract Type</th>
+                            <th>Site Name</th>
+                            <th>Fixed Tariff</th>
+                        </tr>
                     </thead>
                     <tbody>
                         @foreach (var row in PagedRows)
                         {
                             <tr>
-                                <td>@row.VehicleContractTermID</td>
-                                <td>@GetVehicleLabel(row.vmf_Code)</td>
-                                <td>@FormatDate(row.StartDate)</td>
-                                <td>@FormatDate(row.EndDate)</td>
-                                <td>@MapStatus(row.AuthorityStatus)</td>
+                                <td>@(row.RowNumber?.ToString() ?? "-")</td>
+                                <td>@ValueOrDash(row.GgNumber)</td>
+                                <td>@ValueOrDash(row.GpNumber)</td>
+                                <td>@ValueOrDash(row.Model)</td>
+                                <td>@(row.YearModel?.ToString() ?? "-")</td>
+                                <td>@ValueOrDash(row.HiredFrom)</td>
+                                <td>@ValueOrDash(row.HireType)</td>
+                                <td>@ValueOrDash(row.StillCurrent)</td>
+                                <td>@FormatDate(row.ContractStartDate)</td>
+                                <td>@FormatDate(row.TargetReturnDate)</td>
+                                <td>@ValueOrDash(row.ContractType)</td>
+                                <td>@ValueOrDash(row.SiteName)</td>
+                                <td>@FormatCurrency(row.FixedTariff)</td>
                             </tr>
                         }
                     </tbody>
@@ -61,34 +82,23 @@
 
 @code {
     private bool _loading = true;
-    private List<LeaseTermDto> _rows = new();
-    private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private List<FmlContractRow> _rows = new();
     private int _page = 1;
     private const int _pageSize = 12;
-    private IEnumerable<LeaseTermDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private IEnumerable<FmlContractRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var all = await LeaseService.GetAllAsync<LeaseTermDto>();
-            var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-            _vehicleLabelByVmf = vehicles.Data
-                .GroupBy(v => v.vmf_code)
-                .ToDictionary(
-                    g => g.Key,
-                    g => FormatVehicleLabel(g.First()));
-            var today = DateTime.Today;
-            _rows = all
-                .Where(x => x.EndDate.HasValue && x.EndDate.Value.Date < today)
-                .OrderBy(x => x.EndDate)
-                .ToList();
+            var report = await ReportService.GetFmlExpiredOpenContractsAsync();
+            _rows = report.Contracts;
             _page = Math.Min(_page, TotalPages);
         }
         catch (Exception ex)
         {
-            _rows = new List<LeaseTermDto>();
+            _rows = new List<FmlContractRow>();
             _page = 1;
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading expired-open report: {ex.Message}");
         }
@@ -98,19 +108,8 @@
         }
     }
 
-    private static string MapStatus(int? status) => status switch
-    {
-        1 => "Pending",
-        2 => "Approved",
-        4 => "Rejected",
-        _ => "Unknown"
-    };
-
     private static string FormatDate(DateTime? value) => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
-    private string GetVehicleLabel(int vmfCode) =>
-        _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : $"- / - ({vmfCode})";
-    private static string FormatVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+    private static string FormatCurrency(decimal? value) => value.HasValue ? $"R {value.Value:N2}" : "-";
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
 
@@ -130,12 +129,4 @@
         }
     }
 
-    private sealed class LeaseTermDto
-    {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-        public int? AuthorityStatus { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
-    }
 }

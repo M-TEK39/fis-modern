@@ -283,6 +283,11 @@ builder.Services.AddHttpClient<FineApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<RegistrationApiService>(client =>
+{
+    client.BaseAddress = apiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<LogbookApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
@@ -359,6 +364,11 @@ builder.Services.AddHttpClient<WorkshopApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<TaxiApiService>(client =>
+{
+    client.BaseAddress = apiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<TaxiLogApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);

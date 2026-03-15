@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities;
 public class Trip
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("trip_authority_code")]
     public int trip_authority_code { get; set; }
 

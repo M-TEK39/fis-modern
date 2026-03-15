@@ -55,12 +55,16 @@ public class ReportApiService
     }
 
     public async Task<RegistrationCertificatesReportDto> GetRegistrationCertificatesAsync(
+        string? mode = null,
+        string? search = null,
         int? vmfCode = null,
         int? departmentCode = null)
     {
         try
         {
             var queryParts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(mode)) queryParts.Add($"mode={Uri.EscapeDataString(mode)}");
+            if (!string.IsNullOrWhiteSpace(search)) queryParts.Add($"search={Uri.EscapeDataString(search)}");
             if (vmfCode.HasValue) queryParts.Add($"vmfCode={vmfCode.Value}");
             if (departmentCode.HasValue) queryParts.Add($"departmentCode={departmentCode.Value}");
 
@@ -106,5 +110,149 @@ public class ReportApiService
             _logger.LogError(ex, "Error loading report audit trail.");
             return new ReportAuditTrailDto();
         }
+    }
+
+    public async Task<FmlMaintenanceHistoryReportDto> GetFmlMaintenanceHistoryAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? finYear = null,
+        string? ggNum = null,
+        string? mode = null,
+        string? search = null)
+    {
+        try
+        {
+            var path = "api/report/fml/maintenance-history" + BuildFmlQuery(startDate, endDate, finYear, ggNum, mode, search);
+            var result = await _httpClient.GetFromJsonAsync<FmlMaintenanceHistoryReportDto>(path);
+            return result ?? new FmlMaintenanceHistoryReportDto();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading FML maintenance history report.");
+            return new FmlMaintenanceHistoryReportDto();
+        }
+    }
+
+    public async Task<FmlContractsReportDto> GetFmlContractsExpiringAsync()
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<FmlContractsReportDto>("api/report/fml/contracts-expiring");
+            return result ?? new FmlContractsReportDto();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading FML contracts expiring report.");
+            return new FmlContractsReportDto();
+        }
+    }
+
+    public async Task<FmlContractsReportDto> GetFmlExpiredOpenContractsAsync()
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<FmlContractsReportDto>("api/report/fml/expired-open");
+            return result ?? new FmlContractsReportDto();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading FML expired contracts report.");
+            return new FmlContractsReportDto();
+        }
+    }
+
+    public async Task<FmlVehiclesNoContractsReportDto> GetFmlVehiclesNoContractsAsync()
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<FmlVehiclesNoContractsReportDto>("api/report/fml/vehicles-no-contracts");
+            return result ?? new FmlVehiclesNoContractsReportDto();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading FML vehicles with no contracts report.");
+            return new FmlVehiclesNoContractsReportDto();
+        }
+    }
+
+    public async Task<FmlOverUtilizedReportDto> GetFmlOverUtilizedAsync(DateTime? startDate = null, DateTime? endDate = null)
+    {
+        try
+        {
+            var path = "api/report/fml/over-utilized" + BuildFmlQuery(startDate, endDate, null, null, null, null);
+            var result = await _httpClient.GetFromJsonAsync<FmlOverUtilizedReportDto>(path);
+            return result ?? new FmlOverUtilizedReportDto();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading FML over-utilized report.");
+            return new FmlOverUtilizedReportDto();
+        }
+    }
+
+    public async Task<LegacyDynamicReportDto> GetLegacyDynamicReportAsync(
+        string reportKey,
+        IReadOnlyDictionary<string, string?> filters,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reportKey);
+
+        var queryParts = filters
+            .Where(pair => !string.IsNullOrWhiteSpace(pair.Value) && !string.Equals(pair.Key, "view", StringComparison.OrdinalIgnoreCase))
+            .Select(pair => $"{Uri.EscapeDataString(pair.Key)}={Uri.EscapeDataString(pair.Value!)}")
+            .ToList();
+
+        var path = $"api/report/dynamic/{Uri.EscapeDataString(reportKey)}";
+        if (queryParts.Count > 0)
+        {
+            path += "?" + string.Join("&", queryParts);
+        }
+
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<LegacyDynamicReportDto>(path, cancellationToken);
+            return result ?? new LegacyDynamicReportDto { ReportKey = reportKey };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading dynamic legacy report {ReportKey}.", reportKey);
+            throw;
+        }
+    }
+
+    private static string BuildFmlQuery(DateTime? startDate, DateTime? endDate, string? finYear, string? ggNum, string? mode, string? search)
+    {
+        var queryParts = new List<string>();
+        if (startDate.HasValue)
+        {
+            queryParts.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (endDate.HasValue)
+        {
+            queryParts.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(finYear))
+        {
+            queryParts.Add($"finYear={Uri.EscapeDataString(finYear)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(ggNum))
+        {
+            queryParts.Add($"ggNum={Uri.EscapeDataString(ggNum)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(mode))
+        {
+            queryParts.Add($"mode={Uri.EscapeDataString(mode)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            queryParts.Add($"search={Uri.EscapeDataString(search)}");
+        }
+
+        return queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : string.Empty;
     }
 }

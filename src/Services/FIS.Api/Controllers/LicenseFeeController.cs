@@ -76,7 +76,6 @@ public class LicenseFeeController : BaseApiController
 
             var fee = new LicenseFee
             {
-                licence_fee_code = request.LicenceFeeCode,
                 licence_description = request.Description,
                 licence_fee = request.Fee
             };

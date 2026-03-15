@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities;
 public class Driver
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("site_driver_code")]
     public int site_driver_code { get; set; }
 

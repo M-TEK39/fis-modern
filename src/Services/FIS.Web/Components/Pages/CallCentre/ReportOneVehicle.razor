@@ -15,7 +15,7 @@
             <i class="bx bx-car"></i>
             Incident Report on ONE Vehicle
         </h1>
-        <p class="page-description">Vehicle incident lookup by GP or GG number.</p>
+        <p class="page-description">Vehicle incident lookup by GG, GP, engine, VIN/chassis, or invoice number.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-secondary btn-sm" @onclick="GoReportMenu">Report Menu</button>
@@ -32,7 +32,10 @@
                         <div class="contract-search-inputs">
                             <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' /> GP</label>
                             <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' /> GG</label>
-                            <input class="form-input" style="max-width: 12rem;" @bind="_searchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' /> Engine</label>
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' /> VIN / Chassis</label>
+                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' /> Invoice</label>
+                            <input class="form-input" style="max-width: 12rem;" @bind="_searchTerm" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
                             <button class="btn btn-secondary btn-sm" @onclick="SearchVehicleAsync" disabled="@_loading">Find</button>
                             <select class="form-select" style="max-width: 20rem;" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
                                 <option value="">Select vehicle...</option>
@@ -193,7 +196,7 @@
         {
             var searchTerm = _searchTerm.Trim();
             var matches = await VehicleLookupService.SearchAsync(searchTerm);
-            _vehicleMatches = FilterVehicleMatches(matches, searchTerm, _searchMode);
+            _vehicleMatches = VehicleSearchHelper.RankVehicleLookupMatches(matches, searchTerm, _searchMode);
             if (_vehicleMatches.All(vehicle => vehicle.VmfCode != _selectedVmfCode))
             {
                 _selectedVmfCode = null;
@@ -214,22 +217,6 @@
 
     private static string FormatDate(DateTime? date) => date.HasValue ? date.Value.ToString("yyyy/MM/dd") : "-";
     private static string ValueOrDash(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static List<VehicleLookupDto> FilterVehicleMatches(List<VehicleLookupDto> matches, string keyword, string searchMode)
-    {
-        var query = keyword.Trim();
-        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase);
-
-        return matches
-            .Where(v => isGp
-                ? !string.IsNullOrWhiteSpace(v.RegistrationNumber) && v.RegistrationNumber.Contains(query, StringComparison.OrdinalIgnoreCase)
-                : !string.IsNullOrWhiteSpace(v.GGNumber) && v.GGNumber.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(v => isGp
-                ? string.Equals(v.RegistrationNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase)
-                : string.Equals(v.GGNumber?.Trim(), query, StringComparison.OrdinalIgnoreCase))
-            .ThenBy(v => v.VmfCode)
-            .ToList();
-    }
 
     private void SetSearchMode(string mode)
     {
@@ -255,7 +242,7 @@
             return string.Empty;
         }
 
-        var preferred = _searchMode == "GG" ? selected.GGNumber : selected.RegistrationNumber;
+        var preferred = VehicleSearchHelper.GetSearchValue(selected, _searchMode);
         if (!string.IsNullOrWhiteSpace(preferred))
         {
             return preferred.Trim();

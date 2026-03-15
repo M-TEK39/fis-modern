@@ -2,9 +2,11 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using FIS.Web.Components.Shared
 @inject VehicleApiService VehicleService
 @inject TariffApiService TariffService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Tariffs per Vehicle (2008 and Later) - Fleet Information System</PageTitle>
 
@@ -23,19 +25,29 @@
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Max Vehicles To Evaluate</label>
-                    <input class="form-input" type="number" min="1" max="2000" @bind="_maxProbeCount" />
+    @if (!_isResultView)
+    {
+        <div class="form-card">
+            <div class="form-card-body">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label class="form-label">Max Vehicles To Evaluate</label>
+                        <input class="form-input" type="number" min="1" max="2000" @bind="_maxProbeCount" />
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
                 </div>
             </div>
-            <div class="form-actions">
-                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Submit</button>
-            </div>
         </div>
-    </div>
+    }
+    @if (_isResultView)
+    {
+        <LegacyDynamicReportGrid ReportKey="tariffs-per-vehicle" FiltersUrl="@_pageRoute" />
+    }
+    else
+    {
 
     <div class="table-container fis-mt-15">
         <div class="table-header">
@@ -115,6 +127,7 @@
             <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
         }
     </div>
+    }
 </div>
 
 @code {
@@ -139,9 +152,43 @@
     private List<TariffVehicleRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
-    protected override async Task OnInitializedAsync()
+
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
+    private const string _pageRoute = "/reports/tariffs-per-vehicle";
+    private string? _lastAutoLoadUri;
+
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "max")]
+    public string? QMax { get; set; }
+
+    protected override Task OnParametersSetAsync()
     {
-        await LoadReportAsync();
+        var uri = Navigation.Uri;
+        if (_isResultView && uri != _lastAutoLoadUri)
+        {
+            _lastAutoLoadUri = uri;
+            ApplyQueryFilters();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Dictionary<string, string?> BuildQueryFilters() => new()
+    {
+        { "max", _maxProbeCount.ToString() },
+    };
+
+    private void ApplyQueryFilters()
+    {
+        _maxProbeCount = ReportFilterHelper.ParseInt(QMax, 300);
+    }
+
+    private void NavigateToResultsAsync()
+    {
+        _lastAutoLoadUri = null;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
     }
 
     private async Task LoadReportAsync()

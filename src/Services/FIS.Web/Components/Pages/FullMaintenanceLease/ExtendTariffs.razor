@@ -22,29 +22,57 @@
 </div>
 
 <div class="page-content">
-    <div class="form-card">
-        <div class="form-card-body">
-            <div class="form-row">
-                <label class="form-label">Select Lease Term</label>
-                <select class="form-select" @bind="_selectedId">
-                    <option value="0">Select...</option>
-                    @foreach (var item in _items.OrderByDescending(x => x.EndDate ?? DateTime.MinValue))
-                    {
-                        <option value="@item.VehicleContractTermID">
-                            @($"ID {item.VehicleContractTermID} | {GetVehicleLabel(item.vmf_Code)} | End {FormatDate(item.EndDate)}")
-                        </option>
-                    }
-                </select>
+    <div class="alert alert-info fis-alert-tight">
+        <i class="bx bx-info-circle"></i>
+        <span>Select the latest tariff period for a vehicle, then provide the new end date to extend that tariff record.</span>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading lease tariffs...</p>
+        </div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="empty-state">
+            <i class="bx bx-calendar-x"></i>
+            <h3>No lease tariffs available</h3>
+            <p>There are no tariff periods available to extend.</p>
+        </div>
+    }
+    else
+    {
+        <div class="form-card">
+            <div class="form-card-header">
+                <h2>Lease tariff extension</h2>
+                <p>Choose a tariff period and update the end date for the selected lease record.</p>
             </div>
-            <div class="form-row">
-                <label class="form-label">New End Date</label>
-                <InputDate @bind-Value="_newEndDate" class="form-input" />
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-primary" @onclick="ExtendAsync" disabled="@_saving">Submit</button>
+            <div class="form-card-body">
+                <div class="form-row">
+                    <label class="form-label">Select Lease Term</label>
+                    <select class="form-select" @bind="_selectedId">
+                        <option value="0">Select...</option>
+                        @foreach (var item in _items.OrderByDescending(x => x.EffectiveEndDate ?? DateTime.MinValue))
+                        {
+                            <option value="@item.TermId">
+                                @($"ID {item.TermId} | {GetVehicleLabel(item.VmfCode)} | End {FormatDate(item.EffectiveEndDate)}")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label class="form-label">New End Date</label>
+                    <InputDate @bind-Value="_newEndDate" class="form-input" />
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" @onclick="ExtendAsync" disabled="@_saving">Submit</button>
+                    <button class="btn btn-secondary" @onclick="ResetSelection" disabled="@_saving">Clear</button>
+                </div>
             </div>
         </div>
-    </div>
+    }
 
     @if (!string.IsNullOrWhiteSpace(_message))
     {
@@ -56,12 +84,13 @@
 </div>
 
 @code {
+    private bool _loading = true;
     private bool _saving;
     private bool _error;
     private string _message = string.Empty;
     private int _selectedId;
     private DateTime? _newEndDate = DateTime.Today.AddMonths(1);
-    private List<LeaseTermDto> _items = new();
+    private List<FullMaintenanceLeaseTermDto> _items = new();
     private Dictionary<int, string> _vehicleLabelByVmf = new();
 
     protected override async Task OnInitializedAsync()
@@ -71,9 +100,10 @@
 
     private async Task LoadAsync()
     {
+        _loading = true;
         try
         {
-            _items = await LeaseService.GetAllAsync<LeaseTermDto>();
+            _items = await LeaseService.GetAllAsync<FullMaintenanceLeaseTermDto>();
             if (_vehicleLabelByVmf.Count == 0)
             {
                 var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
@@ -86,8 +116,12 @@
         }
         catch (Exception ex)
         {
-            _items = new List<LeaseTermDto>();
+            _items = new List<FullMaintenanceLeaseTermDto>();
             await JSRuntime.InvokeVoidAsync("console.error", $"Error loading lease terms for extension: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 
@@ -103,7 +137,7 @@
             return;
         }
 
-        var selected = _items.FirstOrDefault(x => x.VehicleContractTermID == _selectedId);
+        var selected = _items.FirstOrDefault(x => x.TermId == _selectedId);
         if (selected == null)
         {
             _error = true;
@@ -115,7 +149,7 @@
         try
         {
             selected.EndDate = _newEndDate;
-            var updated = await LeaseService.UpdateAsync(selected.VehicleContractTermID, selected);
+            var updated = await LeaseService.UpdateAsync(selected.TermId, selected);
             _error = updated == null;
             _message = _error ? "Failed to extend lease tariff period." : "Lease tariff period extended.";
             if (!_error)
@@ -139,18 +173,18 @@
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 
     private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+        => FullMaintenanceLeaseUi.ValueOrDash(value);
     private static string FormatVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+        => FullMaintenanceLeaseUi.FormatVehicleLabel(vehicle);
 
     private string GetVehicleLabel(int vmfCode)
         => _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : vmfCode.ToString();
 
-    private sealed class LeaseTermDto
+    private void ResetSelection()
     {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
+        _selectedId = 0;
+        _newEndDate = DateTime.Today.AddMonths(1);
+        _message = string.Empty;
+        _error = false;
     }
 }

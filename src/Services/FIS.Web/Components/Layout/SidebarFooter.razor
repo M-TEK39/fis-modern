@@ -12,6 +12,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserProfileApiService UserProfileApiService
 @inject UserAccessContextService UserAccessContextService
+@inject NotificationApiService NotificationApiService
 @implements IDisposable
 
 <div class="sidebar-footer">
@@ -23,7 +24,10 @@
         </span>
         <button class="sidebar-notification" type="button" @onclick="ToggleNotifications" @onclick:stopPropagation="true">
             <i class="bx bx-bell" aria-hidden="true"></i>
-            <span class="notification-count">3</span>
+            @if (UnreadNotificationCount > 0)
+            {
+                <span class="notification-count">@FormatNotificationCount(UnreadNotificationCount)</span>
+            }
         </button>
     </div>
 
@@ -70,26 +74,75 @@
         <div class="notification-sheet-header">
             <div>
                 <h3>Notifications</h3>
-                <p>3 unread</p>
+                <p>@GetNotificationSummaryText()</p>
             </div>
             <button class="icon-button" type="button" @onclick="CloseNotifications" aria-label="Close notifications">
                 <i class="bx bx-x" aria-hidden="true"></i>
             </button>
         </div>
         <div class="notification-sheet-tabs">
-            <button class="tab-button active" type="button">All</button>
-            <button class="tab-button" type="button">Unread</button>
+            <button class="tab-button @(_activeNotificationTab == "all" ? "active" : "")"
+                    type="button"
+                    @onclick='() => SetNotificationTab("all")'>
+                All
+            </button>
+            <button class="tab-button @(_activeNotificationTab == "unread" ? "active" : "")"
+                    type="button"
+                    @onclick='() => SetNotificationTab("unread")'>
+                Unread
+            </button>
         </div>
         <div class="notification-list">
-            @foreach (var item in _notifications)
+            @if (_loadingNotifications)
             {
-                <div class="notification-item @(item.IsUnread ? "unread" : "")">
-                    <div class="notification-dot"></div>
-                    <div>
-                        <div class="notification-title">@item.Title</div>
-                        <div class="notification-meta">@item.Meta</div>
-                    </div>
-                </div>
+                <div class="notification-list-state">Loading current notifications...</div>
+            }
+            else
+            {
+                @if (!string.IsNullOrWhiteSpace(_notificationError))
+                {
+                    <div class="notification-list-state error">@_notificationError</div>
+                }
+
+                @if (!VisibleNotifications.Any())
+                {
+                    <div class="notification-list-state">No notifications in this view.</div>
+                }
+                else
+                {
+                    @foreach (var item in VisibleNotifications)
+                    {
+                        @if (!string.IsNullOrWhiteSpace(item.LinkUrl))
+                        {
+                            <button class="notification-item notification-item-actionable @(item.IsUnread ? "unread" : "")"
+                                    type="button"
+                                    title="Open related page"
+                                    @onclick="() => OpenNotification(item)">
+                                <div class="notification-dot"></div>
+                                <div>
+                                    <div class="notification-title-row">
+                                        <div class="notification-title">@item.Title</div>
+                                        <span class="notification-source">@item.Source</span>
+                                    </div>
+                                    <div class="notification-meta">@item.Meta</div>
+                                </div>
+                            </button>
+                        }
+                        else
+                        {
+                            <div class="notification-item @(item.IsUnread ? "unread" : "")">
+                                <div class="notification-dot"></div>
+                                <div>
+                                    <div class="notification-title-row">
+                                        <div class="notification-title">@item.Title</div>
+                                        <span class="notification-source">@item.Source</span>
+                                    </div>
+                                    <div class="notification-meta">@item.Meta</div>
+                                </div>
+                            </div>
+                        }
+                    }
+                }
             }
         </div>
     </aside>
@@ -277,13 +330,14 @@
 }
 
 @code {
-    private sealed record NotificationItem(string Title, string Meta, bool IsUnread);
     private sealed record SettingsSection(string Id, string Title, string Icon);
 
     private bool _showNotifications;
     private bool _showSettings;
     private bool _showUserMenu;
+    private bool _loadingNotifications;
     private string _activeSection = "profile";
+    private string _activeNotificationTab = "all";
     private string _userDisplayName = string.Empty;
     private string _userEmail = string.Empty;
     private string _userPosition = string.Empty;
@@ -295,14 +349,13 @@
     private string _avatarText = "AU";
     private bool _canAccessUserAdmin;
     private long _accessLevel;
-
-    private readonly IReadOnlyList<NotificationItem> _notifications =
-    [
-        new("Accident report submitted", "Claim #AC-2198 · 2h ago", true),
-        new("Trip authority expiring", "Trip #TA-447 · Tomorrow", true),
-        new("Vehicle clearance approved", "Vehicle VMC-302 · 1 day ago", false),
-        new("Workshop job closed", "Job Card #JC-811 · 2 days ago", false)
-    ];
+    private string? _notificationError;
+    private IReadOnlyList<NotificationListItemDto> _notifications = Array.Empty<NotificationListItemDto>();
+    private CancellationTokenSource? _notificationRefreshCts;
+    private Task? _notificationRefreshTask;
+    private readonly SemaphoreSlim _notificationLoadLock = new(1, 1);
+    private bool _isDisposed;
+    private static readonly TimeSpan NotificationRefreshInterval = TimeSpan.FromSeconds(60);
 
     private readonly IReadOnlyList<SettingsSection> _settingsSections =
     [
@@ -318,15 +371,18 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadUserAsync();
+        await LoadNotificationsAsync();
         SyncSettingsWithRoute();
         AuthStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
         Navigation.LocationChanged += OnLocationChanged;
+        StartNotificationRefreshLoop();
     }
 
     private async void OnAuthenticationStateChanged(Task<AuthenticationState> task)
     {
         var authState = await task;
         await UpdateUserInfoAsync(authState.User);
+        await LoadNotificationsAsync();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -426,14 +482,127 @@
         }
     }
 
-    private void ToggleNotifications()
+    private async Task ToggleNotifications()
     {
         _showNotifications = !_showNotifications;
         if (_showNotifications)
         {
             _showSettings = false;
             _showUserMenu = false;
+            await LoadNotificationsAsync();
         }
+    }
+
+    private void StartNotificationRefreshLoop()
+    {
+        _notificationRefreshCts = new CancellationTokenSource();
+        _notificationRefreshTask = RunNotificationRefreshLoopAsync(_notificationRefreshCts.Token);
+    }
+
+    private async Task RunNotificationRefreshLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(NotificationRefreshInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                if (_isDisposed)
+                {
+                    break;
+                }
+
+                await InvokeAsync(async () =>
+                {
+                    if (_isDisposed)
+                    {
+                        return;
+                    }
+
+                    await LoadNotificationsAsync(showLoadingState: false, cancellationToken);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task LoadNotificationsAsync(bool showLoadingState = true, CancellationToken cancellationToken = default)
+    {
+        await _notificationLoadLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (showLoadingState)
+            {
+                _loadingNotifications = true;
+                _notificationError = null;
+            }
+
+            var feed = await NotificationApiService.GetFeedAsync();
+            _notifications = feed.Notifications;
+            _notificationError = feed.ErrorMessage;
+        }
+        finally
+        {
+            if (showLoadingState)
+            {
+                _loadingNotifications = false;
+            }
+
+            _notificationLoadLock.Release();
+        }
+    }
+
+    private int UnreadNotificationCount => _notifications.Count(item => item.IsUnread);
+
+    private IEnumerable<NotificationListItemDto> VisibleNotifications =>
+        _activeNotificationTab == "unread"
+            ? _notifications.Where(item => item.IsUnread)
+            : _notifications;
+
+    private void SetNotificationTab(string tab)
+    {
+        _activeNotificationTab = tab;
+    }
+
+    private void OpenNotification(NotificationListItemDto item)
+    {
+        if (string.IsNullOrWhiteSpace(item.LinkUrl))
+        {
+            return;
+        }
+
+        CloseOverlays();
+        Navigation.NavigateTo(item.LinkUrl);
+    }
+
+    private string GetNotificationSummaryText()
+    {
+        if (_loadingNotifications)
+        {
+            return "Loading current notifications...";
+        }
+
+        var summary = UnreadNotificationCount switch
+        {
+            0 => "No current notifications",
+            1 => "1 item requires attention",
+            _ => $"{UnreadNotificationCount} items require attention"
+        };
+
+        if (!string.IsNullOrWhiteSpace(_notificationError))
+        {
+            return $"{summary} · Some sources are unavailable.";
+        }
+
+        return summary;
+    }
+
+    private static string FormatNotificationCount(int count)
+    {
+        return count > 99 ? "99+" : count.ToString();
     }
 
     private void OpenSettings(string sectionId)
@@ -596,6 +765,9 @@
 
     public void Dispose()
     {
+        _isDisposed = true;
+        _notificationRefreshCts?.Cancel();
+        _notificationRefreshCts?.Dispose();
         AuthStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
         Navigation.LocationChanged -= OnLocationChanged;
     }

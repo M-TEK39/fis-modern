@@ -12,6 +12,7 @@ namespace FIS.Core.Domain.Entities.Auth;
 public class TSUser
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("user_access_code")]
     public int user_access_code { get; set; }
 

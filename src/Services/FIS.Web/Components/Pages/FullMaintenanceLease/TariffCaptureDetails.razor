@@ -43,16 +43,25 @@
     }
     else
     {
+        <div class="alert alert-info fis-alert-tight">
+            <i class="bx bx-info-circle"></i>
+            <span>@GetWorkflowMessage()</span>
+        </div>
+
         <div class="form-card">
+            <div class="form-card-header">
+                <h2>Lease tariff workflow detail</h2>
+                <p>Review the tariff values, comments, and workflow status for this lease record.</p>
+            </div>
             <div class="form-card-body">
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Lease Term ID</label>
-                        <input class="form-input" value="@_item.VehicleContractTermID" readonly />
+                        <input class="form-input" value="@_item.TermId" readonly />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Vehicle</label>
-                        <input class="form-input" value="@GetVehicleLabel(_item.vmf_Code)" readonly />
+                        <input class="form-input" value="@GetVehicleLabel(_item.VmfCode)" readonly />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Start Date</label>
@@ -80,7 +89,9 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label">Authority Status</label>
-                        <input class="form-input" value="@MapStatus(_item.AuthorityStatus)" readonly />
+                        <div style="padding-top: 0.5rem;">
+                            <span class="@GetStatusBadgeClass(_item.AuthorityStatus)">@MapStatus(_item.AuthorityStatus)</span>
+                        </div>
                     </div>
                     <div class="form-field form-group-full">
                         <label class="form-label">Reviewer Comment</label>
@@ -135,7 +146,7 @@
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasFinancialAccess;
-    private LeaseTermDto? _item;
+    private FullMaintenanceLeaseTermDto? _item;
     private Dictionary<int, string> _vehicleLabelByVmf = new();
 
     protected override async Task OnParametersSetAsync()
@@ -152,7 +163,7 @@
         _loading = true;
         try
         {
-            _item = await LeaseService.GetByIdAsync<LeaseTermDto>(Id.Value);
+            _item = await LeaseService.GetByIdAsync<FullMaintenanceLeaseTermDto>(Id.Value);
             if (_vehicleLabelByVmf.Count == 0)
             {
                 var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
@@ -249,7 +260,7 @@
                 _item.rejection_reason = _rejectionReason.Trim();
             }
 
-            var updated = await LeaseService.UpdateAsync(_item.VehicleContractTermID, _item);
+            var updated = await LeaseService.UpdateAsync(_item.TermId, _item);
             _error = updated == null;
             _message = _error ? errorMessage : successMessage;
             if (!_error && updated != null)
@@ -305,22 +316,37 @@
             && _item.created_by_user_code.Value == _currentUserAccessCode.Value;
     }
 
-    private static string MapStatus(int? status) => status switch
-    {
-        1 => "Pending",
-        2 => "Approved",
-        4 => "Rejected",
-        _ => "Unknown"
-    };
+    private static string MapStatus(int? status) => FullMaintenanceLeaseUi.MapAuthorityStatus(status);
+    private static string GetStatusBadgeClass(int? status) => FullMaintenanceLeaseUi.GetAuthorityBadgeClass(status);
 
     private string GetVehicleLabel(int vmfCode)
         => _vehicleLabelByVmf.TryGetValue(vmfCode, out var label) ? label : vmfCode.ToString();
 
     private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
+        => FullMaintenanceLeaseUi.ValueOrDash(value);
 
     private static string FormatVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
+        => FullMaintenanceLeaseUi.FormatVehicleLabel(vehicle);
+
+    private string GetWorkflowMessage()
+    {
+        if (_item == null)
+        {
+            return "Open this screen from the tariff capture queue.";
+        }
+
+        if (CanEditCapture())
+        {
+            return "You can edit this tariff and resubmit it for approval.";
+        }
+
+        if (CanReviewPending())
+        {
+            return "You can review this pending tariff and either approve it or reject it with a reason.";
+        }
+
+        return "This tariff is available in view-only mode.";
+    }
 
     private async Task ResolveAccessAsync()
     {
@@ -347,20 +373,4 @@
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
 
-    private sealed class LeaseTermDto
-    {
-        public int VehicleContractTermID { get; set; }
-        public int vmf_Code { get; set; }
-        public int? AgreedTerms { get; set; }
-        public long? AgreedKilos { get; set; }
-        public decimal? AppliedInterest { get; set; }
-        public decimal? FixedMonthlyAmount { get; set; }
-        public int? AuthorityStatus { get; set; }
-        public int? created_by_user_code { get; set; }
-        public int? modified_by_user_code { get; set; }
-        public string? authority_comment { get; set; }
-        public string? rejection_reason { get; set; }
-        public DateTime? StartDate { get; set; }
-        public DateTime? EndDate { get; set; }
-    }
 }

@@ -8,6 +8,7 @@ namespace FIS.Core.Domain.Entities.Contracts;
 public class ContractStatusHistory
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("contract_status_history_code")]
     public int contract_status_history_code { get; set; }
 

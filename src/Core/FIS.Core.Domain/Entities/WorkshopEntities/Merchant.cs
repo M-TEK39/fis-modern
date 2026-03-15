@@ -7,6 +7,7 @@ namespace FIS.Core.Domain.Entities.WorkshopEntities;
 public class Merchant
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("wwmerch_code")]
     public int wwmerch_code { get; set; }
 

@@ -44,6 +44,48 @@ window.fisLayout.ensureSidebarMediaSync = function () {
 
 window.fisLayout.ensureSidebarMediaSync();
 
+window.fisLayout.enableCalendarOnlyDates = function () {
+  const isDateInput = (element) =>
+    element instanceof HTMLInputElement && element.type === "date";
+
+  const canBypass = (event) =>
+    event.key === "Tab" ||
+    event.key === "Shift" ||
+    event.key === "Escape" ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey;
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!isDateInput(event.target) || canBypass(event)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (typeof event.target.showPicker === "function") {
+        event.target.showPicker();
+      }
+    },
+    true
+  );
+
+  const preventManualEntry = (event) => {
+    if (!isDateInput(event.target)) {
+      return;
+    }
+
+    event.preventDefault();
+  };
+
+  document.addEventListener("paste", preventManualEntry, true);
+  document.addEventListener("drop", preventManualEntry, true);
+};
+
+window.fisLayout.enableCalendarOnlyDates();
+
 window.fisLayout.setSidebarCollapsed = function (collapsed) {
   if (!document || !document.body) {
     return;

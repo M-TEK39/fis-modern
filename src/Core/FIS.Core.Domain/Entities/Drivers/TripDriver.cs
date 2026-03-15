@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities.Drivers;
 public class TripDriver
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("trip_driver_code")]
     public int trip_driver_code { get; set; }
 

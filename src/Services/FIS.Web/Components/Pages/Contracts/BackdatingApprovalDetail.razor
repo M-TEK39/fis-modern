@@ -12,6 +12,7 @@
 @inject SiteApiService SiteService
 @inject DepartmentApiService DepartmentService
 @inject DriverApiService DriverService
+@inject UserApiService UserService
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
@@ -184,7 +185,7 @@
                                 </tr>
                                 <tr>
                                     <th>Hire Type</th>
-                                    <td>@ValueOrDash(_vehicle?.type_name ?? GetContractTypeLabel(_contract?.contractor_name))</td>
+                                    <td>@ValueOrDash(_vehicle?.type_name ?? GetContractTypeLabel(GetResolvedContractTypeCode()))</td>
                                     <th>Hired From</th>
                                     <td>@ValueOrDash(_vehicle?.purchased_from)</td>
                                 </tr>
@@ -383,11 +384,13 @@
                                 <tr>
                                     <th>Authoriser Name</th>
                                     <td colspan="2">
-                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.contractor_name)" />
+                                        <select class="form-select" disabled>
+                                            <option value="">@ResolveUserDisplay(_contract?.user_code)</option>
+                                        </select>
                                     </td>
                                     <th>Authorization</th>
                                     <td>
-                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.status)" />
+                                        <input class="form-input" readonly value="@ValueOrDash(_contract?.authorisation)" />
                                     </td>
                                 </tr>
                                 <tr>
@@ -398,7 +401,7 @@
                                         </select>
                                     </td>
                                     <td colspan="2">
-                                        <input type="checkbox" /> Valid Driver's License <span class="contract-muted">(expiry)</span>
+                                        <input type="checkbox" checked="@HasValidDriverLicence()" disabled /> Valid Driver's License <span class="contract-muted">(@DriverLicenceExpiryLabel())</span>
                                     </td>
                                 </tr>
                                 <tr>
@@ -518,7 +521,20 @@
                                 <tr>
                                     <th>Contract Type</th>
                                     <td>
-                                        <input class="form-input" readonly value="@GetContractTypeLabel(_contract?.contractor_name)" />
+                                        <select class="form-select" disabled>
+                                            @if (!string.IsNullOrWhiteSpace(GetResolvedContractTypeCode()))
+                                            {
+                                                <option value="@GetResolvedContractTypeCode()">@GetContractTypeLabel(GetResolvedContractTypeCode())</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="">-</option>
+                                            }
+                                            @foreach (var option in ContractTypeOptions.Where(option => !string.Equals(option.Code, GetResolvedContractTypeCode(), StringComparison.OrdinalIgnoreCase)))
+                                            {
+                                                <option value="@option.Code">@option.Label</option>
+                                            }
+                                        </select>
                                     </td>
                                     <td colspan="2">
                                         <input type="checkbox" /> Opt-In for Relief Vehicle
@@ -672,6 +688,7 @@
     private string? _siteName;
     private DepartmentDto? _department;
     private string? _driverName;
+    private DateTime? _driverLicenceExpiryDate;
     private bool _actionRunning;
     private bool _actionStatusError;
     private string _actionStatusMessage = string.Empty;
@@ -681,13 +698,25 @@
     private bool _reviewPendingMode;
     private bool _scrollToTopPending = true;
     private bool _submittedByCurrentUserInSession;
+    private int? _pendingSubmittedByUserCode;
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
+    private Dictionary<int, UserProfileDto> _userProfilesByCode = new();
+    private List<DriverDto> _drivers = new();
+    private static readonly (string Code, string Label)[] ContractTypeOptions =
+    {
+        ("A", "Daily"),
+        ("B", "Hourly"),
+        ("C", "Permanent"),
+        ("D", "Relieve"),
+        ("E", "Lease")
+    };
 
     protected override async Task OnInitializedAsync()
     {
         await ResolveCurrentUserContextAsync();
+        await LoadReferenceDataAsync();
 
         if (int.TryParse(ContractId, out var contractId))
         {
@@ -721,11 +750,21 @@
 
         if (_contract != null)
         {
-            _driverName = await ResolveDriverName(_contract.contractor_name);
+            ApplyResolvedContractDisplays();
         }
 
         _approvalNotes = string.Empty;
         await EvaluateContractStateAsync();
+    }
+
+    private async Task LoadReferenceDataAsync()
+    {
+        _drivers = await DriverService.GetDriversAsync();
+        var profiles = await UserService.GetAllProfilesAsync();
+        _userProfilesByCode = profiles
+            .Where(profile => profile.UserAccessCode > 0)
+            .GroupBy(profile => (int)profile.UserAccessCode)
+            .ToDictionary(group => group.Key, group => group.First());
     }
 
     protected override Task OnParametersSetAsync()
@@ -793,26 +832,56 @@
             .ToList();
     }
 
-    private async Task<string?> ResolveDriverName(string? driverCodeText)
+    private void ApplyResolvedContractDisplays()
     {
-        if (string.IsNullOrWhiteSpace(driverCodeText))
+        _driverName = ResolveDriverName(_contract);
+        _driverLicenceExpiryDate = ResolveDriver(_contract)?.driver_licence_ExpiryDate;
+    }
+
+    private string ResolveDriverName(ContractDto? contract)
+    {
+        if (contract == null)
         {
             return "-";
         }
 
-        if (!int.TryParse(driverCodeText, out var driverCode))
+        if (!string.IsNullOrWhiteSpace(contract.driver_name))
         {
-            return driverCodeText;
+            return contract.driver_name.Trim();
         }
 
-        var drivers = await DriverService.GetDriversAsync();
-        var driver = drivers.FirstOrDefault(d => d.site_driver_code == driverCode);
+        var driver = ResolveDriver(contract);
         if (driver == null)
         {
-            return driverCodeText;
+            return ValueOrDash(contract.driver_id);
         }
 
         return $"{driver.driver_firstname} {driver.driver_surname}".Trim();
+    }
+
+    private DriverDto? ResolveDriver(ContractDto? contract)
+    {
+        if (contract == null)
+        {
+            return null;
+        }
+
+        if (contract.site_driver_code is > 0)
+        {
+            return _drivers.FirstOrDefault(driver => driver.site_driver_code == contract.site_driver_code.Value);
+        }
+
+        if (string.IsNullOrWhiteSpace(contract.driver_id))
+        {
+            return null;
+        }
+
+        var driverId = contract.driver_id.Trim();
+        return _drivers.FirstOrDefault(driver =>
+            string.Equals(driver.driver_SA_id, driverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(driver.driver_passportnumber, driverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(driver.driver_persalnumber, driverId, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(driver.driver_contractnumber, driverId, StringComparison.OrdinalIgnoreCase));
     }
 
     private string GetQuery(string key)
@@ -957,6 +1026,17 @@
 
     private static string FormatDateForInput(DateTime? date) => date?.ToString("yyyy-MM-dd") ?? string.Empty;
 
+    private string? GetResolvedContractTypeCode()
+        => !string.IsNullOrWhiteSpace(_contract?.contract_type_code)
+            ? _contract.contract_type_code
+            : _contract?.contractor_name;
+
+    private bool HasValidDriverLicence()
+        => _driverLicenceExpiryDate is DateTime expiry && expiry.Date >= DateTime.Today;
+
+    private string DriverLicenceExpiryLabel()
+        => _driverLicenceExpiryDate?.ToString("yyyy/MM/dd") ?? "no expiry";
+
     private static string GetContractTypeLabel(string? contractTypeCode)
     {
         var code = (contractTypeCode ?? string.Empty).Trim().ToUpperInvariant();
@@ -973,11 +1053,22 @@
 
     private string BuildApprovalSummary()
     {
-        var openedBy = ValueOrDash(_contract?.contractor_name);
+        var openedBy = ResolveUserDisplay(GetCapturerUserCode());
         var openedOn = _contract?.start_date.ToString("dd/MM/yyyy") ?? DateTime.Today.ToString("dd/MM/yyyy");
         var status = ValueOrDash(_contract?.status);
 
         return $"CONTRACT OPENED BY {openedBy.ToUpperInvariant()} ON THE {openedOn} AND CURRENTLY IN STATUS: {status.ToUpperInvariant()}.";
+    }
+
+    private string ResolveUserDisplay(int? userAccessCode)
+    {
+        if (userAccessCode is > 0 && _userProfilesByCode.TryGetValue(userAccessCode.Value, out var profile))
+        {
+            var fullName = $"{profile.FirstName} {profile.LastName}".Trim();
+            return ValueOrDash(fullName);
+        }
+
+        return "-";
     }
 
     private async Task EvaluateContractStateAsync()
@@ -991,10 +1082,7 @@
             {
                 var pendingDetails = ExtractPendingDetails(pendingResponse.ResponseBody);
                 _hasPendingContract = pendingDetails.IsPending;
-                if (pendingDetails.SubmittedByUserCode is > 0 && _contract != null)
-                {
-                    _contract.created_by_user_code = pendingDetails.SubmittedByUserCode.Value;
-                }
+                _pendingSubmittedByUserCode = pendingDetails.SubmittedByUserCode;
             }
         }
 
@@ -1021,7 +1109,7 @@
             return true;
         }
 
-        var createdByUserCode = _contract?.created_by_user_code;
+        var createdByUserCode = GetCapturerUserCode();
         if (createdByUserCode is > 0 && createdByUserCode.Value == _currentUserAccessCode.Value)
         {
             return true;
@@ -1029,6 +1117,9 @@
 
         return _submittedByCurrentUserInSession;
     }
+
+    private int? GetCapturerUserCode()
+        => _contract?.created_by_user_code ?? _pendingSubmittedByUserCode;
 
     private async Task ResolveCurrentUserContextAsync()
     {

@@ -488,6 +488,10 @@ public class ContractService : IContractService
                 start_odometer = request.StartOdometer ?? vehicle.current_odo,
                 still_current = "Y",
                 Driver_id = request.DriverId,
+                Driver_name = request.DriverName,
+                site_driver_code = request.SiteDriverCode,
+                user_code = request.UserCode,
+                Authorisation = request.Authorisation,
                 Notes = request.Notes,
                 target_return_date = request.TargetReturnDate,
                 contract_type = "H", // H = Hire

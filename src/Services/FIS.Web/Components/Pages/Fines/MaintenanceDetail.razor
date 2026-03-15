@@ -3,8 +3,12 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject FineApiService FineService
+@inject RegistrationApiService RegistrationService
 @inject TrafficDeptApiService TrafficDeptService
 @inject SiteApiService SiteService
+@inject VehicleApiService VehicleService
+@inject VehicleLookupApiService VehicleLookupService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Fine Maintenance Detail - Fleet Information System</PageTitle>
 
@@ -14,7 +18,7 @@
             <i class="bx bx-receipt"></i>
             Fine Maintenance Detail
         </h1>
-        <p class="page-description">Add or update a fine record.</p>
+        <p class="page-description">Add or update a fine record against the correct vehicle, including historical GP matches.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/fines/maintenance">Back to Fine Maintenance</a>
@@ -24,6 +28,65 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
+            @if (!string.IsNullOrWhiteSpace(_message))
+            {
+                <div class="alert @(_messageIsError ? "alert-error" : "alert-success")">@_message</div>
+            }
+
+            <div class="form-section">
+                <h2 class="form-section-title">Vehicle</h2>
+                @if (FineId.HasValue)
+                {
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Vehicle</label>
+                            <input class="form-input" value="@_selectedVehicleLabel" readonly />
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Number Type</label>
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="fineVehicleMode" checked="@(_vehicleSearchMode == "GG")" @onchange='() => SetVehicleSearchMode("GG")' />
+                                    GG
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="fineVehicleMode" checked="@(_vehicleSearchMode == "GP")" @onchange='() => SetVehicleSearchMode("GP")' />
+                                    GP
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">@(_vehicleSearchMode == "GG" ? "GG Number" : "GP Number")</label>
+                            <div class="fis-input-group-compact">
+                                <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_vehicleSearchMode == "GG" ? "Enter GG number" : "Enter current or old GP number")" />
+                                <button class="btn btn-secondary btn-sm" type="button" @onclick="SearchVehicleAsync">Find</button>
+                            </div>
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Vehicle Match</label>
+                            <select class="form-select" @bind="_selectedVehicleVmfCode" disabled="@(_vehicleOptions.Count == 0)">
+                                <option value="">Select vehicle...</option>
+                                @foreach (var option in _vehicleOptions)
+                                {
+                                    <option value="@option.VmfCode">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    @if (_selectedVehicleOption?.IsHistoricalMatch == true)
+                    {
+                        <div class="alert alert-success">
+                            Historical GP @ValueOrDash(_selectedVehicleOption.MatchedRegistration) resolved to current vehicle @ValueOrDash(_selectedVehicleOption.FleetNumber) / @ValueOrDash(_selectedVehicleOption.CurrentRegistration).
+                        </div>
+                    }
+                }
+            </div>
+
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Date of Offence</label>
@@ -112,23 +175,71 @@
     [SupplyParameterFromQuery(Name = "fineId")]
     public int? FineId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "vmfCode")]
+    public int? VmfCode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "searchType")]
+    public string? SearchType { get; set; }
+
+    [SupplyParameterFromQuery(Name = "searchQuery")]
+    public string? SearchQuery { get; set; }
+
     private FineDto _fine = new();
     private short? _selectedTrafficDept;
     private string _deptResponsibleName = "";
     private string _deptResponsibleId = "";
     private List<TrafficDeptDto> _trafficDepts = new();
     private List<SiteResponseDto> _sites = new();
+    private string _vehicleSearchMode = "GP";
+    private string _vehicleSearchTerm = string.Empty;
+    private int? _selectedVehicleVmfCode;
+    private string _selectedVehicleLabel = "-";
+    private string _message = string.Empty;
+    private bool _messageIsError;
+    private List<VehicleOption> _vehicleOptions = new();
+    private VehicleOption? _selectedVehicleOption => _vehicleOptions.FirstOrDefault(option => option.VmfCode == _selectedVehicleVmfCode);
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadLookups();
-        if (FineId.HasValue)
+        try
         {
-            var existing = await FineService.GetByIdAsync<FineDto>(FineId.Value);
-            if (existing is not null)
+            await LoadLookups();
+
+            if (FineId.HasValue)
             {
-                _fine = existing;
+                var existing = await FineService.GetByIdAsync<FineDto>(FineId.Value);
+                if (existing is not null)
+                {
+                    _fine = existing;
+                    _selectedVehicleVmfCode = _fine.vmf_code;
+                }
             }
+            else
+            {
+                _vehicleSearchMode = string.Equals(SearchType, "GG", StringComparison.OrdinalIgnoreCase) ? "GG" : "GP";
+                _vehicleSearchTerm = SearchQuery?.Trim() ?? string.Empty;
+                _selectedVehicleVmfCode = VmfCode;
+
+                if (!string.IsNullOrWhiteSpace(_vehicleSearchTerm))
+                {
+                    await SearchVehicleAsync();
+                }
+                else if (_selectedVehicleVmfCode.HasValue)
+                {
+                    await EnsureVehicleOptionAsync(_selectedVehicleVmfCode.Value);
+                }
+            }
+
+            if (_selectedVehicleVmfCode.HasValue)
+            {
+                await LoadSelectedVehicleLabelAsync(_selectedVehicleVmfCode.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to load fine details.";
+            _messageIsError = true;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
     }
 
@@ -138,15 +249,169 @@
         _sites = await SiteService.GetAllAsync();
     }
 
-    private async Task SaveFine()
+    private async Task SearchVehicleAsync()
     {
-        if (FineId.HasValue)
+        _message = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(_vehicleSearchTerm))
         {
-            await FineService.UpdateAsync(FineId.Value, _fine);
+            _vehicleOptions = new();
+            _selectedVehicleVmfCode = null;
+            _selectedVehicleLabel = "-";
+            return;
         }
-        else
+
+        try
         {
-            await FineService.CreateAsync(_fine);
+            var searchTerm = _vehicleSearchTerm.Trim();
+
+            if (_vehicleSearchMode == "GG")
+            {
+                _vehicleOptions = VehicleSearchHelper.RankVehicleLookupMatches(
+                        await VehicleLookupService.SearchAsync(searchTerm),
+                        searchTerm,
+                        VehicleSearchHelper.GgMode)
+                    .Select(vehicle => new VehicleOption(
+                        vehicle.VmfCode,
+                        $"{ValueOrDash(vehicle.GGNumber)} / {ValueOrDash(vehicle.RegistrationNumber)} ({vehicle.VmfCode})",
+                        ValueOrDash(vehicle.GGNumber),
+                        vehicle.RegistrationNumber,
+                        vehicle.RegistrationNumber,
+                        false,
+                        null))
+                    .ToList();
+            }
+            else
+            {
+                var response = await RegistrationService.SearchAsync(searchTerm);
+                _vehicleOptions = response.results
+                    .GroupBy(result => result.vmf_code)
+                    .Select(group => group
+                        .OrderBy(result => result.is_historical_match)
+                        .ThenByDescending(result => result.recorded_date)
+                        .First())
+                    .Select(result => new VehicleOption(
+                        result.vmf_code,
+                        $"{ValueOrDash(result.fleet_number)} / {ValueOrDash(result.current_registration)} ({result.vmf_code})",
+                        ValueOrDash(result.fleet_number),
+                        result.current_registration,
+                        result.matched_registration,
+                        result.is_historical_match,
+                        result.recorded_date))
+                    .ToList();
+            }
+
+            if (_vehicleOptions.All(option => option.VmfCode != _selectedVehicleVmfCode))
+            {
+                _selectedVehicleVmfCode = _vehicleOptions.Count == 1 ? _vehicleOptions[0].VmfCode : null;
+            }
+
+            if (_selectedVehicleVmfCode.HasValue)
+            {
+                await LoadSelectedVehicleLabelAsync(_selectedVehicleVmfCode.Value);
+            }
+        }
+        catch (Exception ex)
+        {
+            _vehicleOptions = new();
+            _selectedVehicleVmfCode = null;
+            _message = "Failed to search for the vehicle.";
+            _messageIsError = true;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
         }
     }
+
+    private async Task SaveFine()
+    {
+        _message = string.Empty;
+
+        if (!_selectedVehicleVmfCode.HasValue)
+        {
+            _message = "Select the vehicle before saving the fine.";
+            _messageIsError = true;
+            return;
+        }
+
+        try
+        {
+            _fine.vmf_code = _selectedVehicleVmfCode;
+
+            if (FineId.HasValue)
+            {
+                await FineService.UpdateAsync(FineId.Value, _fine);
+                _message = "Fine updated.";
+            }
+            else
+            {
+                await FineService.CreateAsync(_fine);
+                _message = "Fine captured.";
+            }
+
+            _messageIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to save the fine.";
+            _messageIsError = true;
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+    }
+
+    private void SetVehicleSearchMode(string mode)
+    {
+        if (_vehicleSearchMode == mode)
+        {
+            return;
+        }
+
+        _vehicleSearchMode = mode;
+        _vehicleSearchTerm = string.Empty;
+        _vehicleOptions = new();
+        _selectedVehicleVmfCode = null;
+        _selectedVehicleLabel = "-";
+        _message = string.Empty;
+    }
+
+    private async Task EnsureVehicleOptionAsync(int vmfCode)
+    {
+        if (_vehicleOptions.Any(option => option.VmfCode == vmfCode))
+        {
+            return;
+        }
+
+        var vehicle = await VehicleService.GetVehicleAsync(vmfCode);
+        if (vehicle == null)
+        {
+            return;
+        }
+
+        _vehicleOptions.Add(new VehicleOption(
+            vmfCode,
+            $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vmfCode})",
+            ValueOrDash(vehicle.fleet_number),
+            vehicle.registration_number,
+            vehicle.registration_number,
+            false,
+            null));
+    }
+
+    private async Task LoadSelectedVehicleLabelAsync(int vmfCode)
+    {
+        await EnsureVehicleOptionAsync(vmfCode);
+
+        var selectedOption = _vehicleOptions.FirstOrDefault(option => option.VmfCode == vmfCode);
+        _selectedVehicleLabel = selectedOption?.Label ?? $"- ({vmfCode})";
+    }
+
+    private static string ValueOrDash(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
+
+    private sealed record VehicleOption(
+        int VmfCode,
+        string Label,
+        string FleetNumber,
+        string? CurrentRegistration,
+        string? MatchedRegistration,
+        bool IsHistoricalMatch,
+        DateTime? RecordedDate);
 }

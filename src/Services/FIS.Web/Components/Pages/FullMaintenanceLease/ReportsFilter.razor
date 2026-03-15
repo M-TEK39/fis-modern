@@ -39,8 +39,33 @@
                     </InputSelect>
                 </div>
                 <div class="form-field">
-                    <label class="form-label">GG / GP Number Filter</label>
-                    <InputText class="form-input" @bind-Value="_filter.GgNumber" />
+                    <label class="form-label">Number Type</label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_filter.SearchMode == VehicleSearchHelper.GgMode)" @onchange='() => SetSearchMode(VehicleSearchHelper.GgMode)' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_filter.SearchMode == VehicleSearchHelper.GpMode)" @onchange='() => SetSearchMode(VehicleSearchHelper.GpMode)' />
+                            GP
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_filter.SearchMode == VehicleSearchHelper.EngineMode)" @onchange='() => SetSearchMode(VehicleSearchHelper.EngineMode)' />
+                            Engine
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_filter.SearchMode == VehicleSearchHelper.VinMode)" @onchange='() => SetSearchMode(VehicleSearchHelper.VinMode)' />
+                            VIN / Chassis
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="searchMode" checked="@(_filter.SearchMode == VehicleSearchHelper.InvoiceMode)" @onchange='() => SetSearchMode(VehicleSearchHelper.InvoiceMode)' />
+                            Invoice
+                        </label>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">@VehicleSearchHelper.GetSearchLabel(_filter.SearchMode)</label>
+                    <InputText class="form-input" @bind-Value="_filter.SearchValue" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_filter.SearchMode)" />
                 </div>
             </div>
             <div class="form-actions">
@@ -87,7 +112,8 @@
             _ => "/full-maintenance-lease/reports"
         };
 
-        Navigation.NavigateTo(target);
+        var query = BuildQueryString();
+        Navigation.NavigateTo(string.IsNullOrWhiteSpace(query) ? target : $"{target}{query}");
     }
 
     private void GoBack()
@@ -100,7 +126,44 @@
         _filter.StartDate = null;
         _filter.EndDate = null;
         _filter.FinancialYear = "Select...";
-        _filter.GgNumber = "";
+        _filter.SearchMode = VehicleSearchHelper.GgMode;
+        _filter.SearchValue = "";
+    }
+
+    private string BuildQueryString()
+    {
+        var queryParts = new List<string>();
+        if (_filter.StartDate.HasValue)
+        {
+            queryParts.Add($"startDate={Uri.EscapeDataString(_filter.StartDate.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (_filter.EndDate.HasValue)
+        {
+            queryParts.Add($"endDate={Uri.EscapeDataString(_filter.EndDate.Value.ToString("yyyy-MM-dd"))}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filter.FinancialYear) && _filter.FinancialYear != "Select...")
+        {
+            queryParts.Add($"finYear={Uri.EscapeDataString(_filter.FinancialYear)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_filter.SearchValue))
+        {
+            queryParts.Add($"mode={Uri.EscapeDataString(_filter.SearchMode)}");
+            queryParts.Add($"search={Uri.EscapeDataString(_filter.SearchValue.Trim())}");
+            if (_filter.SearchMode == VehicleSearchHelper.GgMode)
+            {
+                queryParts.Add($"ggNum={Uri.EscapeDataString(_filter.SearchValue.Trim())}");
+            }
+        }
+
+        return queryParts.Count > 0 ? "?" + string.Join("&", queryParts) : string.Empty;
+    }
+
+    private void SetSearchMode(string mode)
+    {
+        _filter.SearchMode = VehicleSearchHelper.NormalizeMode(mode);
     }
 
     private sealed class ReportFilterModel
@@ -108,6 +171,7 @@
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public string FinancialYear { get; set; } = "Select...";
-        public string? GgNumber { get; set; }
+        public string SearchMode { get; set; } = VehicleSearchHelper.GgMode;
+        public string? SearchValue { get; set; }
     }
 }

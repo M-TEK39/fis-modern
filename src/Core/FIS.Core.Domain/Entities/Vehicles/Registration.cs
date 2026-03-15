@@ -9,6 +9,7 @@ namespace FIS.Core.Domain.Entities.Vehicles;
 public class Registration
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("RegistrationID")]
     public short RegistrationID { get; set; }
 

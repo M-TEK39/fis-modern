@@ -6,6 +6,9 @@ public class VehicleLookupDto
     public string? FleetNumber { get; set; }
     public string? GGNumber { get; set; }
     public string? RegistrationNumber { get; set; }
+    public string? ChassisNumber { get; set; }
+    public string? EngineNumber { get; set; }
+    public string? InvoiceNumber { get; set; }
     public string? MakeAndModel { get; set; }
     public short? YearManufactured { get; set; }
     public string? Colour { get; set; }

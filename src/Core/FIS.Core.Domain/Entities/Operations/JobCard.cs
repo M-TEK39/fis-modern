@@ -14,6 +14,7 @@ namespace FIS.Core.Domain.Entities.Operations;
 public class JobCard
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("job_card_id")]
     public int job_card_id { get; set; }
 

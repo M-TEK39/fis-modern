@@ -1,3 +1,4 @@
+using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
@@ -17,20 +18,57 @@ namespace FIS.Api.Controllers;
 public class ReportController : BaseApiController
 {
     private readonly IReportingService _reportingService;
+    private readonly ILegacyReportResultService _legacyReportResultService;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
 
     public ReportController(
         IReportingService reportingService,
+        ILegacyReportResultService legacyReportResultService,
         FisDbContext context,
         ILogger<ReportController> logger)
     {
         _reportingService = reportingService ?? throw new ArgumentNullException(nameof(reportingService));
+        _legacyReportResultService = legacyReportResultService ?? throw new ArgumentNullException(nameof(legacyReportResultService));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     #region Vehicle Reports
+
+
+    /// <summary>
+    /// Generate a legacy-style dynamic report grid using the requested report key and query-string filters.
+    /// </summary>
+    [HttpGet("dynamic/{reportKey}")]
+    [ProducesResponseType(typeof(LegacyReportResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<LegacyReportResultDto>> GetDynamicLegacyReport(string reportKey, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var filters = Request.Query
+                .ToDictionary(pair => pair.Key, pair => (string?)pair.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+
+            if (filters.ContainsKey("view"))
+            {
+                filters.Remove("view");
+            }
+
+            var report = await _legacyReportResultService.GetReportAsync(reportKey, filters, cancellationToken);
+            return Ok(report);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Unknown legacy report key requested: {ReportKey}", reportKey);
+            return NotFound(new { error = "Unknown legacy report key", reportKey });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating dynamic legacy report {ReportKey}", reportKey);
+            return StatusCode(500, new { error = "Failed to generate legacy report", message = ex.Message });
+        }
+    }
 
     /// <summary>
     /// Generate detailed vehicle report
@@ -646,57 +684,79 @@ public class ReportController : BaseApiController
     }
 
     /// <summary>
-    /// Registration certificates report — lists all active vehicles with licence register number,
-    /// licence due date, and derived certificate status (Valid / Due soon / Expired / No due date).
-    /// Filters: vmfCode (optional), departmentCode (reserved — vehicle has no direct department FK).
+    /// Registration certificates report — legacy scan_docs-backed certificate listing.
+    /// Filters: vmfCode (optional), search/mode for GG, GP, engine, VIN/chassis, or invoice lookup, departmentCode reserved.
     /// </summary>
     [HttpGet("registration-certificates")]
     [ProducesResponseType(typeof(RegistrationCertificatesReportDto), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetRegistrationCertificates([FromQuery] int? vmfCode, [FromQuery] int? departmentCode)
+    public async Task<ActionResult> GetRegistrationCertificates(
+        [FromQuery] int? vmfCode,
+        [FromQuery] int? departmentCode,
+        [FromQuery] string? mode,
+        [FromQuery] string? search)
     {
         try
         {
-            var query = _context.Vehicles.Where(v => !v.is_deleted);
+            var normalizedMode = mode?.Trim().ToUpperInvariant() switch
+            {
+                "GP" => "GP",
+                "ENGINE" => "ENGINE",
+                "CHASSIS" => "VIN",
+                "VIN" => "VIN",
+                "INVOICE" => "INVOICE",
+                _ => "GG"
+            };
+            var normalizedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+
+            var query =
+                from scanDoc in _context.ScanDocs.AsNoTracking()
+                join vehicle in _context.Vehicles.AsNoTracking() on scanDoc.vmf_code equals vehicle.vmf_code
+                where !scanDoc.is_deleted && !vehicle.is_deleted
+                select new
+                {
+                    vehicle.vmf_code,
+                    vehicle.fleet_number,
+                    vehicle.registration_number,
+                    vehicle.chassis_number,
+                    vehicle.engine_number_1,
+                    vehicle.invoice_number,
+                    scanDoc.period_begin,
+                    scanDoc.period_end,
+                    scanDoc.image,
+                    DateUploaded = scanDoc.date_updated ?? scanDoc.date_created
+                };
 
             if (vmfCode.HasValue)
-                query = query.Where(v => v.vmf_code == vmfCode.Value);
-
-            var vehicles = await query
-                .OrderBy(v => v.licence_due_date)
-                .ThenBy(v => v.registration_number)
-                .Select(v => new
+            {
+                query = query.Where(row => row.vmf_code == vmfCode.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(normalizedSearch))
+            {
+                query = normalizedMode switch
                 {
-                    v.vmf_code,
-                    v.registration_number,
-                    v.take_on_date,
-                    v.licence_due_date
+                    "GP" => query.Where(row => row.registration_number != null && row.registration_number.Contains(normalizedSearch)),
+                    "ENGINE" => query.Where(row => row.engine_number_1 != null && row.engine_number_1.Contains(normalizedSearch)),
+                    "VIN" => query.Where(row => row.chassis_number != null && row.chassis_number.Contains(normalizedSearch)),
+                    "INVOICE" => query.Where(row => row.invoice_number != null && row.invoice_number.Contains(normalizedSearch)),
+                    _ => query.Where(row => row.fleet_number != null && row.fleet_number.Contains(normalizedSearch))
+                };
+            }
+
+            var certificates = await query
+                .OrderBy(row => row.fleet_number)
+                .ThenBy(row => row.period_begin)
+                .ThenBy(row => row.registration_number)
+                .Select(row => new CertificateDto
+                {
+                    VmfCode = row.vmf_code,
+                    FleetNumber = row.fleet_number ?? string.Empty,
+                    RegistrationNumber = row.registration_number ?? string.Empty,
+                    PeriodFrom = row.period_begin,
+                    PeriodTo = row.period_end,
+                    DateUploaded = row.DateUploaded,
+                    RegistrationCertificate = row.image ?? string.Empty
                 })
                 .ToListAsync();
-
-            var today = DateTime.Today;
-            var dueSoonLimit = today.AddDays(30);
-
-            var certificates = vehicles.Select(v =>
-            {
-                string status;
-                if (!v.licence_due_date.HasValue)
-                    status = "No due date";
-                else if (v.licence_due_date.Value.Date < today)
-                    status = "Expired";
-                else if (v.licence_due_date.Value.Date <= dueSoonLimit)
-                    status = "Due soon";
-                else
-                    status = "Valid";
-
-                return new CertificateDto
-                {
-                    VmfCode = v.vmf_code,
-                    RegistrationNumber = v.registration_number ?? string.Empty,
-                    IssueDate = v.take_on_date,
-                    ExpiryDate = v.licence_due_date,
-                    Status = status
-                };
-            }).ToList();
 
             _logger.LogInformation("Registration certificates report: {Count} records", certificates.Count);
             return Ok(new RegistrationCertificatesReportDto { Certificates = certificates, TotalCount = certificates.Count });
@@ -1056,7 +1116,12 @@ public class RegistrationCertificatesReportDto
 public class CertificateDto
 {
     public int VmfCode { get; set; }
+    public string FleetNumber { get; set; } = "";
     public string RegistrationNumber { get; set; } = "";
+    public DateTime? PeriodFrom { get; set; }
+    public DateTime? PeriodTo { get; set; }
+    public DateTime? DateUploaded { get; set; }
+    public string RegistrationCertificate { get; set; } = "";
     public DateTime? IssueDate { get; set; }
     public DateTime? ExpiryDate { get; set; }
     public string Status { get; set; } = "";

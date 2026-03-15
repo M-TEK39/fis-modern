@@ -12,6 +12,7 @@ namespace FIS.Core.Domain.Entities.ReferenceData;
 public class FuelType
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("fuel_type_code")]
     public short fuel_type_code { get; set; }
 

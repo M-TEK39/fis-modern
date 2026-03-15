@@ -193,6 +193,7 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddScoped<FuelCardManagementService>();
 builder.Services.AddScoped<VehicleService>();
 builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled with PDF service
+builder.Services.AddScoped<ILegacyReportResultService, LegacyReportResultService>();
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 
 // Register PDF service (stub implementation)
@@ -270,6 +271,8 @@ builder.Services.AddScoped<ILogsheetRepository, LogsheetRepository>();
 builder.Services.AddScoped<ILossRepository, LossRepository>();
 builder.Services.AddScoped<IMonitorRepository, MonitorRepository>();
 builder.Services.AddScoped<ITaxiRepository, TaxiRepository>();
+builder.Services.AddScoped<ITaxiLogRepository, TaxiLogRepository>();
+builder.Services.AddScoped<ITaxiLogNoteRepository, TaxiLogNoteRepository>();
 builder.Services.AddScoped<ITaxiWhiteLogRepository, TaxiWhiteLogRepository>();
 builder.Services.AddScoped<ITowingRepository, TowingRepository>();
 // TripAuthorityRepository removed - conflicts with existing Trip entity
@@ -353,7 +356,7 @@ builder.Services.AddScoped<ILegacyCredentialRepository, LegacyCredentialReposito
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 
 // Financial system repositories - temporarily disabled for debugging
-//builder.Services.AddScoped<ITariffRepository, TariffRepository>();
+builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>(); // ✅ Re-enabled for tariff recalculation
 builder.Services.AddScoped<ITariffManagementRepository, TariffManagementRepository>();
 //builder.Services.AddScoped<ILeaseTariffRepository, LeaseTariffRepository>();

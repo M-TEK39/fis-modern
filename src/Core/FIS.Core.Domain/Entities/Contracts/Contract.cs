@@ -12,6 +12,7 @@ namespace FIS.Core.Domain.Entities;
 public class Contract
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("contract_code")]
     public int contract_code { get; set; }
 

@@ -11,6 +11,7 @@ namespace FIS.Core.Domain.Entities;
 public class FuelCard
 {
     [Key]
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
     [Column("Fuel_card_code")]
     public int Fuel_card_code { get; set; }
 

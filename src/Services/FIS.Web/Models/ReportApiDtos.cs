@@ -77,8 +77,125 @@ public record RegistrationCertificatesReportDto
 public record CertificateDto
 {
     public int VmfCode { get; set; }
+    public string FleetNumber { get; set; } = string.Empty;
     public string RegistrationNumber { get; set; } = string.Empty;
+    public DateTime? PeriodFrom { get; set; }
+    public DateTime? PeriodTo { get; set; }
+    public DateTime? DateUploaded { get; set; }
+    public string RegistrationCertificate { get; set; } = string.Empty;
     public DateTime? IssueDate { get; set; }
     public DateTime? ExpiryDate { get; set; }
     public string Status { get; set; } = string.Empty;
+}
+
+public record FmlMaintenanceHistoryReportDto
+{
+    public List<FmlMaintenanceHistoryRow> Records { get; set; } = new();
+    public decimal? GrandTotal { get; set; }
+    public int TotalCount { get; set; }
+}
+
+public record FmlMaintenanceHistoryRow
+{
+    public string? GgNumber { get; set; }
+    public short? YearManufactured { get; set; }
+    public string? ModelDescription { get; set; }
+    public string? CurrentStatus { get; set; }
+    public DateTime? CurrentStatusDate { get; set; }
+    public string? HiredFrom { get; set; }
+    public string? MaintenanceExpenseType { get; set; }
+    public decimal? TotalCostOverDateRange { get; set; }
+}
+
+public record FmlContractsReportDto
+{
+    public List<FmlContractRow> Contracts { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+public record FmlContractRow
+{
+    public int? RowNumber { get; set; }
+    public string? GgNumber { get; set; }
+    public string? GpNumber { get; set; }
+    public string? Model { get; set; }
+    public short? YearModel { get; set; }
+    public string? HiredFrom { get; set; }
+    public string? HireType { get; set; }
+    public string? StillCurrent { get; set; }
+    public DateTime? ContractStartDate { get; set; }
+    public DateTime? TargetReturnDate { get; set; }
+    public string? ContractType { get; set; }
+    public string? SiteName { get; set; }
+    public decimal? FixedTariff { get; set; }
+}
+
+public record FmlVehiclesNoContractsReportDto
+{
+    public List<FmlVehicleNoContractRow> Vehicles { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+public record FmlVehicleNoContractRow
+{
+    public int? VehicleCounter { get; set; }
+    public string? GgNumber { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public string? HiredFrom { get; set; }
+    public string? VehicleStatus { get; set; }
+    public string? Location { get; set; }
+    public short? YearModel { get; set; }
+    public string? ModelDescription { get; set; }
+    public string? ClassDescription { get; set; }
+    public decimal? PurchaseAmount { get; set; }
+}
+
+public record FmlOverUtilizedReportDto
+{
+    public List<FmlOverUtilizedRow> Vehicles { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+public record FmlOverUtilizedRow
+{
+    public int? VehicleCounter { get; set; }
+    public string? GgNumber { get; set; }
+    public string? GpNumber { get; set; }
+    public string? HiredFrom { get; set; }
+    public string? Month { get; set; }
+    public decimal? MaxOdoMeter { get; set; }
+    public decimal? MinOdoMeter { get; set; }
+    public decimal? ActualKilos { get; set; }
+    public decimal? AgreedKilos { get; set; }
+    public decimal? ExcessKilos { get; set; }
+    public decimal? AgreedOverallKilo { get; set; }
+    public decimal? AgreedTerms { get; set; }
+    public decimal? ActualTerm { get; set; }
+    public decimal? TotalKilos { get; set; }
+    public decimal? TotalExcessKilos { get; set; }
+    public decimal? AverageMonthlyKilos { get; set; }
+    public string? ProjectedEndMonth { get; set; }
+    public DateTime? ProjectedEndDate { get; set; }
+    public short? YearModel { get; set; }
+    public string? ModelDescription { get; set; }
+    public decimal? PurchaseAmount { get; set; }
+}
+
+
+public sealed record LegacyDynamicReportDto
+{
+    public string ReportKey { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string? LegacyTarget { get; set; }
+    public bool IsApproximate { get; set; }
+    public string? ApproximationReason { get; set; }
+    public List<LegacyDynamicReportColumnDto> Columns { get; set; } = new();
+    public List<Dictionary<string, string?>> Rows { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+public sealed record LegacyDynamicReportColumnDto
+{
+    public string Key { get; set; } = string.Empty;
+    public string Header { get; set; } = string.Empty;
 }
