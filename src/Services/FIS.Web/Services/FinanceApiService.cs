@@ -147,7 +147,16 @@ public class FinanceApiService
         try
         {
             var encodedFilterBy = Uri.EscapeDataString(filterBy);
-            var payload = await _httpClient.GetFromJsonAsync<JsonElement>($"api/finance/reports/posting-months?filterBy={encodedFilterBy}");
+            using var response = await _httpClient.GetAsync($"api/finance/reports/posting-months?filterBy={encodedFilterBy}");
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogInformation(
+                    "Finance posting-month lookup returned status {StatusCode}; using batch-date fallback.",
+                    (int)response.StatusCode);
+                return await GetBatchDatesAsync();
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
 
             if (payload.ValueKind == JsonValueKind.Object
                 && payload.TryGetProperty("months", out var monthsElement)
@@ -164,7 +173,7 @@ public class FinanceApiService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Finance posting-month lookup failed.");
+            _logger.LogInformation(ex, "Finance posting-month lookup failed; using batch-date fallback.");
             return await GetBatchDatesAsync();
         }
     }

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Net;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace FIS.Web.Services;
@@ -8,15 +9,21 @@ public class NotificationApiService
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<NotificationApiService> _logger;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
+    private const string JwtItemKey = "FIS_JWT_Token";
 
-    public NotificationApiService(HttpClient httpClient, ILogger<NotificationApiService> logger)
+    public NotificationApiService(
+        HttpClient httpClient,
+        ILogger<NotificationApiService> logger,
+        IHttpContextAccessor httpContextAccessor)
     {
         _httpClient = httpClient;
         _logger = logger;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<NotificationConfigStatusDto?> GetConfigStatusAsync()
@@ -34,6 +41,11 @@ public class NotificationApiService
 
     public async Task<NotificationFeedDto> GetFeedAsync()
     {
+        if (!HasJwtToken())
+        {
+            return new NotificationFeedDto(new List<NotificationListItemDto>(), 0, null);
+        }
+
         var workflowTask = GetWorkflowNotificationsAsync();
         var bookingTask = GetBookingNotificationsAsync();
         var callCentreTask = GetCallCentreNotificationsAsync();
@@ -133,6 +145,16 @@ public class NotificationApiService
         try
         {
             using var response = await _httpClient.GetAsync(path);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                _logger.LogInformation(
+                    "Notification source {Path} is unavailable due to auth status {StatusCode}; returning empty source.",
+                    path,
+                    (int)response.StatusCode);
+                return new NotificationApiResult<T>(default, null);
+            }
+
             response.EnsureSuccessStatusCode();
             return new NotificationApiResult<T>(
                 await response.Content.ReadFromJsonAsync<T>(_jsonOptions),
@@ -144,6 +166,9 @@ public class NotificationApiService
             return new NotificationApiResult<T>(default, $"Failed to load {path}.");
         }
     }
+
+    private bool HasJwtToken()
+        => !string.IsNullOrWhiteSpace(_httpContextAccessor.HttpContext?.Items[JwtItemKey] as string);
 
     private static string BuildWorkflowTitle(WorkflowNotificationLogDto item)
     {

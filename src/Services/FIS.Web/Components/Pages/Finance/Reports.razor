@@ -313,6 +313,8 @@
             ? await FinanceService.GetFinanceReportPostingMonthsAsync(Action == "site" ? "Site" : "Department")
             : await FinanceService.GetBatchDatesAsync();
         _sites = await FinanceService.GetSitesAsync();
+
+        EnsurePostingMonthSelected();
     }
 
     private async Task OnDepartmentChangedAsync()
@@ -322,6 +324,7 @@
         if (IsDedicatedFinanceMode)
         {
             _batchDates = await FinanceService.GetFinanceReportPostingMonthsAsync(Action == "site" ? "Site" : "Department");
+            EnsurePostingMonthSelected();
         }
     }
 
@@ -435,7 +438,7 @@
 
     private async Task<FinanceApiResult> RunDedicatedFinanceReportAsync(DedicatedReportConfig config)
     {
-        if (!short.TryParse(_selectedBatchDate, out var postingMonthCode) || postingMonthCode <= 0)
+        if (!TryResolvePostingMonthCode(out var postingMonthCode))
         {
             SetValidationError("Select a posting month before running the report.");
             return new FinanceApiResult { Success = false, Message = "Posting month is required." };
@@ -524,6 +527,54 @@
         }
 
         return result;
+    }
+
+    private void EnsurePostingMonthSelected()
+    {
+        if (!IsDedicatedFinanceMode || !string.IsNullOrWhiteSpace(_selectedBatchDate))
+        {
+            return;
+        }
+
+        var first = _batchDates.FirstOrDefault();
+        if (first is not null)
+        {
+            _selectedBatchDate = first.Value;
+        }
+    }
+
+    private bool TryResolvePostingMonthCode(out short postingMonthCode)
+    {
+        postingMonthCode = 0;
+
+        if (short.TryParse(_selectedBatchDate, out postingMonthCode) && postingMonthCode > 0)
+        {
+            return true;
+        }
+
+        var selectedOption = _batchDates.FirstOrDefault(option => option.Value == _selectedBatchDate);
+        var candidateTexts = new[]
+        {
+            _selectedBatchDate,
+            selectedOption?.Label,
+            selectedOption?.Value
+        };
+
+        foreach (var text in candidateTexts)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            if (DateTime.TryParse(text, out var date))
+            {
+                postingMonthCode = (short)date.Month;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private async Task<FinanceApiResult> RunUniversalReportAsync(string reportAction, string reportType)

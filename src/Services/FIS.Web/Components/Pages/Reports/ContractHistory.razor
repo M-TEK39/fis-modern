@@ -88,6 +88,9 @@
             <span class="table-title">Contract History Report</span>
             <div class="table-controls">
                 <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenHtmlAsync" disabled="@(_loading || _history.Count == 0)">Open HTML</button>
+                <button class="btn btn-secondary btn-sm" @onclick="PrintPdfAsync" disabled="@(_loading || _history.Count == 0)">Print PDF</button>
+                <button class="btn btn-secondary btn-sm" @onclick="DownloadExcelAsync" disabled="@(_loading || _history.Count == 0)">Download Excel</button>
                 <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _history.Count == 0)">Download CSV</button>
             </div>
         </div>
@@ -348,11 +351,101 @@
         await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
     }
 
+    private async Task DownloadExcelAsync()
+    {
+        var html = BuildReportHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        var fileName = $"contract_history_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
+    }
+
+    private async Task OpenHtmlAsync()
+    {
+        var html = BuildReportHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Contract History");
+    }
+
+    private async Task PrintPdfAsync()
+    {
+        var html = BuildReportHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Contract History");
+    }
+
     private static string CsvCell(string? value)
     {
         var safe = (value ?? string.Empty).Replace("\"", "\"\"");
         return $"\"{safe}\"";
     }
+
+    private string BuildReportHtml()
+    {
+        var selected = _exportFields.Where(f => f.Selected).ToList();
+        if (_history.Count == 0 || selected.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
+        var body = string.Join(
+            string.Empty,
+            _history.Select(row =>
+            {
+                var cells = selected.Select(field => field.Key switch
+                {
+                    "contract_id" => row.contract_id.ToString(),
+                    "gg_number" => ValueOrDash(row.fleet_number),
+                    "gp_number" => ValueOrDash(row.vehicle_registration),
+                    "status" => ValueOrDash(row.status),
+                    "current" => ValueOrDash(row.still_current),
+                    "start_date" => row.start_date.ToString("yyyy-MM-dd"),
+                    "end_date" => row.end_date?.ToString("yyyy-MM-dd") ?? "-",
+                    _ => "-"
+                });
+
+                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
+            }));
+
+        var html = new System.Text.StringBuilder();
+        html.AppendLine("<!doctype html>");
+        html.AppendLine("<html>");
+        html.AppendLine("<head>");
+        html.AppendLine("<meta charset=\"utf-8\" />");
+        html.AppendLine("<title>Contract History</title>");
+        html.AppendLine("<style>");
+        html.AppendLine("body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }");
+        html.AppendLine("h1 { font-size: 20px; margin: 0 0 12px 0; }");
+        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
+        html.AppendLine("th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 12px; }");
+        html.AppendLine("th { background: #f3f4f6; }");
+        html.AppendLine("</style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine("<h1>Contract History</h1>");
+        html.AppendLine("<table>");
+        html.AppendLine($"<thead><tr>{head}</tr></thead>");
+        html.AppendLine($"<tbody>{body}</tbody>");
+        html.AppendLine("</table>");
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+        return html.ToString();
+    }
+
+    private static string HtmlEncode(string? value)
+        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
 
     private sealed class ExportField
     {

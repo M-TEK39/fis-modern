@@ -69,6 +69,9 @@
             <span class="table-title">Departments</span>
             <div class="table-controls">
                 <button class="btn btn-secondary btn-sm" @onclick="ToggleDepartmentFieldSelector">Select Fields</button>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenDepartmentHtmlAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Open HTML</button>
+                <button class="btn btn-secondary btn-sm" @onclick="PrintDepartmentPdfAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Print PDF</button>
+                <button class="btn btn-secondary btn-sm" @onclick="DownloadDepartmentExcelAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Download Excel</button>
                 <button class="btn btn-primary btn-sm" @onclick="DownloadDepartmentCsvAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Download CSV</button>
             </div>
         </div>
@@ -142,6 +145,9 @@
             <span class="table-title">Sites</span>
             <div class="table-controls">
                 <button class="btn btn-secondary btn-sm" @onclick="ToggleSiteFieldSelector">Select Fields</button>
+                <button class="btn btn-secondary btn-sm" @onclick="OpenSiteHtmlAsync" disabled="@(_loading || _filteredSites.Count == 0)">Open HTML</button>
+                <button class="btn btn-secondary btn-sm" @onclick="PrintSitePdfAsync" disabled="@(_loading || _filteredSites.Count == 0)">Print PDF</button>
+                <button class="btn btn-secondary btn-sm" @onclick="DownloadSiteExcelAsync" disabled="@(_loading || _filteredSites.Count == 0)">Download Excel</button>
                 <button class="btn btn-primary btn-sm" @onclick="DownloadSiteCsvAsync" disabled="@(_loading || _filteredSites.Count == 0)">Download CSV</button>
             </div>
         </div>
@@ -435,6 +441,40 @@
         await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
     }
 
+    private async Task DownloadDepartmentExcelAsync()
+    {
+        var html = BuildDepartmentHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        var fileName = $"departments_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
+    }
+
+    private async Task OpenDepartmentHtmlAsync()
+    {
+        var html = BuildDepartmentHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Departments Report");
+    }
+
+    private async Task PrintDepartmentPdfAsync()
+    {
+        var html = BuildDepartmentHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Departments Report");
+    }
+
     private async Task DownloadSiteCsvAsync()
     {
         var selected = _siteExportFields.Where(f => f.Selected).ToList();
@@ -463,11 +503,133 @@
         await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
     }
 
+    private async Task DownloadSiteExcelAsync()
+    {
+        var html = BuildSiteHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        var fileName = $"sites_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
+    }
+
+    private async Task OpenSiteHtmlAsync()
+    {
+        var html = BuildSiteHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Sites Report");
+    }
+
+    private async Task PrintSitePdfAsync()
+    {
+        var html = BuildSiteHtml();
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Sites Report");
+    }
+
     private static string CsvCell(string? value)
     {
         var safe = (value ?? string.Empty).Replace("\"", "\"\"");
         return $"\"{safe}\"";
     }
+
+    private string BuildDepartmentHtml()
+    {
+        var selected = _departmentExportFields.Where(f => f.Selected).ToList();
+        if (_filteredDepartments.Count == 0 || selected.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
+        var body = string.Join(
+            string.Empty,
+            _filteredDepartments.Select(row =>
+            {
+                var cells = selected.Select(field => field.Key switch
+                {
+                    "department" => row.department_code.ToString(),
+                    "description" => ValueOrDash(row.department_description),
+                    "contact" => ValueOrDash(row.contact_person),
+                    "telephone" => ValueOrDash(row.telephone),
+                    "status" => row.dept_active ? "Active" : "Inactive",
+                    _ => "-"
+                });
+
+                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
+            }));
+
+        return BuildHtmlDocument("Departments Report", head, body);
+    }
+
+    private string BuildSiteHtml()
+    {
+        var selected = _siteExportFields.Where(f => f.Selected).ToList();
+        if (_filteredSites.Count == 0 || selected.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
+        var body = string.Join(
+            string.Empty,
+            _filteredSites.Select(row =>
+            {
+                var cells = selected.Select(field => field.Key switch
+                {
+                    "site" => row.SiteCode.ToString(),
+                    "department" => GetDepartmentLabel(row.DepartmentCode),
+                    "description" => ValueOrDash(row.Description),
+                    "telephone" => ValueOrDash(row.Telephone),
+                    "status" => row.SiteActive ? "Active" : "Inactive",
+                    _ => "-"
+                });
+
+                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
+            }));
+
+        return BuildHtmlDocument("Sites Report", head, body);
+    }
+
+    private static string BuildHtmlDocument(string title, string head, string body)
+    {
+        var html = new System.Text.StringBuilder();
+        html.AppendLine("<!doctype html>");
+        html.AppendLine("<html>");
+        html.AppendLine("<head>");
+        html.AppendLine("<meta charset=\"utf-8\" />");
+        html.AppendLine($"<title>{HtmlEncode(title)}</title>");
+        html.AppendLine("<style>");
+        html.AppendLine("body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }");
+        html.AppendLine("h1 { font-size: 20px; margin: 0 0 12px 0; }");
+        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
+        html.AppendLine("th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 12px; }");
+        html.AppendLine("th { background: #f3f4f6; }");
+        html.AppendLine("</style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine($"<h1>{HtmlEncode(title)}</h1>");
+        html.AppendLine("<table>");
+        html.AppendLine($"<thead><tr>{head}</tr></thead>");
+        html.AppendLine($"<tbody>{body}</tbody>");
+        html.AppendLine("</table>");
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+        return html.ToString();
+    }
+
+    private static string HtmlEncode(string? value)
+        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
 
     private sealed class ExportField
     {

@@ -35,6 +35,18 @@ else if (_result is not null)
                 </div>
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
                     <span class="badge @(_result.IsApproximate ? "badge-warning" : "badge-success")">@(_result.IsApproximate ? "Approximate fallback" : "Legacy-aligned result")</span>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="OpenHtmlAsync" disabled="@(_result.Rows.Count == 0)">
+                        <i class="bx bx-window-open"></i>
+                        Open HTML
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="PrintPdfAsync" disabled="@(_result.Rows.Count == 0)">
+                        <i class="bx bx-printer"></i>
+                        Print PDF
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="DownloadExcelAsync" disabled="@(_result.Rows.Count == 0)">
+                        <i class="bx bx-spreadsheet"></i>
+                        Download Excel
+                    </button>
                     <button type="button" class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_result.Rows.Count == 0)">
                         <i class="bx bx-download"></i>
                         Download CSV
@@ -193,6 +205,41 @@ else if (_result is not null)
         await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
     }
 
+    private async Task DownloadExcelAsync()
+    {
+        if (_result is null || _result.Columns.Count == 0)
+        {
+            return;
+        }
+
+        var html = BuildHtmlTable(_result.Title, _result.Columns, _result.Rows);
+        var safeKey = ReportKey.Replace(' ', '-').ToLowerInvariant();
+        var fileName = $"{safeKey}_{DateTime.Now:yyyyMMdd_HHmm}.xls";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
+    }
+
+    private async Task OpenHtmlAsync()
+    {
+        if (_result is null || _result.Columns.Count == 0)
+        {
+            return;
+        }
+
+        var html = BuildHtmlTable(_result.Title, _result.Columns, _result.Rows);
+        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, _result.Title);
+    }
+
+    private async Task PrintPdfAsync()
+    {
+        if (_result is null || _result.Columns.Count == 0)
+        {
+            return;
+        }
+
+        var html = BuildHtmlTable(_result.Title, _result.Columns, _result.Rows);
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, _result.Title);
+    }
+
     private void PrevPage()
     {
         if (_page > 1)
@@ -220,4 +267,46 @@ else if (_result is not null)
         var safe = (value ?? string.Empty).Replace("\"", "\"\"");
         return $"\"{safe}\"";
     }
+
+    private static string BuildHtmlTable(
+        string title,
+        IReadOnlyList<LegacyDynamicReportColumnDto> columns,
+        IReadOnlyList<Dictionary<string, string?>> rows)
+    {
+        var head = string.Join(string.Empty, columns.Select(c => $"<th>{HtmlEncode(c.Header)}</th>"));
+        var body = string.Join(
+            string.Empty,
+            rows.Select(row =>
+            {
+                var cells = string.Join(string.Empty, columns.Select(c => $"<td>{HtmlEncode(ValueOrDash(GetCell(row, c.Key)))}</td>"));
+                return $"<tr>{cells}</tr>";
+            }));
+
+        var html = new System.Text.StringBuilder();
+        html.AppendLine("<!doctype html>");
+        html.AppendLine("<html>");
+        html.AppendLine("<head>");
+        html.AppendLine("<meta charset=\"utf-8\" />");
+        html.AppendLine($"<title>{HtmlEncode(title)}</title>");
+        html.AppendLine("<style>");
+        html.AppendLine("body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }");
+        html.AppendLine("h1 { font-size: 20px; margin: 0 0 12px 0; }");
+        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
+        html.AppendLine("th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 12px; }");
+        html.AppendLine("th { background: #f3f4f6; }");
+        html.AppendLine("</style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine($"<h1>{HtmlEncode(title)}</h1>");
+        html.AppendLine("<table>");
+        html.AppendLine($"<thead><tr>{head}</tr></thead>");
+        html.AppendLine($"<tbody>{body}</tbody>");
+        html.AppendLine("</table>");
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+        return html.ToString();
+    }
+
+    private static string HtmlEncode(string? value)
+        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
 }
