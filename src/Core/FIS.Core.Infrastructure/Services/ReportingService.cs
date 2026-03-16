@@ -514,20 +514,158 @@ public class ReportingService : IReportingService
                 break;
 
             case "detailed":
-                // Implement detailed vehicle report
+                var detailedVehicles = await _context.Vehicles
+                    .Where(v => !v.is_deleted && (request.VmfCode == null || v.vmf_code == request.VmfCode))
+                    .Select(v => new
+                    {
+                        v.vmf_code, v.registration_number, v.fleet_number,
+                        v.current_odo, v.year_manufactured, v.location_code,
+                        v.model_code, v.monthly_overhead, v.purchase_amount
+                    })
+                    .ToListAsync();
+
+                var detailModelIds = detailedVehicles.Select(v => v.model_code).Distinct().ToList();
+                var detailSiteIds  = detailedVehicles.Select(v => v.location_code).Distinct().ToList();
+
+                var detailModels = await _context.Models
+                    .Where(m => detailModelIds.Contains(m.model_code))
+                    .Join(_context.Makes, m => m.make_code, mk => mk.make_code,
+                          (m, mk) => new { m.model_code, m.model_description, mk.make_description })
+                    .ToDictionaryAsync(x => x.model_code);
+
+                var detailSites = await _context.Sites
+                    .Where(s => detailSiteIds.Contains(s.Site_code) && !s.is_deleted)
+                    .Join(_context.Departments.Where(d => !d.is_deleted),
+                          s => s.Depatrment_code, d => d.department_code,
+                          (s, d) => new { s.Site_code, site_desc = s.description, dept_desc = d.description })
+                    .ToDictionaryAsync(x => x.Site_code);
+
+                var detailContracts = await _context.Contracts
+                    .Where(c => !c.is_deleted && c.still_current == "Y")
+                    .Select(c => new { c.vmf_code, c.contract_type, c.monthly_km })
+                    .ToDictionaryAsync(c => c.vmf_code);
+
+                var detailTariffs = await _context.LeaseTariffs
+                    .Where(t => t.active && !t.is_deleted)
+                    .Select(t => new { t.vmf_code, t.fixed_tariff })
+                    .ToDictionaryAsync(t => t.vmf_code);
+
+                dataRows = detailedVehicles.Select(v =>
+                {
+                    detailModels.TryGetValue(v.model_code, out var model);
+                    detailSites.TryGetValue(v.location_code, out var site);
+                    detailContracts.TryGetValue(v.vmf_code, out var contract);
+                    detailTariffs.TryGetValue(v.vmf_code, out var tariff);
+                    return new Dictionary<string, object>
+                    {
+                        ["VMF_Code"]         = v.vmf_code,
+                        ["Fleet_Number"]     = (object)(v.fleet_number ?? ""),
+                        ["Registration"]     = (object)(v.registration_number ?? ""),
+                        ["Make"]             = (object)(model?.make_description ?? ""),
+                        ["Model"]            = (object)(model?.model_description ?? ""),
+                        ["Year"]             = (object)(v.year_manufactured ?? 0),
+                        ["Current_Odo"]      = v.current_odo,
+                        ["Site"]             = (object)(site?.site_desc ?? ""),
+                        ["Department"]       = (object)(site?.dept_desc ?? ""),
+                        ["Contract_Type"]    = (object)(contract?.contract_type ?? "None"),
+                        ["Monthly_KM"]       = contract?.monthly_km ?? 0,
+                        ["Monthly_Tariff"]   = tariff?.fixed_tariff ?? 0m,
+                        ["Monthly_Overhead"] = v.monthly_overhead ?? 0m,
+                    };
+                }).ToList();
+
+                summary["Total_Vehicles"]       = detailedVehicles.Count;
+                summary["Active_Contracts"]     = detailContracts.Count;
+                summary["Vehicles_With_Tariff"] = detailTariffs.Count;
                 break;
 
             case "financial":
-                // Implement financial report
+                var financialItems = await _context.InvoiceItems
+                    .Where(ii => !ii.is_deleted
+                        && (request.VmfCode == null || ii.vmf_code == request.VmfCode))
+                    .Join(_context.Invoices.Where(i => !i.is_deleted),
+                          ii => ii.invoice_code, i => i.invoice_code,
+                          (ii, i) => new { ii, i })
+                    .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                          x => x.i.posting_month_code, pm => pm.posting_month_code,
+                          (x, pm) => new { x.ii, x.i, pm })
+                    .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                          x => x.pm.posting_year_code, py => py.posting_year_code,
+                          (x, py) => new { x.ii, x.i, x.pm, py })
+                    .Where(x =>
+                        (request.StartDate == null || x.py.year_start_date >= request.StartDate) &&
+                        (request.EndDate   == null || x.py.year_end_date   <= request.EndDate))
+                    .Select(x => new
+                    {
+                        x.ii.vmf_code,
+                        x.ii.fixed_tariff_amount,
+                        x.ii.odo_tariff_amount,
+                        x.i.department_code,
+                        month_name   = x.pm.month_name,
+                        month_number = (int)x.pm.month_number,
+                        year         = x.py.year_start_date.Year,
+                    })
+                    .ToListAsync();
+
+                dataRows = financialItems.Select(f => new Dictionary<string, object>
+                {
+                    ["VMF_Code"]       = f.vmf_code,
+                    ["Department_Code"]= f.department_code,
+                    ["Year"]           = f.year,
+                    ["Month"]          = (object)(f.month_name ?? f.month_number.ToString()),
+                    ["Fixed_Tariff"]   = f.fixed_tariff_amount,
+                    ["Odo_Tariff"]     = f.odo_tariff_amount,
+                    ["Total_Billed"]   = f.fixed_tariff_amount + f.odo_tariff_amount,
+                }).ToList();
+
+                summary["Total_Billed"]     = financialItems.Sum(f => f.fixed_tariff_amount + f.odo_tariff_amount);
+                summary["Vehicles_Billed"]  = financialItems.Select(f => f.vmf_code).Distinct().Count();
+                summary["Months_Covered"]   = financialItems.Select(f => new { f.year, f.month_number }).Distinct().Count();
                 break;
 
             case "maintenance":
-                // Implement maintenance report
+                var maintVmfFilter = request.VmfCode;
+                var maintVehicles = await _context.Vehicles
+                    .Where(v => !v.is_deleted && (maintVmfFilter == null || v.vmf_code == maintVmfFilter))
+                    .Select(v => new { v.vmf_code, v.registration_number, v.fleet_number })
+                    .ToListAsync();
+
+                var maintVmfCodes = maintVehicles.Select(v => v.vmf_code).ToList();
+                var maintRecords  = await _context.MaintenanceRecords
+                    .Where(m => maintVmfCodes.Contains(m.VmfCode))
+                    .Select(m => new { m.VmfCode, m.MaintenanceType, m.MaintenanceDate, m.TotalCost, m.OdometerReading })
+                    .ToListAsync();
+
+                var maintByVehicle = maintRecords.GroupBy(m => m.VmfCode)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+
+                dataRows = maintVehicles.Select(v =>
+                {
+                    var records = maintByVehicle.GetValueOrDefault(v.vmf_code);
+                    return new Dictionary<string, object>
+                    {
+                        ["VMF_Code"]             = v.vmf_code,
+                        ["Registration"]         = (object)(v.registration_number ?? ""),
+                        ["Fleet_Number"]         = (object)(v.fleet_number ?? ""),
+                        ["Service_Count"]        = records?.Count ?? 0,
+                        ["Total_Maintenance_Cost"]= records?.Sum(r => r.TotalCost) ?? 0m,
+                        ["Last_Service_Date"]    = (object)(records?.Max(r => (DateTime?)r.MaintenanceDate)?.ToString("yyyy-MM-dd") ?? ""),
+                        ["Last_Service_Odo"]     = records?.OrderByDescending(r => r.MaintenanceDate).FirstOrDefault()?.OdometerReading ?? 0,
+                    };
+                }).ToList();
+
+                summary["Total_Maintenance_Cost"]  = maintRecords.Sum(r => r.TotalCost);
+                summary["Total_Services"]          = maintRecords.Count;
+                summary["Vehicles_With_Service"]   = maintByVehicle.Count;
                 break;
 
             default:
                 throw new ArgumentException($"Unknown report type: {request.ReportType}");
         }
+
+        // Only "financial" rows carry per-row Month/Year fields; all other types are
+        // vehicle-master snapshots with no posting-date dimension.
+        var supportsDateFilter = request.ReportType.ToLower() == "financial";
 
         return new UniversalReport
         {
@@ -537,6 +675,7 @@ public class ReportingService : IReportingService
             ReportData = request.Parameters,
             DataRows = dataRows,
             Summary = summary,
+            SupportsDateFilter = supportsDateFilter,
         };
     }
 
@@ -546,115 +685,307 @@ public class ReportingService : IReportingService
 
     public async Task<SummaryIncomeReport> GenerateSummaryIncomeReportAsync(int financialYear)
     {
-        _logger.LogInformation(
-            "Generating summary income report for FY: {FinancialYear}",
-            financialYear
-        );
+        _logger.LogInformation("Generating summary income report for FY: {FinancialYear}", financialYear);
 
-        // TODO: Implement financial data retrieval
-        // This would require implementing financial/billing tables and repositories
+        // Pull all invoice_items for the requested financial year, joining through invoice → posting_month → posting_year
+        var yearItems = await _context.InvoiceItems
+            .Where(ii => !ii.is_deleted)
+            .Join(_context.Invoices.Where(i => !i.is_deleted),
+                  ii => ii.invoice_code, i => i.invoice_code,
+                  (ii, i) => new { ii, i })
+            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                  x => x.i.posting_month_code, pm => pm.posting_month_code,
+                  (x, pm) => new { x.ii, x.i, pm })
+            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                  x => x.pm.posting_year_code, py => py.posting_year_code,
+                  (x, py) => new { x.ii, x.i, x.pm, py })
+            .Where(x => x.py.year_start_date.Year == financialYear)
+            .Select(x => new
+            {
+                x.ii.vmf_code,
+                x.i.department_code,
+                x.ii.site_code,
+                x.ii.fixed_tariff_amount,
+                x.ii.odo_tariff_amount,
+                month_name   = x.pm.month_name,
+                month_number = (int)x.pm.month_number,
+            })
+            .ToListAsync();
 
-        await Task.CompletedTask; // Make method properly async
+        var deptCodes = yearItems.Select(x => x.department_code).Distinct().ToList();
+        var deptNames = await _context.Departments
+            .Where(d => deptCodes.Contains(d.department_code) && !d.is_deleted)
+            .Select(d => new { d.department_code, d.description })
+            .ToDictionaryAsync(d => d.department_code, d => d.description ?? $"Dept {d.department_code}");
+
+        var vmfCodes = yearItems.Select(x => x.vmf_code).Distinct().ToList();
+        var vehicleTypes = await _context.Vehicles
+            .Where(v => vmfCodes.Contains(v.vmf_code) && !v.is_deleted)
+            .Join(_context.VehicleTypes, v => v.type_code, t => t.type_code,
+                  (v, t) => new { v.vmf_code, type = t.type_description })
+            .ToDictionaryAsync(x => x.vmf_code, x => x.type ?? "Unknown");
+
+        var totalIncome = yearItems.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount);
+
+        var incomeByDept = yearItems
+            .GroupBy(x => x.department_code)
+            .ToDictionary(
+                g => deptNames.GetValueOrDefault(g.Key, $"Dept {g.Key}"),
+                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
+
+        var incomeByMonth = yearItems
+            .GroupBy(x => new { x.month_number, x.month_name })
+            .OrderBy(g => g.Key.month_number)
+            .ToDictionary(
+                g => g.Key.month_name ?? $"Month {g.Key.month_number}",
+                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
+
+        var incomeByType = yearItems
+            .GroupBy(x => vehicleTypes.GetValueOrDefault(x.vmf_code, "Unknown"))
+            .ToDictionary(
+                g => g.Key,
+                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
 
         return new SummaryIncomeReport
         {
-            FinancialYear = financialYear,
-            TotalIncome = 0,
-            IncomeByDepartment = new Dictionary<string, decimal>(),
-            IncomeByMonth = new Dictionary<string, decimal>(),
-            IncomeByVehicleType = new Dictionary<string, decimal>(),
-            BudgetedIncome = 0,
-            VarianceAmount = 0,
-            VariancePercentage = 0,
+            FinancialYear       = financialYear,
+            GeneratedDate       = DateTime.Now,
+            TotalIncome         = totalIncome,
+            IncomeByDepartment  = incomeByDept,
+            IncomeByMonth       = incomeByMonth,
+            IncomeByVehicleType = incomeByType,
+            BudgetedIncome      = 0,
+            VarianceAmount      = 0,
+            VariancePercentage  = 0,
+            Summary = $"Financial year {financialYear}: {yearItems.Select(x => x.vmf_code).Distinct().Count()} vehicles billed, {yearItems.Count} invoice lines, total income R{totalIncome:N2}",
         };
     }
 
     public async Task<DetailedIncomeReport> GenerateDetailedIncomeReportAsync(int financialYear)
     {
-        _logger.LogInformation(
-            "Generating detailed income report for FY: {FinancialYear}",
-            financialYear
-        );
+        _logger.LogInformation("Generating detailed income report for FY: {FinancialYear}", financialYear);
 
-        // TODO: Implement detailed financial data retrieval
-        await Task.CompletedTask; // Make method properly async
+        var detailItems = await _context.InvoiceItems
+            .Where(ii => !ii.is_deleted)
+            .Join(_context.Invoices.Where(i => !i.is_deleted),
+                  ii => ii.invoice_code, i => i.invoice_code,
+                  (ii, i) => new { ii, i })
+            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                  x => x.i.posting_month_code, pm => pm.posting_month_code,
+                  (x, pm) => new { x.ii, x.i, pm })
+            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                  x => x.pm.posting_year_code, py => py.posting_year_code,
+                  (x, py) => new { x.ii, x.i, x.pm, py })
+            .Where(x => x.py.year_start_date.Year == financialYear)
+            .Select(x => new
+            {
+                x.ii.vmf_code,
+                x.i.department_code,
+                x.ii.fixed_tariff_amount,
+                x.ii.odo_tariff_amount,
+                x.ii.date_created,
+                month_name = x.pm.month_name,
+            })
+            .ToListAsync();
 
-        // TODO: Implement detailed financial transaction retrieval
+        var vmfList = detailItems.Select(x => x.vmf_code).Distinct().ToList();
+        var regNumbers = await _context.Vehicles
+            .Where(v => vmfList.Contains(v.vmf_code) && !v.is_deleted)
+            .Select(v => new { v.vmf_code, v.registration_number })
+            .ToDictionaryAsync(v => v.vmf_code, v => v.registration_number ?? "");
+
+        var deptList = detailItems.Select(x => x.department_code).Distinct().ToList();
+        var deptNameMap = await _context.Departments
+            .Where(d => deptList.Contains(d.department_code) && !d.is_deleted)
+            .Select(d => new { d.department_code, d.description })
+            .ToDictionaryAsync(d => d.department_code, d => d.description ?? $"Dept {d.department_code}");
+
+        var incomeDetails = detailItems.Select(x => new IncomeDetailLine
+        {
+            VmfCode            = x.vmf_code.ToString(),
+            RegistrationNumber = regNumbers.GetValueOrDefault(x.vmf_code, ""),
+            Department         = deptNameMap.GetValueOrDefault(x.department_code, $"Dept {x.department_code}"),
+            Amount             = x.fixed_tariff_amount + x.odo_tariff_amount,
+            Description        = $"Monthly tariff — {x.month_name}",
+            Date               = x.date_created,
+        }).ToList();
+
+        var totals = new Dictionary<string, decimal>
+        {
+            ["Total_Fixed_Tariff"] = detailItems.Sum(x => x.fixed_tariff_amount),
+            ["Total_Odo_Tariff"]   = detailItems.Sum(x => x.odo_tariff_amount),
+            ["Grand_Total"]        = detailItems.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount),
+        };
 
         return new DetailedIncomeReport
         {
-            FinancialYear = financialYear,
-            IncomeDetails = new List<IncomeDetailLine>(),
-            Totals = new Dictionary<string, decimal>(),
+            FinancialYear  = financialYear,
+            GeneratedDate  = DateTime.Now,
+            IncomeDetails  = incomeDetails,
+            Totals         = totals,
+            Summary        = $"{incomeDetails.Count} line items, grand total R{totals["Grand_Total"]:N2}",
         };
     }
 
     public async Task<TariffListReport> GenerateTariffListReportAsync(int financialYear)
     {
-        _logger.LogInformation(
-            "Generating tariff list report for FY: {FinancialYear}",
-            financialYear
-        );
+        _logger.LogInformation("Generating tariff list report for FY: {FinancialYear}", financialYear);
 
-        // TODO: Implement tariff retrieval from tariff tables
-        await Task.CompletedTask; // Make method properly async
+        var tariffs = await _context.LeaseTariffs
+            .Where(t => !t.is_deleted && t.active)
+            .Join(_context.Vehicles.Where(v => !v.is_deleted),
+                  t => t.vmf_code, v => v.vmf_code,
+                  (t, v) => new { t, v })
+            .Select(x => new
+            {
+                x.t.lease_tariff_code,
+                x.t.fixed_tariff,
+                x.t.start_date,
+                x.t.end_date,
+                x.v.vmf_code,
+                x.v.registration_number,
+                x.v.fleet_number,
+            })
+            .OrderBy(x => x.vmf_code)
+            .ToListAsync();
+
+        var tariffItems = tariffs.Select(t => new TariffItem
+        {
+            TariffCode  = t.lease_tariff_code.ToString(),
+            Description = $"{t.fleet_number ?? t.vmf_code.ToString()} — {t.registration_number} (valid {t.start_date:yyyy-MM-dd} to {t.end_date:yyyy-MM-dd})",
+            Rate        = t.fixed_tariff,
+            Unit        = "Monthly",
+        }).ToList();
 
         return new TariffListReport
         {
             FinancialYear = financialYear,
-            Tariffs = new List<TariffItem>(),
             GeneratedDate = DateTime.Now,
+            Tariffs       = tariffItems,
+            Summary       = $"{tariffItems.Count} active lease tariffs. Average monthly rate: R{(tariffItems.Count > 0 ? tariffItems.Average(t => t.Rate) : 0):N2}",
         };
     }
 
-    public async Task<VehicleBillingHistoryReport> GenerateVehicleBillingHistoryAsync(
-        int vmfCode,
-        int financialYear
-    )
+    public async Task<VehicleBillingHistoryReport> GenerateVehicleBillingHistoryAsync(int vmfCode, int financialYear)
     {
-        _logger.LogInformation(
-            "Generating vehicle billing history for VMF: {VmfCode}, FY: {FinancialYear}",
-            vmfCode,
-            financialYear
-        );
+        _logger.LogInformation("Generating vehicle billing history for VMF: {VmfCode}, FY: {FinancialYear}", vmfCode, financialYear);
 
         var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
         if (vehicle == null)
-        {
             throw new ArgumentException($"Vehicle with VMF Code {vmfCode} not found");
-        }
 
-        // TODO: Implement billing history retrieval
+        var billingLines = await _context.InvoiceItems
+            .Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .Join(_context.Invoices.Where(i => !i.is_deleted),
+                  ii => ii.invoice_code, i => i.invoice_code,
+                  (ii, i) => new { ii, i })
+            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                  x => x.i.posting_month_code, pm => pm.posting_month_code,
+                  (x, pm) => new { x.ii, x.i, pm })
+            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                  x => x.pm.posting_year_code, py => py.posting_year_code,
+                  (x, py) => new { x.ii, x.i, x.pm, py })
+            .Where(x => x.py.year_start_date.Year == financialYear)
+            .Select(x => new
+            {
+                x.ii.fixed_tariff_amount,
+                x.ii.odo_tariff_amount,
+                x.ii.start_odometer,
+                x.ii.end_odometer,
+                month_name   = x.pm.month_name,
+                month_number = (int)x.pm.month_number,
+                x.ii.date_created,
+            })
+            .OrderBy(x => x.month_number)
+            .ToListAsync();
+
+        var history = billingLines.Select(b => new BillingHistoryLine
+        {
+            Date        = b.date_created,
+            Description = $"{b.month_name} — fixed R{b.fixed_tariff_amount:N2} + odo R{b.odo_tariff_amount:N2} ({b.start_odometer} → {b.end_odometer} km)",
+            Amount      = b.fixed_tariff_amount + b.odo_tariff_amount,
+            Reference   = $"FY{financialYear}/{b.month_number:D2}",
+            Type        = "Tariff",
+        }).ToList();
+
+        var totalBilled   = history.Sum(h => h.Amount);
+        var monthlyAvg    = history.Count > 0 ? totalBilled / history.Count : 0m;
 
         return new VehicleBillingHistoryReport
         {
-            VmfCode = vmfCode,
-            RegistrationNumber = vehicle.registration_number ?? string.Empty,
-            FinancialYear = financialYear,
-            BillingHistory = new List<BillingHistoryLine>(),
-            TotalBilled = 0,
-            AverageMonthlyBilling = 0,
+            VmfCode                = vmfCode,
+            RegistrationNumber     = vehicle.registration_number ?? string.Empty,
+            FinancialYear          = financialYear,
+            GeneratedDate          = DateTime.Now,
+            BillingHistory         = history,
+            TotalBilled            = totalBilled,
+            AverageMonthlyBilling  = monthlyAvg,
+            Summary                = $"{history.Count} billing periods in FY{financialYear}, total R{totalBilled:N2}, average R{monthlyAvg:N2}/month",
         };
     }
 
     public async Task<KiloGapsReport> GenerateKiloGapsReportAsync(int financialYear)
     {
-        _logger.LogInformation(
-            "Generating kilo gaps report for FY: {FinancialYear}",
-            financialYear
-        );
+        _logger.LogInformation("Generating kilo gaps report for FY: {FinancialYear}", financialYear);
 
-        // TODO: Implement gap detection in odometer readings
-        // This would analyze trip records for missing or inconsistent odometer readings
+        // Find odometer discontinuities: for each vehicle, compare consecutive invoice_item
+        // end_odometer vs the next month's start_odometer across the financial year.
+        var odoData = await _context.InvoiceItems
+            .Where(ii => !ii.is_deleted)
+            .Join(_context.Invoices.Where(i => !i.is_deleted),
+                  ii => ii.invoice_code, i => i.invoice_code,
+                  (ii, i) => new { ii, i })
+            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                  x => x.i.posting_month_code, pm => pm.posting_month_code,
+                  (x, pm) => new { x.ii, x.i, pm })
+            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                  x => x.pm.posting_year_code, py => py.posting_year_code,
+                  (x, py) => new { x.ii, x.i, x.pm, py })
+            .Where(x => x.py.year_start_date.Year == financialYear)
+            .Select(x => new
+            {
+                x.ii.vmf_code,
+                x.ii.start_odometer,
+                x.ii.end_odometer,
+                x.ii.start_odo_date,
+                x.ii.end_odo_date,
+                month_number = (int)x.pm.month_number,
+            })
+            .OrderBy(x => x.vmf_code).ThenBy(x => x.month_number)
+            .ToListAsync();
 
-        await Task.CompletedTask; // Make method properly async
+        var gaps = new List<KiloGap>();
+        foreach (var vehicleGroup in odoData.GroupBy(x => x.vmf_code))
+        {
+            var months = vehicleGroup.OrderBy(m => m.month_number).ToList();
+            for (int i = 0; i < months.Count - 1; i++)
+            {
+                var current = months[i];
+                var next    = months[i + 1];
+                // A gap exists when next month's start_odo doesn't align with this month's end_odo
+                if (next.start_odometer > 0 && current.end_odometer > 0
+                    && next.start_odometer != current.end_odometer)
+                {
+                    gaps.Add(new KiloGap
+                    {
+                        VmfCode     = vehicleGroup.Key,
+                        FromDate    = current.end_odo_date ?? DateTime.MinValue,
+                        ToDate      = next.start_odo_date ?? DateTime.MinValue,
+                        MissingDays = (next.start_odo_date - current.end_odo_date) is TimeSpan ts && ts.TotalDays > 0
+                            ? (int)ts.TotalDays : 0,
+                    });
+                }
+            }
+        }
 
         return new KiloGapsReport
         {
-            FinancialYear = financialYear,
-            Gaps = new List<KiloGap>(),
-            TotalGaps = 0,
-            VehiclesAffected = 0,
+            FinancialYear    = financialYear,
+            GeneratedDate    = DateTime.Now,
+            Gaps             = gaps,
+            TotalGaps        = gaps.Count,
+            VehiclesAffected = gaps.Select(g => g.VmfCode).Distinct().Count(),
+            Summary          = $"{gaps.Count} odometer discontinuities found across {gaps.Select(g => g.VmfCode).Distinct().Count()} vehicles in FY{financialYear}",
         };
     }
 

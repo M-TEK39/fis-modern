@@ -1,6 +1,8 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 
 namespace FIS.Api.Controllers;
@@ -16,13 +18,16 @@ namespace FIS.Api.Controllers;
 public class FinanceController : BaseApiController
 {
     private readonly IJournalDetailService _journalService;
+    private readonly FisDbContext _context;
     private readonly ILogger<FinanceController> _logger;
 
     public FinanceController(
         IJournalDetailService journalService,
+        FisDbContext context,
         ILogger<FinanceController> logger)
     {
         _journalService = journalService;
+        _context = context;
         _logger = logger;
     }
 
@@ -184,17 +189,166 @@ public class FinanceController : BaseApiController
     #region Tariff Parameters
 
     [HttpGet("tariff-parameters/years")]
-    public ActionResult<IEnumerable<int>> GetTariffParameterYears()
+    public async Task<ActionResult<IEnumerable<int>>> GetTariffParameterYears()
     {
-        var years = new List<int> { 2023, 2024, 2025, 2026 };
-        return Ok(years);
+        try
+        {
+            var years = await _context.TariffParameters
+                .Where(tp => !tp.is_deleted)
+                .Select(tp => tp.TariffParameterYear)
+                .Distinct()
+                .OrderByDescending(y => y)
+                .ToListAsync();
+
+            if (!years.Any())
+                years = new List<int> { DateTime.Now.Year };
+
+            return Ok(years);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching tariff parameter years");
+            return StatusCode(500, new { error = "Failed to fetch tariff parameter years" });
+        }
     }
 
     [HttpGet("tariff-parameters/{year}")]
-    public ActionResult<TariffParametersDto> GetTariffParameters(int year)
+    public async Task<ActionResult<TariffParametersDto>> GetTariffParameters(int year)
     {
-        var parameters = new TariffParametersDto { Year = year, IsApproved = false, Parameters = new List<TariffParameterItemDto>() };
-        return Ok(parameters);
+        try
+        {
+            var param = await _context.TariffParameters
+                .Where(tp => tp.TariffParameterYear == year && !tp.is_deleted)
+                .FirstOrDefaultAsync();
+
+            // Global parameters (interest rate, fuel price, etc.)
+            var globalParams = new List<TariffParameterItemDto>();
+            bool isApproved = false;
+            string? approvedBy = null;
+            DateTime? effectiveDate = null;
+
+            if (param != null)
+            {
+                isApproved = !string.IsNullOrEmpty(param.Approval_user_access_name);
+                approvedBy = param.Approval_user_access_name;
+                effectiveDate = param.EffectiveDate;
+
+                globalParams.Add(new TariffParameterItemDto
+                {
+                    ParameterName = "Annual Interest Rate",
+                    Value = param.AnnualInterestRatePercentage,
+                    Unit = "%",
+                });
+                globalParams.Add(new TariffParameterItemDto
+                {
+                    ParameterName = "Annual Payments",
+                    Value = param.AnnualPayments,
+                    Unit = "payments/year",
+                });
+                if (param.EffectiveInterestRate.HasValue)
+                    globalParams.Add(new TariffParameterItemDto
+                    {
+                        ParameterName = "Effective Interest Rate",
+                        Value = param.EffectiveInterestRate.Value,
+                        Unit = "%",
+                    });
+                globalParams.Add(new TariffParameterItemDto
+                {
+                    ParameterName = "Pool Vehicle Charged Days/Month",
+                    Value = param.PoolVehicleChargedDaysPerMonth,
+                    Unit = "days",
+                });
+                if (param.AverageFuelPrice.HasValue)
+                    globalParams.Add(new TariffParameterItemDto
+                    {
+                        ParameterName = "Average Fuel Price",
+                        Value = param.AverageFuelPrice.Value,
+                        Unit = "R/litre",
+                    });
+                if (param.AnnualRecoveredKilos.HasValue)
+                    globalParams.Add(new TariffParameterItemDto
+                    {
+                        ParameterName = "Annual Recovered Kilometres",
+                        Value = param.AnnualRecoveredKilos.Value,
+                        Unit = "km",
+                    });
+            }
+
+            // Fixed and kilo tariffs per vehicle class (from Tariff table, current effective date)
+            var today = DateTime.Today;
+            var classTariffs = await _context.Tariffs
+                .Where(t => t.effective_start_date <= today &&
+                            (t.effective_end_date == null || t.effective_end_date >= today))
+                .Join(_context.Classes,
+                      t => t.class_code, c => c.class_code,
+                      (t, c) => new
+                      {
+                          t.tariff_code,
+                          t.class_code,
+                          class_description = c.description,
+                          t.monthly_fixed_amount,
+                          t.monthly_odo_amount,
+                          t.daily_fixed_amount,
+                          t.effective_start_date,
+                      })
+                .OrderBy(x => x.class_code)
+                .ToListAsync();
+
+            var fixedTariffs = classTariffs.Select(t => new TariffClassRowDto
+            {
+                ClassCode      = t.class_code,
+                ClassDescription = t.class_description ?? $"Class {t.class_code}",
+                Amount         = t.monthly_fixed_amount,
+                Unit           = "R/month",
+                EffectiveDate  = t.effective_start_date,
+            }).ToList();
+
+            var kiloTariffs = classTariffs.Select(t => new TariffClassRowDto
+            {
+                ClassCode      = t.class_code,
+                ClassDescription = t.class_description ?? $"Class {t.class_code}",
+                Amount         = t.monthly_odo_amount,
+                Unit           = "R/km",
+                EffectiveDate  = t.effective_start_date,
+            }).ToList();
+
+            // Maintenance values for this parameter year
+            var maintValues = param != null
+                ? await _context.MaintenanceValues
+                    .Where(mv => mv.TariffParameterID == param.TariffParameterID)
+                    .Join(_context.Classes,
+                          mv => mv.class_code, c => c.class_code,
+                          (mv, c) => new MaintenanceValueRowDto
+                          {
+                              ClassCode      = mv.class_code,
+                              ClassDescription = c.description ?? $"Class {mv.class_code}",
+                              MonthsAge      = mv.months_age,
+                              KilometerAge   = mv.kilometer_age,
+                              Amount         = mv.amount,
+                              RandPerKilometer = mv.RandPerKilometer,
+                          })
+                    .OrderBy(mv => mv.ClassCode)
+                    .ThenBy(mv => mv.MonthsAge)
+                    .ToListAsync()
+                : new List<MaintenanceValueRowDto>();
+
+            return Ok(new TariffParametersDto
+            {
+                Year          = year,
+                IsApproved    = isApproved,
+                ApprovedBy    = approvedBy,
+                EffectiveDate = effectiveDate,
+                Parameters    = globalParams,
+                FixedTariffs  = fixedTariffs,
+                KiloTariffs   = kiloTariffs,
+                MaintenanceValues = maintValues,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching tariff parameters for year {Year}", year);
+            return StatusCode(500, new { error = "Failed to fetch tariff parameters" });
+        }
     }
 
     [HttpPost("tariff-parameters/{year}/approve")]
@@ -227,7 +381,19 @@ public class ReversalTreeDto { public string JournalNumber { get; set; } = ""; p
 public class ReversalNodeDto { public string JournalNumber { get; set; } = ""; public DateTime ReversalDate { get; set; } public decimal Amount { get; set; } }
 public class StandardBankImportDto { [Required] public string FileContent { get; set; } = ""; }
 public class ImportResultDto { public bool Success { get; set; } public int RecordsImported { get; set; } public int RecordsFailed { get; set; } public List<string> Errors { get; set; } = new(); }
-public class TariffParametersDto { public int Year { get; set; } public bool IsApproved { get; set; } public List<TariffParameterItemDto> Parameters { get; set; } = new(); }
+public class TariffParametersDto
+{
+    public int Year { get; set; }
+    public bool IsApproved { get; set; }
+    public string? ApprovedBy { get; set; }
+    public DateTime? EffectiveDate { get; set; }
+    public List<TariffParameterItemDto> Parameters { get; set; } = new();
+    public List<TariffClassRowDto> FixedTariffs { get; set; } = new();
+    public List<TariffClassRowDto> KiloTariffs { get; set; } = new();
+    public List<MaintenanceValueRowDto> MaintenanceValues { get; set; } = new();
+}
 public class TariffParameterItemDto { public string ParameterName { get; set; } = ""; public decimal Value { get; set; } public string Unit { get; set; } = ""; }
+public class TariffClassRowDto { public short ClassCode { get; set; } public string ClassDescription { get; set; } = ""; public decimal Amount { get; set; } public string Unit { get; set; } = ""; public DateTime EffectiveDate { get; set; } }
+public class MaintenanceValueRowDto { public short ClassCode { get; set; } public string ClassDescription { get; set; } = ""; public short MonthsAge { get; set; } public int KilometerAge { get; set; } public decimal Amount { get; set; } public decimal RandPerKilometer { get; set; } }
 public class ApproveTariffDto { public string? ApprovalNotes { get; set; } }
 #endregion

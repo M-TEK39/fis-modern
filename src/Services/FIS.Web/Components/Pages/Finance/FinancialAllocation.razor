@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using System.Text.Json
 @inject FinanceApiService FinanceService
 
 <PageTitle>@PageTitleText</PageTitle>
@@ -327,6 +328,7 @@
         _submitting = true;
         var endpoint = $"api/finance/bas/segments?departmentCode={Uri.EscapeDataString(_selectedDepartment)}&segmentType={Uri.EscapeDataString(_selectedSegmentType)}";
         var result = await FinanceService.GetActionAsync(endpoint);
+        _segmentRows = result.Success ? ParseGridRows(result.ResponseBody) : new List<FinanceGridRowDto>();
         _segmentPage = 1;
         SetStatus(result.Success, result.Message);
         _submitting = false;
@@ -349,6 +351,7 @@
         _submitting = true;
         var endpoint = $"api/finance/bas/journals/invalid?departmentCode={Uri.EscapeDataString(_selectedDepartment)}";
         var result = await FinanceService.GetActionAsync(endpoint);
+        _journalRows = result.Success ? ParseGridRows(result.ResponseBody) : new List<FinanceGridRowDto>();
         _journalPage = 1;
         SetStatus(result.Success, result.Message);
         _submitting = false;
@@ -359,6 +362,7 @@
         _submitting = true;
         var endpoint = $"api/finance/bas/journals/uninvoiced?departmentCode={Uri.EscapeDataString(_selectedDepartment)}";
         var result = await FinanceService.GetActionAsync(endpoint);
+        _journalRows = result.Success ? ParseGridRows(result.ResponseBody) : new List<FinanceGridRowDto>();
         _journalPage = 1;
         SetStatus(result.Success, result.Message);
         _submitting = false;
@@ -408,8 +412,83 @@
         };
 
         var result = await FinanceService.GetActionAsync(endpoint);
+        if (result.Success)
+        {
+            var rows = ParseGridRows(result.ResponseBody);
+            if (Action is "invalid-journals" or "fix-invalid-journals" or "allocate-fund-codes")
+            {
+                _journalRows = rows;
+                _journalPage = 1;
+            }
+            else
+            {
+                _segmentRows = rows;
+                _segmentPage = 1;
+            }
+        }
         SetStatus(result.Success, result.Message);
         _submitting = false;
+    }
+
+    private static List<FinanceGridRowDto> ParseGridRows(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return new List<FinanceGridRowDto>();
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(responseBody);
+            var root = document.RootElement;
+            JsonElement rowsElement;
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("dataRows", out var dataRows)
+                && dataRows.ValueKind == JsonValueKind.Array)
+            {
+                rowsElement = dataRows;
+            }
+            else if (root.ValueKind == JsonValueKind.Array)
+            {
+                rowsElement = root;
+            }
+            else
+            {
+                return new List<FinanceGridRowDto>();
+            }
+
+            var rows = new List<FinanceGridRowDto>();
+            foreach (var item in rowsElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                var data = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                foreach (var property in item.EnumerateObject())
+                {
+                    data[property.Name] = property.Value.ValueKind switch
+                    {
+                        JsonValueKind.String => property.Value.GetString(),
+                        JsonValueKind.Number => property.Value.GetRawText(),
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        JsonValueKind.Null => null,
+                        _ => property.Value.GetRawText()
+                    };
+                }
+
+                rows.Add(new FinanceGridRowDto { Data = data });
+            }
+
+            return rows;
+        }
+        catch
+        {
+            return new List<FinanceGridRowDto>();
+        }
     }
 
     private void SetStatus(bool success, string message)

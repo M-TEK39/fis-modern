@@ -44,41 +44,111 @@
                 <button class="btn btn-primary btn-sm" @onclick="ApproveYearAsync" disabled="@_submitting">Approve Year</button>
                 <button class="btn btn-secondary btn-sm" @onclick="RejectYearAsync" disabled="@_submitting">Reject Year</button>
             </div>
-            <h3 style="margin-top: 1.5rem;">Tariff Parameters &amp; Overhead Values</h3>
+            <h3 style="margin-top: 1.5rem;">Global Parameters</h3>
             <div class="table-container" style="margin-top: 0.75rem;">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Fixed Tariff</th>
+                                <th>Parameter</th>
                                 <th>Value</th>
-                                <th>Overhead</th>
-                                <th>Actions</th>
+                                <th>Unit</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="4">Select a tariff year to load fixed tariff records.</td>
-                            </tr>
+                            @if (_tariffParameters?.Parameters.Count > 0)
+                            {
+                                @foreach (var item in _tariffParameters.Parameters)
+                                {
+                                    <tr>
+                                        <td>@item.ParameterName</td>
+                                        <td>@FormatDecimal(item.Value)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Unit) ? "-" : item.Unit)</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="3">Select a tariff year to load parameter values.</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            <h3 style="margin-top: 1.5rem;">Fixed Tariffs</h3>
             <div class="table-container" style="margin-top: 0.75rem;">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Kilo Tariff</th>
-                                <th>Value</th>
-                                <th>Overhead</th>
-                                <th>Actions</th>
+                                <th>Class Code</th>
+                                <th>Class Description</th>
+                                <th>Amount</th>
+                                <th>Unit</th>
+                                <th>Effective Date</th>
                             </tr>
                         </thead>
                         <tbody>
+                            @if (_tariffParameters?.FixedTariffs.Count > 0)
+                            {
+                                @foreach (var item in _tariffParameters.FixedTariffs)
+                                {
+                                    <tr>
+                                        <td>@(item.ClassCode?.ToString() ?? "-")</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.ClassDescription) ? "-" : item.ClassDescription)</td>
+                                        <td>@FormatDecimal(item.Amount)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Unit) ? "-" : item.Unit)</td>
+                                        <td>@FormatDate(item.EffectiveDate)</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5">Select a tariff year to load fixed tariff records.</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <h3 style="margin-top: 1.5rem;">Kilometre Tariffs</h3>
+            <div class="table-container" style="margin-top: 0.75rem;">
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
                             <tr>
-                                <td colspan="4">Select a tariff year to load kilometre tariff records.</td>
+                                <th>Class Code</th>
+                                <th>Class Description</th>
+                                <th>Amount</th>
+                                <th>Unit</th>
+                                <th>Effective Date</th>
                             </tr>
+                        </thead>
+                        <tbody>
+                            @if (_tariffParameters?.KiloTariffs.Count > 0)
+                            {
+                                @foreach (var item in _tariffParameters.KiloTariffs)
+                                {
+                                    <tr>
+                                        <td>@(item.ClassCode?.ToString() ?? "-")</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.ClassDescription) ? "-" : item.ClassDescription)</td>
+                                        <td>@FormatDecimal(item.Amount)</td>
+                                        <td>@(string.IsNullOrWhiteSpace(item.Unit) ? "-" : item.Unit)</td>
+                                        <td>@FormatDate(item.EffectiveDate)</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="5">Select a tariff year to load kilometre tariff records.</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
@@ -96,13 +166,37 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="4">Select a tariff year to load maintenance values.</td>
-                            </tr>
+                            @if (_tariffParameters?.MaintenanceValues.Count > 0)
+                            {
+                                @foreach (var item in _tariffParameters.MaintenanceValues)
+                                {
+                                    <tr>
+                                        <td>@(string.IsNullOrWhiteSpace(item.ClassDescription) ? item.ClassCode?.ToString() ?? "-" : item.ClassDescription)</td>
+                                        <td>@(item.MonthsAge?.ToString() ?? "-")</td>
+                                        <td>@(item.KilometerAge?.ToString() ?? "-")</td>
+                                        <td>@FormatDecimal(item.Amount)</td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4">Select a tariff year to load maintenance values.</td>
+                                </tr>
+                            }
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            @if (_tariffParameters is not null)
+            {
+                <div class="alert alert-success" style="margin-top:0.75rem;">
+                    Approval status: @(_tariffParameters.IsApproved ? "Approved" : "Pending")
+                    | Approved by: @(string.IsNullOrWhiteSpace(_tariffParameters.ApprovedBy) ? "-" : _tariffParameters.ApprovedBy)
+                    | Effective date: @FormatDate(_tariffParameters.EffectiveDate)
+                </div>
+            }
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
@@ -116,6 +210,7 @@
 
 @code {
     private List<FinanceOptionDto> _years = new();
+    private FinanceTariffParametersDto? _tariffParameters;
     private string _selectedYear = string.Empty;
     private bool _submitting;
     private bool _statusError;
@@ -130,29 +225,71 @@
     {
         if (string.IsNullOrWhiteSpace(_selectedYear))
         {
+            _tariffParameters = null;
             return;
         }
 
-        var result = await FinanceService.GetActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}");
-        _statusError = !result.Success;
-        _statusMessage = result.Message;
+        var data = await FinanceService.GetTariffParametersAsync(_selectedYear);
+        if (data is null)
+        {
+            _tariffParameters = null;
+            _statusError = true;
+            _statusMessage = "Could not load tariff parameters for the selected year.";
+            return;
+        }
+
+        _tariffParameters = data;
+        _statusError = false;
+        _statusMessage = "Tariff parameters loaded successfully.";
     }
 
     private async Task ApproveYearAsync()
     {
+        if (string.IsNullOrWhiteSpace(_selectedYear))
+        {
+            _statusError = true;
+            _statusMessage = "Select a tariff year before approving.";
+            return;
+        }
+
         _submitting = true;
         var result = await FinanceService.PostActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}/approve", new { });
         _statusError = !result.Success;
         _statusMessage = result.Message;
+
+        if (result.Success)
+        {
+            await LoadYearAsync();
+        }
+
         _submitting = false;
     }
 
     private async Task RejectYearAsync()
     {
+        if (string.IsNullOrWhiteSpace(_selectedYear))
+        {
+            _statusError = true;
+            _statusMessage = "Select a tariff year before rejecting.";
+            return;
+        }
+
         _submitting = true;
         var result = await FinanceService.PostActionAsync($"api/finance/tariff-parameters/{Uri.EscapeDataString(_selectedYear)}/reject", new { });
         _statusError = !result.Success;
         _statusMessage = result.Message;
+
+        if (result.Success)
+        {
+            await LoadYearAsync();
+        }
+
         _submitting = false;
     }
+
+    private static string FormatDecimal(decimal? value)
+        => value.HasValue ? value.Value.ToString("N2") : "-";
+
+    private static string FormatDate(string? value)
+        => DateTime.TryParse(value, out var parsed) ? parsed.ToString("yyyy-MM-dd") : "-";
 }

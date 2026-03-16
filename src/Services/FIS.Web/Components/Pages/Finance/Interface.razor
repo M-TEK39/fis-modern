@@ -3,7 +3,9 @@
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -75,13 +77,27 @@
             ? "api/finance/interface/pastel-csv-customer"
             : "api/finance/interface/pastel-csv";
 
-        var result = await FinanceService.PostActionAsync(endpoint, new
+        var filename = Action == "pastel-csv-customer"
+            ? $"pastel-customers-{DateTime.UtcNow:yyyyMMddHHmmss}.csv"
+            : $"pastel-export-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+
+        var fileResult = await FinanceService.PostFileAsync(endpoint, new
         {
             batchDate = _selectedBatchDate
-        });
+        }, filename);
 
-        _statusError = !result.Success;
-        _statusMessage = result.Message;
+        _statusError = !fileResult.Success;
+        _statusMessage = fileResult.Message;
+
+        if (fileResult.Success && fileResult.Content.Length > 0)
+        {
+            await JSRuntime.InvokeVoidAsync(
+                "fisDownload.downloadBase64",
+                fileResult.Filename,
+                Convert.ToBase64String(fileResult.Content),
+                fileResult.ContentType);
+        }
+
         _submitting = false;
     }
 

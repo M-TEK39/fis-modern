@@ -3,7 +3,10 @@
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using System.Text.Json
+@using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -160,13 +163,17 @@
                     }
                     <div class="form-field">
                         <label class="form-label">Posting Date</label>
-                        <select class="form-select" @bind="_selectedBatchDate">
+                        <select class="form-select" @bind="_selectedBatchDate" disabled="@IsPostingMonthFilterDisabled">
                             <option value="">Select Posting Month</option>
                             @foreach (var batchDate in _batchDates)
                             {
                                 <option value="@batchDate.Value">@batchDate.Label</option>
                             }
                         </select>
+                        @if (_supportsDateFilter == false)
+                        {
+                            <small class="form-hint">Posting month filtering is not available for the current report output.</small>
+                        }
                     </div>
                 </div>
 
@@ -184,6 +191,7 @@
                     <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-table")'>Show Invoice in a Table</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-excel")'>Download Excel invoice</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-vip-taxi")'>Show TAXI &amp; VIP transactions</button>
+                    <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-vip-taxi-pdf")'>TAXI &amp; VIP PDF</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-fuel-pdf")'>Show detailed FUEL Invoice</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-fuel-excel")'>Download detailed FUEL invoice in Excel</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SubmitReportAsync("detailed-toll-oil-pdf")'>Show detailed TOLL &amp; OIL Invoice</button>
@@ -201,6 +209,52 @@
             {
                 <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
                     @_statusMessage
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_filterNotice))
+            {
+                <div class="alert alert-success" style="margin-top:0.75rem;">
+                    @_filterNotice
+                </div>
+            }
+
+            @if (_reportRows.Count > 0)
+            {
+                <div class="table-container" style="margin-top:1rem;">
+                    <div class="table-header">
+                        <span class="table-title">@_resultTitle (@_reportRows.Count row(s))</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in _reportColumns)
+                                    {
+                                        <th>@column</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in PagedReportRows)
+                                {
+                                    <tr>
+                                        @foreach (var column in _reportColumns)
+                                        {
+                                            <td>@GetRowValue(row, column)</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination">
+                        <button class="pagination-btn" @onclick="PrevReportPage" disabled="@(_reportPage <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_reportPage of @ReportTotalPages</div>
+                        <button class="pagination-btn" @onclick="NextReportPage" disabled="@(_reportPage >= ReportTotalPages)">Next</button>
+                    </div>
+                    <div class="pagination-meta">Total filtered records: @_reportRows.Count | Page size: @_reportPageSize</div>
                 </div>
             }
         </div>
@@ -231,23 +285,44 @@
     private bool _submitting;
     private bool _statusError;
     private string _statusMessage = string.Empty;
+    private string _filterNotice = string.Empty;
+    private string _resultTitle = "Report Results";
+    private List<string> _reportColumns = new();
+    private List<Dictionary<string, string>> _allReportRows = new();
+    private List<Dictionary<string, string>> _reportRows = new();
+    private bool? _supportsDateFilter;
+    private readonly int _reportPageSize = 12;
+    private int _reportPage = 1;
 
     private bool IsFinancialYear => Action is "vehicle-billing-history" or "income-split-summary" or "income-split-detailed";
     private bool IsDateRange => Action is "income-department" or "income-department-site" or "download-income-department" or "download-income-department-site" or "download-income-department-site-vehicle";
     private bool IsJournal => Action == "reversals-tree";
+    private bool IsPostingMonthFilterDisabled => !IsDedicatedFinanceMode && _supportsDateFilter == false;
+    private bool IsDedicatedFinanceMode => Action is "department" or "site";
+    private int ReportTotalPages => Math.Max(1, (int)Math.Ceiling(_reportRows.Count / (double)_reportPageSize));
+    private IEnumerable<Dictionary<string, string>> PagedReportRows => _reportRows
+        .Skip((_reportPage - 1) * _reportPageSize)
+        .Take(_reportPageSize);
 
     protected override async Task OnInitializedAsync()
     {
         _departments = await FinanceService.GetDepartmentsAsync();
         _provinces = await FinanceService.GetProvincesAsync();
         _financialYears = await FinanceService.GetFinancialYearsAsync();
-        _batchDates = await FinanceService.GetBatchDatesAsync();
+        _batchDates = IsDedicatedFinanceMode
+            ? await FinanceService.GetFinanceReportPostingMonthsAsync(Action == "site" ? "Site" : "Department")
+            : await FinanceService.GetBatchDatesAsync();
         _sites = await FinanceService.GetSitesAsync();
     }
 
     private async Task OnDepartmentChangedAsync()
     {
         _sites = await FinanceService.GetSitesAsync(_selectedDepartment);
+
+        if (IsDedicatedFinanceMode)
+        {
+            _batchDates = await FinanceService.GetFinanceReportPostingMonthsAsync(Action == "site" ? "Site" : "Department");
+        }
     }
 
     private async Task OnVehicleSearchChanged(ChangeEventArgs _)
@@ -265,6 +340,14 @@
     {
         _submitting = true;
         _statusMessage = string.Empty;
+        _filterNotice = string.Empty;
+        _resultTitle = "Report Results";
+        _reportColumns = new List<string>();
+        _allReportRows = new List<Dictionary<string, string>>();
+        _reportRows = new List<Dictionary<string, string>>();
+        _supportsDateFilter = null;
+        _reportPage = 1;
+        var suppressEmptyTableNotice = false;
 
         FinanceApiResult result;
 
@@ -292,28 +375,521 @@
         }
         else
         {
-            result = await FinanceService.PostActionAsync("api/Report/universal", new
+            if (TryGetDedicatedReportConfig(reportAction, out var dedicatedConfig) && IsDedicatedFinanceMode)
             {
-                reportType = GetUniversalReportType(reportAction),
-                parameters = new Dictionary<string, object?>
+                suppressEmptyTableNotice = dedicatedConfig!.Format != "json";
+                result = await RunDedicatedFinanceReportAsync(dedicatedConfig!);
+            }
+            else
+            {
+                result = await RunUniversalReportAsync(reportAction, GetUniversalReportType(reportAction));
+            }
+
+            if (result.Success)
+            {
+                ParseReportResult(result.ResponseBody, reportAction);
+
+                if (!TryGetDedicatedReportConfig(reportAction, out _)
+                    && IsDetailedAction(reportAction)
+                    && _reportRows.Count == 0)
                 {
-                    ["mode"] = Action,
-                    ["action"] = reportAction,
-                    ["departmentCode"] = _selectedDepartment,
-                    ["siteCode"] = _selectedSite,
-                    ["province"] = _selectedProvince,
-                    ["financialYear"] = _selectedFinancialYear,
-                    ["batchDate"] = _selectedBatchDate
-                },
-                vmfCode = int.TryParse(_selectedVehicleVmfCode, out var vmfCode) ? vmfCode : (int?)null,
-                startDate = _startDate,
-                endDate = _endDate
-            });
+                    // Backend detailed mode is not fully implemented yet; fallback keeps the UI usable.
+                    var fallback = await RunUniversalReportAsync(reportAction, "summary");
+                    if (fallback.Success)
+                    {
+                        ParseReportResult(fallback.ResponseBody, reportAction);
+                        _statusMessage = "Detailed report output is not available yet. Showing summary data fallback.";
+                    }
+                }
+
+                if (result.Success && !IsDedicatedFinanceMode && IsExcelAction(reportAction) && _reportRows.Count > 0)
+                {
+                    await DownloadExcelAsync(reportAction);
+                }
+
+                if (result.Success && !IsDedicatedFinanceMode && IsPdfAction(reportAction) && _reportRows.Count > 0)
+                {
+                    await PrintResultsAsync(reportAction);
+                }
+            }
         }
 
         _statusError = !result.Success;
-        _statusMessage = result.Message;
+        if (string.IsNullOrWhiteSpace(_statusMessage))
+        {
+            _statusMessage = result.Message;
+        }
+
+        if (result.Success && !IsDateRange && !IsFinancialYear && !IsJournal && !suppressEmptyTableNotice)
+        {
+            if (_reportRows.Count == 0)
+            {
+                _statusMessage = _allReportRows.Count > 0
+                    ? "Request completed, but no rows matched the selected department/posting month filters."
+                    : "Request completed, but no rows were returned for the selected parameters.";
+            }
+        }
+
         _submitting = false;
+    }
+
+    private async Task<FinanceApiResult> RunDedicatedFinanceReportAsync(DedicatedReportConfig config)
+    {
+        if (!short.TryParse(_selectedBatchDate, out var postingMonthCode) || postingMonthCode <= 0)
+        {
+            SetValidationError("Select a posting month before running the report.");
+            return new FinanceApiResult { Success = false, Message = "Posting month is required." };
+        }
+
+        var filterBy = Action == "site" ? "Site" : "Department";
+        var selectedId = Action == "site" ? _selectedSite : _selectedDepartment;
+
+        if (!short.TryParse(selectedId, out var id) || id <= 0)
+        {
+            SetValidationError(Action == "site"
+                ? "Select a site before running the report."
+                : "Select a department before running the report.");
+            return new FinanceApiResult { Success = false, Message = "Report filter is required." };
+        }
+
+        var endpoint = $"api/finance/reports/{config.EndpointName}?id={id}&postingMonthCode={postingMonthCode}&filterBy={Uri.EscapeDataString(filterBy)}&format={config.Format}";
+
+        if (config.Format == "csv")
+        {
+            var defaultFilename = $"{config.EndpointName}-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+            var fileResult = await FinanceService.GetFileAsync(endpoint, defaultFilename);
+            if (!fileResult.Success || fileResult.Content.Length == 0)
+            {
+                return new FinanceApiResult
+                {
+                    Success = false,
+                    Endpoint = endpoint,
+                    Message = fileResult.Message
+                };
+            }
+
+            await JSRuntime.InvokeVoidAsync(
+                "fisDownload.downloadBase64",
+                fileResult.Filename,
+                Convert.ToBase64String(fileResult.Content),
+                fileResult.ContentType);
+
+            return new FinanceApiResult
+            {
+                Success = true,
+                Endpoint = endpoint,
+                Message = "CSV downloaded successfully."
+            };
+        }
+
+        var result = await FinanceService.GetActionAsync(endpoint);
+        if (!result.Success)
+        {
+            return result;
+        }
+
+        if (config.Format == "html")
+        {
+            if (string.IsNullOrWhiteSpace(result.ResponseBody))
+            {
+                return new FinanceApiResult
+                {
+                    Success = false,
+                    Endpoint = endpoint,
+                    Message = "The report returned empty HTML output."
+                };
+            }
+
+            if (config.AutoPrint)
+            {
+                await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", result.ResponseBody, BuildResultTitle(Action ?? "report", default));
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", result.ResponseBody, BuildResultTitle(Action ?? "report", default));
+            }
+
+            _reportRows = new List<Dictionary<string, string>>();
+            _allReportRows = new List<Dictionary<string, string>>();
+            _reportColumns = new List<string>();
+
+            return new FinanceApiResult
+            {
+                Success = true,
+                Endpoint = endpoint,
+                Message = config.AutoPrint
+                    ? "Printable report opened. Use the browser print dialog to save as PDF."
+                    : "HTML report opened in a new browser window."
+            };
+        }
+
+        return result;
+    }
+
+    private async Task<FinanceApiResult> RunUniversalReportAsync(string reportAction, string reportType)
+    {
+        return await FinanceService.PostActionAsync("api/Report/universal", new
+        {
+            reportType,
+            parameters = new Dictionary<string, object?>
+            {
+                ["mode"] = Action,
+                ["action"] = reportAction,
+                ["departmentCode"] = _selectedDepartment,
+                ["siteCode"] = _selectedSite,
+                ["province"] = _selectedProvince,
+                ["financialYear"] = _selectedFinancialYear,
+                ["batchDate"] = _selectedBatchDate
+            },
+            vmfCode = int.TryParse(_selectedVehicleVmfCode, out var vmfCode) ? vmfCode : (int?)null,
+            startDate = _startDate,
+            endDate = _endDate
+        });
+    }
+
+    private async Task DownloadExcelAsync(string reportAction)
+    {
+        var filename = $"finance-{Action ?? "report"}-{reportAction}-{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
+        var payload = new
+        {
+            data = _reportRows.Cast<object>().ToList(),
+            filename
+        };
+
+        var fileResult = await FinanceService.PostFileAsync("api/Report/export/excel", payload, filename);
+        if (!fileResult.Success || fileResult.Content.Length == 0)
+        {
+            _statusError = true;
+            _statusMessage = fileResult.Message;
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync(
+            "fisDownload.downloadBase64",
+            fileResult.Filename,
+            Convert.ToBase64String(fileResult.Content),
+            fileResult.ContentType);
+    }
+
+    private async Task PrintResultsAsync(string reportAction)
+    {
+        var html = BuildPrintableTableHtml(reportAction);
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, BuildResultTitle(reportAction, default));
+    }
+
+    private string BuildPrintableTableHtml(string reportAction)
+    {
+        var safeColumns = _reportColumns.Select(HtmlEncode).ToList();
+        var rows = _reportRows.Select(row => _reportColumns.Select(column => HtmlEncode(GetRowValue(row, column))).ToList()).ToList();
+
+        var header = string.Join(string.Empty, safeColumns.Select(column => $"<th style='text-align:left;padding:8px;border:1px solid #d9d9d9'>{column}</th>"));
+        var body = string.Join(string.Empty,
+            rows.Select(cells => "<tr>" + string.Join(string.Empty, cells.Select(cell => $"<td style='padding:8px;border:1px solid #d9d9d9'>{cell}</td>")) + "</tr>"));
+
+        return $@"<h2>{HtmlEncode(PageTitleText)} - {HtmlEncode(reportAction)}</h2>
+<table style='border-collapse:collapse;width:100%;font-family:Segoe UI,Arial,sans-serif;font-size:12px'>
+<thead><tr>{header}</tr></thead>
+<tbody>{body}</tbody>
+</table>";
+    }
+
+    private static string HtmlEncode(string value)
+        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
+
+    private static bool IsDetailedAction(string reportAction)
+        => reportAction.Contains("detailed", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsExcelAction(string reportAction)
+        => reportAction.Contains("excel", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPdfAction(string reportAction)
+        => reportAction.Contains("pdf", StringComparison.OrdinalIgnoreCase);
+
+    private void ParseReportResult(string? responseBody, string reportAction)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(responseBody);
+            var root = document.RootElement;
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("dataRows", out var dataRowsElement)
+                && dataRowsElement.ValueKind == JsonValueKind.Array)
+            {
+                _resultTitle = BuildResultTitle(reportAction, root);
+                _supportsDateFilter = ReadSupportsDateFilter(root);
+                _allReportRows = ParseObjectRows(dataRowsElement);
+                _reportRows = ApplyClientSideFilters(_allReportRows);
+                _reportColumns = ExtractColumns(_reportRows);
+                _reportPage = 1;
+                return;
+            }
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("rows", out var rowsElement)
+                && rowsElement.ValueKind == JsonValueKind.Array)
+            {
+                _resultTitle = BuildResultTitle(reportAction, root);
+                _supportsDateFilter = null;
+                _allReportRows = ParseObjectRows(rowsElement);
+                _reportRows = _allReportRows;
+                _reportColumns = ExtractColumns(_reportRows);
+                _reportPage = 1;
+                return;
+            }
+
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                _resultTitle = BuildResultTitle(reportAction, root);
+                _supportsDateFilter = null;
+                _allReportRows = ParseObjectRows(root);
+                _reportRows = ApplyClientSideFilters(_allReportRows);
+                _reportColumns = ExtractColumns(_reportRows);
+                _reportPage = 1;
+            }
+        }
+        catch
+        {
+            // Keep the success/error banner as the primary feedback if parsing fails.
+        }
+    }
+
+    private List<Dictionary<string, string>> ApplyClientSideFilters(List<Dictionary<string, string>> rows)
+    {
+        var filtered = rows.ToList();
+
+        if (!string.IsNullOrWhiteSpace(_selectedDepartment) && filtered.Count > 0)
+        {
+            var departmentColumn = FindColumnName(filtered, "department");
+            if (!string.IsNullOrWhiteSpace(departmentColumn))
+            {
+                var selectedOption = _departments.FirstOrDefault(option => option.Value == _selectedDepartment);
+                var selectedCode = _selectedDepartment.Trim();
+                var selectedLabel = selectedOption?.Label?.Trim() ?? selectedCode;
+                var selectedName = selectedLabel.Contains(" - ", StringComparison.Ordinal)
+                    ? selectedLabel.Split(" - ", 2, StringSplitOptions.TrimEntries)[1]
+                    : selectedLabel;
+
+                filtered = filtered
+                    .Where(row => RowContains(row, departmentColumn!, selectedCode)
+                        || RowContains(row, departmentColumn!, selectedName)
+                        || RowContains(row, departmentColumn!, selectedLabel))
+                    .ToList();
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedBatchDate) && filtered.Count > 0)
+        {
+            if (_supportsDateFilter == false)
+            {
+                _filterNotice = "Posting month was selected, but this report does not support per-row date filtering.";
+                return filtered;
+            }
+
+            var postingColumn = FindColumnName(filtered, "posting", "month", "batch", "date");
+            if (!string.IsNullOrWhiteSpace(postingColumn))
+            {
+                var tokens = BuildPostingMonthTokens();
+                if (tokens.Count > 0)
+                {
+                    filtered = filtered
+                        .Where(row => tokens.Any(token => RowContains(row, postingColumn!, token)))
+                        .ToList();
+                }
+            }
+            else
+            {
+                _filterNotice = "Posting month was selected, but the returned rows do not contain a posting date/month column; month filtering could not be applied to this result set.";
+            }
+        }
+
+        return filtered;
+    }
+
+    private List<string> BuildPostingMonthTokens()
+    {
+        var tokens = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_selectedBatchDate))
+        {
+            tokens.Add(_selectedBatchDate.Trim());
+
+            if (DateTime.TryParse(_selectedBatchDate, out var parsedFromValue))
+            {
+                tokens.Add(parsedFromValue.ToString("MMM yyyy"));
+                tokens.Add(parsedFromValue.ToString("yyyy-MM"));
+                tokens.Add(parsedFromValue.ToString("yyyy/MM"));
+            }
+        }
+
+        var selectedOption = _batchDates.FirstOrDefault(option => option.Value == _selectedBatchDate);
+        if (!string.IsNullOrWhiteSpace(selectedOption?.Label))
+        {
+            tokens.Add(selectedOption.Label.Trim());
+            if (DateTime.TryParse(selectedOption.Label, out var parsedFromLabel))
+            {
+                tokens.Add(parsedFromLabel.ToString("MMM yyyy"));
+                tokens.Add(parsedFromLabel.ToString("yyyy-MM"));
+            }
+        }
+
+        return tokens
+            .Where(token => !string.IsNullOrWhiteSpace(token))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static string? FindColumnName(List<Dictionary<string, string>> rows, params string[] hints)
+    {
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var headers = rows
+            .SelectMany(row => row.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        foreach (var hint in hints)
+        {
+            var exact = headers.FirstOrDefault(header => string.Equals(header, hint, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(exact))
+            {
+                return exact;
+            }
+
+            var contains = headers.FirstOrDefault(header => header.Contains(hint, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(contains))
+            {
+                return contains;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool RowContains(Dictionary<string, string> row, string column, string token)
+    {
+        return !string.IsNullOrWhiteSpace(token)
+            && row.TryGetValue(column, out var value)
+            && !string.IsNullOrWhiteSpace(value)
+            && value.Contains(token, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void PrevReportPage()
+    {
+        if (_reportPage > 1)
+        {
+            _reportPage--;
+        }
+    }
+
+    private void NextReportPage()
+    {
+        if (_reportPage < ReportTotalPages)
+        {
+            _reportPage++;
+        }
+    }
+
+    private static string BuildResultTitle(string reportAction, JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("title", out var title)
+            && title.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(title.GetString()))
+        {
+            return title.GetString()!;
+        }
+
+        return $"{reportAction} results";
+    }
+
+    private static bool? ReadSupportsDateFilter(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var property in root.EnumerateObject())
+        {
+            if (!string.Equals(property.Name, "supportsDateFilter", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return property.Value.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static List<Dictionary<string, string>> ParseObjectRows(JsonElement arrayElement)
+    {
+        var rows = new List<Dictionary<string, string>>();
+
+        foreach (var item in arrayElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in item.EnumerateObject())
+            {
+                row[property.Name] = JsonValueToString(property.Value);
+            }
+
+            rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static List<string> ExtractColumns(List<Dictionary<string, string>> rows)
+    {
+        var columns = new List<string>();
+        foreach (var row in rows)
+        {
+            foreach (var key in row.Keys)
+            {
+                if (!columns.Any(existing => string.Equals(existing, key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    columns.Add(key);
+                }
+            }
+        }
+
+        return columns;
+    }
+
+    private static string GetRowValue(Dictionary<string, string> row, string column)
+        => row.TryGetValue(column, out var value) && !string.IsNullOrWhiteSpace(value) ? value : "-";
+
+    private static string JsonValueToString(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => string.Empty,
+            _ => value.GetRawText()
+        };
     }
 
     private void SetValidationError(string message)
@@ -337,6 +913,34 @@
 
         return "financial";
     }
+
+    private static bool TryGetDedicatedReportConfig(string reportAction, out DedicatedReportConfig? config)
+    {
+        config = reportAction switch
+        {
+            "summary-by-cost-type" => new DedicatedReportConfig("invoice-summary", "html", autoPrint: true),
+            "summary-by-cost-type-journal" => new DedicatedReportConfig("invoice-by-cost-type", "html", autoPrint: true),
+            "summary-html" => new DedicatedReportConfig("invoice-summary", "html", autoPrint: false),
+            "summary-pdf" => new DedicatedReportConfig("invoice-summary", "html", autoPrint: true),
+            "detailed-html" => new DedicatedReportConfig("invoice-detailed", "html", autoPrint: false),
+            "detailed-pdf" => new DedicatedReportConfig("invoice-detailed", "html", autoPrint: true),
+            "detailed-table" => new DedicatedReportConfig("invoice-detailed", "json", autoPrint: false),
+            "detailed-excel" => new DedicatedReportConfig("invoice-detailed", "csv", autoPrint: false),
+            "detailed-vip-taxi" => new DedicatedReportConfig("taxi-vip", "html", autoPrint: false),
+            "detailed-vip-taxi-pdf" => new DedicatedReportConfig("taxi-vip", "html", autoPrint: true),
+            "detailed-fuel-pdf" => new DedicatedReportConfig("fuel", "html", autoPrint: true),
+            "detailed-fuel-excel" => new DedicatedReportConfig("fuel", "csv", autoPrint: false),
+            "detailed-toll-oil-pdf" => new DedicatedReportConfig("toll-oil", "html", autoPrint: true),
+            "detailed-toll-oil-excel" => new DedicatedReportConfig("toll-oil", "csv", autoPrint: false),
+            "detailed-surcharge-pdf" => new DedicatedReportConfig("surcharge", "html", autoPrint: true),
+            "detailed-surcharge-excel" => new DedicatedReportConfig("surcharge", "csv", autoPrint: false),
+            _ => null
+        };
+
+        return config is not null;
+    }
+
+    private sealed record DedicatedReportConfig(string EndpointName, string Format, bool AutoPrint);
 
     private string PageTitleText => Action switch
     {

@@ -3,7 +3,10 @@
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using System.Text.Json
+@using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -111,6 +114,38 @@
                     @_statusMessage
                 </div>
             }
+
+            @if (_reportRows.Count > 0)
+            {
+                <div class="table-container" style="margin-top:1rem;">
+                    <div class="table-header">
+                        <span class="table-title">Audit Trail Results (@_reportRows.Count row(s))</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    @foreach (var column in _reportColumns)
+                                    {
+                                        <th>@column</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in _reportRows)
+                                {
+                                    <tr>
+                                        @foreach (var column in _reportColumns)
+                                        {
+                                            <td>@GetRowValue(row, column)</td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
         </div>
     </div>
 </div>
@@ -131,6 +166,8 @@
 
     private bool _statusError;
     private string _statusMessage = string.Empty;
+    private List<string> _reportColumns = new();
+    private List<Dictionary<string, string>> _reportRows = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,6 +193,9 @@
 
     private async Task RunAuditAsync(string reportType, string outputFormat)
     {
+        _reportRows = new();
+        _reportColumns = new();
+
         var result = await FinanceService.PostActionAsync("api/Report/universal", new
         {
             reportType = "financial",
@@ -174,6 +214,151 @@
 
         _statusError = !result.Success;
         _statusMessage = result.Message;
+
+        if (!result.Success)
+        {
+            return;
+        }
+
+        ParseRows(result.ResponseBody);
+
+        if (outputFormat.Equals("excel", StringComparison.OrdinalIgnoreCase) && _reportRows.Count > 0)
+        {
+            await DownloadExcelAsync(reportType);
+        }
+
+        if (outputFormat.Equals("pdf", StringComparison.OrdinalIgnoreCase) && _reportRows.Count > 0)
+        {
+            await PrintRowsAsync(reportType);
+        }
+    }
+
+    private async Task DownloadExcelAsync(string reportType)
+    {
+        var filename = $"audit-{Mode ?? "mode"}-{reportType}-{DateTime.UtcNow:yyyyMMddHHmmss}.xlsx";
+        var payload = new { data = _reportRows.Cast<object>().ToList(), filename };
+        var fileResult = await FinanceService.PostFileAsync("api/Report/export/excel", payload, filename);
+        if (!fileResult.Success || fileResult.Content.Length == 0)
+        {
+            _statusError = true;
+            _statusMessage = fileResult.Message;
+            return;
+        }
+
+        await JSRuntime.InvokeVoidAsync(
+            "fisDownload.downloadBase64",
+            fileResult.Filename,
+            Convert.ToBase64String(fileResult.Content),
+            fileResult.ContentType);
+    }
+
+    private async Task PrintRowsAsync(string reportType)
+    {
+        var safeColumns = _reportColumns.Select(HtmlEncode).ToList();
+        var rows = _reportRows.Select(row => _reportColumns.Select(column => HtmlEncode(GetRowValue(row, column))).ToList()).ToList();
+
+        var header = string.Join(string.Empty, safeColumns.Select(column => $"<th style='text-align:left;padding:8px;border:1px solid #d9d9d9'>{column}</th>"));
+        var body = string.Join(string.Empty,
+            rows.Select(cells => "<tr>" + string.Join(string.Empty, cells.Select(cell => $"<td style='padding:8px;border:1px solid #d9d9d9'>{cell}</td>")) + "</tr>"));
+
+        var html = $@"<h2>{HtmlEncode(PageTitleText)} - {HtmlEncode(reportType)}</h2>
+<table style='border-collapse:collapse;width:100%;font-family:Segoe UI,Arial,sans-serif;font-size:12px'>
+<thead><tr>{header}</tr></thead>
+<tbody>{body}</tbody>
+</table>";
+
+        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, $"{PageTitleText} - {reportType}");
+    }
+
+    private static string HtmlEncode(string value)
+        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
+
+    private static string GetRowValue(Dictionary<string, string> row, string column)
+        => row.TryGetValue(column, out var value) && !string.IsNullOrWhiteSpace(value) ? value : "-";
+
+    private void ParseRows(string? responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(responseBody);
+            var root = document.RootElement;
+            JsonElement rowsElement;
+
+            if (root.ValueKind == JsonValueKind.Object
+                && root.TryGetProperty("dataRows", out var dataRows)
+                && dataRows.ValueKind == JsonValueKind.Array)
+            {
+                rowsElement = dataRows;
+            }
+            else if (root.ValueKind == JsonValueKind.Array)
+            {
+                rowsElement = root;
+            }
+            else
+            {
+                return;
+            }
+
+            _reportRows = ParseObjectRows(rowsElement);
+            _reportColumns = ExtractColumns(_reportRows);
+        }
+        catch
+        {
+            // Keep status feedback if parsing fails.
+        }
+    }
+
+    private static List<Dictionary<string, string>> ParseObjectRows(JsonElement arrayElement)
+    {
+        var rows = new List<Dictionary<string, string>>();
+
+        foreach (var item in arrayElement.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in item.EnumerateObject())
+            {
+                row[property.Name] = property.Value.ValueKind switch
+                {
+                    JsonValueKind.String => property.Value.GetString() ?? string.Empty,
+                    JsonValueKind.Number => property.Value.GetRawText(),
+                    JsonValueKind.True => "true",
+                    JsonValueKind.False => "false",
+                    JsonValueKind.Null => string.Empty,
+                    _ => property.Value.GetRawText()
+                };
+            }
+
+            rows.Add(row);
+        }
+
+        return rows;
+    }
+
+    private static List<string> ExtractColumns(List<Dictionary<string, string>> rows)
+    {
+        var columns = new List<string>();
+        foreach (var row in rows)
+        {
+            foreach (var key in row.Keys)
+            {
+                if (!columns.Any(existing => string.Equals(existing, key, StringComparison.OrdinalIgnoreCase)))
+                {
+                    columns.Add(key);
+                }
+            }
+        }
+
+        return columns;
     }
 
     private string PageTitleText => Mode switch

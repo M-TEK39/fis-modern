@@ -83,6 +83,7 @@ public class FisDbContext : DbContext
     public DbSet<BatchExport> BatchExports { get; set; } = null!;
     public DbSet<DailyImportExcept> DailyImportExcepts { get; set; } = null!;
     public DbSet<JournalHeader> JournalHeaders { get; set; } = null!;
+    public DbSet<JournalDetail> JournalDetails { get; set; } = null!;
     public DbSet<JournalDetailType> JournalDetailTypes { get; set; } = null!;
     public DbSet<JournalDetailTypeGroup> JournalDetailTypeGroups { get; set; } = null!;
     public DbSet<PostingMonth> PostingMonths { get; set; } = null!;

@@ -264,6 +264,7 @@
     private List<FIS.Web.Models.VehicleDto> _overviewAll = new();
     private List<FIS.Web.Models.VehicleDto> _vehicleOverview = new();
     private readonly Dictionary<int, string> _contractStateByVmf = new();
+    private readonly Dictionary<int, short?> _contractStatusCodeByVmf = new();
     private readonly Dictionary<int, DateTime?> _contractReturnByVmf = new();
 
     protected override async Task OnInitializedAsync()
@@ -391,57 +392,67 @@
     private async Task LoadContractStatesForCurrentPageAsync()
     {
         _contractStateByVmf.Clear();
+        _contractStatusCodeByVmf.Clear();
         _contractReturnByVmf.Clear();
 
-        var activeContracts = await ContractService.GetContractsAsync();
-        var latestActiveByVmf = activeContracts
-            .Where(c => c.vmf_code.HasValue)
-            .GroupBy(c => c.vmf_code!.Value)
-            .Select(group => group.OrderByDescending(c => c.contract_id).First())
-            .ToDictionary(c => c.vmf_code!.Value, c => c);
+        var vmfCodes = _vehicleOverview
+            .Select(v => v.vmf_code)
+            .Where(code => code > 0)
+            .Distinct()
+            .ToList();
 
-        foreach (var vehicle in _vehicleOverview)
+        if (vmfCodes.Count == 0)
         {
-            if (!latestActiveByVmf.TryGetValue(vehicle.vmf_code, out var latest))
+            return;
+        }
+
+        var requests = vmfCodes.Select(async vmfCode =>
+        {
+            var query = new ContractsPageQuery
             {
-                _contractStateByVmf[vehicle.vmf_code] = "No Contract";
-                _contractReturnByVmf[vehicle.vmf_code] = null;
+                Page = 1,
+                PageSize = 25,
+                VmfCode = vmfCode
+            };
+
+            var result = await ContractService.GetContractsPageAsync(query);
+            var latest = (result.Data ?? new List<FIS.Web.Models.ContractDto>())
+                .OrderByDescending(c => c.contract_id)
+                .FirstOrDefault();
+
+            return (vmfCode, latest);
+        });
+
+        var responses = await Task.WhenAll(requests);
+        foreach (var (vmfCode, latest) in responses)
+        {
+            if (latest == null)
+            {
+                _contractStateByVmf[vmfCode] = "No Contract";
+                _contractStatusCodeByVmf[vmfCode] = null;
+                _contractReturnByVmf[vmfCode] = null;
                 continue;
             }
 
-            _contractStateByVmf[vehicle.vmf_code] = ResolveContractState(latest);
-            _contractReturnByVmf[vehicle.vmf_code] = latest.target_return_date;
+            _contractStateByVmf[vmfCode] = MapContractStatusLabel(latest.contract_status_code, latest.status);
+            _contractStatusCodeByVmf[vmfCode] = latest.contract_status_code;
+            _contractReturnByVmf[vmfCode] = latest.target_return_date;
         }
     }
 
-    private string ResolveContractState(FIS.Web.Models.ContractDto contract)
-    {
-        var status = contract.contract_status_code switch
+    private static string MapContractStatusLabel(short? statusCode, string? statusText)
+        => statusCode switch
         {
-            1 => "Pending",
+            0 => "Draft",
+            1 => "Pending Review",
             2 => "Approved",
             3 => "Active",
-            4 => "Correction Required",
+            4 => "Declined for Correction",
             5 => "Declined",
             6 => "Cancelled",
             7 => "Closed",
-            _ => "Draft"
+            _ => string.IsNullOrWhiteSpace(statusText) ? "Unknown" : statusText
         };
-
-        if (contract.end_date.HasValue && contract.end_date.Value.Date < DateTime.Today)
-        {
-            return "Expired";
-        }
-
-        if (status == "Active"
-            && contract.target_return_date.HasValue
-            && contract.target_return_date.Value.Date <= DateTime.Today.AddDays(30))
-        {
-            return "Soon To Expire";
-        }
-
-        return status;
-    }
 
     private string GetContractStateLabel(int vmfCode)
         => _contractStateByVmf.TryGetValue(vmfCode, out var label) ? label : "No Contract";
@@ -451,16 +462,19 @@
 
     private string GetContractStateBadgeClass(int vmfCode)
     {
-        var label = GetContractStateLabel(vmfCode);
-        return label switch
+        if (!_contractStatusCodeByVmf.TryGetValue(vmfCode, out var statusCode))
         {
-            "Active" => "badge-success",
-            "Approved" => "badge-success",
-            "Pending" => "badge-warning",
-            "Soon To Expire" => "badge-warning",
-            "Expired" => "badge-error",
-            "Declined" => "badge-error",
-            "Correction Required" => "badge-warning",
+            return "badge";
+        }
+
+        return statusCode switch
+        {
+            1 => "badge-warning",
+            2 => "status-info",
+            3 => "badge-success",
+            4 => "badge-warning",
+            5 => "badge-error",
+            6 => "badge-error",
             _ => "badge"
         };
     }

@@ -162,6 +162,11 @@
                                 <ValidationMessage For="() => _vehicle.take_on_odo" />
                             </div>
                             <div class="form-field">
+                                <label class="form-label">Tare (kg) <span class="required">*</span></label>
+                                <InputNumber @bind-Value="_vehicle.tare" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.tare" />
+                            </div>
+                            <div class="form-field">
                                 <label class="form-label">Purchase Date <span class="required">*</span></label>
                                 <InputDate @bind-Value="_vehicle.purchase_date" class="form-input" />
                                 <ValidationMessage For="() => _vehicle.purchase_date" />
@@ -498,6 +503,15 @@
                             <div class="form-field">
                                 <label class="form-label">Engine Number</label>
                                 <InputText @bind-Value="_vehicle.engine_number_1" class="form-input" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">Tare (kg)</label>
+                                <InputNumber @bind-Value="_vehicle.tare" class="form-input" />
+                                <ValidationMessage For="() => _vehicle.tare" />
+                            </div>
+                            <div class="form-field">
+                                <label class="form-label">GVM (kg)</label>
+                                <InputNumber @bind-Value="_vehicle.gvm" class="form-input" />
                             </div>
                         </div>
                     </div>

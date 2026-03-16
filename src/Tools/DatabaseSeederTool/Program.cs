@@ -50,6 +50,9 @@ public class Program
             Console.WriteLine("📜 Seeding contract data...");
             await SeedContractData(dbContext);
 
+            Console.WriteLine("💳 Seeding lease tariff data...");
+            await SeedLeaseTariffData(dbContext);
+
             Console.WriteLine("🧪 Seeding frontend demo coverage data...");
             await SeedFrontendDemoCoverage(dbContext);
 
@@ -658,29 +661,131 @@ public class Program
 
     private static async Task SeedOrganizationData(FisDbContext dbContext)
     {
+        // South African Government Departments — FIS manages government fleet
         if (!await dbContext.Departments.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(@"
                 SET IDENTITY_INSERT department ON;
-                INSERT INTO department (department_code, description, company_code, dept_active, Service_Years, Overhead_Percentage, Service_Kilometres, date_created, is_deleted) VALUES
-                (1, 'Transport', 1, 1, 1, 10, 15000, GETDATE(), 0),
-                (2, 'Logistics', 1, 1, 1, 10, 15000, GETDATE(), 0),
-                (3, 'Admin', 1, 1, 1, 10, 15000, GETDATE(), 0);
+                INSERT INTO department
+                    (department_code, description, department_abbr, company_code,
+                     dept_active, Service_Years, Overhead_Percentage, Service_Kilometres,
+                     date_created, is_deleted)
+                VALUES
+                ( 1, 'The Presidency of South Africa',                     'PRES',  1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                ( 2, 'National Treasury',                                   'NT',    1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                ( 3, 'Department of Tourism',                               'DT',    1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                ( 4, 'Department of Trade, Industry and Competition',       'DTIC',  1, 1, 5, 10.0, 20000, GETDATE(), 0),
+                ( 5, 'Department of Communications and Digital Technologies','DCDT', 1, 1, 5, 10.0, 20000, GETDATE(), 0),
+                ( 6, 'Department of Mineral Resources and Energy',          'DMRE',  1, 1, 5, 10.0, 25000, GETDATE(), 0),
+                ( 7, 'Department of Forestry, Fisheries and the Environment','DFFE', 1, 1, 5, 10.0, 20000, GETDATE(), 0),
+                ( 8, 'Department of Agriculture, Land Reform and Rural Development','DALRRD',1,1,5,10.0,25000,GETDATE(),0),
+                ( 9, 'Department of Transport',                             'DOT',   1, 1, 5, 10.0, 30000, GETDATE(), 0),
+                (10, 'Department of Health',                                'DOH',   1, 1, 5, 10.0, 20000, GETDATE(), 0),
+                (11, 'Department of Higher Education and Training',         'DHET',  1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                (12, 'Department of Employment and Labour',                 'DEL',   1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                (13, 'Department of Justice and Constitutional Development', 'DOJ',  1, 1, 5, 10.0, 20000, GETDATE(), 0),
+                (14, 'Department of Social Development',                    'DSD',   1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                (15, 'Department of Human Settlements',                     'DHS',   1, 1, 5, 10.0, 15000, GETDATE(), 0),
+                (16, 'Department of Sport, Arts and Culture',               'DSAC',  1, 1, 5, 10.0, 15000, GETDATE(), 0);
                 SET IDENTITY_INSERT department OFF;
             ");
-            Console.WriteLine("  ✓ Departments seeded.");
+            Console.WriteLine("  ✓ SA Government Departments seeded (16).");
         }
 
+        // Entities / Sites under each department.
+        // IMPORTANT: Sites 1 and 2 are placed under DIFFERENT departments (1 and 2) so
+        // that demo vehicles (location_code alternates 1/2) produce spread across depts
+        // in financial reports.
         if (!await dbContext.Sites.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(@"
                 SET IDENTITY_INSERT site ON;
                 INSERT INTO site (Site_code, description, Depatrment_code, site_active, date_created, is_deleted) VALUES
-                (1, 'Head Office', 1, 1, GETDATE(), 0),
-                (2, 'Cape Town Branch', 2, 1, GETDATE(), 0);
+                -- Dept 1: The Presidency
+                ( 1, 'National Planning Commission',                                        1, 1, GETDATE(), 0),
+                ( 3, 'Presidential Climate Commission',                                     1, 1, GETDATE(), 0),
+                ( 4, 'Government Communication and Information System (GCIS)',              1, 1, GETDATE(), 0),
+                -- Dept 2: National Treasury  (site 2 intentionally in NT for billing spread)
+                ( 2, 'Accounting Standards Board',                                          2, 1, GETDATE(), 0),
+                ( 5, 'Government Technical Advisory Centre',                                2, 1, GETDATE(), 0),
+                ( 6, 'Financial Intelligence Centre',                                       2, 1, GETDATE(), 0),
+                ( 7, 'Cooperative Banks Development Agency',                                2, 1, GETDATE(), 0),
+                -- Dept 3: Tourism
+                ( 8, 'South African Tourism',                                               3, 1, GETDATE(), 0),
+                ( 9, 'Tourism Transformation Council',                                      3, 1, GETDATE(), 0),
+                -- Dept 4: Trade, Industry and Competition
+                (10, 'Companies and Intellectual Property Commission',                      4, 1, GETDATE(), 0),
+                (11, 'Companies Tribunal',                                                  4, 1, GETDATE(), 0),
+                (12, 'Competition Commission South Africa',                                 4, 1, GETDATE(), 0),
+                (13, 'Competition Tribunal South Africa',                                   4, 1, GETDATE(), 0),
+                (14, 'National Consumer Commission',                                        4, 1, GETDATE(), 0),
+                (15, 'National Consumer Tribunal',                                          4, 1, GETDATE(), 0),
+                (16, 'National Gambling Board',                                             4, 1, GETDATE(), 0),
+                (17, 'Industrial Development Corporation',                                  4, 1, GETDATE(), 0),
+                (18, 'National Empowerment Fund',                                           4, 1, GETDATE(), 0),
+                -- Dept 5: Communications and Digital Technologies
+                (19, 'State Information Technology Agency',                                 5, 1, GETDATE(), 0),
+                (20, 'Independent Communications Authority of South Africa',                5, 1, GETDATE(), 0),
+                (21, 'South African Broadcasting Corporation',                              5, 1, GETDATE(), 0),
+                (22, 'South African Post Office',                                           5, 1, GETDATE(), 0),
+                (23, '.ZA Domain Name Authority',                                           5, 1, GETDATE(), 0),
+                (24, 'Broadband Infraco',                                                   5, 1, GETDATE(), 0),
+                -- Dept 6: Mineral Resources and Energy
+                (25, 'Council for Geoscience',                                              6, 1, GETDATE(), 0),
+                (26, 'National Energy Regulator of South Africa',                           6, 1, GETDATE(), 0),
+                (27, 'Mine Health and Safety Council',                                      6, 1, GETDATE(), 0),
+                (28, 'South African Diamond and Precious Metals Regulator',                 6, 1, GETDATE(), 0),
+                (29, 'Mintek',                                                              6, 1, GETDATE(), 0),
+                -- Dept 7: Forestry, Fisheries and the Environment
+                (30, 'South African National Parks',                                        7, 1, GETDATE(), 0),
+                (31, 'South African Weather Service',                                       7, 1, GETDATE(), 0),
+                (32, 'iSimangaliso Wetland Park Authority',                                 7, 1, GETDATE(), 0),
+                (33, 'South African National Biodiversity Institute',                       7, 1, GETDATE(), 0),
+                -- Dept 8: Agriculture, Land Reform and Rural Development
+                (34, 'Agricultural Research Council',                                       8, 1, GETDATE(), 0),
+                (35, 'Ingonyama Trust Board',                                               8, 1, GETDATE(), 0),
+                (36, 'Onderstepoort Biological Products',                                   8, 1, GETDATE(), 0),
+                (37, 'Perishable Products Export Control Board',                            8, 1, GETDATE(), 0),
+                -- Dept 9: Transport
+                (38, 'South African National Roads Agency',                                 9, 1, GETDATE(), 0),
+                (39, 'Road Traffic Management Corporation',                                 9, 1, GETDATE(), 0),
+                (40, 'South African Civil Aviation Authority',                              9, 1, GETDATE(), 0),
+                (41, 'Railway Safety Regulator',                                            9, 1, GETDATE(), 0),
+                (42, 'Passenger Rail Agency of South Africa',                               9, 1, GETDATE(), 0),
+                (43, 'Airports Company South Africa',                                       9, 1, GETDATE(), 0),
+                -- Dept 10: Health
+                (44, 'South African Health Products Regulatory Authority',                 10, 1, GETDATE(), 0),
+                (45, 'National Health Laboratory Service',                                 10, 1, GETDATE(), 0),
+                (46, 'Council for Medical Schemes',                                        10, 1, GETDATE(), 0),
+                -- Dept 11: Higher Education and Training
+                (47, 'National Student Financial Aid Scheme',                              11, 1, GETDATE(), 0),
+                (48, 'Quality Council for Trades and Occupations',                         11, 1, GETDATE(), 0),
+                (49, 'Council on Higher Education',                                        11, 1, GETDATE(), 0),
+                (50, '21 Sector Education and Training Authorities (SETAs)',               11, 1, GETDATE(), 0),
+                -- Dept 12: Employment and Labour
+                (51, 'Unemployment Insurance Fund',                                        12, 1, GETDATE(), 0),
+                (52, 'Compensation Fund',                                                  12, 1, GETDATE(), 0),
+                (53, 'Commission for Conciliation Mediation and Arbitration',              12, 1, GETDATE(), 0),
+                -- Dept 13: Justice and Constitutional Development
+                (54, 'National Prosecuting Authority',                                     13, 1, GETDATE(), 0),
+                (55, 'Legal Aid South Africa',                                             13, 1, GETDATE(), 0),
+                (56, 'Special Investigating Unit',                                         13, 1, GETDATE(), 0),
+                (57, 'Public Protector South Africa',                                      13, 1, GETDATE(), 0),
+                -- Dept 14: Social Development
+                (58, 'South African Social Security Agency',                               14, 1, GETDATE(), 0),
+                (59, 'National Development Agency',                                        14, 1, GETDATE(), 0),
+                -- Dept 15: Human Settlements
+                (60, 'National Housing Finance Corporation',                               15, 1, GETDATE(), 0),
+                (61, 'Social Housing Regulatory Authority',                                15, 1, GETDATE(), 0),
+                (62, 'Housing Development Agency',                                         15, 1, GETDATE(), 0),
+                -- Dept 16: Sport, Arts and Culture
+                (63, 'National Arts Council',                                              16, 1, GETDATE(), 0),
+                (64, 'National Heritage Council',                                          16, 1, GETDATE(), 0),
+                (65, 'South African Library for the Blind',                                16, 1, GETDATE(), 0),
+                (66, 'Freedom Park',                                                       16, 1, GETDATE(), 0);
                 SET IDENTITY_INSERT site OFF;
             ");
-            Console.WriteLine("  ✓ Sites seeded.");
+            Console.WriteLine("  ✓ SA Government Entity Sites seeded (66 across 16 departments).");
         }
     }
 
@@ -798,55 +903,139 @@ public class Program
 
     private static async Task SeedContractData(FisDbContext dbContext)
     {
+        // Seed 10 base contracts for legacy vehicles 1-10
         if (await dbContext.Contracts.CountAsync() < 10)
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(@"
                 SET IDENTITY_INSERT contract ON;
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 1)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (1, 1, 1, 'H', DATEADD(month, -6, GETDATE()), DATEADD(month, -6, GETDATE()), 1000, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 2)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (2, 2, 2, 'H', DATEADD(month, -12, GETDATE()), DATEADD(month, -12, GETDATE()), 500, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 3)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (3, 3, 2, 'H', DATEADD(year, -2, GETDATE()), DATEADD(year, -2, GETDATE()), 500, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 4)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (4, 4, 1, 'H', DATEADD(month, -5, GETDATE()), DATEADD(month, -5, GETDATE()), 0, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 5)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (5, 5, 1, 'H', DATEADD(year, -3, GETDATE()), DATEADD(year, -3, GETDATE()), 2000, 'N', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 6)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (6, 6, 2, 'H', DATEADD(month, -10, GETDATE()), DATEADD(month, -10, GETDATE()), 100, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 7)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (7, 7, 1, 'H', DATEADD(year, -4, GETDATE()), DATEADD(year, -4, GETDATE()), 5000, 'N', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 8)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (8, 8, 2, 'H', DATEADD(year, -1, GETDATE()), DATEADD(year, -1, GETDATE()), 0, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 9)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (9, 9, 1, 'H', DATEADD(month, -1, GETDATE()), DATEADD(month, -1, GETDATE()), 0, 'Y', 0, GETDATE(), 0);
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 10)
-                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES 
+                INSERT INTO contract (contract_code, vmf_code, site_code, contract_type, start_date, start_time, start_odometer, still_current, locked_for_transfer, date_created, is_deleted) VALUES
                 (10, 10, 2, 'H', DATEADD(year, -2, GETDATE()), DATEADD(year, -2, GETDATE()), 1000, 'N', 0, GETDATE(), 0);
 
                 SET IDENTITY_INSERT contract OFF;
             ");
-            Console.WriteLine("  ✓ Contracts seeded (ensured 10 contracts).");
+            Console.WriteLine("  ✓ Base contracts seeded (10).");
         }
+
+        // Seed 50 active demo contracts for vehicles 1001-1050 (mixed H/R/D types, backdated 1-24 months)
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            DECLARE @vmf     INT;
+            DECLARE @ctype   CHAR(1);
+            DECLARE @mback   INT;
+            DECLARE @site    SMALLINT;
+            DECLARE @s_odo   INT;
+            DECLARE @mthly   INT;
+
+            SET @vmf = 1001;
+            WHILE @vmf <= 1050
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM contract
+                    WHERE vmf_code = @vmf AND still_current = 'Y' AND is_deleted = 0
+                )
+                BEGIN
+                    SET @ctype  = CASE WHEN @vmf <= 1020 THEN 'H'
+                                       WHEN @vmf <= 1035 THEN 'R'
+                                       ELSE 'D' END;
+                    SET @mback  = ((@vmf - 1001) % 24) + 1;
+                    SET @site   = CASE WHEN @vmf % 2 = 0 THEN 2 ELSE 1 END;
+                    SET @s_odo  = (@vmf - 1001) * 500;
+                    SET @mthly  = 1500 + ((@vmf - 1001) % 10) * 200;
+
+                    INSERT INTO contract
+                    (vmf_code, site_code, contract_type,
+                     start_date, start_time, start_odometer, monthly_km,
+                     still_current, locked_for_transfer,
+                     date_created, is_deleted)
+                    VALUES
+                    (@vmf, @site, @ctype,
+                     DATEADD(month, -@mback, GETDATE()),
+                     DATEADD(month, -@mback, GETDATE()),
+                     @s_odo, @mthly,
+                     'Y', 0, GETDATE(), 0);
+                END
+
+                SET @vmf = @vmf + 1;
+            END;
+        ");
+
+        var activeCount = await dbContext.Database.SqlQueryRaw<int>(
+            "SELECT COUNT(1) AS [Value] FROM contract WHERE still_current = 'Y' AND is_deleted = 0"
+        ).FirstOrDefaultAsync();
+        Console.WriteLine($"  ✓ Demo contracts seeded — {activeCount} active contracts total.");
+    }
+
+    private static async Task SeedLeaseTariffData(FisDbContext dbContext)
+    {
+        // Create one active LeaseTariff record per demo vehicle that has an active contract.
+        // fixed_tariff cycles between 3000–6500 to give varied billing amounts for reports.
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            DECLARE @vmf     INT;
+            DECLARE @tariff  DECIMAL(18,2);
+
+            SET @vmf = 1001;
+            WHILE @vmf <= 1050
+            BEGIN
+                IF EXISTS (SELECT 1 FROM contract WHERE vmf_code = @vmf AND still_current = 'Y' AND is_deleted = 0)
+                   AND NOT EXISTS (SELECT 1 FROM LeaseTariff WHERE vmf_code = @vmf AND active = 1 AND is_deleted = 0)
+                BEGIN
+                    SET @tariff = CAST(3000 + ((@vmf - 1001) % 18) * 200 AS DECIMAL(18,2));
+
+                    INSERT INTO LeaseTariff
+                    (vmf_code, start_date, end_date, fixed_tariff, active, date_created, is_deleted)
+                    VALUES
+                    (@vmf,
+                     DATEADD(year, -3, GETDATE()),
+                     DATEADD(year,  2, GETDATE()),
+                     @tariff,
+                     1,
+                     GETDATE(),
+                     0);
+                END
+
+                SET @vmf = @vmf + 1;
+            END;
+        ");
+
+        var tariffCount = await dbContext.LeaseTariffs.CountAsync(t => t.active && !t.is_deleted);
+        Console.WriteLine($"  ✓ Lease tariffs seeded ({tariffCount} active records for demo vehicles).");
     }
 
     private static async Task SeedFuelCardData(FisDbContext dbContext)
@@ -889,20 +1078,72 @@ public class Program
 
     private static async Task SeedDriverData(FisDbContext dbContext)
     {
+        // Seed trip_driver records for trip authorities
         if (!await dbContext.TripDrivers.AnyAsync())
         {
-            // Seed Trip Drivers linked to Trips (1, 2)
             await dbContext.Database.ExecuteSqlRawAsync(@"
                 SET IDENTITY_INSERT trip_driver ON;
                 INSERT INTO trip_driver (
-                    trip_driver_code, trip_authority_code, trip_driver_name, trip_driver_id, 
+                    trip_driver_code, trip_authority_code, trip_driver_name, trip_driver_id,
                     trip_driver_primary, driver_licence_type_id, driver_active, driver_hasPDP, date_created, is_deleted
-                ) VALUES 
-                (1, 1, 'John Doe', '8001015009087', 1, 2, 1, 1, GETDATE(), 0),
-                (2, 2, 'Jane Smith', '8505050050080', 1, 1, 1, 1, GETDATE(), 0);
+                ) VALUES
+                (1, 1, 'Sipho Dlamini',  '8001015009087', 1, 2, 1, 1, GETDATE(), 0),
+                (2, 2, 'Fatima Motaung', '8505050050080', 1, 1, 1, 0, GETDATE(), 0);
                 SET IDENTITY_INSERT trip_driver OFF;
             ");
-            Console.WriteLine("  ✓ Drivers seeded.");
+            Console.WriteLine("  ✓ Trip drivers seeded.");
+        }
+
+        // Seed site_drivers — the actual driver roster per site
+        if (!await dbContext.Drivers.AnyAsync())
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                -- driver_licence_type_id 1 and 2 must exist (seeded in reference data)
+                -- SA IDs are realistic test values (format: YYMMDD SSSS C Z)
+                INSERT INTO site_drivers
+                (site_code, driver_licence_type_id,
+                 driver_surname, driver_firstname,
+                 driver_SA_id, driver_persalnumber, driver_contractnumber,
+                 driver_licence_number,
+                 driver_licence_issuedate, driver_licence_lastVerifiedDate,
+                 driver_hasPDP, driver_PDP_ExpiryDate, driver_licence_ExpiryDate,
+                 driver_active, date_created, is_deleted)
+                VALUES
+                -- Site 1 — 15 drivers
+                (1, 1, 'Dlamini',   'Sipho',      '8001015009087', 'P001234', 'C001001', '12345678ABCD', '2015-03-10', DATEADD(month,-3,GETDATE()), 1, DATEADD(year,1,GETDATE()), '2030-03-10', 1, GETDATE(), 0),
+                (1, 2, 'Nkosi',     'Thabo',       '7507105800082', 'P001235', 'C001002', '23456789BCDE', '2012-07-20', DATEADD(month,-6,GETDATE()), 0, NULL,                      '2027-07-20', 1, GETDATE(), 0),
+                (1, 1, 'Motaung',   'Fatima',      '9202140800087', 'P001236', 'C001003', '34567890CDEF', '2018-02-15', DATEADD(month,-2,GETDATE()), 1, DATEADD(year,2,GETDATE()), '2028-02-15', 1, GETDATE(), 0),
+                (1, 2, 'Zulu',      'Bongani',     '8806056800083', 'P001237', 'C001004', '45678901DEFG', '2014-06-05', DATEADD(month,-4,GETDATE()), 0, NULL,                      '2029-06-05', 1, GETDATE(), 0),
+                (1, 1, 'Khumalo',   'Zanele',      '9510280800081', 'P001238', 'C001005', '56789012EFGH', '2020-10-28', DATEADD(month,-1,GETDATE()), 0, NULL,                      '2030-10-28', 1, GETDATE(), 0),
+                (1, 2, 'Mokoena',   'Lerato',      '8304135800086', 'P001239', 'C001006', '67890123FGHI', '2013-04-13', DATEADD(month,-8,GETDATE()), 1, DATEADD(month,6,GETDATE()), '2026-04-13', 1, GETDATE(), 0),
+                (1, 1, 'Sithole',   'Mandla',      '7912115800089', 'P001240', 'C001007', '78901234GHIJ', '2010-12-11', DATEADD(month,-12,GETDATE()),0, NULL,                      '2025-12-11', 1, GETDATE(), 0),
+                (1, 2, 'Ngcobo',    'Nompumelelo', '9108296800080', 'P001241', 'C001008', '89012345HIJK', '2017-08-29', DATEADD(month,-5,GETDATE()), 0, NULL,                      '2027-08-29', 1, GETDATE(), 0),
+                (1, 1, 'Mahlangu',  'Sifiso',      '8703025800084', 'P001242', 'C001009', '90123456IJKL', '2016-03-02', DATEADD(month,-9,GETDATE()), 1, DATEADD(year,3,GETDATE()), '2026-03-02', 1, GETDATE(), 0),
+                (1, 2, 'Cele',      'Nokuthula',   '9406194800082', 'P001243', 'C001010', '01234567JKLM', '2019-06-19', DATEADD(month,-3,GETDATE()), 0, NULL,                      '2029-06-19', 1, GETDATE(), 0),
+                (1, 1, 'Mthembu',   'Lungelo',     '8512046800085', 'P001244', 'C001011', '12345678KLMN', '2015-12-04', DATEADD(month,-6,GETDATE()), 0, NULL,                      '2028-12-04', 1, GETDATE(), 0),
+                (1, 2, 'Buthelezi', 'Thandeka',    '7101015800088', 'P001245', 'C001012', '23456789LMNO', '2008-01-01', DATEADD(month,-18,GETDATE()),1, DATEADD(year,1,GETDATE()), '2026-01-01', 1, GETDATE(), 0),
+                (1, 1, 'Ntuli',     'Sandile',     '9301015800081', 'P001246', 'C001013', '34567890MNOP', '2018-01-01', DATEADD(month,-2,GETDATE()), 0, NULL,                      '2028-01-01', 1, GETDATE(), 0),
+                (1, 2, 'Shabalala', 'Phiwayinkosi','8209036800087', 'P001247', 'C001014', '45678901NOPQ', '2011-09-03', DATEADD(month,-10,GETDATE()),0, NULL,                      '2026-09-03', 1, GETDATE(), 0),
+                (1, 1, 'Mnguni',    'Lindiwe',     '9704110800083', 'P001248', 'C001015', '56789012OPQR', '2022-04-11', DATEADD(month,-1,GETDATE()), 0, NULL,                      '2032-04-11', 1, GETDATE(), 0),
+                -- Site 2 — 15 drivers
+                (2, 2, 'van der Berg','Pieter',    '7608165800082', 'P002001', 'C002001', '67890123PQRS', '2009-08-16', DATEADD(month,-14,GETDATE()),1, DATEADD(month,8,GETDATE()), '2026-08-16', 1, GETDATE(), 0),
+                (2, 1, 'Botha',     'Anri',        '8902270800085', 'P002002', 'C002002', '78901234QRST', '2016-02-27', DATEADD(month,-4,GETDATE()), 0, NULL,                      '2028-02-27', 1, GETDATE(), 0),
+                (2, 2, 'Swanepoel', 'Hennie',      '7403265800089', 'P002003', 'C002003', '89012345RSTU', '2007-03-26', DATEADD(month,-20,GETDATE()),1, DATEADD(year,2,GETDATE()), '2025-03-26', 1, GETDATE(), 0),
+                (2, 1, 'Joubert',   'Marinda',     '9105120800081', 'P002004', 'C002004', '90123456STUV', '2018-05-12', DATEADD(month,-6,GETDATE()), 0, NULL,                      '2028-05-12', 1, GETDATE(), 0),
+                (2, 2, 'Patel',     'Rajan',       '8001185800086', 'P002005', 'C002005', '01234567TUVW', '2013-01-18', DATEADD(month,-8,GETDATE()), 1, DATEADD(year,1,GETDATE()), '2027-01-18', 1, GETDATE(), 0),
+                (2, 1, 'Singh',     'Priya',       '9306264800083', 'P002006', 'C002006', '12345678UVWX', '2019-06-26', DATEADD(month,-3,GETDATE()), 0, NULL,                      '2029-06-26', 1, GETDATE(), 0),
+                (2, 2, 'Adams',     'Yusuf',       '7805125800087', 'P002007', 'C002007', '23456789VWXY', '2010-05-12', DATEADD(month,-11,GETDATE()),1, DATEADD(year,2,GETDATE()), '2026-05-12', 1, GETDATE(), 0),
+                (2, 1, 'Hendricks', 'Megan',       '9010254800082', 'P002008', 'C002008', '34567890WXYZ', '2017-10-25', DATEADD(month,-5,GETDATE()), 0, NULL,                      '2027-10-25', 1, GETDATE(), 0),
+                (2, 2, 'Abrahams',  'Gareth',      '8507185800080', 'P002009', 'C002009', '45678901XYZA', '2014-07-18', DATEADD(month,-7,GETDATE()), 1, DATEADD(month,18,GETDATE()),'2027-07-18', 1, GETDATE(), 0),
+                (2, 1, 'Daniels',   'Liezel',      '9212064800084', 'P002010', 'C002010', '56789012YZAB', '2020-12-06', DATEADD(month,-2,GETDATE()), 0, NULL,                      '2030-12-06', 1, GETDATE(), 0),
+                (2, 2, 'Isaacs',    'Ferdie',      '7706285800081', 'P002011', 'C002011', '67890123ZABC', '2008-06-28', DATEADD(month,-15,GETDATE()),0, NULL,                      '2025-06-28', 1, GETDATE(), 0),
+                (2, 1, 'Thomas',    'Marlene',     '8810144800086', 'P002012', 'C002012', '78901234ABCD', '2016-10-14', DATEADD(month,-9,GETDATE()), 1, DATEADD(year,4,GETDATE()), '2028-10-14', 1, GETDATE(), 0),
+                (2, 2, 'Jansen',    'Werner',      '9402145800089', 'P002013', 'C002013', '89012345BCDE', '2021-02-14', DATEADD(month,-1,GETDATE()), 0, NULL,                      '2031-02-14', 1, GETDATE(), 0),
+                (2, 1, 'Coetzee',   'Elmarie',     '8006094800083', 'P002014', 'C002014', '90123456CDEF', '2011-06-09', DATEADD(month,-13,GETDATE()),0, NULL,                      '2026-06-09', 1, GETDATE(), 0),
+                (2, 2, 'Petersen',  'Ashraf',      '7309115800085', 'P002015', 'C002015', '01234567DEFG', '2006-09-11', DATEADD(month,-22,GETDATE()),1, DATEADD(year,1,GETDATE()), '2025-09-11', 1, GETDATE(), 0);
+            ");
+            var driverCount = await dbContext.Drivers.CountAsync();
+            Console.WriteLine($"  ✓ Site drivers seeded ({driverCount} records across sites 1 and 2).");
         }
     }
 
@@ -2284,17 +2525,14 @@ public class Program
 
     private static async Task ApplyBatch3FinanceBillingCoverageAsync(FisDbContext dbContext)
     {
-        // Batch 3 tables:
-        // financial_system, posting_year, posting_month, financial_year, cost_category,
-        // batch, invoice, invoice_item, daily_transactions, journal
-
+        // Step 1: Reference data (financial_system, cost_category, posting years + months for 24 months)
         await dbContext.Database.ExecuteSqlRawAsync(@"
-            DECLARE @yearNow smallint = CAST(YEAR(GETDATE()) AS smallint);
-            DECLARE @monthNow tinyint = CAST(MONTH(GETDATE()) AS tinyint);
-            DECLARE @postingYearCode int = NULL;
-            DECLARE @latestPostingMonthCode int = NULL;
+            DECLARE @yearNow   SMALLINT = CAST(YEAR(GETDATE())   AS SMALLINT);
+            DECLARE @yearPrev  SMALLINT = CAST(YEAR(GETDATE())-1 AS SMALLINT);
+            DECLARE @monthNow  TINYINT  = CAST(MONTH(GETDATE())  AS TINYINT);
 
-            IF OBJECT_ID('financial_system', 'U') IS NOT NULL
+            -- Financial systems
+            IF OBJECT_ID('financial_system','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM financial_system WHERE financial_system_code = 1)
                     INSERT INTO financial_system (financial_system_code, financial_system_name, date_created, is_deleted)
@@ -2304,72 +2542,8 @@ public class Program
                     VALUES (2, 'Pastel', GETDATE(), 0);
             END
 
-            IF OBJECT_ID('posting_year', 'U') IS NOT NULL
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM posting_year
-                    WHERE year_start_date = DATEFROMPARTS(@yearNow, 1, 1)
-                      AND year_end_date = DATEFROMPARTS(@yearNow, 12, 31)
-                      AND is_deleted = 0
-                )
-                    INSERT INTO posting_year (description, year_start_date, year_end_date, date_created, is_deleted)
-                    VALUES (CONCAT('Posting Year ', @yearNow), DATEFROMPARTS(@yearNow, 1, 1), DATEFROMPARTS(@yearNow, 12, 31), GETDATE(), 0);
-
-                SET @postingYearCode = (
-                    SELECT TOP 1 posting_year_code
-                    FROM posting_year
-                    WHERE year_start_date = DATEFROMPARTS(@yearNow, 1, 1)
-                      AND year_end_date = DATEFROMPARTS(@yearNow, 12, 31)
-                    ORDER BY posting_year_code DESC
-                );
-            END
-
-            IF OBJECT_ID('financial_year', 'U') IS NOT NULL
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM financial_year
-                    WHERE start_date = DATEFROMPARTS(@yearNow, 1, 1)
-                      AND end_date = DATEFROMPARTS(@yearNow, 12, 31)
-                      AND is_deleted = 0
-                )
-                    INSERT INTO financial_year (financial_year, start_date, end_date, date_created, is_deleted)
-                    VALUES (CONCAT(@yearNow, '/', @yearNow + 1), DATEFROMPARTS(@yearNow, 1, 1), DATEFROMPARTS(@yearNow, 12, 31), GETDATE(), 0);
-            END
-
-            IF OBJECT_ID('posting_month', 'U') IS NOT NULL AND @postingYearCode IS NOT NULL
-            BEGIN
-                ;WITH m AS (
-                    SELECT 1 n, 'January' name UNION ALL SELECT 2, 'February' UNION ALL SELECT 3, 'March' UNION ALL
-                    SELECT 4, 'April' UNION ALL SELECT 5, 'May' UNION ALL SELECT 6, 'June' UNION ALL
-                    SELECT 7, 'July' UNION ALL SELECT 8, 'August' UNION ALL SELECT 9, 'September' UNION ALL
-                    SELECT 10, 'October' UNION ALL SELECT 11, 'November' UNION ALL SELECT 12, 'December'
-                )
-                INSERT INTO posting_month (posting_year_code, month_number, month_name, is_closed, date_created, is_deleted)
-                SELECT @postingYearCode,
-                       CAST(m.n AS tinyint),
-                       m.name,
-                       CASE WHEN m.n < @monthNow THEN 1 ELSE 0 END,
-                       GETDATE(),
-                       0
-                FROM m
-                WHERE NOT EXISTS (
-                    SELECT 1
-                    FROM posting_month pm
-                    WHERE pm.posting_year_code = @postingYearCode
-                      AND pm.month_number = m.n
-                );
-
-                SET @latestPostingMonthCode = (
-                    SELECT TOP 1 posting_month_code
-                    FROM posting_month
-                    WHERE posting_year_code = @postingYearCode
-                    ORDER BY month_number DESC, posting_month_code DESC
-                );
-            END
-
-            IF OBJECT_ID('cost_category', 'U') IS NOT NULL
+            -- Cost categories
+            IF OBJECT_ID('cost_category','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM cost_category WHERE cost_category_code = 1)
                     INSERT INTO cost_category (cost_category_code, description, vat_recoverable, cpk_contribution, date_created, is_deleted)
@@ -2382,251 +2556,220 @@ public class Program
                     VALUES (3, 'Maintenance Cost', 'Y', 'N', GETDATE(), 0);
             END
 
-            IF OBJECT_ID('batch', 'U') IS NOT NULL
+            -- Posting years: previous year + current year
+            IF OBJECT_ID('posting_year','U') IS NOT NULL
             BEGIN
-                ;WITH src AS (
-                    SELECT 1 rn UNION ALL SELECT 2 UNION ALL SELECT 3
+                IF NOT EXISTS (SELECT 1 FROM posting_year WHERE year_start_date = DATEFROMPARTS(@yearPrev,1,1) AND is_deleted = 0)
+                    INSERT INTO posting_year (description, year_start_date, year_end_date, date_created, is_deleted)
+                    VALUES (CONCAT('Posting Year ',@yearPrev), DATEFROMPARTS(@yearPrev,1,1), DATEFROMPARTS(@yearPrev,12,31), GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM posting_year WHERE year_start_date = DATEFROMPARTS(@yearNow,1,1) AND is_deleted = 0)
+                    INSERT INTO posting_year (description, year_start_date, year_end_date, date_created, is_deleted)
+                    VALUES (CONCAT('Posting Year ',@yearNow), DATEFROMPARTS(@yearNow,1,1), DATEFROMPARTS(@yearNow,12,31), GETDATE(), 0);
+            END
+
+            -- Financial years
+            IF OBJECT_ID('financial_year','U') IS NOT NULL
+            BEGIN
+                IF NOT EXISTS (SELECT 1 FROM financial_year WHERE start_date = DATEFROMPARTS(@yearPrev,1,1) AND is_deleted = 0)
+                    INSERT INTO financial_year (financial_year, start_date, end_date, date_created, is_deleted)
+                    VALUES (CONCAT(@yearPrev,'/',@yearNow), DATEFROMPARTS(@yearPrev,1,1), DATEFROMPARTS(@yearPrev,12,31), GETDATE(), 0);
+                IF NOT EXISTS (SELECT 1 FROM financial_year WHERE start_date = DATEFROMPARTS(@yearNow,1,1) AND is_deleted = 0)
+                    INSERT INTO financial_year (financial_year, start_date, end_date, date_created, is_deleted)
+                    VALUES (CONCAT(@yearNow,'/',@yearNow+1), DATEFROMPARTS(@yearNow,1,1), DATEFROMPARTS(@yearNow,12,31), GETDATE(), 0);
+            END
+
+            -- Posting months: all 12 months for both years
+            IF OBJECT_ID('posting_month','U') IS NOT NULL
+            BEGIN
+                ;WITH months AS (
+                    SELECT 1 n,'January'   nm UNION ALL SELECT 2,'February'  UNION ALL SELECT 3,'March'
+                    UNION ALL  SELECT 4,'April'     UNION ALL SELECT 5,'May'        UNION ALL SELECT 6,'June'
+                    UNION ALL  SELECT 7,'July'      UNION ALL SELECT 8,'August'     UNION ALL SELECT 9,'September'
+                    UNION ALL  SELECT 10,'October'  UNION ALL SELECT 11,'November'  UNION ALL SELECT 12,'December'
+                ),
+                years AS (
+                    SELECT py.posting_year_code, YEAR(py.year_start_date) yr
+                    FROM posting_year py
+                    WHERE py.is_deleted = 0
+                      AND YEAR(py.year_start_date) IN (@yearPrev, @yearNow)
                 )
-                INSERT INTO batch
-                (
-                    batch_date, batch_turnover, batch_header_date, batch_header_time, financial_system_code,
-                    date_created, created_by_user_code, is_deleted
-                )
-                SELECT DATEADD(day, -s.rn, GETDATE()),
-                       CAST(0.00 AS decimal(18,2)),
-                       CONVERT(varchar(10), DATEADD(day, -s.rn, GETDATE()), 120),
-                       CONVERT(varchar(8), DATEADD(day, -s.rn, GETDATE()), 108),
-                       1,
+                INSERT INTO posting_month (posting_year_code, month_number, month_name, is_closed, date_created, is_deleted)
+                SELECT y.posting_year_code,
+                       CAST(m.n AS TINYINT),
+                       m.nm,
+                       CASE WHEN y.yr < @yearNow THEN 1
+                            WHEN y.yr = @yearNow AND m.n < @monthNow THEN 1
+                            ELSE 0 END,
                        GETDATE(),
-                       1,
                        0
-                FROM src s
+                FROM years y
+                CROSS JOIN months m
                 WHERE NOT EXISTS (
-                    SELECT 1 FROM batch b
-                    WHERE b.is_deleted = 0 AND b.batch_header_date = CONVERT(varchar(10), DATEADD(day, -s.rn, GETDATE()), 120)
+                    SELECT 1 FROM posting_month pm
+                    WHERE pm.posting_year_code = y.posting_year_code
+                      AND pm.month_number = m.n
                 );
             END
 
-            IF OBJECT_ID('invoice', 'U') IS NOT NULL
+            -- Batches: one per month for the past 24 months
+            IF OBJECT_ID('batch','U') IS NOT NULL
             BEGIN
-                IF @latestPostingMonthCode IS NULL
+                DECLARE @bi INT = 0;
+                WHILE @bi < 24
                 BEGIN
-                    SET @latestPostingMonthCode = (
-                        SELECT TOP 1 posting_month_code
-                        FROM posting_month
-                        WHERE is_deleted = 0
-                        ORDER BY posting_month_code DESC
-                    );
+                    DECLARE @bdate DATE = CAST(DATEADD(month,-@bi,GETDATE()) AS DATE);
+                    IF NOT EXISTS (SELECT 1 FROM batch WHERE batch_header_date = CONVERT(varchar(10),@bdate,120) AND is_deleted = 0)
+                        INSERT INTO batch (batch_date, batch_turnover, batch_header_date, batch_header_time, financial_system_code, date_created, created_by_user_code, is_deleted)
+                        VALUES (@bdate, 0.00, CONVERT(varchar(10),@bdate,120), '08:00:00', 1, GETDATE(), 1, 0);
+                    SET @bi = @bi + 1;
                 END
-
-                ;WITH dept_source AS (
-                    SELECT DISTINCT CAST(s.Depatrment_code AS smallint) AS department_code
-                    FROM contract c
-                    JOIN vehicle_master vm ON vm.vmf_code = c.vmf_code AND vm.is_deleted = 0
-                    JOIN site s ON s.Site_code = vm.location_code AND s.is_deleted = 0
-                    WHERE c.is_deleted = 0
-                      AND c.still_current = 'Y'
-                      AND s.Depatrment_code IS NOT NULL
-                ),
-                to_insert AS (
-                    SELECT ds.department_code
-                    FROM dept_source ds
-                    WHERE NOT EXISTS (
-                        SELECT 1 FROM invoice i
-                        WHERE i.is_deleted = 0
-                          AND i.department_code = ds.department_code
-                          AND i.posting_month_code = @latestPostingMonthCode
-                    )
-                )
-                INSERT INTO invoice
-                (
-                    posting_month_code, department_code, date_created, created_by_user_code, is_deleted
-                )
-                SELECT @latestPostingMonthCode,
-                       ti.department_code,
-                       GETDATE(),
-                       1,
-                       0
-                FROM to_insert ti;
-            END
-
-            IF OBJECT_ID('invoice_item', 'U') IS NOT NULL
-            BEGIN
-                DECLARE @latestInvoiceMonth int = (
-                    SELECT TOP 1 posting_month_code
-                    FROM invoice
-                    WHERE is_deleted = 0
-                    ORDER BY posting_month_code DESC, invoice_code DESC
-                );
-
-                ;WITH base AS (
-                    SELECT c.vmf_code,
-                           vm.location_code,
-                           s.Depatrment_code,
-                           c.start_date,
-                           c.end_date,
-                           c.start_time,
-                           c.end_time,
-                           c.start_odometer,
-                           c.end_odometer,
-                           c.contract_type
-                    FROM contract c
-                    JOIN vehicle_master vm ON vm.vmf_code = c.vmf_code AND vm.is_deleted = 0
-                    JOIN site s ON s.Site_code = vm.location_code AND s.is_deleted = 0
-                    WHERE c.is_deleted = 0
-                      AND c.still_current = 'Y'
-                ),
-                targets AS (
-                    SELECT i.invoice_code,
-                           b.vmf_code,
-                           b.location_code,
-                           b.start_date,
-                           b.end_date,
-                           b.start_time,
-                           b.end_time,
-                           b.start_odometer,
-                           b.end_odometer,
-                           b.contract_type
-                    FROM invoice i
-                    JOIN base b ON b.Depatrment_code = i.department_code
-                    WHERE i.is_deleted = 0
-                      AND i.posting_month_code = @latestInvoiceMonth
-                      AND NOT EXISTS (
-                          SELECT 1 FROM invoice_item ii
-                          WHERE ii.invoice_code = i.invoice_code
-                            AND ii.vmf_code = b.vmf_code
-                            AND ii.is_deleted = 0
-                      )
-                )
-                INSERT INTO invoice_item
-                (
-                    invoice_code, vmf_code, site_code, fixed_tariff_amount, start_odometer, start_odo_derived, start_odo_date,
-                    end_odometer, end_odo_derived, end_odo_date, odo_tariff_amount, driver_rate, contract_start_date, contract_end_date,
-                    contract_type, contract_start_time, contract_end_time, date_created, created_by_user_code, is_deleted
-                )
-                SELECT t.invoice_code,
-                       t.vmf_code,
-                       CAST(t.location_code AS smallint),
-                       CAST(3500.00 AS decimal(18,2)),
-                       ISNULL(t.start_odometer, 0),
-                       'Captured',
-                       t.start_date,
-                       ISNULL(t.end_odometer, ISNULL(t.start_odometer, 0) + 500),
-                       CASE WHEN t.end_odometer IS NULL THEN 'Estimated' ELSE 'Captured' END,
-                       t.end_date,
-                       CAST(900.00 AS decimal(18,2)),
-                       CAST(0.00 AS decimal(18,2)),
-                       ISNULL(t.start_date, GETDATE()),
-                       t.end_date,
-                       ISNULL(NULLIF(t.contract_type, ''), 'H'),
-                       t.start_time,
-                       t.end_time,
-                       GETDATE(),
-                       1,
-                       0
-                FROM targets t;
-            END
-
-            IF OBJECT_ID('daily_transactions', 'U') IS NOT NULL
-            BEGIN
-                DECLARE @latestPostingMonthForTx int = (
-                    SELECT TOP 1 posting_month_code
-                    FROM posting_month
-                    WHERE is_deleted = 0
-                    ORDER BY posting_month_code DESC
-                );
-
-                DECLARE @defaultCostCategory smallint = (
-                    SELECT TOP 1 cost_category_code
-                    FROM cost_category
-                    WHERE is_deleted = 0
-                    ORDER BY cost_category_code
-                );
-
-                ;WITH tx AS (
-                    SELECT c.vmf_code
-                    FROM contract c
-                    WHERE c.is_deleted = 0
-                      AND c.still_current = 'Y'
-                      AND NOT EXISTS (
-                          SELECT 1 FROM daily_transactions dt
-                          WHERE dt.vmf_code = c.vmf_code
-                            AND dt.posting_month_code = @latestPostingMonthForTx
-                            AND dt.is_deleted = 0
-                      )
-                )
-                INSERT INTO daily_transactions
-                (
-                    vmf_code, cost_category_code, posting_month_code, file_sequence_number, transaction_date,
-                    date_created, created_by_user_code, is_deleted
-                )
-                SELECT tx.vmf_code,
-                       ISNULL(@defaultCostCategory, 1),
-                       @latestPostingMonthForTx,
-                       1,
-                       GETDATE(),
-                       GETDATE(),
-                       1,
-                       0
-                FROM tx;
-            END
-
-            IF OBJECT_ID('journal', 'U') IS NOT NULL
-            BEGIN
-                ;WITH missing_journal AS (
-                    SELECT b.batch_code
-                    FROM batch b
-                    WHERE b.is_deleted = 0
-                      AND NOT EXISTS (
-                          SELECT 1 FROM journal j
-                          WHERE j.batch_code = b.batch_code
-                            AND j.is_deleted = 0
-                      )
-                )
-                INSERT INTO journal
-                (
-                    batch_code, journal_date, journal_installation_link,
-                    date_created, created_by_user_code, is_deleted
-                )
-                SELECT mj.batch_code,
-                       GETDATE(),
-                       CONCAT('BATCH-', mj.batch_code),
-                       GETDATE(),
-                       1,
-                       0
-                FROM missing_journal mj;
             END
         ");
 
-        Console.WriteLine("  ✓ Batch 3 finance billing coverage updates applied.");
+        // Step 2: For every posting month in the last 24 months, create invoices per department
+        //         and invoice_items + daily_transactions per active-contract vehicle.
+        //         We loop month-by-month in C# to keep individual SQL statements simple.
+        for (int mOffset = 23; mOffset >= 0; mOffset--)
+        {
+            var targetDate = DateTime.Now.AddMonths(-mOffset);
+            int targetYear = targetDate.Year;
+            int targetMonth = targetDate.Month;
 
-        var financialSystemCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM financial_system WHERE is_deleted = 0");
-        var postingYearCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_year WHERE is_deleted = 0");
-        var postingMonthCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_month WHERE is_deleted = 0");
-        var financialYearCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM financial_year WHERE is_deleted = 0");
-        var costCategoryCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM cost_category WHERE is_deleted = 0");
-        var batchCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM batch WHERE is_deleted = 0");
-        var invoiceCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM invoice WHERE is_deleted = 0");
-        var invoiceItemCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM invoice_item WHERE is_deleted = 0");
-        var dailyTransactionCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM daily_transactions WHERE is_deleted = 0");
-        var journalCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal WHERE is_deleted = 0");
+            await dbContext.Database.ExecuteSqlRawAsync(@"
+                DECLARE @ty INT = {0};
+                DECLARE @tm INT = {1};
+                DECLARE @txDate DATE = DATEFROMPARTS(@ty, @tm, 15);
 
-        var stillCurrentContractCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND still_current = 'Y'");
-        var billedStillCurrentVehicleCount = await QueryCountAsync(dbContext, @"
-            SELECT COUNT(DISTINCT c.vmf_code)
-            FROM contract c
-            WHERE c.is_deleted = 0
-              AND c.still_current = 'Y'
-              AND EXISTS (
-                  SELECT 1
-                  FROM invoice_item ii
-                  WHERE ii.vmf_code = c.vmf_code
-                    AND ii.is_deleted = 0
-              )");
+                -- Find posting_month_code for this year/month
+                DECLARE @pmCode INT = (
+                    SELECT pm.posting_month_code
+                    FROM posting_month pm
+                    JOIN posting_year py ON py.posting_year_code = pm.posting_year_code
+                    WHERE YEAR(py.year_start_date) = @ty
+                      AND pm.month_number = @tm
+                      AND pm.is_deleted = 0
+                );
 
-        Console.WriteLine($"  📊 Batch 3 | Financial System: {financialSystemCount} | Posting Years: {postingYearCount} | Posting Months: {postingMonthCount} | Financial Years: {financialYearCount} | Cost Categories: {costCategoryCount}");
-        Console.WriteLine($"  📊 Batch 3 | Batches: {batchCount} | Invoices: {invoiceCount} | Invoice Items: {invoiceItemCount} | Daily Tx: {dailyTransactionCount} | Journals: {journalCount}");
-        Console.WriteLine($"  📊 Batch 3 | Still Current Contracts: {stillCurrentContractCount} | Still Current Vehicles Billed: {billedStillCurrentVehicleCount}");
+                IF @pmCode IS NOT NULL
+                BEGIN
+
+                -- Invoice per department (only depts that have active-contract vehicles)
+                INSERT INTO invoice (posting_month_code, department_code, date_created, created_by_user_code, is_deleted)
+                SELECT @pmCode,
+                       CAST(s.Depatrment_code AS SMALLINT),
+                       GETDATE(), 1, 0
+                FROM (
+                    SELECT DISTINCT s.Depatrment_code
+                    FROM contract c
+                    JOIN vehicle_master vm ON vm.vmf_code = c.vmf_code AND vm.is_deleted = 0
+                    JOIN site s ON s.Site_code = vm.location_code AND s.is_deleted = 0
+                    WHERE c.still_current = 'Y' AND c.is_deleted = 0
+                      AND s.Depatrment_code IS NOT NULL
+                ) s
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM invoice i
+                    WHERE i.posting_month_code = @pmCode
+                      AND i.department_code = CAST(s.Depatrment_code AS SMALLINT)
+                      AND i.is_deleted = 0
+                );
+
+                -- invoice_item per vehicle per invoice for this month
+                INSERT INTO invoice_item
+                (invoice_code, vmf_code, site_code,
+                 fixed_tariff_amount, start_odometer, start_odo_derived, start_odo_date,
+                 end_odometer, end_odo_derived, end_odo_date,
+                 odo_tariff_amount, driver_rate,
+                 contract_start_date, contract_end_date,
+                 contract_type, contract_start_time, contract_end_time,
+                 date_created, created_by_user_code, is_deleted)
+                SELECT i.invoice_code,
+                       c.vmf_code,
+                       CAST(vm.location_code AS SMALLINT),
+                       ISNULL(lt.fixed_tariff, 3500.00),
+                       ISNULL(c.start_odometer, 0),
+                       'Captured',
+                       @txDate,
+                       ISNULL(c.start_odometer, 0) + ISNULL(c.monthly_km, 1500),
+                       'Estimated',
+                       @txDate,
+                       CAST(ISNULL(c.monthly_km, 1500) * 0.60 AS DECIMAL(18,2)),
+                       0.00,
+                       c.start_date,
+                       c.end_date,
+                       ISNULL(NULLIF(c.contract_type,''), 'H'),
+                       c.start_time,
+                       c.end_time,
+                       GETDATE(), 1, 0
+                FROM contract c
+                JOIN vehicle_master vm ON vm.vmf_code = c.vmf_code AND vm.is_deleted = 0
+                JOIN site s            ON s.Site_code  = vm.location_code AND s.is_deleted = 0
+                JOIN invoice i         ON i.posting_month_code = @pmCode
+                                     AND i.department_code = CAST(s.Depatrment_code AS SMALLINT)
+                                     AND i.is_deleted = 0
+                LEFT JOIN LeaseTariff lt ON lt.vmf_code = c.vmf_code
+                                       AND lt.active = 1 AND lt.is_deleted = 0
+                WHERE c.still_current = 'Y' AND c.is_deleted = 0
+                  AND s.Depatrment_code IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM invoice_item ii
+                      WHERE ii.invoice_code = i.invoice_code
+                        AND ii.vmf_code = c.vmf_code
+                        AND ii.is_deleted = 0
+                  );
+
+                -- daily_transactions: one tariff transaction per vehicle per month
+                INSERT INTO daily_transactions
+                (vmf_code, cost_category_code, posting_month_code,
+                 file_sequence_number, transaction_date,
+                 date_created, created_by_user_code, is_deleted)
+                SELECT c.vmf_code, 1, @pmCode, 1, @txDate,
+                       GETDATE(), 1, 0
+                FROM contract c
+                WHERE c.still_current = 'Y' AND c.is_deleted = 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM daily_transactions dt
+                      WHERE dt.vmf_code = c.vmf_code
+                        AND dt.posting_month_code = @pmCode
+                        AND dt.is_deleted = 0
+                  );
+
+                -- Journal entries for batches in this month
+                IF OBJECT_ID('journal','U') IS NOT NULL
+                BEGIN
+                    INSERT INTO journal (batch_code, journal_date, journal_installation_link, date_created, created_by_user_code, is_deleted)
+                    SELECT b.batch_code, @txDate, CONCAT('BATCH-',b.batch_code), GETDATE(), 1, 0
+                    FROM batch b
+                    WHERE YEAR(CAST(b.batch_header_date AS DATE)) = @ty
+                      AND MONTH(CAST(b.batch_header_date AS DATE)) = @tm
+                      AND b.is_deleted = 0
+                      AND NOT EXISTS (
+                          SELECT 1 FROM journal j
+                          WHERE j.batch_code = b.batch_code AND j.is_deleted = 0
+                      );
+                END
+
+                END -- IF @pmCode IS NOT NULL
+            ", targetYear, targetMonth);
+        }
+
+        Console.WriteLine("  ✓ Batch 3 finance billing coverage updated (24 months backdated).");
+
+        var financialSystemCount   = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM financial_system WHERE is_deleted = 0");
+        var postingYearCount       = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_year WHERE is_deleted = 0");
+        var postingMonthCount      = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_month WHERE is_deleted = 0");
+        var invoiceCount           = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM invoice WHERE is_deleted = 0");
+        var invoiceItemCount       = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM invoice_item WHERE is_deleted = 0");
+        var dailyTransactionCount  = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM daily_transactions WHERE is_deleted = 0");
+        var journalCount           = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal WHERE is_deleted = 0");
+        var activeContractCount    = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND still_current = 'Y'");
+        var billedVehicleCount     = await QueryCountAsync(dbContext, @"
+            SELECT COUNT(DISTINCT c.vmf_code) FROM contract c
+            WHERE c.is_deleted = 0 AND c.still_current = 'Y'
+              AND EXISTS (SELECT 1 FROM invoice_item ii WHERE ii.vmf_code = c.vmf_code AND ii.is_deleted = 0)");
+
+        Console.WriteLine($"  📊 Batch 3 | Financial Systems: {financialSystemCount} | Posting Years: {postingYearCount} | Posting Months: {postingMonthCount}");
+        Console.WriteLine($"  📊 Batch 3 | Invoices: {invoiceCount} | Invoice Items: {invoiceItemCount} | Daily Tx: {dailyTransactionCount} | Journals: {journalCount}");
+        Console.WriteLine($"  📊 Batch 3 | Active Contracts: {activeContractCount} | Billed Vehicles (all months): {billedVehicleCount}");
     }
 
     private static async Task ApplyBatch4TripWorkshopVerificationCoverageAsync(FisDbContext dbContext)
@@ -3414,12 +3557,14 @@ public class Program
 
             IF OBJECT_ID('Positions', 'U') IS NOT NULL
             BEGIN
+                SET IDENTITY_INSERT Positions ON;
                 IF NOT EXISTS (SELECT 1 FROM Positions WHERE Position_Code = 1)
                     INSERT INTO Positions (Position_Code, Position_Name, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'Fleet Administrator', GETDATE(), @defaultUserCode, 0);
                 IF NOT EXISTS (SELECT 1 FROM Positions WHERE Position_Code = 2)
                     INSERT INTO Positions (Position_Code, Position_Name, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'Transport Officer', GETDATE(), @defaultUserCode, 0);
+                SET IDENTITY_INSERT Positions OFF;
             END
 
             IF OBJECT_ID('Incident_Area', 'U') IS NOT NULL
@@ -3437,12 +3582,14 @@ public class Program
 
             IF OBJECT_ID('vehicle_source', 'U') IS NOT NULL
             BEGIN
+                SET IDENTITY_INSERT vehicle_source ON;
                 IF NOT EXISTS (SELECT 1 FROM vehicle_source WHERE vs_code = 1)
                     INSERT INTO vehicle_source (vs_code, name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'OEM Direct', '1 Industry Rd, Midrand', 'PO Box 100, Midrand', '0110000000', '0110000001', GETDATE(), @defaultUserCode, 0);
                 IF NOT EXISTS (SELECT 1 FROM vehicle_source WHERE vs_code = 2)
                     INSERT INTO vehicle_source (vs_code, name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'Auction House', '22 Auction Ave, JHB', 'PO Box 220, JHB', '0110000002', '0110000003', GETDATE(), @defaultUserCode, 0);
+                SET IDENTITY_INSERT vehicle_source OFF;
             END
 
             IF OBJECT_ID('fuel_tariff', 'U') IS NOT NULL

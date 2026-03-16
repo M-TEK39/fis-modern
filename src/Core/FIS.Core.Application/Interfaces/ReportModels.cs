@@ -73,6 +73,13 @@ public class UniversalReport
     public Dictionary<string, object> ReportData { get; set; } = new();
     public List<Dictionary<string, object>> DataRows { get; set; } = new();
     public Dictionary<string, object> Summary { get; set; } = new();
+    /// <summary>
+    /// True when every DataRow contains "Month" (month name) and "Year" (int)
+    /// fields so the frontend can reliably filter by posting month.
+    /// False for vehicle-master types (summary, detailed, maintenance) which
+    /// carry no per-row posting date.
+    /// </summary>
+    public bool SupportsDateFilter { get; set; }
 }
 
 /// <summary>

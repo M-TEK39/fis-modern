@@ -202,3 +202,19 @@ window.fisPrint.printHtml = function (html, title) {
   printWindow.print();
   printWindow.close();
 };
+
+window.fisPrint.openHtml = function (html, title) {
+  if (typeof html !== "string" || !html.trim()) {
+    return;
+  }
+
+  const previewWindow = window.open("", "_blank");
+  if (!previewWindow) {
+    return;
+  }
+
+  previewWindow.document.open();
+  previewWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title || "Report"}</title></head><body>${html}</body></html>`);
+  previewWindow.document.close();
+  previewWindow.focus();
+};
