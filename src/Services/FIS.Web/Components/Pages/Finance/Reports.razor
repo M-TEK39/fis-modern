@@ -440,8 +440,12 @@
     {
         if (!TryResolvePostingMonthCode(out var postingMonthCode))
         {
-            SetValidationError("Select a posting month before running the report.");
-            return new FinanceApiResult { Success = false, Message = "Posting month is required." };
+            SetValidationError("Posting month codes are currently unavailable from the API, so this HTML/PDF invoice can\'t be generated accurately right now.");
+            return new FinanceApiResult
+            {
+                Success = false,
+                Message = "Posting month code lookup failed. This report requires the exact posting_month_code from api/finance/reports/posting-months."
+            };
         }
 
         var filterBy = Action == "site" ? "Site" : "Department";
@@ -550,28 +554,6 @@
         if (short.TryParse(_selectedBatchDate, out postingMonthCode) && postingMonthCode > 0)
         {
             return true;
-        }
-
-        var selectedOption = _batchDates.FirstOrDefault(option => option.Value == _selectedBatchDate);
-        var candidateTexts = new[]
-        {
-            _selectedBatchDate,
-            selectedOption?.Label,
-            selectedOption?.Value
-        };
-
-        foreach (var text in candidateTexts)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                continue;
-            }
-
-            if (DateTime.TryParse(text, out var date))
-            {
-                postingMonthCode = (short)date.Month;
-                return true;
-            }
         }
 
         return false;
