@@ -918,22 +918,22 @@
     {
         config = reportAction switch
         {
-            "summary-by-cost-type" => new DedicatedReportConfig("invoice-summary", "html", autoPrint: true),
-            "summary-by-cost-type-journal" => new DedicatedReportConfig("invoice-by-cost-type", "html", autoPrint: true),
-            "summary-html" => new DedicatedReportConfig("invoice-summary", "html", autoPrint: false),
-            "summary-pdf" => new DedicatedReportConfig("invoice-summary", "html", autoPrint: true),
-            "detailed-html" => new DedicatedReportConfig("invoice-detailed", "html", autoPrint: false),
-            "detailed-pdf" => new DedicatedReportConfig("invoice-detailed", "html", autoPrint: true),
-            "detailed-table" => new DedicatedReportConfig("invoice-detailed", "json", autoPrint: false),
-            "detailed-excel" => new DedicatedReportConfig("invoice-detailed", "csv", autoPrint: false),
-            "detailed-vip-taxi" => new DedicatedReportConfig("taxi-vip", "html", autoPrint: false),
-            "detailed-vip-taxi-pdf" => new DedicatedReportConfig("taxi-vip", "html", autoPrint: true),
-            "detailed-fuel-pdf" => new DedicatedReportConfig("fuel", "html", autoPrint: true),
-            "detailed-fuel-excel" => new DedicatedReportConfig("fuel", "csv", autoPrint: false),
-            "detailed-toll-oil-pdf" => new DedicatedReportConfig("toll-oil", "html", autoPrint: true),
-            "detailed-toll-oil-excel" => new DedicatedReportConfig("toll-oil", "csv", autoPrint: false),
-            "detailed-surcharge-pdf" => new DedicatedReportConfig("surcharge", "html", autoPrint: true),
-            "detailed-surcharge-excel" => new DedicatedReportConfig("surcharge", "csv", autoPrint: false),
+            "summary-by-cost-type" => new DedicatedReportConfig("invoice-summary", "html", AutoPrint: true),
+            "summary-by-cost-type-journal" => new DedicatedReportConfig("invoice-by-cost-type", "html", AutoPrint: true),
+            "summary-html" => new DedicatedReportConfig("invoice-summary", "html", AutoPrint: false),
+            "summary-pdf" => new DedicatedReportConfig("invoice-summary", "html", AutoPrint: true),
+            "detailed-html" => new DedicatedReportConfig("invoice-detailed", "html", AutoPrint: false),
+            "detailed-pdf" => new DedicatedReportConfig("invoice-detailed", "html", AutoPrint: true),
+            "detailed-table" => new DedicatedReportConfig("invoice-detailed", "json", AutoPrint: false),
+            "detailed-excel" => new DedicatedReportConfig("invoice-detailed", "csv", AutoPrint: false),
+            "detailed-vip-taxi" => new DedicatedReportConfig("taxi-vip", "html", AutoPrint: false),
+            "detailed-vip-taxi-pdf" => new DedicatedReportConfig("taxi-vip", "html", AutoPrint: true),
+            "detailed-fuel-pdf" => new DedicatedReportConfig("fuel", "html", AutoPrint: true),
+            "detailed-fuel-excel" => new DedicatedReportConfig("fuel", "csv", AutoPrint: false),
+            "detailed-toll-oil-pdf" => new DedicatedReportConfig("toll-oil", "html", AutoPrint: true),
+            "detailed-toll-oil-excel" => new DedicatedReportConfig("toll-oil", "csv", AutoPrint: false),
+            "detailed-surcharge-pdf" => new DedicatedReportConfig("surcharge", "html", AutoPrint: true),
+            "detailed-surcharge-excel" => new DedicatedReportConfig("surcharge", "csv", AutoPrint: false),
             _ => null
         };
 
