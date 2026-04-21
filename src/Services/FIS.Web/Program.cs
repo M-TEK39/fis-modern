@@ -113,6 +113,12 @@ builder.Services.AddHttpClient<PrivateHireApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 
+builder.Services.AddHttpClient<AuditApiService>(client =>
+{
+    client.BaseAddress = apiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+
 builder.Services.AddHttpClient<AccidentApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

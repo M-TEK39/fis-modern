@@ -12,13 +12,16 @@ Tariffs not added for new cars - enforce
 
 Taxi - capturing the kms on logsheet
 
-Vehicle to driver misallocation (e.g. a vehicle in cape town being assigned to a driver in jhb)
+Vehicle to driver misallocation (e.g. a vehicle in cape town being assigned to a driver in jhb) (cannot add a driver to different site, flag that as a driver duplicate)
 
 Edit taxi log sheet not currently working
 
 recurring of taxi capturing (automating of capturing) bills everyday
 
 When you click the close contract trigger a vehicle inspection only after vehicle inspection is done can it be approved to be closed
+
+Signed the data with the province of the users (a user can only see data pertaining their province/office)
+
 
 
 

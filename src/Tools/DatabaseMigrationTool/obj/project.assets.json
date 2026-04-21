@@ -2058,7 +2058,10 @@
         },
         "runtime": {
           "bin/placeholder/FIS.Data.SqlServer.dll": {}
-        }
+        },
+        "frameworkReferences": [
+          "Microsoft.AspNetCore.App"
+        ]
       }
     }
   },

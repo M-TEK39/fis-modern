@@ -1,5 +1,6 @@
-using Microsoft.Extensions.Hosting;
+using FIS.Data.SqlServer;
 using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Hosting;
 
 namespace FIS.Tools.DatabaseInspector;
 
@@ -10,27 +11,33 @@ public class Program
         Console.WriteLine("🔍 Database Schema Inspector");
         Console.WriteLine("============================");
 
-        var connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
-        
+        var connectionString = SqlServerConnectionStringHelper.Resolve(
+            Environment.GetEnvironmentVariable("ConnectionStrings__Default"),
+            SqlServerConnectionStringHelper.IsDevelopmentEnvironment()
+        );
+
         try
         {
             using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
-            
+
             Console.WriteLine("✅ Connected to database successfully");
-            
+
             // Check what tables exist
-            var command = new SqlCommand(@"
+            var command = new SqlCommand(
+                @"
                 SELECT 
                     TABLE_SCHEMA,
                     TABLE_NAME,
                     TABLE_TYPE 
                 FROM INFORMATION_SCHEMA.TABLES 
                 WHERE TABLE_TYPE = 'BASE TABLE'
-                ORDER BY TABLE_SCHEMA, TABLE_NAME", connection);
-                
+                ORDER BY TABLE_SCHEMA, TABLE_NAME",
+                connection
+            );
+
             using var reader = await command.ExecuteReaderAsync();
-            
+
             Console.WriteLine("\n📋 Tables found in database:");
             var tableCount = 0;
             while (await reader.ReadAsync())
@@ -40,7 +47,7 @@ public class Program
                 var tableName = reader.GetString(1);
                 Console.WriteLine($"  ✓ {schema}.{tableName}");
             }
-            
+
             if (tableCount == 0)
             {
                 Console.WriteLine("  ⚠️ No tables found in database");

@@ -1,0 +1,262 @@
+@page "/reports/vip-self-drive-utilization"
+@rendermode InteractiveServer
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject IJSRuntime JSRuntime
+
+<PageTitle>VIP Self-Drive Rental Utilization - Fleet Information System</PageTitle>
+
+<div class="page-header">
+    <div class="page-header-content">
+        <h1 class="page-title">
+            <i class="bx bx-car"></i>
+            VIP Self-Drive Rental Utilization
+        </h1>
+        <p class="page-description">
+            Calculates utilization using actual check-out and check-in dates from the Private Hire register.
+            Days hired = actual days vehicle was out (check-in date minus check-out date), not the scheduled booking period.
+        </p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+    </div>
+</div>
+
+<div class="page-content">
+    <div class="form-card">
+        <div class="form-card-body">
+            <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Year</label>
+                    <select class="form-input" @bind="_selectedYear">
+                        @for (int y = DateTime.Today.Year; y >= DateTime.Today.Year - 5; y--)
+                        {
+                            <option value="@y">@y</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label">Month</label>
+                    <select class="form-input" @bind="_selectedMonth">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@(new DateTime(2000, m, 1).ToString("MMMM"))</option>
+                        }
+                    </select>
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">
+                    @(_loading ? "Loading..." : "Generate Report")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (_hasLoaded)
+    {
+        <div class="table-container fis-mt-15">
+            <div class="table-header">
+                <span class="table-title">
+                    VIP Self-Drive Utilization — @(new DateTime(_selectedYear, _selectedMonth, 1).ToString("MMMM yyyy"))
+                    &nbsp;(@_daysInMonth days in month)
+                </span>
+                <div class="table-controls">
+                    <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_rows.Count == 0)">Download CSV</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Registration / GG No.</th>
+                            <th>Model</th>
+                            <th>Check-out Date</th>
+                            <th>Return Date (Actual)</th>
+                            <th>Days Hired (Actual)</th>
+                            <th>Days in Month</th>
+                            <th>% Utilization</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_loading)
+                        {
+                            <tr><td colspan="7">Loading report...</td></tr>
+                        }
+                        else if (_rows.Count == 0)
+                        {
+                            <tr><td colspan="7">No self-drive records found for the selected period.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in PagedRows)
+                            {
+                                <tr>
+                                    <td>@row.RegistrationNumber</td>
+                                    <td>@row.ModelDescription</td>
+                                    <td>@(row.CheckOutDate?.ToString("yyyy-MM-dd") ?? "-")</td>
+                                    <td>
+                                        @if (row.ReturnDate == null)
+                                        {
+                                            <span style="color: var(--color-warning, #e6a817); font-weight: 600;">Not Yet Returned</span>
+                                        }
+                                        else
+                                        {
+                                            @row.ReturnDate.Value.ToString("yyyy-MM-dd")
+                                        }
+                                    </td>
+                                    <td>@row.DaysHiredInMonth</td>
+                                    <td>@row.DaysInMonth</td>
+                                    <td>
+                                        <span style="font-weight: 600;">@row.UtilizationPercent.ToString("0.00")%</span>
+                                    </td>
+                                </tr>
+                            }
+                            <tr style="font-weight: 700; border-top: 2px solid var(--color-border, #ddd);">
+                                <td colspan="4">Summary (Avg. across @_rows.Count vehicle(s))</td>
+                                <td>@_rows.Sum(r => r.DaysHiredInMonth)</td>
+                                <td>@_daysInMonth</td>
+                                <td>@(_rows.Average(r => r.UtilizationPercent).ToString("0.00"))%</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_rows.Count > _pageSize)
+            {
+                <div class="pagination">
+                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
+                    <div class="pagination-info">Page @_page of @TotalPages</div>
+                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                </div>
+                <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
+            }
+        </div>
+
+        <div class="form-card fis-mt-15" style="border-left: 4px solid var(--color-info, #3b82f6);">
+            <div class="form-card-body">
+                <strong>Audit Note:</strong> Days hired are calculated from the actual <em>return date</em> recorded on the
+                check-out/check-in form, not from the scheduled booking end date.
+                Formula: <code>Days Hired = (Return Date − Check-out Date) + 1</code> (inclusive, capped within the selected month).
+                Vehicles not yet returned show days up to the last day of the selected month.
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _loading;
+    private bool _hasLoaded;
+    private int _selectedYear = DateTime.Today.Year;
+    private int _selectedMonth = DateTime.Today.Month;
+    private int _daysInMonth;
+    private List<UtilizationRow> _rows = new();
+    private int _page = 1;
+    private const int _pageSize = 20;
+
+    private List<UtilizationRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+
+    private async Task LoadReportAsync()
+    {
+        _loading = true;
+        _hasLoaded = true;
+        try
+        {
+            var monthStart = new DateTime(_selectedYear, _selectedMonth, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+            _daysInMonth = DateTime.DaysInMonth(_selectedYear, _selectedMonth);
+
+            // Fetch records that overlap with the selected month:
+            // check-out before month end AND (no return yet OR returned after month start)
+            var hires = await PrivateHireService.GetUtilizationByDateRangeAsync(monthStart, monthEnd);
+
+            _rows = hires
+                .Where(h => h.CheckOutDate.HasValue)
+                .Where(h => h.CheckOutDate!.Value.Date <= monthEnd && (h.ReturnDate == null || h.ReturnDate.Value.Date >= monthStart))
+                .Select(h =>
+                {
+                    var checkout = h.CheckOutDate!.Value.Date;
+                    var @return = h.ReturnDate?.Date ?? monthEnd; // vehicles not yet returned: count to end of month
+
+                    // Clamp both dates to within the selected month
+                    var effectiveStart = checkout < monthStart ? monthStart : checkout;
+                    var effectiveEnd = @return > monthEnd ? monthEnd : @return;
+
+                    var daysHired = Math.Max(0, (effectiveEnd - effectiveStart).Days + 1); // inclusive
+                    var pct = _daysInMonth > 0 ? daysHired * 100.0 / _daysInMonth : 0.0;
+
+                    return new UtilizationRow(
+                        RegistrationNumber: h.RegistrationNumber,
+                        ModelDescription: h.ModelDescription,
+                        CheckOutDate: h.CheckOutDate,
+                        ReturnDate: h.ReturnDate,
+                        DaysHiredInMonth: daysHired,
+                        DaysInMonth: _daysInMonth,
+                        UtilizationPercent: pct);
+                })
+                .OrderBy(r => r.RegistrationNumber)
+                .ToList();
+
+            _page = 1;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading VIP self-drive utilization: {ex.Message}");
+            _rows = new();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (_page > 1) _page--;
+    }
+
+    private void NextPage()
+    {
+        if (_page < TotalPages) _page++;
+    }
+
+    private async Task DownloadCsvAsync()
+    {
+        var lines = new List<string>
+        {
+            "\"Registration / GG No.\",\"Model\",\"Check-out Date\",\"Return Date (Actual)\",\"Days Hired (Actual)\",\"Days in Month\",\"% Utilization\""
+        };
+
+        foreach (var row in _rows)
+        {
+            lines.Add(string.Join(",",
+                CsvCell(row.RegistrationNumber),
+                CsvCell(row.ModelDescription),
+                CsvCell(row.CheckOutDate?.ToString("yyyy-MM-dd") ?? ""),
+                CsvCell(row.ReturnDate?.ToString("yyyy-MM-dd") ?? "Not Yet Returned"),
+                row.DaysHiredInMonth.ToString(),
+                row.DaysInMonth.ToString(),
+                row.UtilizationPercent.ToString("0.00") + "%"));
+        }
+
+        var csv = string.Join(Environment.NewLine, lines);
+        var fileName = $"vip_self_drive_utilization_{_selectedYear}{_selectedMonth:D2}.csv";
+        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+    }
+
+    private static string CsvCell(string? value)
+    {
+        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
+        return $"\"{safe}\"";
+    }
+
+    private sealed record UtilizationRow(
+        string RegistrationNumber,
+        string ModelDescription,
+        DateTime? CheckOutDate,
+        DateTime? ReturnDate,
+        int DaysHiredInMonth,
+        int DaysInMonth,
+        double UtilizationPercent);
+}

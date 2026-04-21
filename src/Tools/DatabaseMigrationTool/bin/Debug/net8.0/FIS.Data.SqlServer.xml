@@ -4,6 +4,15 @@
         <name>FIS.Data.SqlServer</name>
     </assembly>
     <members>
+        <member name="T:FIS.Data.SqlServer.Interceptors.AuditInterceptor">
+             <summary>
+             EF Core interceptor that automatically writes a row to Workflow.Audit for every
+             INSERT / UPDATE / DELETE across all entities (except Audit and UserStatusHistory themselves).
+            
+             Sensitive fields (password, hash, salt, token) are redacted from snapshots.
+             The current user is resolved from the HTTP context JWT claims.
+             </summary>
+        </member>
         <member name="T:FIS.Data.SqlServer.Migrations.InitialModernLegacySchema">
             <inheritdoc />
         </member>

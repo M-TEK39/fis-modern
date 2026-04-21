@@ -81,11 +81,48 @@
             Stores password hashes for legacy JWT authentication
             </summary>
         </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.LegacyUserCredential.password_expiry_date">
+            <summary>
+            Absolute date/time after which the password is expired.
+            Calculated at change time as last_password_change + 90 days.
+            Null for legacy records (fall back to config-based calculation).
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.LegacyUserCredential.changed_by_user_code">
+            <summary>FK to TS_Users — who last changed this password (admin reset or self-service).</summary>
+        </member>
         <member name="T:FIS.Core.Domain.Entities.Auth.TSUser">
             <summary>
             TSUser Entity - EXACT legacy schema match
             Maps to 'TS_User' table
             </summary>
+        </member>
+        <member name="T:FIS.Core.Domain.Entities.Auth.UserStatusHistory">
+            <summary>
+            Tracks every enable / disable / lock / unlock / password-reset event per user.
+            This table preserves the full history — not just current state.
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.UserStatusHistory.user_access_code">
+            <summary>FK to TS_Users.user_access_code — which user's status changed.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.UserStatusHistory.new_status">
+            <summary>
+            The status after the change.
+            Values: enabled | disabled | locked | unlocked | password_reset | created
+            </summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.UserStatusHistory.previous_status">
+            <summary>The status before the change (null when first created).</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.UserStatusHistory.changed_by_user_code">
+            <summary>FK to TS_Users.user_access_code — who triggered the change.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.UserStatusHistory.changed_at">
+            <summary>UTC timestamp of the status change.</summary>
+        </member>
+        <member name="P:FIS.Core.Domain.Entities.Auth.UserStatusHistory.reason">
+            <summary>Optional free-text reason (e.g. "Account inactive per HR instruction").</summary>
         </member>
         <member name="T:FIS.Core.Domain.Entities.VipSiteMap">
             <summary>

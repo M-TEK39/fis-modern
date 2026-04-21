@@ -1,12 +1,12 @@
+using System.Data;
+using System.Diagnostics.CodeAnalysis;
+using FIS.Data.SqlServer;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using FIS.Data.SqlServer;
-using System.Data;
-using Microsoft.Data.SqlClient;
-using System.Diagnostics.CodeAnalysis;
 
 namespace FIS.Tools.DatabaseMigrationTool;
 
@@ -99,7 +99,9 @@ public class Program
                 bool leftoverExists = await TableExistsAsync(connection, leftoverName, schema);
                 if (leftoverExists)
                 {
-                    Console.WriteLine($"    🧹 Cleaning up leftover '{leftoverName}' from previous run...");
+                    Console.WriteLine(
+                        $"    🧹 Cleaning up leftover '{leftoverName}' from previous run..."
+                    );
                     await DropTableAsync(connection, schema, leftoverName);
                 }
 
@@ -111,13 +113,28 @@ public class Program
             else
             {
                 // Check for IDENTITY mismatches first — requires a table rebuild
-                var identityMismatches = await GetIdentityMismatchColumnsAsync(connection, entityType, schema, tableName);
+                var identityMismatches = await GetIdentityMismatchColumnsAsync(
+                    connection,
+                    entityType,
+                    schema,
+                    tableName
+                );
 
                 if (identityMismatches.Any())
                 {
-                    Console.WriteLine($"    ⚠️  IDENTITY missing on: {string.Join(", ", identityMismatches)}");
-                    Console.WriteLine($"    🔄 Rebuilding table to add IDENTITY property (data preserved)...");
-                    await RebuildTableWithIdentityAsync(dbContext, connection, entityType, schema, tableName);
+                    Console.WriteLine(
+                        $"    ⚠️  IDENTITY missing on: {string.Join(", ", identityMismatches)}"
+                    );
+                    Console.WriteLine(
+                        $"    🔄 Rebuilding table to add IDENTITY property (data preserved)..."
+                    );
+                    await RebuildTableWithIdentityAsync(
+                        dbContext,
+                        connection,
+                        entityType,
+                        schema,
+                        tableName
+                    );
                     tablesRebuilt++;
                     tablesUpdated++;
                     Console.WriteLine($"    ✅ Table rebuilt with IDENTITY columns");
@@ -125,16 +142,25 @@ public class Program
                 else
                 {
                     // IDENTITY is fine — just check for missing columns
-                    var missingColumns = await GetMissingColumnsAsync(connection, entityType, schema, tableName);
+                    var missingColumns = await GetMissingColumnsAsync(
+                        connection,
+                        entityType,
+                        schema,
+                        tableName
+                    );
 
                     if (missingColumns.Any())
                     {
-                        Console.WriteLine($"    🔧 Found {missingColumns.Count} missing columns. Adding...");
+                        Console.WriteLine(
+                            $"    🔧 Found {missingColumns.Count} missing columns. Adding..."
+                        );
                         foreach (var column in missingColumns)
                         {
                             await AddColumnAsync(connection, schema, tableName, column);
                             columnsAdded++;
-                            Console.WriteLine($"       ✅ Added column: {column.ColumnName} ({column.DataType})");
+                            Console.WriteLine(
+                                $"       ✅ Added column: {column.ColumnName} ({column.DataType})"
+                            );
                         }
                         tablesUpdated++;
                     }
@@ -159,7 +185,11 @@ public class Program
     // -----------------------------------------------------------------------
 
     private static async Task<List<string>> GetIdentityMismatchColumnsAsync(
-        SqlConnection connection, IEntityType entityType, string schema, string tableName)
+        SqlConnection connection,
+        IEntityType entityType,
+        string schema,
+        string tableName
+    )
     {
         var mismatches = new List<string>();
 
@@ -173,7 +203,8 @@ public class Program
             if (string.IsNullOrEmpty(columnName))
                 continue;
 
-            var sql = @"
+            var sql =
+                @"
                 SELECT COLUMNPROPERTY(OBJECT_ID(@FullName), @Col, 'IsIdentity')";
 
             using var cmd = new SqlCommand(sql, connection);
@@ -194,11 +225,18 @@ public class Program
     // Table rebuild to add IDENTITY — preserves all existing data
     // -----------------------------------------------------------------------
 
-    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "SQL is constructed from EF Core metadata, not user input")]
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL is constructed from EF Core metadata, not user input"
+    )]
     private static async Task RebuildTableWithIdentityAsync(
-        FisDbContext dbContext, SqlConnection connection,
-        IEntityType entityType, string schema, string tableName)
+        FisDbContext dbContext,
+        SqlConnection connection,
+        IEntityType entityType,
+        string schema,
+        string tableName
+    )
     {
         var oldName = $"{tableName}__identity_old";
 
@@ -208,12 +246,17 @@ public class Program
             await DropTableAsync(connection, schema, oldName);
 
         // 1. Rename original → temp
-        using (var cmd = new SqlCommand(
-            $"EXEC sp_rename '[{schema}].[{tableName}]', '{oldName}'", connection))
+        using (
+            var cmd = new SqlCommand(
+                $"EXEC sp_rename '[{schema}].[{tableName}]', '{oldName}'",
+                connection
+            )
+        )
             await cmd.ExecuteNonQueryAsync();
 
         // 1b. Drop the PK constraint on the old table so the new table can reuse the same constraint name
-        var dropPkSql = $@"
+        var dropPkSql =
+            $@"
             DECLARE @pkName NVARCHAR(256)
             SELECT @pkName = kc.name
             FROM sys.key_constraints kc
@@ -233,14 +276,16 @@ public class Program
         await CreateTableAsync(dbContext, entityType, schema, tableName);
 
         // 3. Build column list from EF model (columns that exist in both tables)
-        var efColumns = entityType.GetProperties()
+        var efColumns = entityType
+            .GetProperties()
             .Select(p => p.GetColumnName())
             .Where(c => !string.IsNullOrEmpty(c))
             .ToList();
 
         // Only copy columns that physically exist in the old table
         var oldColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var colSql = @"
+        var colSql =
+            @"
             SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName";
         using (var cmd = new SqlCommand(colSql, connection))
@@ -260,8 +305,7 @@ public class Program
         if (!copyColumns.Any())
         {
             // Nothing to copy (empty table or schema mismatch) — just drop old
-            using var drop = new SqlCommand(
-                $"DROP TABLE [{schema}].[{oldName}]", connection);
+            using var drop = new SqlCommand($"DROP TABLE [{schema}].[{oldName}]", connection);
             await drop.ExecuteNonQueryAsync();
             return;
         }
@@ -269,7 +313,8 @@ public class Program
         var columnList = string.Join(", ", copyColumns);
 
         // 4. Copy data — use IDENTITY_INSERT so existing IDs are preserved
-        var identityColumns = entityType.GetProperties()
+        var identityColumns = entityType
+            .GetProperties()
             .Where(p => p.ValueGenerated == ValueGenerated.OnAdd && p.IsPrimaryKey())
             .Select(p => p.GetColumnName())
             .Where(c => !string.IsNullOrEmpty(c))
@@ -278,25 +323,34 @@ public class Program
         if (identityColumns.Any())
         {
             using var setOn = new SqlCommand(
-                $"SET IDENTITY_INSERT [{schema}].[{tableName}] ON", connection);
+                $"SET IDENTITY_INSERT [{schema}].[{tableName}] ON",
+                connection
+            );
             await setOn.ExecuteNonQueryAsync();
         }
 
-        using (var copy = new SqlCommand(
-            $"INSERT INTO [{schema}].[{tableName}] ({columnList}) " +
-            $"SELECT {columnList} FROM [{schema}].[{oldName}]", connection))
+        using (
+            var copy = new SqlCommand(
+                $"INSERT INTO [{schema}].[{tableName}] ({columnList}) "
+                    + $"SELECT {columnList} FROM [{schema}].[{oldName}]",
+                connection
+            )
+        )
             await copy.ExecuteNonQueryAsync();
 
         if (identityColumns.Any())
         {
             using var setOff = new SqlCommand(
-                $"SET IDENTITY_INSERT [{schema}].[{tableName}] OFF", connection);
+                $"SET IDENTITY_INSERT [{schema}].[{tableName}] OFF",
+                connection
+            );
             await setOff.ExecuteNonQueryAsync();
 
             // Reseed so next INSERT gets MAX + 1
             foreach (var col in identityColumns)
             {
-                var reseedSql = $@"
+                var reseedSql =
+                    $@"
                     DECLARE @max BIGINT = (SELECT ISNULL(MAX([{col}]), 0) FROM [{schema}].[{tableName}])
                     DBCC CHECKIDENT('[{schema}].[{tableName}]', RESEED, @max)";
                 using var reseed = new SqlCommand(reseedSql, connection);
@@ -308,12 +362,20 @@ public class Program
         await DropTableAsync(connection, schema, oldName);
     }
 
-    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "SQL is constructed from EF Core metadata, not user input")]
-    private static async Task DropTableAsync(SqlConnection connection, string schema, string tableName)
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL is constructed from EF Core metadata, not user input"
+    )]
+    private static async Task DropTableAsync(
+        SqlConnection connection,
+        string schema,
+        string tableName
+    )
     {
         // Drop PK constraint first (prevents name conflicts when recreating)
-        var dropPkSql = $@"
+        var dropPkSql =
+            $@"
             DECLARE @pkName NVARCHAR(256)
             SELECT @pkName = kc.name
             FROM sys.key_constraints kc
@@ -335,9 +397,14 @@ public class Program
     // Existing helpers (unchanged)
     // -----------------------------------------------------------------------
 
-    private static async Task<bool> TableExistsAsync(SqlConnection connection, string tableName, string schema)
+    private static async Task<bool> TableExistsAsync(
+        SqlConnection connection,
+        string tableName,
+        string schema
+    )
     {
-        var sql = @"
+        var sql =
+            @"
             SELECT CASE WHEN EXISTS (
                 SELECT 1 FROM INFORMATION_SCHEMA.TABLES
                 WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName
@@ -356,7 +423,8 @@ public class Program
         if (string.Equals(schema, "dbo", StringComparison.OrdinalIgnoreCase))
             return;
 
-        const string sql = @"
+        const string sql =
+            @"
             IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = @SchemaName)
             BEGIN
                 DECLARE @createSql NVARCHAR(MAX) = N'CREATE SCHEMA ' + QUOTENAME(@SchemaName);
@@ -368,7 +436,12 @@ public class Program
         await cmd.ExecuteNonQueryAsync();
     }
 
-    private static async Task CreateTableAsync(FisDbContext dbContext, IEntityType entityType, string schema, string tableName)
+    private static async Task CreateTableAsync(
+        FisDbContext dbContext,
+        IEntityType entityType,
+        string schema,
+        string tableName
+    )
     {
         var createScript = dbContext.Database.GenerateCreateScript();
 
@@ -380,7 +453,9 @@ public class Program
         if (tableCreateEnd == -1)
             tableCreateEnd = createScript.Length;
 
-        var tableScript = createScript.Substring(tableCreateStart, tableCreateEnd - tableCreateStart).Trim();
+        var tableScript = createScript
+            .Substring(tableCreateStart, tableCreateEnd - tableCreateStart)
+            .Trim();
 
         var lines = tableScript.Split('\n');
         var createTableLines = new List<string>();
@@ -407,7 +482,10 @@ public class Program
                         for (int i = nextNonFkLineIndex; i < lines.Length; i++)
                         {
                             var nextLine = lines[i].TrimStart();
-                            if (nextLine.StartsWith("CONSTRAINT") && nextLine.Contains("FOREIGN KEY"))
+                            if (
+                                nextLine.StartsWith("CONSTRAINT")
+                                && nextLine.Contains("FOREIGN KEY")
+                            )
                                 continue;
                             if (nextLine.StartsWith(")") || nextLine.Contains(");"))
                                 break;
@@ -435,10 +513,15 @@ public class Program
     }
 
     private static async Task<List<ColumnDefinition>> GetMissingColumnsAsync(
-        SqlConnection connection, IEntityType entityType, string schema, string tableName)
+        SqlConnection connection,
+        IEntityType entityType,
+        string schema,
+        string tableName
+    )
     {
         var dbColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var sql = @"
+        var sql =
+            @"
             SELECT COLUMN_NAME
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName";
@@ -463,22 +546,32 @@ public class Program
 
             if (!dbColumns.Contains(columnName))
             {
-                missingColumns.Add(new ColumnDefinition
-                {
-                    ColumnName = columnName,
-                    DataType = GetSqlDataType(property),
-                    IsNullable = property.IsNullable,
-                    DefaultValue = property.GetDefaultValueSql()
-                });
+                missingColumns.Add(
+                    new ColumnDefinition
+                    {
+                        ColumnName = columnName,
+                        DataType = GetSqlDataType(property),
+                        IsNullable = property.IsNullable,
+                        DefaultValue = property.GetDefaultValueSql(),
+                    }
+                );
             }
         }
 
         return missingColumns;
     }
 
-    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "SQL is constructed from EF Core metadata, not user input")]
-    private static async Task AddColumnAsync(SqlConnection connection, string schema, string tableName, ColumnDefinition column)
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "SQL is constructed from EF Core metadata, not user input"
+    )]
+    private static async Task AddColumnAsync(
+        SqlConnection connection,
+        string schema,
+        string tableName,
+        ColumnDefinition column
+    )
     {
         string? defaultValue = column.DefaultValue;
 
@@ -486,19 +579,22 @@ public class Program
         {
             defaultValue = column.DataType.ToUpperInvariant() switch
             {
-                var t when t.Contains("INT") || t.Contains("NUMERIC") || t.Contains("DECIMAL") => "0",
+                var t when t.Contains("INT") || t.Contains("NUMERIC") || t.Contains("DECIMAL") =>
+                    "0",
                 var t when t.Contains("BIT") => "0",
                 var t when t.Contains("DATETIME") => "GETDATE()",
                 var t when t.Contains("UNIQUEIDENTIFIER") => "NEWID()",
-                var t when t.Contains("NVARCHAR") || t.Contains("VARCHAR") || t.Contains("CHAR") => "''",
-                _ => (string?)null
+                var t when t.Contains("NVARCHAR") || t.Contains("VARCHAR") || t.Contains("CHAR") =>
+                    "''",
+                _ => (string?)null,
             };
         }
 
         var nullability = column.IsNullable ? "NULL" : "NOT NULL";
         var defaultClause = !string.IsNullOrEmpty(defaultValue) ? $" DEFAULT {defaultValue}" : "";
 
-        var sql = $@"
+        var sql =
+            $@"
             ALTER TABLE [{schema}].[{tableName}]
             ADD [{column.ColumnName}] {column.DataType} {nullability}{defaultClause}";
 
@@ -527,7 +623,7 @@ public class Program
             "Double" => "FLOAT",
             "Guid" => "UNIQUEIDENTIFIER",
             "Byte" => "TINYINT",
-            _ => "NVARCHAR(MAX)"
+            _ => "NVARCHAR(MAX)",
         };
     }
 
@@ -551,21 +647,25 @@ public class Program
 
     private static IHostBuilder CreateHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
-            .ConfigureServices((context, services) =>
-            {
-                var connectionString = context.Configuration["ConnectionStrings:Default"];
-                if (string.IsNullOrWhiteSpace(connectionString))
-                    connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
-
-                services.AddDbContext<FisDbContext>(options =>
-                    options.UseSqlServer(connectionString));
-
-                services.AddLogging(builder =>
+            .ConfigureServices(
+                (context, services) =>
                 {
-                    builder.AddConsole();
-                    builder.SetMinimumLevel(LogLevel.Information);
-                });
-            });
+                    var connectionString = SqlServerConnectionStringHelper.Resolve(
+                        context.Configuration["ConnectionStrings:Default"],
+                        context.HostingEnvironment.IsDevelopment()
+                    );
+
+                    services.AddDbContext<FisDbContext>(options =>
+                        options.UseSqlServer(connectionString)
+                    );
+
+                    services.AddLogging(builder =>
+                    {
+                        builder.AddConsole();
+                        builder.SetMinimumLevel(LogLevel.Information);
+                    });
+                }
+            );
 }
 
 public class ColumnDefinition

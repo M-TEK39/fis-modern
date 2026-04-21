@@ -12,13 +12,8 @@
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Abstractions.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.Relational.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.EntityFrameworkCore.SqlServer.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Caching.Abstractions.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Caching.Memory.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.Abstractions.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.Binder.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.CommandLine.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.EnvironmentVariables.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.FileExtensions.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.Json.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Configuration.UserSecrets.dll
@@ -26,9 +21,6 @@
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.DependencyInjection.Abstractions.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Diagnostics.Abstractions.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.FileProviders.Abstractions.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.FileProviders.Physical.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.FileSystemGlobbing.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Hosting.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
@@ -39,8 +31,6 @@
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Logging.EventLog.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Logging.EventSource.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Options.ConfigurationExtensions.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Extensions.Primitives.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Identity.Client.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.Identity.Client.Extensions.Msal.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/Microsoft.IdentityModel.Abstractions.dll
@@ -112,7 +102,6 @@
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/System.Composition.Hosting.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/System.Composition.Runtime.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/System.Composition.TypedParts.dll
-/home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/System.IO.Pipelines.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/cs/Microsoft.CodeAnalysis.resources.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/de/Microsoft.CodeAnalysis.resources.dll
 /home/dev/work/fis-modern/src/Tools/DatabaseMigrationTool/bin/Debug/net8.0/es/Microsoft.CodeAnalysis.resources.dll

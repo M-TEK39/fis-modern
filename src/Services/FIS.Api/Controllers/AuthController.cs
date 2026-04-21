@@ -124,10 +124,22 @@ public class AuthController : ControllerBase
         _context.LegacyUserCredentials.Update(credential);
         await _context.SaveChangesAsync();
 
-        // Password expiry check
-        var expiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "30");
-        var passwordAge = (DateTime.UtcNow - credential.last_password_change).TotalDays;
-        var passwordExpired = passwordAge > expiryDays;
+        // Password expiry check — prefer stored expiry_date, fall back to config-based calculation
+        bool passwordExpired;
+        int daysRemaining;
+        var fallbackExpiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "90");
+
+        if (credential.password_expiry_date.HasValue)
+        {
+            passwordExpired = DateTime.UtcNow > credential.password_expiry_date.Value;
+            daysRemaining = Math.Max(0, (int)(credential.password_expiry_date.Value - DateTime.UtcNow).TotalDays);
+        }
+        else
+        {
+            var passwordAge = (DateTime.UtcNow - credential.last_password_change).TotalDays;
+            passwordExpired = passwordAge > fallbackExpiryDays;
+            daysRemaining = Math.Max(0, (int)(fallbackExpiryDays - passwordAge));
+        }
 
         var token = GenerateJwtToken(user.user_access_code, user.email ?? request.Username, passwordExpired);
 
@@ -138,7 +150,7 @@ public class AuthController : ControllerBase
             UserAccessCode = user.user_access_code,
             Email = user.email,
             PasswordExpired = passwordExpired,
-            PasswordExpiresIn = Math.Max(0, (int)(expiryDays - passwordAge)),
+            PasswordExpiresIn = daysRemaining,
             Message = passwordExpired
                 ? "Password has expired. Please change your password to continue."
                 : "Login successful"
@@ -274,15 +286,23 @@ public class AuthController : ControllerBase
             if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, credential.password_hash))
                 return BadRequest(new ChangePasswordResponse { Success = false, Message = "Current password is incorrect" });
 
+            var changedByRaw = User.FindFirst("user_access_code")?.Value;
+            int.TryParse(changedByRaw, out int changedBy);
+            var now = DateTime.UtcNow;
+
             credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-            credential.last_password_change = DateTime.UtcNow;
-            credential.modified_date = DateTime.UtcNow;
+            credential.last_password_change = now;
+            credential.password_expiry_date = now.AddDays(90);
+            credential.changed_by_user_code = changedBy > 0 ? changedBy : null;
+            credential.modified_date = now;
             credential.failed_login_attempts = 0;
             credential.account_locked_until = null;
             _context.LegacyUserCredentials.Update(credential);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Password changed successfully for user {Username}", request.Username);
+            _logger.LogInformation(
+                "Password changed successfully for user {Username} by user_access_code {ChangedBy}",
+                request.Username, changedBy);
 
             return Ok(new ChangePasswordResponse
             {

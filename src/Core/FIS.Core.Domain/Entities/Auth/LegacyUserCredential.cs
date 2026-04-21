@@ -44,6 +44,18 @@ public class LegacyUserCredential
     [Column("last_password_change")]
     public DateTime last_password_change { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Absolute date/time after which the password is expired.
+    /// Calculated at change time as last_password_change + 90 days.
+    /// Null for legacy records (fall back to config-based calculation).
+    /// </summary>
+    [Column("password_expiry_date")]
+    public DateTime? password_expiry_date { get; set; }
+
+    /// <summary>FK to TS_Users — who last changed this password (admin reset or self-service).</summary>
+    [Column("changed_by_user_code")]
+    public int? changed_by_user_code { get; set; }
+
     [Column("created_date")]
     public DateTime created_date { get; set; } = DateTime.UtcNow;
 

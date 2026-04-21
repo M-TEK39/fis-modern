@@ -7994,11 +7994,10 @@ public class Program
         Host.CreateDefaultBuilder(args)
             .ConfigureServices((context, services) =>
             {
-                var connectionString = context.Configuration["ConnectionStrings:Default"];
-                if (string.IsNullOrWhiteSpace(connectionString))
-                {
-                    connectionString = "Server=localhost,1433;Database=legacy;User Id=sa;Password=Behox@1903;Encrypt=True;TrustServerCertificate=True;";
-                }
+                var connectionString = SqlServerConnectionStringHelper.Resolve(
+                    context.Configuration["ConnectionStrings:Default"],
+                    context.HostingEnvironment.IsDevelopment());
+
                 services.AddDbContext<FisDbContext>(options =>
                     options.UseSqlServer(connectionString)
                 );

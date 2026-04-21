@@ -882,6 +882,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL1JlcXVlc3QucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/SystemAuditTrail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL1N5c3RlbUF1ZGl0VHJhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/Tariffs.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL1RhcmlmZnMucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
@@ -972,6 +976,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/VipPoolUtilizationPrevious.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL1ZpcFBvb2xVdGlsaXphdGlvblByZXZpb3VzLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/VipSelfDriveUtilization.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL1ZpcFNlbGZEcml2ZVV0aWxpemF0aW9uLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/Wesbank.razor]

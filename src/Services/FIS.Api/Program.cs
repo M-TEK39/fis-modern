@@ -11,6 +11,7 @@ using FIS.Core.Infrastructure.Interfaces;
 using FIS.Core.Infrastructure.Repositories;
 using FIS.Core.Infrastructure.Services;
 using FIS.Data.SqlServer;
+using FIS.Data.SqlServer.Interceptors;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
@@ -56,11 +57,19 @@ builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection(
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
+// Audit trail infrastructure
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<AuditInterceptor>();
+
 // Configure Entity Framework
-var connectionString = builder.Configuration.GetConnectionString("Default") ?? throw new InvalidOperationException("Connection string 'Default' not found");
-builder.Services.AddDbContext<FisDbContext>(options =>
-    options.UseSqlServer(connectionString)
-);
+var connectionString = SqlServerConnectionStringHelper.Resolve(
+    builder.Configuration.GetConnectionString("Default"),
+    builder.Environment.IsDevelopment());
+builder.Services.AddDbContext<FisDbContext>((serviceProvider, options) =>
+{
+    options.UseSqlServer(connectionString);
+    options.AddInterceptors(serviceProvider.GetRequiredService<AuditInterceptor>());
+});
 
 // Configure Hangfire for background jobs (Phase 5 - Analytics)
 builder.Services.AddHangfire(configuration => configuration

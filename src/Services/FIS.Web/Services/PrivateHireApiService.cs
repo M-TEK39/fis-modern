@@ -187,6 +187,31 @@ public class PrivateHireApiService
         }
     }
 
+    public async Task<List<PrivateHireUtilizationDto>> GetUtilizationByDateRangeAsync(DateTime startDate, DateTime endDate)
+    {
+        try
+        {
+            var url = $"api/privatehire/daterange?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+
+            var payload = await response.Content.ReadFromJsonAsync<List<PrivateHireVehicleResponseDto>>();
+            return payload?.Select(r => new PrivateHireUtilizationDto
+            {
+                PHVCode = r.PHV_code ?? 0,
+                RegistrationNumber = r.registration_number ?? string.Empty,
+                ModelDescription = r.model_desc ?? r.model_description ?? r.make_model ?? string.Empty,
+                SiteCode = r.site_code ?? 0,
+                CheckOutDate = r.take_on_date ?? r.date_hired ?? r.hire_start_date,
+                ReturnDate = r.return_date ?? r.date_retired ?? r.hire_end_date
+            }).ToList() ?? new List<PrivateHireUtilizationDto>();
+        }
+        catch
+        {
+            return new List<PrivateHireUtilizationDto>();
+        }
+    }
+
     private static PrivateHireVehicleDto MapVehicle(PrivateHireVehicleResponseDto source)
         => new()
         {
@@ -225,6 +250,7 @@ internal sealed class PrivateHireVehicleResponseDto
     public int? vehicle_id { get; set; }
     public string? registration_number { get; set; }
     public string? model_description { get; set; }
+    public string? model_desc { get; set; }
     public string? make_model { get; set; }
     public int? contractor_id { get; set; }
     public string? contractor_name { get; set; }
@@ -235,6 +261,8 @@ internal sealed class PrivateHireVehicleResponseDto
     public DateTime? date_retired { get; set; }
     public DateTime? hire_start_date { get; set; }
     public DateTime? hire_end_date { get; set; }
+    public DateTime? take_on_date { get; set; }
+    public DateTime? return_date { get; set; }
     public decimal? monthly_rate { get; set; }
     public string? hire_status { get; set; }
     public string? notes { get; set; }
@@ -278,4 +306,14 @@ public class PrivateHireContractorDto
     public string business_registration { get; set; } = "";
     public string address { get; set; } = "";
     public string status { get; set; } = "Active";
+}
+
+public class PrivateHireUtilizationDto
+{
+    public int PHVCode { get; set; }
+    public string RegistrationNumber { get; set; } = "";
+    public string ModelDescription { get; set; } = "";
+    public int SiteCode { get; set; }
+    public DateTime? CheckOutDate { get; set; }
+    public DateTime? ReturnDate { get; set; }
 }
