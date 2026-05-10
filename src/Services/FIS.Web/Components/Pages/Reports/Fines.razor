@@ -1,10 +1,6 @@
 @page "/reports/fines"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@inject FineApiService FineService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Fines Reports - Fleet Information System</PageTitle>
 
@@ -14,7 +10,7 @@
             <i class="bx bx-receipt"></i>
             Fines Reports
         </h1>
-        <p class="page-description">Traffic fine reporting with offence and payment tracking fields.</p>
+        <p class="page-description">Legacy fines report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
@@ -23,234 +19,105 @@
 </div>
 
 <div class="page-content">
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Fine Records</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Fines Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle")'>1) Fines Report on ONE Vehicle</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("dept-site-period")'>2) Fines Report, for a Dept / Site, for a period</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("appear-date")'>3) Fines Report on Appear Date</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("reissue-submission")'>4) Submission to Re-Issue Fine in Transport Officer's Name</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("traffic-dept-detail")'>5) Traffic Dept Detail</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a>
+                        <span class="menu-item-badge">Menu</span>
                     </div>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Fine ID</th>
-                        <th>Vehicle</th>
-                        <th>Offence Date</th>
-                        <th>Reference</th>
-                        <th>Issuer</th>
-                        <th>Amount (R)</th>
-                        <th>Pay Due Date</th>
-                        <th>Paid Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="8">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="8">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.Fine_code</td>
-                                <td>@GetVehicleLabel(row.vmf_code)</td>
-                                <td>@(row.Offence_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                                <td>@ValueOrDash(row.Offence_reference)</td>
-                                <td>@ValueOrDash(row.Offence_issuer)</td>
-                                <td>@(row.Fine_amount?.ToString("N2") ?? "-")</td>
-                                <td>@(row.Pay_due_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                                <td>@(row.Fine_pay_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/fines">Back to Fines Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
             </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+        </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/fines" />
+    }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<FineDto> _rows = new();
-    private Dictionary<int, string> _vehicleLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("fine_id", "Fine ID", true),
-        new("vehicle", "Vehicle", true),
-        new("offence_date", "Offence Date", true),
-        new("reference", "Reference", true),
-        new("issuer", "Issuer", true),
-        new("amount", "Amount (R)", true),
-        new("pay_due_date", "Pay Due Date", true),
-        new("paid_date", "Paid Date", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private List<FineDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            if (_vehicleLabels.Count == 0)
-            {
-                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-                _vehicleLabels = vehicles.Data
-                    .GroupBy(v => v.vmf_code)
-                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
-            }
-
-            _rows = (await FineService.GetAllAsync<FineDto>())
-                .OrderByDescending(f => f.Offence_date)
-                .ThenByDescending(f => f.Fine_code)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading fines report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private string GetVehicleLabel(int? vmfCode)
-    {
-        if (!vmfCode.HasValue)
-        {
-            return "-";
-        }
-
-        return _vehicleLabels.TryGetValue(vmfCode.Value, out var label)
-            ? label
-            : $"- / - ({vmfCode.Value})";
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "fine_id" => row.Fine_code.ToString(),
-                "vehicle" => GetVehicleLabel(row.vmf_code),
-                "offence_date" => FormatDate(row.Offence_date),
-                "reference" => ValueOrDash(row.Offence_reference),
-                "issuer" => ValueOrDash(row.Offence_issuer),
-                "amount" => row.Fine_amount?.ToString("N2") ?? "-",
-                "pay_due_date" => FormatDate(row.Pay_due_date),
-                "paid_date" => FormatDate(row.Fine_pay_date),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"fines_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/fines", filters));
     }
 
-    private static string FormatDate(DateTime? value)
-        => value?.ToString("yyyy-MM-dd") ?? "-";
-
-    private static string CsvCell(string? value)
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
+        "one-vehicle" => "fines-one-vehicle",
+        "dept-site-period" => "fines",
+        "appear-date" => "fines-appear-date",
+        "reissue-submission" => "fines-reissue-submission",
+        "traffic-dept-detail" => "fines-traffic-dept-detail",
+        _ => "fines"
+    };
 
-    private sealed class ExportField
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
+        "one-vehicle" => "Fines Report on ONE Vehicle",
+        "dept-site-period" => "Fines Report, for a Dept / Site, for a period",
+        "appear-date" => "Fines Report on Appear Date",
+        "reissue-submission" => "Submission to Re-Issue Fine in Transport Officer's Name",
+        "traffic-dept-detail" => "Traffic Dept Detail",
+        _ => "Fines Reports"
+    };
 
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "one-vehicle" => "one-vehicle",
+            "dept-site-period" => "dept-site-period",
+            "appear-date" => "appear-date",
+            "reissue-submission" => "reissue-submission",
+            "traffic-dept-detail" => "traffic-dept-detail",
+            _ => "dept-site-period"
+        };
 }

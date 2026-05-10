@@ -1,9 +1,6 @@
 @page "/reports/vip-pool-income-current"
 @rendermode InteractiveServer
-@using FIS.Web.Services
-@inject TripApiService TripService
-@inject ContractApiService ContractService
-@inject IJSRuntime JSRuntime
+@using FIS.Web.Components.Shared
 
 <PageTitle>VIP/Pool Utilization with Income (Current Month) - Fleet Information System</PageTitle>
 
@@ -13,7 +10,7 @@
             <i class="bx bx-money-withdraw"></i>
             VIP and Pool Utilization (Current Month, Including Income)
         </h1>
-        <p class="page-description">Current-month utilization with estimated income based on contract monthly cost.</p>
+        <p class="page-description">Legacy generated utilization+income report with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
@@ -24,234 +21,12 @@
 <div class="page-content">
     <div class="table-container">
         <div class="table-header">
-            <span class="table-title">Current Month Income Utilization</span>
+            <span class="table-title">Utilization of VIP and Pool vehicles (current month, including income)</span>
             <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
+                <a class="btn btn-secondary btn-sm" href="/reports">Back to Reports Menu</a>
             </div>
         </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Vehicle (VMF)</th>
-                        <th>Total Trips</th>
-                        <th>Open Trips</th>
-                        <th>Utilization %</th>
-                        <th>Monthly Contract Cost (R)</th>
-                        <th>Estimated Income (R)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="6">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.VehicleLabel</td>
-                                <td>@row.TotalTrips</td>
-                                <td>@row.OpenTrips</td>
-                                <td>@row.UtilizationPercent.ToString("0.0")%</td>
-                                <td>@row.MonthlyCost.ToString("N2")</td>
-                                <td>@row.EstimatedIncome.ToString("N2")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
     </div>
+
+    <LegacyDynamicReportGrid ReportKey="vip-pool-income-current" FiltersUrl="/reports/vip-pool-income-current" />
 </div>
-
-@code {
-    private bool _loading;
-    private List<IncomeRow> _rows = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private bool _showFieldSelector;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("vehicle", "Vehicle (VMF)", true),
-        new("total_trips", "Total Trips", true),
-        new("open_trips", "Open Trips", true),
-        new("utilization", "Utilization %", true),
-        new("monthly_cost", "Monthly Contract Cost (R)", true),
-        new("estimated_income", "Estimated Income (R)", true)
-    ];
-
-    private List<IncomeRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
-        {
-            var start = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-            var end = DateTime.Today;
-            var daysInScope = Math.Max(1, (end - start).Days + 1);
-
-            var trips = await TripService.GetDateRangeAsync(start, end);
-            var contractPage = await ContractService.GetContractsPageAsync(new ContractsPageQuery
-            {
-                Page = 1,
-                PageSize = 5000
-            });
-            var monthlyCostByVmf = contractPage.Data
-                .Where(c => c.vmf_code.HasValue)
-                .GroupBy(c => c.vmf_code!.Value)
-                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.contract_id).FirstOrDefault()?.monthly_cost ?? 0m);
-
-            _rows = trips
-                .Where(t => t.VmfCode > 0)
-                .GroupBy(t => t.VmfCode)
-                .Select(g =>
-                {
-                    var all = g.ToList();
-                    var activeDays = all.Select(t => t.TripDate.Date).Distinct().Count();
-                    var utilization = activeDays * 100d / daysInScope;
-                    var monthlyCost = monthlyCostByVmf.TryGetValue(g.Key, out var value) ? value : 0m;
-                    var estimatedIncome = monthlyCost * (decimal)(utilization / 100d);
-                    return new IncomeRow(
-                        VehicleLabel: g.Key.ToString(),
-                        TotalTrips: all.Count,
-                        OpenTrips: all.Count(t => !string.Equals(t.Status, "Closed", StringComparison.OrdinalIgnoreCase)),
-                        UtilizationPercent: utilization,
-                        MonthlyCost: monthlyCost,
-                        EstimatedIncome: estimatedIncome);
-                })
-                .OrderByDescending(r => r.EstimatedIncome)
-                .ThenByDescending(r => r.TotalTrips)
-                .ToList();
-
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading VIP/pool income current report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "vehicle" => row.VehicleLabel,
-                "total_trips" => row.TotalTrips.ToString(),
-                "open_trips" => row.OpenTrips.ToString(),
-                "utilization" => row.UtilizationPercent.ToString("0.0") + "%",
-                "monthly_cost" => row.MonthlyCost.ToString("N2"),
-                "estimated_income" => row.EstimatedIncome.ToString("N2"),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"vip_pool_income_current_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed record IncomeRow(
-        string VehicleLabel,
-        int TotalTrips,
-        int OpenTrips,
-        double UtilizationPercent,
-        decimal MonthlyCost,
-        decimal EstimatedIncome);
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
-}

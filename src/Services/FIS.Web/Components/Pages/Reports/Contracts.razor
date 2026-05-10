@@ -1,11 +1,5 @@
 @page "/reports/contracts"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@inject ContractApiService ContractService
-@inject SiteApiService SiteService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Contract Reports - Fleet Information System</PageTitle>
@@ -16,10 +10,10 @@
             <i class="bx bx-file"></i>
             Contract Reports
         </h1>
-        <p class="page-description">Contract report by status/current flag/site and date range.</p>
+        <p class="page-description">Legacy contracts report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
         <a class="btn btn-primary btn-sm" href="/contracts">Contracts Module</a>
     </div>
 </div>
@@ -27,419 +21,167 @@
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" @bind="_statusCode">
-                            <option value="">All</option>
-                            <option value="0">Draft</option>
-                            <option value="1">Pending Approval</option>
-                            <option value="2">Approved</option>
-                            <option value="3">Active</option>
-                            <option value="4">Declined for Correction</option>
-                            <option value="5">Declined</option>
-                        </select>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Contract Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-contract-single")'>1) Information On A Vehicle Contracts</a>
+                        <span class="menu-item-badge">Report</span>
                     </div>
-                    <div class="form-field">
-                        <label class="form-label">Current</label>
-                        <select class="form-select" @bind="_stillCurrent">
-                            <option value="">All</option>
-                            <option value="Y">Y</option>
-                            <option value="N">N</option>
-                        </select>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-contract-multiple")'>2) Information On Multiple Vehicle Contracts</a>
+                        <span class="menu-item-badge">Report</span>
                     </div>
-                    <div class="form-field">
-                        <label class="form-label">Site</label>
-                        <select class="form-select" @bind="_siteCode">
-                            <option value="">All</option>
-                            @foreach (var site in _sites)
-                            {
-                                <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
-                            }
-                        </select>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-contract-universal")'>3) Information On All Vehicles Contracts(Universal Report)</a>
+                        <span class="menu-item-badge">Report</span>
                     </div>
-                    <div class="form-field">
-                        <label class="form-label">Start From</label>
-                        <InputDate class="form-input" @bind-Value="_startFrom" />
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("contracts-expiring-by-date")'>4) Information On All Contracts That Will Expire By a Specified Date</a>
+                        <span class="menu-item-badge">Report</span>
                     </div>
-                    <div class="form-field">
-                        <label class="form-label">Start To</label>
-                        <InputDate class="form-input" @bind-Value="_startTo" />
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("contract-summary")'>5) Contract summarized report</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("trip-authorities-single")'>6) Vehicle Trip Authorities per GG or GP Number</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("trip-authorities-multiple")'>7) Multiple Vehicle Trip Authorities per GG or GP Number</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("trip-authorities-by-dept-site-date")'>8) Vehicle Trip Authorities per Dept, Site or Date</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("contracts-checklist")'>9) Daily &amp; Monthly Contract check list report</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("contracts-no-distance")'>10) Vehicle Contracts with NO distance traveled</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("contracts-per-dept-period")'>11) Contracts for a Department for period</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("contracts-fleet-reports")'>12) Permanent Section - Contracts Fleet Reports</a>
+                        <span class="menu-item-badge">Report</span>
                     </div>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadContractsAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+            </div>
+
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Lease (NOM) Vehicle Contract Report</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("lease-nom-split")'>1) Lease Vehicles Split Report for Vehicles not on Contract and those on Contract</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a>
+                        <span class="menu-item-badge">Menu</span>
+                    </div>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="contracts" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Contract Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-secondary btn-sm" @onclick="OpenHtmlAsync" disabled="@(_loading || _contracts.Count == 0)">Open HTML</button>
-                <button class="btn btn-secondary btn-sm" @onclick="PrintPdfAsync" disabled="@(_loading || _contracts.Count == 0)">Print PDF</button>
-                <button class="btn btn-secondary btn-sm" @onclick="DownloadExcelAsync" disabled="@(_loading || _contracts.Count == 0)">Download Excel</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _contracts.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/contracts">Back to Contract Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Contract ID</th>
-                        <th>GG Number</th>
-                        <th>GP Number</th>
-                        <th>Status</th>
-                        <th>Current</th>
-                        <th>Start Date</th>
-                        <th>Site</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="7">Loading report...</td></tr>
-                    }
-                    else if (_contracts.Count == 0)
-                    {
-                        <tr><td colspan="7">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in _contracts)
-                        {
-                            <tr>
-                                <td>@row.contract_id</td>
-                                <td>@ValueOrDash(row.fleet_number)</td>
-                                <td>@ValueOrDash(row.vehicle_registration)</td>
-                                <td>@ValueOrDash(row.status)</td>
-                                <td>@ValueOrDash(row.still_current)</td>
-                                <td>@row.start_date.ToString("yyyy-MM-dd")</td>
-                                <td>@ValueOrDash(GetSiteName(row.site_code))</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/contracts" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<ContractDto> _contracts = new();
-    private List<SiteResponseDto> _sites = new();
-    private string _statusCode = string.Empty;
-    private string _stillCurrent = string.Empty;
-    private string _siteCode = string.Empty;
-    private DateTime? _startFrom;
-    private DateTime? _startTo;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("contract_id", "Contract ID", true),
-        new("fleet_number", "GG Number", true),
-        new("vehicle_registration", "GP Number", true),
-        new("status", "Status", true),
-        new("still_current", "Current", true),
-        new("start_date", "Start Date", true),
-        new("site", "Site", true)
-    ];
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/contracts";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "current")]
-    public string? QCurrent { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "site")]
-    public string? QSite { get; set; }
-
-    [Parameter, SupplyParameterFromQuery(Name = "from")]
-    public string? QFrom { get; set; }
-
-    [Parameter, SupplyParameterFromQuery(Name = "to")]
-    public string? QTo { get; set; }
-
-    [Parameter, SupplyParameterFromQuery(Name = "status")]
-    public string? QStatus { get; set; }
-
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private Dictionary<string, string?> BuildQueryFilters() => new()
-    {
-        { "current", _stillCurrent },
-        { "site", _siteCode },
-        { "from", ReportFilterHelper.FormatDate(_startFrom) },
-        { "to", ReportFilterHelper.FormatDate(_startTo) },
-        { "status", _statusCode },
-    };
-
-    private void ApplyQueryFilters()
-    {
-        _stillCurrent = QCurrent ?? string.Empty;
-        _siteCode = QSite ?? string.Empty;
-        _startFrom = ReportFilterHelper.ParseDate(QFrom);
-        _startTo = ReportFilterHelper.ParseDate(QTo);
-        _statusCode = QStatus ?? string.Empty;
-    }
-
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        _sites = await SiteService.GetAllAsync();
-    }
-
-    private async Task LoadContractsAsync()
-    {
-        _loading = true;
-        try
-        {
-            var query = new ContractsPageQuery
-            {
-                Page = 1,
-                PageSize = 200,
-                StatusCode = int.TryParse(_statusCode, out var status) ? (short?)status : null,
-                SiteCode = short.TryParse(_siteCode, out var site) ? site : null,
-                StillCurrent = string.IsNullOrWhiteSpace(_stillCurrent) ? null : _stillCurrent,
-                StartDateFrom = _startFrom,
-                StartDateTo = _startTo
-            };
-
-            var page = await ContractService.GetContractsPageAsync(query);
-            _contracts = page.Data;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading contract report: {ex.Message}");
-            _contracts = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void ResetFilters()
-    {
-        _statusCode = string.Empty;
-        _stillCurrent = string.Empty;
-        _siteCode = string.Empty;
-        _startFrom = null;
-        _startTo = null;
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _contracts)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "contract_id" => row.contract_id.ToString(),
-                "fleet_number" => ValueOrDash(row.fleet_number),
-                "vehicle_registration" => ValueOrDash(row.vehicle_registration),
-                "status" => ValueOrDash(row.status),
-                "still_current" => ValueOrDash(row.still_current),
-                "start_date" => row.start_date.ToString("yyyy-MM-dd"),
-                "site" => ValueOrDash(GetSiteName(row.site_code)),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"contracts_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/contracts", filters));
     }
 
-    private async Task DownloadExcelAsync()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        var html = BuildReportHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
+        "vehicle-contract-single" => "contract-vehicle-single",
+        "vehicle-contract-multiple" => "contract-vehicle-multiple",
+        "vehicle-contract-universal" => "contracts",
+        "contracts-expiring-by-date" => "contracts-expiring-by-date",
+        "contract-summary" => "contract-summary",
+        "trip-authorities-single" => "contract-trip-authority-single",
+        "trip-authorities-multiple" => "contract-trip-authority-multiple",
+        "trip-authorities-by-dept-site-date" => "contract-trip-authority-dept-site-date",
+        "contracts-checklist" => "contracts-checklist",
+        "contracts-no-distance" => "contracts-no-distance",
+        "contracts-per-dept-period" => "contracts-per-dept-period",
+        "contracts-fleet-reports" => "contracts-fleet-reports",
+        "lease-nom-split" => "lease-nom-contract-split",
+        _ => "contracts"
+    };
 
-        var fileName = $"contracts_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
-    }
-
-    private async Task OpenHtmlAsync()
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        var html = BuildReportHtml();
-        if (string.IsNullOrWhiteSpace(html))
+        "vehicle-contract-single" => "Information On A Vehicle Contracts",
+        "vehicle-contract-multiple" => "Information On Multiple Vehicle Contracts",
+        "vehicle-contract-universal" => "Information On All Vehicles Contracts(Universal Report)",
+        "contracts-expiring-by-date" => "Information On All Contracts That Will Expire By a Specified Date",
+        "contract-summary" => "Contract summarized report",
+        "trip-authorities-single" => "Vehicle Trip Authorities per GG or GP Number",
+        "trip-authorities-multiple" => "Multiple Vehicle Trip Authorities per GG or GP Number",
+        "trip-authorities-by-dept-site-date" => "Vehicle Trip Authorities per Dept, Site or Date",
+        "contracts-checklist" => "Daily & Monthly Contract check list report",
+        "contracts-no-distance" => "Vehicle Contracts with NO distance traveled",
+        "contracts-per-dept-period" => "Contracts for a Department for period",
+        "contracts-fleet-reports" => "Permanent Section - Contracts Fleet Reports",
+        "lease-nom-split" => "Lease Vehicles Split Report for Vehicles not on Contract and those on Contract",
+        _ => "Contract Reports"
+    };
+
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Contract Reports");
-    }
-
-    private async Task PrintPdfAsync()
-    {
-        var html = BuildReportHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Contract Reports");
-    }
-
-    private string GetSiteName(short? siteCode)
-    {
-        if (!siteCode.HasValue)
-        {
-            return "-";
-        }
-
-        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
-        return site == null ? siteCode.Value.ToString() : $"{site.DepartmentNumber} - {site.Description}";
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private string BuildReportHtml()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (_contracts.Count == 0 || selected.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
-        var body = string.Join(
-            string.Empty,
-            _contracts.Select(row =>
-            {
-                var cells = selected.Select(field => field.Key switch
-                {
-                    "contract_id" => row.contract_id.ToString(),
-                    "fleet_number" => ValueOrDash(row.fleet_number),
-                    "vehicle_registration" => ValueOrDash(row.vehicle_registration),
-                    "status" => ValueOrDash(row.status),
-                    "still_current" => ValueOrDash(row.still_current),
-                    "start_date" => row.start_date.ToString("yyyy-MM-dd"),
-                    "site" => ValueOrDash(GetSiteName(row.site_code)),
-                    _ => "-"
-                });
-
-                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
-            }));
-
-        var html = new System.Text.StringBuilder();
-        html.AppendLine("<!doctype html>");
-        html.AppendLine("<html>");
-        html.AppendLine("<head>");
-        html.AppendLine("<meta charset=\"utf-8\" />");
-        html.AppendLine("<title>Contract Reports</title>");
-        html.AppendLine("<style>");
-        html.AppendLine("body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }");
-        html.AppendLine("h1 { font-size: 20px; margin: 0 0 12px 0; }");
-        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
-        html.AppendLine("th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 12px; }");
-        html.AppendLine("th { background: #f3f4f6; }");
-        html.AppendLine("</style>");
-        html.AppendLine("</head>");
-        html.AppendLine("<body>");
-        html.AppendLine("<h1>Contract Reports</h1>");
-        html.AppendLine("<table>");
-        html.AppendLine($"<thead><tr>{head}</tr></thead>");
-        html.AppendLine($"<tbody>{body}</tbody>");
-        html.AppendLine("</table>");
-        html.AppendLine("</body>");
-        html.AppendLine("</html>");
-        return html.ToString();
-    }
-
-    private static string HtmlEncode(string? value)
-        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+            "vehicle-contract-single" => "vehicle-contract-single",
+            "vehicle-contract-multiple" => "vehicle-contract-multiple",
+            "vehicle-contract-universal" => "vehicle-contract-universal",
+            "contracts-expiring-by-date" => "contracts-expiring-by-date",
+            "contract-summary" => "contract-summary",
+            "trip-authorities-single" => "trip-authorities-single",
+            "trip-authorities-multiple" => "trip-authorities-multiple",
+            "trip-authorities-by-dept-site-date" => "trip-authorities-by-dept-site-date",
+            "contracts-checklist" => "contracts-checklist",
+            "contracts-no-distance" => "contracts-no-distance",
+            "contracts-per-dept-period" => "contracts-per-dept-period",
+            "contracts-fleet-reports" => "contracts-fleet-reports",
+            "lease-nom-split" => "lease-nom-split",
+            _ => "vehicle-contract-universal"
+        };
 }

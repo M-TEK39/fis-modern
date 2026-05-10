@@ -1,10 +1,6 @@
 @page "/reports/auction"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@inject AuctionApiService AuctionService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Auction Reports - Fleet Information System</PageTitle>
 
@@ -14,240 +10,96 @@
             <i class="bx bx-hammer"></i>
             Auction Reports
         </h1>
-        <p class="page-description">Auction disposal reporting with value and authorization details.</p>
+        <p class="page-description">Legacy auction report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
-        <a class="btn btn-primary btn-sm" href="/auction">Auction</a>
+        <a class="btn btn-primary btn-sm" href="/auction">Auction Module</a>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Auction Records</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Auction Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle")'>1) Auction Report on ONE Vehicle</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-vehicles")'>2) Auction Report on ALL Vehicle's</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("sale-to-name")'>3) Auction Report on Sale to Name</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-auction-sort-gg")'>4) Auction Report of ONE Auction - Sort by GG Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-auction-sort-lot")'>5) Auction Report of ONE Auction - Sort by LOT Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Auction ID</th>
-                        <th>Vehicle</th>
-                        <th>Auction Number</th>
-                        <th>Auth Number</th>
-                        <th>Auth Date</th>
-                        <th>Estimate (R)</th>
-                        <th>Reserve (R)</th>
-                        <th>Reason Sold</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="8">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="8">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.auction_code</td>
-                                <td>@GetVehicleLabel(row.vmf_code)</td>
-                                <td>@ValueOrDash(row.auction_number)</td>
-                                <td>@ValueOrDash(row.auth_number)</td>
-                                <td>@(row.auth_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                                <td>@(row.estimate_amount?.ToString("N2") ?? "-")</td>
-                                <td>@(row.reserve_amount?.ToString("N2") ?? "-")</td>
-                                <td>@ValueOrDash(row.reason_sold)</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/auction">Back to Auction Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
             </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+        </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/auction" />
+    }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<AuctionDto> _rows = new();
-    private Dictionary<int, string> _vehicleLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("auction_id", "Auction ID", true),
-        new("vehicle", "Vehicle", true),
-        new("auction_number", "Auction Number", true),
-        new("auth_number", "Auth Number", true),
-        new("auth_date", "Auth Date", true),
-        new("estimate", "Estimate (R)", true),
-        new("reserve", "Reserve (R)", true),
-        new("reason_sold", "Reason Sold", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private List<AuctionDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            if (_vehicleLabels.Count == 0)
-            {
-                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-                _vehicleLabels = vehicles.Data
-                    .GroupBy(v => v.vmf_code)
-                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
-            }
-
-            _rows = (await AuctionService.GetAllAsync<AuctionDto>())
-                .OrderByDescending(r => r.auth_date)
-                .ThenByDescending(r => r.auction_code)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading auction report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private string GetVehicleLabel(int? vmfCode)
-    {
-        if (!vmfCode.HasValue)
-        {
-            return "-";
-        }
-
-        return _vehicleLabels.TryGetValue(vmfCode.Value, out var label)
-            ? label
-            : $"- / - ({vmfCode.Value})";
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "auction_id" => row.auction_code.ToString(),
-                "vehicle" => GetVehicleLabel(row.vmf_code),
-                "auction_number" => ValueOrDash(row.auction_number),
-                "auth_number" => ValueOrDash(row.auth_number),
-                "auth_date" => row.auth_date?.ToString("yyyy-MM-dd") ?? "-",
-                "estimate" => row.estimate_amount?.ToString("N2") ?? "-",
-                "reserve" => row.reserve_amount?.ToString("N2") ?? "-",
-                "reason_sold" => ValueOrDash(row.reason_sold),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"auction_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/auction", filters));
     }
 
-    private static string CsvCell(string? value)
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
+        "one-vehicle" => "auction-one-vehicle",
+        "all-vehicles" => "auction",
+        "sale-to-name" => "auction-sale-to-name",
+        "one-auction-sort-gg" => "auction-one-sort-gg",
+        "one-auction-sort-lot" => "auction-one-sort-lot",
+        _ => "auction"
+    };
 
-    private sealed class ExportField
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
+        "one-vehicle" => "Auction Report on ONE Vehicle",
+        "all-vehicles" => "Auction Report on ALL Vehicle's",
+        "sale-to-name" => "Auction Report on Sale to Name",
+        "one-auction-sort-gg" => "Auction Report of ONE Auction - Sort by GG Number",
+        "one-auction-sort-lot" => "Auction Report of ONE Auction - Sort by LOT Number",
+        _ => "Auction Reports"
+    };
 
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "one-vehicle" => "one-vehicle",
+            "all-vehicles" => "all-vehicles",
+            "sale-to-name" => "sale-to-name",
+            "one-auction-sort-gg" => "one-auction-sort-gg",
+            "one-auction-sort-lot" => "one-auction-sort-lot",
+            _ => "all-vehicles"
+        };
 }

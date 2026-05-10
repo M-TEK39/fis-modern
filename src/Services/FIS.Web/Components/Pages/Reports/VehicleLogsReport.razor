@@ -1,14 +1,6 @@
 @page "/reports/vehicle-logs-report"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@inject VehicleApiService VehicleService
-@inject ContractApiService ContractService
-@inject TripApiService TripService
-@inject LogsheetApiService LogsheetService
-@inject SiteApiService SiteService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Vehicle Logs Report - Fleet Information System</PageTitle>
@@ -19,7 +11,7 @@
             <i class="bx bx-notepad"></i>
             Vehicle Report - Contracts, ELS &amp; Logsheets
         </h1>
-        <p class="page-description">Legacy per-vehicle report for contract details, ELS details, and logsheet details.</p>
+        <p class="page-description">Legacy per-vehicle logs report flow with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
@@ -36,239 +28,41 @@
                     <div class="form-field">
                         <label class="form-label">Number Type</label>
                         <div class="contract-search-radio">
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
-                                GG
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
-                                GP
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />
-                                Engine
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />
-                                VIN / Chassis
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' />
-                                Invoice
-                            </label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />GG</label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />GP</label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />Engine</label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />VIN / Chassis</label>
                         </div>
-                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Vehicle Match</label>
-                        <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
-                            <option value="">Select vehicle</option>
-                            @foreach (var vehicle in _vehicleMatches)
-                            {
-                                <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
-                            }
-                        </select>
+                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Enter GG, GP, Engine or VIN/Chassis" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_loading">Find</button>
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Preview Modern Table</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResults">Submit</button>
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 </div>
             </div>
         </div>
     }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="vehicle-logs-report" FiltersUrl="@_pageRoute" />
-    }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Vehicle Logs Summary</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleSummaryFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadSummaryCsvAsync" disabled="@(_loading || _selectedVehicle is null)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showSummaryFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _summaryExportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Vehicle Report - Contracts, ELS &amp; Logsheets</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/vehicle-logs-report">Back to Search</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Vehicle</th>
-                        <th>Active Contract</th>
-                        <th>Total Contracts (Window)</th>
-                        <th>ELS Trips</th>
-                        <th>ELS Logsheets</th>
-                        <th>Last Log Month</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading report...</td></tr>
-                    }
-                    else if (_selectedVehicle is null)
-                    {
-                        <tr><td colspan="6">Select a vehicle to view report.</td></tr>
-                    }
-                    else
-                    {
-                        <tr>
-                            <td>@GetVehicleLabel(_selectedVehicle)</td>
-                            <td>@(_activeContractId?.ToString() ?? "-")</td>
-                            <td>@_contractHistoryCount</td>
-                            <td>@_tripCount</td>
-                            <td>@_logsheetCount</td>
-                            <td>@(_lastLogMonth?.ToString("yyyy-MM") ?? "-")</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
         </div>
-    </div>
 
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">ELS Logsheets</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleLogsheetFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadLogsheetCsvAsync" disabled="@(_loading || _vehicleLogsheets.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showLogsheetFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _logsheetExportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Log ID</th>
-                        <th>Month</th>
-                        <th>Start ODO</th>
-                        <th>End ODO</th>
-                        <th>Site</th>
-                        <th>Days Used</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading logsheets...</td></tr>
-                    }
-                    else if (PagedLogsheets.Count == 0)
-                    {
-                        <tr><td colspan="6">No logsheets found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedLogsheets)
-                        {
-                            <tr>
-                                <td>@row.log_code</td>
-                                <td>@row.month.ToString("yyyy-MM")</td>
-                                <td>@row.start_odo.ToString("N0")</td>
-                                <td>@row.end_odo.ToString("N0")</td>
-                                <td>@GetSiteLabel(row.site_code)</td>
-                                <td>@(row.days_used?.ToString() ?? "-")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
-        @if (_vehicleLogsheets.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_vehicleLogsheets.Count | Page size: @_pageSize</div>
-        }
-    </div>
+        <LegacyDynamicReportGrid ReportKey="vehicle-logs-report" FiltersUrl="/reports/vehicle-logs-report" />
     }
 </div>
 
 @code {
-    private bool _loading;
     private string _searchMode = "GG";
     private string _searchTerm = string.Empty;
-    private int? _selectedVmfCode;
-    private List<VehicleDto> _vehicleMatches = new();
-    private VehicleDto? _selectedVehicle;
-    private int? _activeContractId;
-    private int _contractHistoryCount;
-    private int _tripCount;
-    private int _logsheetCount;
-    private DateTime? _lastLogMonth;
-    private List<LogsheetDto> _vehicleLogsheets = new();
-    private Dictionary<short, string> _siteLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private bool _showSummaryFieldSelector;
-    private bool _showLogsheetFieldSelector;
-    private readonly List<ExportField> _summaryExportFields =
-    [
-        new("vehicle", "Vehicle", true),
-        new("active_contract", "Active Contract", true),
-        new("total_contracts", "Total Contracts (Window)", true),
-        new("els_trips", "ELS Trips", true),
-        new("els_logsheets", "ELS Logsheets", true),
-        new("last_log_month", "Last Log Month", true)
-    ];
-    private readonly List<ExportField> _logsheetExportFields =
-    [
-        new("log_id", "Log ID", true),
-        new("month", "Month", true),
-        new("start_odo", "Start ODO", true),
-        new("end_odo", "End ODO", true),
-        new("site", "Site", true),
-        new("days_used", "Days Used", true)
-    ];
-
-    private List<LogsheetDto> PagedLogsheets => _vehicleLogsheets.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_vehicleLogsheets.Count / (double)_pageSize));
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/vehicle-logs-report";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
@@ -279,280 +73,28 @@
     [Parameter, SupplyParameterFromQuery(Name = "search")]
     public string? QSearch { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "vmf")]
-    public string? QVmf { get; set; }
-
     protected override Task OnParametersSetAsync()
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
-        {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-
+        _searchMode = QMode ?? _searchMode;
+        _searchTerm = QSearch ?? _searchTerm;
         return Task.CompletedTask;
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private void SetSearchMode(string value) => _searchMode = value;
+
+    private void NavigateToResults()
     {
-        { "mode", _searchMode },
-        { "search", _searchTerm },
-        { "vmf", _selectedVmfCode?.ToString() },
-    };
-
-    private void ApplyQueryFilters()
-    {
-        _searchMode = QMode ?? "GG";
-        _searchTerm = QSearch ?? string.Empty;
-        _selectedVmfCode = int.TryParse(QVmf, out var v) ? v : null;
-    }
-
-    private void NavigateToResultsAsync()
-    {
-        if (_selectedVmfCode.HasValue)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-        }
-    }
-
-    private async Task SearchVehiclesAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_searchTerm))
-        {
-            _vehicleMatches = new();
-            _selectedVmfCode = null;
-            _selectedVehicle = null;
-            return;
-        }
-
-        _loading = true;
-        try
-        {
-            var query = _searchTerm.Trim();
-            var matches = await VehicleService.SearchVehiclesAsync(query);
-            _vehicleMatches = VehicleSearchHelper.RankVehicleMatches(matches, query, _searchMode);
-            _vehicleLogsheets = new();
-            _selectedVehicle = null;
-
-            if (_vehicleMatches.All(v => v.vmf_code != _selectedVmfCode))
-            {
-                _selectedVmfCode = null;
-                _selectedVehicle = null;
-            }
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error searching vehicle logs report: {ex.Message}");
-            _vehicleMatches = new();
-            _selectedVehicle = null;
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task LoadReportAsync()
-    {
-        if (!_selectedVmfCode.HasValue)
-        {
-            _selectedVehicle = null;
-            _vehicleLogsheets = new();
-            return;
-        }
-
-        _loading = true;
-        try
-        {
-            if (_siteLabels.Count == 0)
-            {
-                var sites = await SiteService.GetAllAsync();
-                _siteLabels = sites
-                    .GroupBy(s => s.SiteCode)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => $"{ValueOrDash(g.First().Description)} ({g.Key})");
-            }
-
-            _selectedVehicle = _vehicleMatches.FirstOrDefault(v => v.vmf_code == _selectedVmfCode.Value)
-                ?? await VehicleService.GetVehicleAsync(_selectedVmfCode.Value);
-
-            var activeContract = await ContractService.GetLatestContractForVehicleAsync(_selectedVmfCode.Value);
-            _activeContractId = activeContract?.contract_id;
-
-            var contractWindow = await ContractService.GetRecentContractsWindowAsync();
-            _contractHistoryCount = contractWindow.Count(c => c.vmf_code == _selectedVmfCode.Value);
-
-            var trips = await TripService.GetByVehicleAsync(_selectedVmfCode.Value);
-            _tripCount = trips.Count;
-
-            var logsheets = await LogsheetService.GetAllAsync<LogsheetDto>();
-            _vehicleLogsheets = logsheets
-                .Where(l => l.vmf_code == _selectedVmfCode.Value)
-                .OrderByDescending(l => l.month)
-                .ToList();
-            _logsheetCount = _vehicleLogsheets.Count;
-            _lastLogMonth = _vehicleLogsheets.FirstOrDefault()?.month;
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicle logs report: {ex.Message}");
-            _vehicleLogsheets = new();
-            _selectedVehicle = null;
-        }
-        finally
-        {
-            _loading = false;
-        }
+            ["mode"] = _searchMode,
+            ["search"] = _searchTerm
+        };
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/vehicle-logs-report", filters));
     }
 
     private void ResetFilters()
     {
+        _searchMode = "GG";
         _searchTerm = string.Empty;
-        _selectedVmfCode = null;
-        _selectedVehicle = null;
-        _vehicleMatches = new();
-        _vehicleLogsheets = new();
-        _activeContractId = null;
-        _contractHistoryCount = 0;
-        _tripCount = 0;
-        _logsheetCount = 0;
-        _lastLogMonth = null;
-    }
-
-    private void SetSearchMode(string mode)
-    {
-        _searchMode = mode;
-        _vehicleMatches = new();
-        _selectedVmfCode = null;
-        _selectedVehicle = null;
-        _vehicleLogsheets = new();
-    }
-
-    private static string GetVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private string GetSiteLabel(short? siteCode)
-    {
-        if (!siteCode.HasValue)
-        {
-            return "-";
-        }
-
-        return _siteLabels.TryGetValue(siteCode.Value, out var label)
-            ? label
-            : siteCode.Value.ToString();
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleSummaryFieldSelector()
-    {
-        _showSummaryFieldSelector = !_showSummaryFieldSelector;
-    }
-
-    private void ToggleLogsheetFieldSelector()
-    {
-        _showLogsheetFieldSelector = !_showLogsheetFieldSelector;
-    }
-
-    private async Task DownloadSummaryCsvAsync()
-    {
-        if (_selectedVehicle is null)
-        {
-            return;
-        }
-
-        var selected = _summaryExportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        var values = selected.Select(field => field.Key switch
-        {
-            "vehicle" => GetVehicleLabel(_selectedVehicle),
-            "active_contract" => _activeContractId?.ToString() ?? "-",
-            "total_contracts" => _contractHistoryCount.ToString(),
-            "els_trips" => _tripCount.ToString(),
-            "els_logsheets" => _logsheetCount.ToString(),
-            "last_log_month" => _lastLogMonth?.ToString("yyyy-MM") ?? "-",
-            _ => "-"
-        });
-        lines.Add(string.Join(",", values.Select(CsvCell)));
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"vehicle_logs_summary_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private async Task DownloadLogsheetCsvAsync()
-    {
-        var selected = _logsheetExportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _vehicleLogsheets)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "log_id" => row.log_code.ToString(),
-                "month" => row.month.ToString("yyyy-MM"),
-                "start_odo" => row.start_odo.ToString("N0"),
-                "end_odo" => row.end_odo.ToString("N0"),
-                "site" => GetSiteLabel(row.site_code),
-                "days_used" => row.days_used?.ToString() ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"vehicle_logs_els_logsheets_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
     }
 }

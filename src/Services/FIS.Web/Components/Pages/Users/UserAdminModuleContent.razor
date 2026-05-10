@@ -172,8 +172,10 @@ else if (_activeView == ViewAdd)
         </div>
 
         <div class="page-actions">
-            <button class="btn btn-primary" type="button">Create User</button>
-            <button class="btn btn-secondary" type="button">Clear Values</button>
+            <button class="btn btn-primary" type="button" @onclick="HandleAddUser" disabled="@_addSubmitting">
+                @(_addSubmitting ? "Saving..." : "Create User")
+            </button>
+            <button class="btn btn-secondary" type="button" @onclick="ClearAddUserFields" disabled="@_addSubmitting">Clear Values</button>
         </div>
     </div>
 }
@@ -303,9 +305,24 @@ else if (_activeView == ViewEdit)
             </div>
 
             <div class="page-actions">
-                <button class="btn btn-primary" type="button">Submit Changes</button>
-                <button class="btn btn-secondary" type="button">Reset Changes</button>
+                <button class="btn btn-primary" type="button" @onclick="HandleSubmitUserChanges" disabled="@_editSubmitting">
+                    @(_editSubmitting ? "Saving..." : "Submit Changes")
+                </button>
+                <button class="btn btn-secondary" type="button" @onclick="ResetEditChanges" disabled="@_editSubmitting">Reset Changes</button>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_editErrorMessage))
+            {
+                <div class="alert alert-error">
+                    <i class="bx bx-error-circle"></i>
+                    @_editErrorMessage
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_editSuccessMessage))
+            {
+                <div class="alert alert-success">
+                    @_editSuccessMessage
+                </div>
+            }
         }
     </div>
 }
@@ -328,8 +345,23 @@ else if (_activeView == ViewResetLogin)
                 </div>
             </div>
             <div class="fis-mt-075">
-                <button class="btn btn-primary" type="button">Reset Login</button>
+                <button class="btn btn-primary" type="button" @onclick="HandleResetLogin" disabled="@_adminActionSubmitting">
+                    @(_adminActionSubmitting ? "Submitting..." : "Reset Login")
+                </button>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_adminActionError))
+            {
+                <div class="alert alert-error">
+                    <i class="bx bx-error-circle"></i>
+                    @_adminActionError
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_adminActionSuccess))
+            {
+                <div class="alert alert-success">
+                    @_adminActionSuccess
+                </div>
+            }
         </div>
     </div>
 }
@@ -352,10 +384,23 @@ else if (_activeView == ViewDeactivate)
                 </div>
             </div>
             <div class="fis-mt-075 fis-flex-wrap-gap-05">
-                <button class="btn btn-secondary" type="button">De-Activate User</button>
-                <button class="btn btn-secondary" type="button">De-ActivateUser Expired Password</button>
-                <button class="btn btn-secondary" type="button">Activate User</button>
+                <button class="btn btn-secondary" type="button" @onclick="HandleDeactivateUser" disabled="@_adminActionSubmitting">De-Activate User</button>
+                <button class="btn btn-secondary" type="button" @onclick="HandleDeactivateExpiredPassword" disabled="@_adminActionSubmitting">De-ActivateUser Expired Password</button>
+                <button class="btn btn-secondary" type="button" @onclick="HandleActivateUser" disabled="@_adminActionSubmitting">Activate User</button>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_adminActionError))
+            {
+                <div class="alert alert-error">
+                    <i class="bx bx-error-circle"></i>
+                    @_adminActionError
+                </div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_adminActionSuccess))
+            {
+                <div class="alert alert-success">
+                    @_adminActionSuccess
+                </div>
+            }
         </div>
     </div>
 }
@@ -713,6 +758,12 @@ else if (_activeView == ViewForgotPassword)
     private string? _forgotMessage;
     private bool _forgotSubmitting;
     private List<UserSummaryDto> _userSummaries = new();
+    private string? _editErrorMessage;
+    private string? _editSuccessMessage;
+    private bool _editSubmitting;
+    private string? _adminActionError;
+    private string? _adminActionSuccess;
+    private bool _adminActionSubmitting;
 
     private static readonly string[] _alphabet =
     [
@@ -813,6 +864,10 @@ else if (_activeView == ViewForgotPassword)
         _changeSuccessMessage = null;
         _addErrorMessage = null;
         _addSuccessMessage = null;
+        _editErrorMessage = null;
+        _editSuccessMessage = null;
+        _adminActionError = null;
+        _adminActionSuccess = null;
         _forcePasswordError = null;
         _forcePasswordSuccess = null;
         _forgotError = null;
@@ -832,6 +887,8 @@ else if (_activeView == ViewForgotPassword)
     private void ShowEditProfile()
     {
         _showEditProfile = true;
+        _editErrorMessage = null;
+        _editSuccessMessage = null;
     }
 
     private void ShowEditForUser(string userName)
@@ -948,6 +1005,122 @@ else if (_activeView == ViewForgotPassword)
         finally
         {
             _addSubmitting = false;
+        }
+    }
+
+    private void ClearAddUserFields()
+    {
+        _addUserName = string.Empty;
+        _addEmail = string.Empty;
+        _addErrorMessage = null;
+        _addSuccessMessage = null;
+    }
+
+    private async Task HandleSubmitUserChanges()
+    {
+        _editErrorMessage = null;
+        _editSuccessMessage = null;
+        if (string.IsNullOrWhiteSpace(_selectedUsername))
+        {
+            _editErrorMessage = "Select a user before submitting changes.";
+            return;
+        }
+
+        var user = _userSummaries.FirstOrDefault(u => string.Equals(u.UserName, _selectedUsername, StringComparison.OrdinalIgnoreCase));
+        if (user is null)
+        {
+            _editErrorMessage = "Selected user was not found.";
+            return;
+        }
+
+        _editSubmitting = true;
+        try
+        {
+            var updated = await UserApiService.UpdateAsync(user.UserAccessCode, user.Email, user.Telephone);
+            _editSuccessMessage = updated is not null ? "User changes submitted successfully." : "User changes submitted.";
+            await LoadUsers();
+        }
+        catch (Exception ex)
+        {
+            _editErrorMessage = $"Unable to submit user changes: {ex.Message}";
+        }
+        finally
+        {
+            _editSubmitting = false;
+        }
+    }
+
+    private void ResetEditChanges()
+    {
+        _showEditProfile = false;
+        _editErrorMessage = null;
+        _editSuccessMessage = null;
+    }
+
+    private async Task HandleResetLogin()
+    {
+        await RunAdminUserAction(async username => await AuthApiService.ResetLoginAsync(new ResetLoginRequest
+        {
+            Username = username
+        }));
+    }
+
+    private async Task HandleDeactivateUser()
+    {
+        await RunAdminUserAction(async username => await AuthApiService.DeactivateExpiredPasswordAsync(new DeactivateExpiredPasswordRequest
+        {
+            Username = username
+        }));
+    }
+
+    private async Task HandleDeactivateExpiredPassword()
+    {
+        await RunAdminUserAction(async username => await AuthApiService.DeactivateExpiredPasswordAsync(new DeactivateExpiredPasswordRequest
+        {
+            Username = username
+        }));
+    }
+
+    private async Task HandleActivateUser()
+    {
+        await RunAdminUserAction(async username => await AuthApiService.ActivateUserAsync(new ActivateUserRequest
+        {
+            Username = username
+        }));
+    }
+
+    private async Task RunAdminUserAction(Func<string, Task<UserAdminResponse>> action)
+    {
+        _adminActionError = null;
+        _adminActionSuccess = null;
+
+        var username = _selectedUsername?.Trim();
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            _adminActionError = "Select or enter a username first.";
+            return;
+        }
+
+        _adminActionSubmitting = true;
+        try
+        {
+            var response = await action(username);
+            if (response.Success)
+            {
+                _adminActionSuccess = response.Message ?? "Operation completed successfully.";
+            }
+            else
+            {
+                _adminActionError = response.Message ?? "Operation failed.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _adminActionError = $"Operation failed: {ex.Message}";
+        }
+        finally
+        {
+            _adminActionSubmitting = false;
         }
     }
 

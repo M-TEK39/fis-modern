@@ -1,318 +1,133 @@
 @page "/reports/fuel-cards"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@inject FleetManagementApiService FleetService
-@inject SiteApiService SiteService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JS
+@inject NavigationManager Navigation
 
 <PageTitle>Fuel Card Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
-            <i class="bx bx-file"></i>
+            <i class="bx bx-credit-card"></i>
             Fuel Card Reports
         </h1>
-        <p class="page-description">Fuel card allocation summary and recent activity.</p>
+        <p class="page-description">Legacy fuel card report menu with modern UI presentation.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/fuelcards">Fuel Card Module</a>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="form-card fis-mb-15">
-        <div class="form-card-header">
-            <h2>Fuel Card Allocation Summary</h2>
-        </div>
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Site (optional)</label>
-                    <select class="form-select" @bind="_siteCodeInput">
-                        <option value="">All sites</option>
-                        @foreach (var site in _sites.OrderBy(s => s.Description))
-                        {
-                            <option value="@site.SiteCode">@($"{site.Description} ({site.SiteCode})")</option>
-                        }
-                    </select>
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>FuelCard Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle")'>1) Fuelcard Report for a Vehicle</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-pan")'>2) Fuelcard Report for a PAN Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle-handout")'>3) Fuelcard Handout Report</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-vehicles")'>4) Fuelcard Report for ALL Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("expire-date")'>5) Fuelcard Report for an Expire Date</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("replace-reason")'>6) Fuelcard Report for a Replace Reason</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("dept-site-expire-period")'>7) Fuelcard Report, for a Department / Site, for an Expire Period</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("dept-site")'>8) Fuelcard Report for a Department / Site</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-site-expire-date")'>9) Fuelcard Report for a Dept Site and Expire Date</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("pool-vehicles")'>10) Fuelcard Report for POOL Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vip-vehicles")'>11) Fuelcard Report for VIP Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("wesbank-new-cards")'>12) Wesbank Application for New FuelCards</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
             </div>
-            <div class="contract-action-group">
-                <button class="btn btn-primary btn-sm" @onclick="LoadReport" disabled="@_loading">
-                    @(_loading ? "Loading..." : "Load Report")
-                </button>
-            </div>
-            @if (!string.IsNullOrWhiteSpace(_errorMessage))
-            {
-                <div class="alert alert-error fis-mt-1">@_errorMessage</div>
-            }
-        </div>
-    </div>
-
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading fuel card allocation...</p>
-        </div>
-    }
-    else if (_report?.Report is null)
-    {
-        <div class="empty-state">
-            <i class="bx bx-file"></i>
-            <h3>Fuel Card Reports</h3>
-            <p>Load a report to view allocation details.</p>
         </div>
     }
     else
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">Allocation Summary</span>
-            </div>
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <tbody>
-                        <tr>
-                            <th>Total Cards</th>
-                            <td>@_report.Report.TotalCards</td>
-                            <th>Active Cards</th>
-                            <td>@_report.Report.ActiveCards</td>
-                        </tr>
-                        <tr>
-                            <th>Returned Cards</th>
-                            <td>@_report.Report.ReturnedCards</td>
-                            <th>Expiring (90 days)</th>
-                            <td>@_report.Report.ExpiringCards</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/fuel-cards">Back to Fuel Card Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
             </div>
         </div>
 
-        <div class="table-container fis-mt-15">
-            <div class="table-header">
-                <span class="table-title">Recent Activity</span>
-                <div class="table-controls">
-                    <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                    <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || (_report?.Report?.RecentActivity?.Count ?? 0) == 0)">Download CSV</button>
-                </div>
-            </div>
-            @if (_showFieldSelector)
-            {
-                <div class="form-card fis-mb-075">
-                    <div class="form-card-body">
-                        <div class="form-grid">
-                            @foreach (var field in _exportFields)
-                            {
-                                <div class="form-field">
-                                    <label class="form-label">
-                                        <input type="checkbox" @bind="field.Selected" />
-                                        @field.Label
-                                    </label>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </div>
-            }
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Card Number</th>
-                            <th>Vehicle</th>
-                            <th>Action</th>
-                            <th>Date</th>
-                            <th>Receiver</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if ((_report?.Report?.RecentActivity?.Count ?? 0) == 0)
-                        {
-                            <tr>
-                                <td colspan="5">No recent activity.</td>
-                            </tr>
-                        }
-                        else
-                        {
-                            @foreach (var activity in PagedActivity)
-                            {
-                                <tr>
-                                    <td>@activity.CardNumber</td>
-                                    <td>@GetVehicleLabel(activity.VmfCode)</td>
-                                    <td>@activity.Action</td>
-                                    <td>@activity.Date.ToString("yyyy-MM-dd")</td>
-                                    <td>@activity.Receiver</td>
-                                </tr>
-                            }
-                        }
-                    </tbody>
-                </table>
-            </div>
-            <div class="pagination-controls fis-mt-1">
-                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-        </div>
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/fuel-cards" />
     }
 </div>
 
 @code {
-    private FuelCardReportResponse? _report;
-    private bool _loading;
-    private string? _errorMessage;
-    private int? _siteCodeInput;
-    private List<SiteResponseDto> _sites = new();
-    private Dictionary<int, string> _vehicleLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private bool _showFieldSelector;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("card_number", "Card Number", true),
-        new("vehicle", "Vehicle", true),
-        new("action", "Action", true),
-        new("date", "Date", true),
-        new("receiver", "Receiver", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private IEnumerable<FuelCardActivityDto> PagedActivity =>
-        (_report?.Report?.RecentActivity ?? new List<FuelCardActivityDto>())
-        .Skip((_page - 1) * _pageSize)
-        .Take(_pageSize);
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    private int TotalPages
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        get
+        var filters = new Dictionary<string, string?>
         {
-            var total = _report?.Report?.RecentActivity.Count ?? 0;
-            return Math.Max(1, (int)Math.Ceiling(total / (double)_pageSize));
-        }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        _sites = await SiteService.GetAllAsync();
-        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-        _vehicleLabels = vehicles.Data
-            .GroupBy(v => v.vmf_code)
-            .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
-        await LoadReport();
-    }
-
-    private async Task LoadReport()
-    {
-        _loading = true;
-        _errorMessage = null;
-
-        try
-        {
-            _report = await FleetService.GetFuelCardAllocationAsync(_siteCodeInput);
-            if (_report is null || !_report.Success)
-            {
-                _errorMessage = _report?.Message ?? "Unable to load fuel card report.";
-            }
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = "Unable to load fuel card report.";
-            await JS.InvokeVoidAsync("console.error", $"Fuel card report error: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void PreviousPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private string GetVehicleLabel(int? vmfCode)
-    {
-        if (!vmfCode.HasValue)
-        {
-            return "-";
-        }
-
-        return _vehicleLabels.TryGetValue(vmfCode.Value, out var label)
-            ? label
-            : $"- / - ({vmfCode.Value})";
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        var activities = _report?.Report?.RecentActivity ?? new List<FuelCardActivityDto>();
-        if (selected.Count == 0 || activities.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in activities)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "card_number" => row.CardNumber ?? "-",
-                "vehicle" => GetVehicleLabel(row.VmfCode),
-                "action" => row.Action ?? "-",
-                "date" => row.Date.ToString("yyyy-MM-dd"),
-                "receiver" => row.Receiver ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"fuel_cards_activity_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JS.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/fuel-cards", filters));
     }
 
-    private static string CsvCell(string? value)
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
+        "one-vehicle" => "fuelcards-one-vehicle",
+        "one-pan" => "fuelcards-one-pan",
+        "one-vehicle-handout" => "fuelcards-one-vehicle-handout",
+        "all-vehicles" => "fuel-cards",
+        "expire-date" => "fuelcards-expire-date",
+        "replace-reason" => "fuelcards-replace-reason",
+        "dept-site-expire-period" => "fuelcards-dept-site-expire-period",
+        "dept-site" => "fuelcards-dept-site",
+        "one-site-expire-date" => "fuelcards-one-site-expire-date",
+        "pool-vehicles" => "fuelcards-pool-vehicles",
+        "vip-vehicles" => "fuelcards-vip-vehicles",
+        "wesbank-new-cards" => "fuelcards-wesbank-new-cards",
+        _ => "fuel-cards"
+    };
 
-    private sealed class ExportField
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
+        "one-vehicle" => "Fuelcard Report for a Vehicle",
+        "one-pan" => "Fuelcard Report for a PAN Number",
+        "one-vehicle-handout" => "Fuelcard Handout Report",
+        "all-vehicles" => "Fuelcard Report for ALL Vehicles",
+        "expire-date" => "Fuelcard Report for an Expire Date",
+        "replace-reason" => "Fuelcard Report for a Replace Reason",
+        "dept-site-expire-period" => "Fuelcard Report, for a Department / Site, for an Expire Period",
+        "dept-site" => "Fuelcard Report for a Department / Site",
+        "one-site-expire-date" => "Fuelcard Report for a Dept Site and Expire Date",
+        "pool-vehicles" => "Fuelcard Report for POOL Vehicles",
+        "vip-vehicles" => "Fuelcard Report for VIP Vehicles",
+        "wesbank-new-cards" => "Wesbank Application for New FuelCards",
+        _ => "Fuel Card Reports"
+    };
 
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "one-vehicle" => "one-vehicle",
+            "one-pan" => "one-pan",
+            "one-vehicle-handout" => "one-vehicle-handout",
+            "all-vehicles" => "all-vehicles",
+            "expire-date" => "expire-date",
+            "replace-reason" => "replace-reason",
+            "dept-site-expire-period" => "dept-site-expire-period",
+            "dept-site" => "dept-site",
+            "one-site-expire-date" => "one-site-expire-date",
+            "pool-vehicles" => "pool-vehicles",
+            "vip-vehicles" => "vip-vehicles",
+            "wesbank-new-cards" => "wesbank-new-cards",
+            _ => "all-vehicles"
+        };
 }

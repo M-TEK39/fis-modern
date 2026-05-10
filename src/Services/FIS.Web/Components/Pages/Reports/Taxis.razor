@@ -1,9 +1,7 @@
 @page "/reports/taxis"
 @rendermode InteractiveServer
-@using FIS.Web.Services
-@inject TaxiApiService TaxiService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
+@using FIS.Web.Components.Shared
+@inject NavigationManager Navigation
 
 <PageTitle>Taxis Reports - Fleet Information System</PageTitle>
 
@@ -13,7 +11,7 @@
             <i class="bx bx-taxi"></i>
             Taxis Reports
         </h1>
-        <p class="page-description">Taxi requisition and usage reporting.</p>
+        <p class="page-description">Legacy taxis report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
@@ -22,238 +20,101 @@
 </div>
 
 <div class="page-content">
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Taxi Records</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Taxi Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("future-bookings-my-dept")'>1) Future booking made for my department.</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("history-bookings-period")'>2) History bookings for period</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("requisition-numbers-period")'>3) List of Requisition Numbers for a period</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("taxis-per-hire-company")'>4) Taxis Per Hire Company</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("list-inservice")'>5) List Of all Taxis in service in various departments</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("list-all")'>6) List Of all Taxis in various departments</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("reprint-requisition")'>7) Reprint A Requisition</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("reprint-taxi-log")'>8) Reprint A Taxi Log</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Request ID</th>
-                        <th>Requisition #</th>
-                        <th>Official</th>
-                        <th>Vehicle</th>
-                        <th>Rank/Status</th>
-                        <th>Date Required</th>
-                        <th>Address</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="7">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="7">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.request_id</td>
-                                <td>@ValueOrDash(row.rek_num)</td>
-                                <td>@ValueOrDash(row.official)</td>
-                                <td>@GetVehicleLabel(row.vmf_code)</td>
-                                <td>@ValueOrDash(row.rank)</td>
-                                <td>@(row.date_required?.ToString("yyyy-MM-dd") ?? "-")</td>
-                                <td>@ValueOrDash(row.address_1)</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/taxis">Back to Taxis Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
             </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+        </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/taxis" />
+    }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<TaxiReportDto> _rows = new();
-    private Dictionary<int, string> _vehicleLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("request_id", "Request ID", true),
-        new("requisition", "Requisition #", true),
-        new("official", "Official", true),
-        new("vehicle", "Vehicle", true),
-        new("rank_status", "Rank/Status", true),
-        new("date_required", "Date Required", true),
-        new("address", "Address", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private List<TaxiReportDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            if (_vehicleLabels.Count == 0)
-            {
-                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-                _vehicleLabels = vehicles.Data
-                    .GroupBy(v => v.vmf_code)
-                    .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
-            }
-
-            _rows = (await TaxiService.GetAllAsync<TaxiReportDto>())
-                .OrderByDescending(t => t.date_required)
-                .ThenByDescending(t => t.request_id)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading taxis report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private string GetVehicleLabel(string? vmfCodeText)
-    {
-        if (!int.TryParse(vmfCodeText, out var vmfCode))
-        {
-            return ValueOrDash(vmfCodeText);
-        }
-
-        return _vehicleLabels.TryGetValue(vmfCode, out var label)
-            ? label
-            : vmfCode.ToString();
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _rows)
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/taxis", filters));
+    }
+
+    private string GetReportKey()
+        => NormalizeReportType(QReportType) switch
         {
-            var values = selected.Select(field => field.Key switch
-            {
-                "request_id" => row.request_id.ToString(),
-                "requisition" => ValueOrDash(row.rek_num),
-                "official" => ValueOrDash(row.official),
-                "vehicle" => GetVehicleLabel(row.vmf_code),
-                "rank_status" => ValueOrDash(row.rank),
-                "date_required" => row.date_required?.ToString("yyyy-MM-dd") ?? "-",
-                "address" => ValueOrDash(row.address_1),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
+            "future-bookings-my-dept" => "taxis-future-bookings-my-dept",
+            "history-bookings-period" => "taxis-history-bookings-period",
+            "requisition-numbers-period" => "taxis-requisition-numbers-period",
+            "taxis-per-hire-company" => "taxis-per-hire-company",
+            "list-inservice" => "taxis-list-inservice-per-department",
+            "list-all" => "taxis-list-per-department",
+            "reprint-requisition" => "taxis-reprint-requisition",
+            "reprint-taxi-log" => "taxis-reprint-taxi-log",
+            _ => "taxis"
+        };
 
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"taxis_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
+    private string GetSelectedCaption()
+        => NormalizeReportType(QReportType) switch
         {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
+            "future-bookings-my-dept" => "Future booking made for my department.",
+            "history-bookings-period" => "History bookings for period",
+            "requisition-numbers-period" => "List of Requisition Numbers for a period",
+            "taxis-per-hire-company" => "Taxis Per Hire Company",
+            "list-inservice" => "List Of all Taxis in service in various departments",
+            "list-all" => "List Of all Taxis in various departments",
+            "reprint-requisition" => "Reprint A Requisition",
+            "reprint-taxi-log" => "Reprint A Taxi Log",
+            _ => "Taxi Reports Menu"
+        };
 
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
-
-    private sealed class TaxiReportDto
-    {
-        public int request_id { get; set; }
-        public string? rek_num { get; set; }
-        public string? official { get; set; }
-        public string? vmf_code { get; set; }
-        public string? rank { get; set; }
-        public DateTime? date_required { get; set; }
-        public string? address_1 { get; set; }
-    }
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "future-bookings-my-dept" => "future-bookings-my-dept",
+            "history-bookings-period" => "history-bookings-period",
+            "requisition-numbers-period" => "requisition-numbers-period",
+            "taxis-per-hire-company" => "taxis-per-hire-company",
+            "list-inservice" => "list-inservice",
+            "list-all" => "list-all",
+            "reprint-requisition" => "reprint-requisition",
+            "reprint-taxi-log" => "reprint-taxi-log",
+            _ => "future-bookings-my-dept"
+        };
 }

@@ -599,6 +599,22 @@
                 driver = (_whiteLog.Driver ?? string.Empty).Trim()
             };
 
+            try
+            {
+                var created = await TaxiLogService.CreateAsync<object, object>(payload);
+                if (created is not null)
+                {
+                    _message = "White log entered.";
+                    _error = false;
+                    ResetWhiteLog();
+                    return;
+                }
+            }
+            catch
+            {
+                // Fall through to legacy endpoint attempt for compatibility.
+            }
+
             var response = await Http.PostAsJsonAsync("api/taxi/white-log", payload);
             if (response.IsSuccessStatusCode)
             {

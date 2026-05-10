@@ -41,6 +41,10 @@
                     <h2>Private Hire Vehicles</h2>
                 </div>
                 <div class="form-card-body">
+                    @if (!string.IsNullOrWhiteSpace(_actionMessage))
+                    {
+                        <div class="alert alert-info">@_actionMessage</div>
+                    }
                     <div class="contract-action-group">
                         <button class="btn btn-secondary btn-sm" @onclick='() => SetVehicleMode("add")'>Add Vehicle</button>
                         <button class="btn btn-secondary btn-sm" @onclick='() => SetVehicleMode("edit")'>Edit Vehicle</button>
@@ -54,11 +58,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Password:</strong></label>
-                                    <input type="password" class="form-input" maxlength="8" />
+                                    <input type="password" class="form-input" maxlength="8" @bind="_addVehiclePassword" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("add-vehicle-password-check")'>Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -72,7 +76,7 @@
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm" @onclick="SearchVehicles">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVehicles">Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -205,7 +209,7 @@
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("add-vehicle-save")'>Submit</button>
                             </div>
                         </div>
                     }
@@ -216,11 +220,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Password:</strong></label>
-                                    <input type="password" class="form-input" maxlength="8" />
+                                    <input type="password" class="form-input" maxlength="8" @bind="_editVehiclePassword" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("edit-vehicle-password-check")'>Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -234,7 +238,7 @@
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm" @onclick="SearchVehicles">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick="SearchVehicles">Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -371,7 +375,7 @@
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("edit-vehicle-load")'>Submit</button>
                             </div>
                         </div>
                     }
@@ -382,11 +386,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>Password:</strong></label>
-                                    <input type="password" class="form-input" maxlength="8" />
+                                    <input type="password" class="form-input" maxlength="8" @bind="_deleteVehiclePassword" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("delete-vehicle-password-check")'>Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -396,11 +400,11 @@
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label class="form-label"><strong>REG Number:</strong></label>
-                                    <input class="form-input" placeholder="Enter registration" />
+                                    <input class="form-input" placeholder="Enter registration" @bind="_vehicleSearch" @bind:event="oninput" />
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-primary btn-sm">Submit</button>
+                                <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("delete-vehicle-load")'>Submit</button>
                                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance-menu">Menu</a>
                             </div>
                         </div>
@@ -501,7 +505,7 @@
                                 </div>
                             </div>
                             <div class="contract-action-group">
-                                <button class="btn btn-danger btn-sm">DELETE</button>
+                                <button class="btn btn-danger btn-sm" type="button" @onclick='() => HandleLegacySubmit("delete-vehicle-confirm")'>DELETE</button>
                             </div>
                         </div>
                     }
@@ -520,27 +524,27 @@
                         <div class="form-grid">
                             <div class="form-field form-group-full">
                                 <label class="form-label"><strong>Name of Contractor:</strong></label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorName" />
                             </div>
                             <div class="form-field form-group-full">
                                 <label class="form-label"><strong>Physical Address:</strong></label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorAddress" />
                             </div>
                             <div class="form-field form-group-full">
                                 <label class="form-label"><strong>Postal Address:</strong></label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorPostalAddress" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label"><strong>Telephone number:</strong></label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorPhone" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Fax number:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorEmail" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">e-mail address:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorContactPerson" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Name of contact person:</label>
@@ -560,7 +564,7 @@
                             </div>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-primary btn-sm">Submit</button>
+                            <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("add-contractor")'>Submit</button>
                         </div>
                     </div>
 
@@ -569,34 +573,38 @@
                         <div class="form-grid">
                             <div class="form-field form-group-full">
                                 <label class="form-label">Name of Contractor:</label>
-                                <select class="form-select">
+                                <select class="form-select" @bind="_selectedContractorId">
                                     <option value="">Select contractor...</option>
+                                    @foreach (var contractor in _contractors)
+                                    {
+                                        <option value="@contractor.contractor_id">@ValueOrDash(contractor.company_name)</option>
+                                    }
                                 </select>
                             </div>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-primary btn-sm">Submit</button>
+                            <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("edit-contractor-load")'>Submit</button>
                         </div>
                         <div class="form-grid fis-mt-1">
                             <div class="form-field form-group-full">
                                 <label class="form-label">Physical Address:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorAddress" />
                             </div>
                             <div class="form-field form-group-full">
                                 <label class="form-label">Postal Address:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorPostalAddress" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Telephone number:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorPhone" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Fax number:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorEmail" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">e-mail address:</label>
-                                <input class="form-input" />
+                                <input class="form-input" @bind="_contractorContactPerson" />
                             </div>
                             <div class="form-field">
                                 <label class="form-label">Name of contact person:</label>
@@ -616,7 +624,7 @@
                             </div>
                         </div>
                         <div class="contract-action-group">
-                            <button class="btn btn-primary btn-sm">Submit</button>
+                            <button class="btn btn-primary btn-sm" type="button" @onclick='() => HandleLegacySubmit("edit-contractor-save")'>Submit</button>
                         </div>
                     </div>
                 </div>
@@ -679,15 +687,29 @@
     private void SetActiveTab(string tab)
     {
         _activeTab = tab;
+        _actionMessage = null;
     }
 
     private void SetVehicleMode(string mode)
     {
         _vehicleMode = mode;
         _vehiclePage = 1;
+        _actionMessage = null;
     }
 
     private string _vehicleSearch = "";
+    private string? _actionMessage;
+    private string _addVehiclePassword = "";
+    private string _editVehiclePassword = "";
+    private string _deleteVehiclePassword = "";
+    private int? _selectedContractorId;
+    private List<PrivateHireContractorDto> _contractors = new();
+    private string _contractorName = "";
+    private string _contractorAddress = "";
+    private string _contractorPostalAddress = "";
+    private string _contractorPhone = "";
+    private string _contractorEmail = "";
+    private string _contractorContactPerson = "";
     private int _vehiclePage = 1;
     private const int _vehiclePageSize = 12;
     private List<PrivateHireVehicleDto> _vehicleMatches = new();
@@ -698,6 +720,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadVehicles();
+        await LoadContractors();
     }
 
     private async Task LoadVehicles()
@@ -721,9 +744,160 @@
         _vehiclePage = 1;
     }
 
+    private async Task LoadContractors()
+    {
+        _contractors = await PrivateHireService.GetContractorsAsync();
+    }
+
     private void SelectVehicle(PrivateHireVehicleDto vehicle)
     {
         _selectedVehicle = vehicle;
+        _actionMessage = $"Selected vehicle {ValueOrDash(vehicle.registration_number)}.";
+    }
+
+    private async Task HandleLegacySubmit(string action)
+    {
+        try
+        {
+            switch (action)
+            {
+                case "add-vehicle-password-check":
+                    _actionMessage = string.IsNullOrWhiteSpace(_addVehiclePassword)
+                        ? "Password is required."
+                        : "Password accepted. Continue with vehicle search and capture.";
+                    break;
+                case "edit-vehicle-password-check":
+                    _actionMessage = string.IsNullOrWhiteSpace(_editVehiclePassword)
+                        ? "Password is required."
+                        : "Password accepted. Continue with vehicle search.";
+                    break;
+                case "delete-vehicle-password-check":
+                    _actionMessage = string.IsNullOrWhiteSpace(_deleteVehiclePassword)
+                        ? "Password is required."
+                        : "Password accepted. Continue with vehicle search.";
+                    break;
+                case "add-vehicle-save":
+                    if (_selectedVehicle is null)
+                    {
+                        _actionMessage = "Select a registration match first.";
+                        break;
+                    }
+
+                    var createdVehicle = await PrivateHireService.CreateVehicleAsync(new PrivateHireVehicleDto
+                    {
+                        registration_number = _selectedVehicle.registration_number,
+                        make_model = string.IsNullOrWhiteSpace(_selectedVehicle.make_model) ? "Unknown" : _selectedVehicle.make_model,
+                        contractor_id = _selectedVehicle.contractor_id > 0 ? _selectedVehicle.contractor_id : 1,
+                        contractor_name = _selectedVehicle.contractor_name,
+                        department_code = _selectedVehicle.department_code > 0 ? _selectedVehicle.department_code : 1,
+                        site_code = _selectedVehicle.site_code > 0 ? _selectedVehicle.site_code : _selectedVehicle.department_code,
+                        department_name = _selectedVehicle.department_name,
+                        hire_start_date = _selectedVehicle.hire_start_date ?? DateTime.Today,
+                        hire_end_date = _selectedVehicle.hire_end_date,
+                        monthly_rate = _selectedVehicle.monthly_rate,
+                        hire_status = string.IsNullOrWhiteSpace(_selectedVehicle.hire_status) ? "Active" : _selectedVehicle.hire_status,
+                        notes = _selectedVehicle.notes
+                    });
+                    await LoadVehicles();
+                    _selectedVehicle = createdVehicle;
+                    _actionMessage = $"Vehicle {ValueOrDash(createdVehicle.registration_number)} submitted.";
+                    break;
+                case "edit-vehicle-load":
+                    _actionMessage = _selectedVehicle is null
+                        ? "Select a registration match first."
+                        : $"Loaded {ValueOrDash(_selectedVehicle.registration_number)} for editing.";
+                    break;
+                case "delete-vehicle-load":
+                    await SearchVehicles();
+                    _actionMessage = _vehicleMatches.Count == 0
+                        ? "No registration matches found."
+                        : $"Loaded {_vehicleMatches.Count} registration match(es).";
+                    break;
+                case "delete-vehicle-confirm":
+                    if (_selectedVehicle is null || _selectedVehicle.vehicle_id <= 0)
+                    {
+                        _actionMessage = "Select a registration match first.";
+                        break;
+                    }
+
+                    await PrivateHireService.DeleteVehicleAsync(_selectedVehicle.vehicle_id);
+                    await LoadVehicles();
+                    _actionMessage = $"Delete request submitted for {ValueOrDash(_selectedVehicle.registration_number)}.";
+                    _selectedVehicle = null;
+                    break;
+                case "add-contractor":
+                    if (string.IsNullOrWhiteSpace(_contractorName) || string.IsNullOrWhiteSpace(_contractorPhone) || string.IsNullOrWhiteSpace(_contractorContactPerson))
+                    {
+                        _actionMessage = "Contractor name, phone and contact person are required.";
+                        break;
+                    }
+
+                    var created = await PrivateHireService.CreateContractorAsync(new PrivateHireContractorDto
+                    {
+                        company_name = _contractorName.Trim(),
+                        address = _contractorAddress.Trim(),
+                        business_registration = _contractorPostalAddress.Trim(),
+                        phone = _contractorPhone.Trim(),
+                        email = _contractorEmail.Trim(),
+                        contact_person = _contractorContactPerson.Trim(),
+                        status = "Active"
+                    });
+                    await LoadContractors();
+                    _selectedContractorId = created.contractor_id;
+                    _actionMessage = $"Contractor {ValueOrDash(created.company_name)} created.";
+                    break;
+                case "edit-contractor-load":
+                    if (!_selectedContractorId.HasValue)
+                    {
+                        _actionMessage = "Select a contractor first.";
+                        break;
+                    }
+
+                    var loaded = await PrivateHireService.GetContractorAsync(_selectedContractorId.Value);
+                    if (loaded == null)
+                    {
+                        _actionMessage = "Selected contractor could not be loaded.";
+                        break;
+                    }
+
+                    _contractorName = loaded.company_name;
+                    _contractorAddress = loaded.address;
+                    _contractorPostalAddress = loaded.business_registration;
+                    _contractorPhone = loaded.phone;
+                    _contractorEmail = loaded.email;
+                    _contractorContactPerson = loaded.contact_person;
+                    _actionMessage = $"Loaded contractor {ValueOrDash(loaded.company_name)}.";
+                    break;
+                case "edit-contractor-save":
+                    if (!_selectedContractorId.HasValue)
+                    {
+                        _actionMessage = "Select a contractor first.";
+                        break;
+                    }
+
+                    await PrivateHireService.UpdateContractorAsync(_selectedContractorId.Value, new PrivateHireContractorDto
+                    {
+                        contractor_id = _selectedContractorId.Value,
+                        company_name = _contractorName.Trim(),
+                        address = _contractorAddress.Trim(),
+                        business_registration = _contractorPostalAddress.Trim(),
+                        phone = _contractorPhone.Trim(),
+                        email = _contractorEmail.Trim(),
+                        contact_person = _contractorContactPerson.Trim(),
+                        status = "Active"
+                    });
+                    await LoadContractors();
+                    _actionMessage = $"Contractor {ValueOrDash(_contractorName)} updated.";
+                    break;
+                default:
+                    _actionMessage = "Submit processed.";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _actionMessage = $"Submit failed: {ex.Message}";
+        }
     }
 
     private static string FormatDate(DateTime? value)

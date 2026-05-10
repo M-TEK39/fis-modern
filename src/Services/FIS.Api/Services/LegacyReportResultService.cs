@@ -27,9 +27,12 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     public async Task<LegacyReportResultDto> GetReportAsync(string reportKey, IDictionary<string, string?> filters, CancellationToken cancellationToken = default)
     {
-        if (!_definitions.TryGetValue(reportKey, out var definition))
+        var resolvedKey = ResolveReportKeyAlias(reportKey);
+
+        if (!_definitions.TryGetValue(resolvedKey, out var definition))
         {
-            throw new KeyNotFoundException($"Unknown legacy report key '{reportKey}'.");
+            _logger.LogWarning("Legacy report key '{ReportKey}' is not mapped. Returning fallback response.", reportKey);
+            return BuildMissingKeyFallback(reportKey, filters);
         }
 
         if (definition.StoredProcedureItem is not null)
@@ -44,7 +47,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Stored procedure execution failed for legacy report {ReportKey}. Falling back to approximate query.", reportKey);
+                    _logger.LogWarning(ex, "Stored procedure execution failed for legacy report {ReportKey}. Falling back to approximate query.", resolvedKey);
             }
         }
 
@@ -56,6 +59,233 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         fallback.ApproximationReason ??= definition.ApproximationReason;
         fallback.TotalCount = fallback.Rows.Count;
         return fallback;
+    }
+
+    private static string ResolveReportKeyAlias(string reportKey)
+    {
+        if (string.IsNullOrWhiteSpace(reportKey))
+        {
+            return reportKey;
+        }
+
+        var key = reportKey.Trim().ToLowerInvariant();
+        return key switch
+        {
+            // Top-level menu keys that should resolve to concrete dynamic definitions
+            "asset-verification" => "asset-list",
+            "auction" => "vehicle-disposals",
+            "class-code" => "tariffs-class-2007",
+            "class-code-totals" => "tariffs-class-2007",
+            "clearance" => "unallocated-vehicles",
+            "fuel-cards" => "wesbank",
+            "logbooks" => "vehicle-logs-report",
+            "logsheets" => "vehicle-logs-report",
+            "registration-certificate-one-vehicle" => "registration-certificates",
+            "tariffs-class-codes" => "tariffs-class-2007",
+            "tariffs-licence-fees" => "tariffs-fin-year",
+            "tariffs-make-model" => "tariffs-fin-year",
+            "tariffs-private-taxi" => "tariffs-fin-year",
+            "users" => "audit-trail",
+            "users-added" => "audit-trail",
+            "users-one" => "audit-trail",
+            "vehicle-by-barcode" => "vehicles",
+            "vehicles-with-history" => "vehicles",
+            "vip-pool-utilization-current" => "trips-open-31",
+            "vip-pool-utilization-previous" => "trips-open-31",
+            "vip-pool-income-current" => "trips-open-31",
+            "vip-pool-income-previous" => "trips-open-31",
+
+            // Audit trail variants
+            "audit-trail-department" => "audit-trail",
+            "audit-trail-site" => "audit-trail",
+            "audit-trail-vehicle" => "audit-trail",
+
+            // Management menu variants
+            "management-ggmt" => "management",
+            "management-incorrect-captured-data" => "management",
+            "management-site-info" => "management",
+
+            // Contract report variants
+            "contract-summary" => "contracts",
+            "contract-trip-authority-dept-site-date" => "contracts",
+            "contract-trip-authority-multiple" => "contracts",
+            "contract-trip-authority-single" => "contracts",
+            "contract-vehicle-multiple" => "contracts",
+            "contract-vehicle-single" => "contracts",
+            "contracts-checklist" => "contracts",
+            "contracts-expiring-by-date" => "contracts",
+            "contracts-fleet-reports" => "contracts",
+            "contracts-no-distance" => "contracts",
+            "contracts-per-dept-period" => "contracts",
+            "lease-nom-contract-split" => "contracts",
+
+            // Asset list variants
+            "asset-list-by-province" => "asset-list",
+            "asset-list-by-department" => "asset-list",
+            "asset-list-by-site" => "asset-list",
+
+            // Asset verification variants
+            "asset-verification-per-site-province-date" => "asset-verification",
+            "asset-verification-not-verified" => "asset-verification",
+            "asset-verification-verified-by-date-range" => "asset-verification",
+
+            // Fine report variants
+            "fines-one-vehicle" => "fines",
+            "fines-appear-date" => "fines",
+            "fines-reissue-submission" => "fines",
+            "fines-traffic-dept-detail" => "fines",
+
+            // Taxis menu/report variants
+            "taxis-future-bookings-my-dept" => "taxis",
+            "taxis-history-bookings-period" => "taxis",
+            "taxis-requisition-numbers-period" => "taxis",
+            "taxis-per-hire-company" => "taxis",
+            "taxis-reprint-requisition" => "taxis",
+            "taxis-reprint-taxi-log" => "taxis",
+            "taxis-fin-general-requisitions" => "taxis-financial",
+            "taxis-fin-requisitions-per-department" => "taxis-financial",
+            "taxis-fin-outstanding-logsheets" => "taxis-financial",
+            "taxis-fin-log-odometer-gg" => "taxis-financial",
+            "taxis-fin-cancellations" => "taxis-financial",
+            "taxis-fin-no-objective-or-responsibility" => "taxis-financial",
+
+            // Wesbank variants
+            "wesbank-one-vehicle" => "wesbank",
+            "wesbank-one-vehicle-period" => "wesbank",
+            "wesbank-one-dept-site" => "wesbank",
+            "wesbank-overfills" => "wesbank",
+            "wesbank-multiple-daily-fuels" => "wesbank",
+
+            // Auction variants
+            "auction-one-vehicle" => "auction",
+            "auction-sale-to-name" => "auction",
+            "auction-one-sort-gg" => "auction",
+            "auction-one-sort-lot" => "auction",
+
+            // Logbook/logsheet fine-grained variants
+            "logbooks-number" => "logbooks",
+            "logbooks-one-vehicle" => "logbooks",
+            "logsheets-all-outstanding" => "logsheets",
+            "logsheets-one-vehicle" => "logsheets",
+            "logsheets-vehicle-details-per-rek" => "logsheets",
+            "logsheets-vehicle-odo-balance" => "logsheets",
+
+            // Losses report variants
+            "losses-one-vehicle" => "losses",
+            "losses-outstanding-report" => "losses",
+            "losses-with-report" => "losses",
+            "losses-site-period-vip-gg-hire" => "losses",
+
+            // Licence variants
+            "licences-all-with-model-tare-fee" => "licences",
+            "licences-cof-info" => "licences",
+            "licences-expire-date" => "licences",
+            "licences-site" => "licences",
+            "licences-gg-number" => "licences",
+            "licences-register-number" => "licences",
+            "licences-chassis-number" => "licences",
+            "licences-engine-number" => "licences",
+            "licences-data-workgroup" => "licences",
+            "licences-data-workgroup-latest" => "licences",
+            "licences-received-by-ggmt" => "licences",
+            "licences-prov-reg-number" => "licences",
+            "licences-old-expire-dates" => "licences",
+            "licences-make-model-fee" => "licences",
+            "licences-month-fees" => "licences",
+            "licences-sap-info" => "licences",
+            "licences-dept-sites-period" => "licences",
+
+            // Vehicle report variants
+            "vehicles-no-trips" => "vehicles",
+            "vehicles-no-trips-daterange" => "vehicles",
+            "vehicles-per-site" => "vehicles",
+            "vehicles-per-department" => "vehicles",
+            "vehicles-inservice-per-gg" => "vehicles",
+            "vehicles-inservice-per-dept" => "vehicles",
+            "vehicles-inservice-wesbank" => "vehicles",
+            "vehicles-provincial-numbers" => "vehicles",
+            "vehicles-with-barcodes" => "vehicles",
+            "vehicles-lpg-converted" => "vehicles",
+            "vehicles-replaced-per-dept" => "vehicles",
+            "vehicles-older-than-5y-over-120k" => "vehicles",
+            "vehicles-older-than-5y-over-120k-period" => "vehicles",
+            "vehicles-extended-service" => "vehicles",
+            "vehicles-value-inservice" => "vehicles",
+            "vehicles-extras" => "vehicles",
+            "vehicles-contract-type-site" => "vehicles",
+            "vehicles-contract-type-department" => "vehicles",
+            "vehicles-contract-type-department-site" => "vehicles",
+            "vehicles-universal-selected" => "vehicles",
+            "vehicles-selected" => "vehicles",
+            "vehicles-els-manual" => "vehicles",
+            "vehicle-contract-single" => "vehicles",
+            "vehicle-contract-multiple" => "vehicles",
+            "vehicle-contract-universal" => "vehicles",
+            "vehicle-contract-els-manual" => "vehicles",
+
+            // Department/site variants
+            "departments-sites-contact" => "departments-sites",
+            "departments-outstanding-logs-combined" => "departments-sites",
+            "departments-one-department" => "departments-sites",
+            "departments-one-site" => "departments-sites",
+            "departments-vehicles-manual-logs" => "departments-sites",
+            "departments-vehicles-els" => "departments-sites",
+
+            // Fuel card variants
+            "fuelcards-one-vehicle" => "fuel-cards",
+            "fuelcards-one-vehicle-handout" => "fuel-cards",
+            "fuelcards-expire-date" => "fuel-cards",
+            "fuelcards-one-site-expire-date" => "fuel-cards",
+            "fuelcards-dept-site-expire-period" => "fuel-cards",
+            "fuelcards-dept-site" => "fuel-cards",
+            "fuelcards-replace-reason" => "fuel-cards",
+            "fuelcards-one-pan" => "fuel-cards",
+            "fuelcards-wesbank-new-cards" => "fuel-cards",
+            "fuelcards-pool-vehicles" => "fuel-cards",
+            "fuelcards-vip-vehicles" => "fuel-cards",
+
+            // Workshop report variants
+            "workshop-one-vehicle" => "workshop",
+            "workshop-print-job-card" => "workshop",
+            "workshop-in-shop" => "workshop",
+            "workshop-merchants" => "workshop",
+
+            _ => key
+        };
+    }
+
+    private static LegacyReportResultDto BuildMissingKeyFallback(string reportKey, IDictionary<string, string?> filters)
+    {
+        var columns = new List<LegacyReportColumnDto>
+        {
+            new() { Key = "report_key", Header = "Report Key" },
+            new() { Key = "status", Header = "Status" },
+            new() { Key = "details", Header = "Details" }
+        };
+
+        var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["report_key"] = reportKey,
+            ["status"] = "Missing API Mapping",
+            ["details"] = "This report key is not yet mapped in LegacyReportResultService. Returning non-404 placeholder so navigation can continue."
+        };
+
+        if (filters.Count > 0)
+        {
+            row["details"] += $" Filters: {JsonSerializer.Serialize(filters)}";
+        }
+
+        return new LegacyReportResultDto
+        {
+            ReportKey = reportKey,
+            Title = $"Report: {reportKey}",
+            LegacyTarget = "Legacy mapping pending",
+            IsApproximate = true,
+            ApproximationReason = "Fallback generated because report key mapping is missing in API.",
+            Columns = columns,
+            Rows = new List<Dictionary<string, string?>> { row },
+            TotalCount = 1
+        };
     }
 
     private async Task<LegacyReportResultDto?> TryExecuteStoredProcedureAsync(
@@ -205,6 +435,30 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildDepartmentsSitesAsync,
                 "Legacy department screens are custom pages. This approximation projects the legacy department/site tables into a dynamic grid."),
 
+            ["fines"] = new(
+                "fines",
+                "Fines Reports",
+                "Fines/RPTFines.aspx",
+                null,
+                BuildFinesAsync,
+                "Legacy fines report pages are menu-driven and parameterized. This approximation projects fine records with joined vehicle/site/traffic fields."),
+
+            ["losses"] = new(
+                "losses",
+                "Losses Reports",
+                "Losses/RPTLosses.aspx",
+                null,
+                BuildLossesAsync,
+                "Legacy losses report pages are menu-driven and parameterized. This approximation projects loss records with joined vehicle/site/loss-type fields."),
+
+            ["manuals"] = new(
+                "manuals",
+                "Manuals Menu",
+                "Manuals/RPTmanuals.aspx",
+                null,
+                BuildManualsAsync,
+                "Legacy manuals reporting is a navigation menu of manual documents. This result preserves one-to-one menu entries and targets in a dynamic grid."),
+
             ["high-distance-all"] = new(
                 "high-distance-all",
                 "High Distance Vehicles (All Departments)",
@@ -223,6 +477,22 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildStoredProcedureParameters: filters => BuildOptionalParameterList(("@DepartmentID", (object?)GetShort(filters, "dept"), DbType.Int16)),
                 ApproximationReason: "Falls back to current/highest odometer readings plus active contract department when the legacy DEV_REP_KiloAudit stored procedure is unavailable."),
 
+            ["incorrect-quantities"] = new(
+                "incorrect-quantities",
+                "Report to show incorrect calculated quantities",
+                "Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities",
+                null,
+                BuildIncorrectQuantitiesAsync,
+                "Legacy generated report output is approximated from vehicle odometer and quantity-related fields in vehicle_master."),
+
+            ["licences"] = new(
+                "licences",
+                "Licence Reports",
+                "License/RPTLicence.aspx",
+                null,
+                BuildLicencesAsync,
+                "Legacy licence reports include multiple one-vehicle and grouped variants. This approximation consolidates core licence fields with vehicle, model, status, site, and licence-fee data."),
+
             ["management"] = new(
                 "management",
                 "Management Reports",
@@ -230,6 +500,30 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildManagementAsync,
                 "Legacy management report entry is a custom page. This approximation groups legacy vehicle data into a management summary grid."),
+
+            ["previous-fin-year"] = new(
+                "previous-fin-year",
+                "Previous Fin Year Reports",
+                "Finance/PreviousFinYear.aspx",
+                null,
+                BuildPreviousFinYearMenuAsync,
+                "Legacy flow presents two report items. This modern entry returns a selectable summary of those same report options."),
+
+            ["previous-fin-year-manual-logs"] = new(
+                "previous-fin-year-manual-logs",
+                "Previous Fin Year Manual Logsheet Kilos Captured in Current Fin Year",
+                "ShowReport.aspx?Item=PreviousFinYearManualLogsCapturedInCurrentFinYear",
+                "PreviousFinYearManualLogsCapturedInCurrentFinYear",
+                BuildPreviousFinYearManualLogsAsync,
+                "Falls back to Logsheets month/date_created financial-year comparison when the legacy report stored procedure is unavailable."),
+
+            ["previous-fin-year-vip-taxi"] = new(
+                "previous-fin-year-vip-taxi",
+                "Previous Fin Year VIP & Taxi Requisitions Captured in Current Fin Year",
+                "ShowReport.aspx?Item=PreviousFinYearKiloLogsCapturedInCurrentFinYear",
+                "PreviousFinYearKiloLogsCapturedInCurrentFinYear",
+                BuildPreviousFinYearVipTaxiAsync,
+                "Falls back to Taxis date_required/date_created financial-year comparison when the legacy report stored procedure is unavailable."),
 
             ["registration-certificates"] = new(
                 "registration-certificates",
@@ -266,6 +560,30 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 BuildStoredProcedureParameters: _ => [new LegacyStoredProcedureParameter("@FinYear", 0, DbType.Int32)],
                 ApproximationReason: "Falls back to fin.vehicle_tariff rows joined to vehicles when the legacy per-vehicle tariff stored procedure is unavailable."),
 
+            ["taxis"] = new(
+                "taxis",
+                "Taxi Reports Menu",
+                "Taxis/RPTtaxis.aspx",
+                null,
+                BuildTaxisMenuAsync,
+                "Legacy taxis reporting opens from a menu page. This dynamic result preserves the same menu entries and targets."),
+
+            ["taxis-list-per-department"] = new(
+                "taxis-list-per-department",
+                "Report On All Taxis in various Departments",
+                "Taxis/RPT_list_of_taxis_per_department.aspx",
+                null,
+                BuildTaxisListPerDepartmentAsync,
+                "Legacy report lists requisition numbers with department description. This approximation uses taxis + department data."),
+
+            ["taxis-list-inservice-per-department"] = new(
+                "taxis-list-inservice-per-department",
+                "Report On All Taxis in service in various Departments",
+                "Taxis/RPT_list_of_taxis_inservice_per_department.aspx",
+                null,
+                BuildTaxisListInServicePerDepartmentAsync,
+                "Legacy report lists in-service taxi requisitions with department description. This approximation applies in-service vehicle status filtering."),
+
             ["taxis-financial"] = new(
                 "taxis-financial",
                 "Financial Reports: Taxis",
@@ -281,6 +599,15 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildTripAuthorityAsync,
                 "Legacy trip authority reports fan into multiple custom pages. This approximation flattens trip authority records into a single dynamic grid."),
+
+            ["trips-open-31"] = new(
+                "trips-open-31",
+                "Trips Open for Over 31 Days",
+                "ShowReport.aspx?Item=TripsOpenForOver31Days",
+                "TripsOpenForOver31Days",
+                BuildTripsOpen31Async,
+                BuildStoredProcedureParameters: filters => BuildOptionalParameterList(("@Days", (object?)GetInt(filters, "days"), DbType.Int32)),
+                ApproximationReason: "Falls back to trip_authorities issue/expiry dates when the legacy TripsOpenForOver31Days stored procedure is unavailable."),
 
             ["unallocated-vehicles"] = new(
                 "unallocated-vehicles",
@@ -340,6 +667,14 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildVehicleStatusRangeAsync,
                 "Legacy vehicle status report is a custom page. This approximation uses vehicle_status_history rows."),
+
+            ["vehicle-status-all"] = new(
+                "vehicle-status-all",
+                "All Vehicle Status",
+                "Finance/GeneratedReports.aspx?key=9.2%20All%20Vehicle%20Statuses",
+                null,
+                BuildVehicleStatusAllAsync,
+                "Legacy generated report output is approximated from vehicle master + status + site dimensions."),
 
             ["vehicles"] = new(
                 "vehicles",
@@ -853,6 +1188,177 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Site Telephone", row => row.SiteTelephone));
     }
 
+    private async Task<LegacyReportResultDto> BuildFinesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var from = GetDate(filters, "from")?.Date;
+        var to = GetDate(filters, "to")?.Date;
+        var search = GetString(filters, "search");
+
+        var query =
+            from fine in _context.Fines.AsNoTracking()
+            join vehicle in _context.Vehicles.AsNoTracking() on fine.vmf_code equals vehicle.vmf_code into fineVehicles
+            from vehicle in fineVehicles.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking() on fine.Site_code equals site.Site_code into fineSites
+            from site in fineSites.DefaultIfEmpty()
+            where !fine.is_deleted
+            select new
+            {
+                fine.Fine_code,
+                fine.Offence_date,
+                fine.Offence_reference,
+                fine.Offence_issuer,
+                fine.Fine_amount,
+                fine.Pay_due_date,
+                fine.Fine_pay_date,
+                fine.Receive_gg_date,
+                fine.Appear_date,
+                fine.Offence_name,
+                fine.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                fine.Site_code,
+                Site = site != null ? site.description : null
+            };
+
+        if (from.HasValue)
+        {
+            query = query.Where(row => row.Offence_date.HasValue && row.Offence_date.Value.Date >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(row => row.Offence_date.HasValue && row.Offence_date.Value.Date <= to.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(row =>
+                (row.fleet_number != null && row.fleet_number.Contains(term)) ||
+                (row.registration_number != null && row.registration_number.Contains(term)) ||
+                (row.Offence_reference != null && row.Offence_reference.Contains(term)) ||
+                (row.Offence_issuer != null && row.Offence_issuer.Contains(term)) ||
+                row.Fine_code.ToString().Contains(term));
+        }
+
+        var rows = await query
+            .OrderByDescending(row => row.Offence_date)
+            .ThenByDescending(row => row.Fine_code)
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Fines Reports",
+            "Fines/RPTFines.aspx",
+            true,
+            "Legacy fines reports include multiple per-vehicle/per-department views. This approximation consolidates core fine records with vehicle, site, and traffic department fields.",
+            rows,
+            Column("Fine Code", row => row.Fine_code),
+            Column("Offence Date", row => row.Offence_date),
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number),
+            Column("Offence Reference", row => row.Offence_reference),
+            Column("Offence Issuer", row => row.Offence_issuer),
+            Column("Fine Amount", row => row.Fine_amount),
+            Column("Pay Due Date", row => row.Pay_due_date),
+            Column("Fine Pay Date", row => row.Fine_pay_date),
+            Column("Receive GG Date", row => row.Receive_gg_date),
+            Column("Appear Date", row => row.Appear_date),
+            Column("Offence Name", row => row.Offence_name),
+            Column("VMF Code", row => row.vmf_code),
+            Column("Site Code", row => row.Site_code),
+            Column("Site", row => row.Site));
+    }
+
+    private async Task<LegacyReportResultDto> BuildLossesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var from = GetDate(filters, "from")?.Date;
+        var to = GetDate(filters, "to")?.Date;
+        var search = GetString(filters, "search");
+
+        var query =
+            from loss in _context.Losses.AsNoTracking()
+            join vehicle in _context.Vehicles.AsNoTracking() on loss.vmf_code equals vehicle.vmf_code into lossVehicles
+            from vehicle in lossVehicles.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking() on loss.site_code equals site.Site_code into lossSites
+            from site in lossSites.DefaultIfEmpty()
+            join lossType in _context.LossTypes.AsNoTracking() on loss.loss_type_code equals lossType.loss_type_code into lossTypeRows
+            from lossType in lossTypeRows.DefaultIfEmpty()
+            where !loss.is_deleted
+            select new
+            {
+                loss.loss_code,
+                loss.loss_date,
+                loss.loss_reference,
+                loss.loss_amount,
+                loss.dept_claim,
+                loss.sapd,
+                loss.inspector,
+                loss.case_number,
+                loss.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                loss.site_code,
+                Site = site != null ? site.description : null,
+                site.Department_number,
+                DepartmentCode = site != null ? site.Depatrment_code : (short?)null,
+                loss.loss_type_code,
+                LossType = lossType != null ? lossType.loss_description : null
+            };
+
+        if (from.HasValue)
+        {
+            query = query.Where(row => row.loss_date.Date >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(row => row.loss_date.Date <= to.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(row =>
+                (row.fleet_number != null && row.fleet_number.Contains(term)) ||
+                (row.registration_number != null && row.registration_number.Contains(term)) ||
+                (row.loss_reference != null && row.loss_reference.Contains(term)) ||
+                (row.case_number != null && row.case_number.Contains(term)) ||
+                (row.sapd != null && row.sapd.Contains(term)) ||
+                row.loss_code.ToString().Contains(term));
+        }
+
+        var rows = await query
+            .OrderByDescending(row => row.loss_date)
+            .ThenByDescending(row => row.loss_code)
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Losses Reports",
+            "Losses/RPTLosses.aspx",
+            true,
+            "Legacy losses reports include by-GG/by-site/by-date views. This approximation consolidates core loss records with vehicle, site, and loss type fields.",
+            rows,
+            Column("Loss Code", row => row.loss_code),
+            Column("Loss Date", row => row.loss_date),
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number),
+            Column("Loss Reference", row => row.loss_reference),
+            Column("Case Number", row => row.case_number),
+            Column("SAPD", row => row.sapd),
+            Column("Inspector", row => row.inspector),
+            Column("Loss Amount", row => row.loss_amount),
+            Column("Department Claim", row => row.dept_claim),
+            Column("VMF Code", row => row.vmf_code),
+            Column("Site Code", row => row.site_code),
+            Column("Site", row => row.Site),
+            Column("Department Number", row => row.Department_number),
+            Column("Department Code", row => row.DepartmentCode),
+            Column("Loss Type Code", row => row.loss_type_code),
+            Column("Loss Type", row => row.LossType));
+    }
+
     private async Task<LegacyReportResultDto> BuildHighDistanceAllAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         return await BuildHighDistanceAsync(filters, null, "All vehicles with high distances (All Departments)", "ShowReport.aspx?Item=KiloAudit", cancellationToken);
@@ -860,7 +1366,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private async Task<LegacyReportResultDto> BuildHighDistanceDeptAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
-        return await BuildHighDistanceAsync(filters, GetShort(filters, "dept"), "All vehicles with high distances (Department)", "ShowReport.aspx?Item=KiloAudit&DepartmentID=...", cancellationToken);
+        var departmentCode = GetShort(filters, "dept") ?? GetShort(filters, "DepartmentID");
+        return await BuildHighDistanceAsync(filters, departmentCode, "All vehicles with high distances (Department)", "ShowReport.aspx?Item=KiloAudit&DepartmentID=...", cancellationToken);
     }
 
     private async Task<LegacyReportResultDto> BuildHighDistanceAsync(
@@ -923,6 +1430,195 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Site", row => row.Site));
     }
 
+    private async Task<LegacyReportResultDto> BuildIncorrectQuantitiesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var rows = await _context.Vehicles.AsNoTracking()
+            .Where(vehicle => !vehicle.is_deleted
+                && (vehicle.take_on_odo < 0
+                    || vehicle.current_odo < 0
+                    || vehicle.current_odo < vehicle.take_on_odo
+                    || (vehicle.average_consumption.HasValue && vehicle.average_consumption.Value < 0)
+                    || (vehicle.highest_km.HasValue && vehicle.highest_km.Value < 0)
+                    || (vehicle.km_3month_average.HasValue && vehicle.km_3month_average.Value < 0)))
+            .OrderBy(vehicle => vehicle.fleet_number)
+            .ThenBy(vehicle => vehicle.registration_number)
+            .Take(5000)
+            .Select(vehicle => new
+            {
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                vehicle.take_on_odo,
+                vehicle.current_odo,
+                vehicle.highest_km,
+                vehicle.average_consumption,
+                vehicle.km_3month_average,
+                Reason =
+                    vehicle.current_odo < vehicle.take_on_odo ? "Current odometer is less than take-on odometer." :
+                    vehicle.take_on_odo < 0 ? "Take-on odometer is negative." :
+                    vehicle.current_odo < 0 ? "Current odometer is negative." :
+                    (vehicle.average_consumption.HasValue && vehicle.average_consumption.Value < 0) ? "Average consumption is negative." :
+                    (vehicle.highest_km.HasValue && vehicle.highest_km.Value < 0) ? "Highest KM is negative." :
+                    (vehicle.km_3month_average.HasValue && vehicle.km_3month_average.Value < 0) ? "3-month KM average is negative." :
+                    "Quantity anomaly detected."
+            })
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Report to show incorrect calculated quantities",
+            "Finance/GeneratedReports.aspx?key=9.3%20Report%20to%20show%20incorrect%20calculated%20quantities",
+            true,
+            "Legacy generated report output is approximated from vehicle odometer and quantity-related fields in vehicle_master.",
+            rows,
+            Column("VMF Code", row => row.vmf_code),
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number),
+            Column("Take On ODO", row => row.take_on_odo),
+            Column("Current ODO", row => row.current_odo),
+            Column("Highest KM", row => row.highest_km),
+            Column("Average Consumption", row => row.average_consumption),
+            Column("3-Month KM Average", row => row.km_3month_average),
+            Column("Reason", row => row.Reason));
+    }
+
+    private async Task<LegacyReportResultDto> BuildLicencesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var search = GetString(filters, "search");
+        var mode = (GetString(filters, "mode") ?? "GG").Trim().ToUpperInvariant();
+        var statusFilter = (GetString(filters, "status") ?? "all").Trim().ToLowerInvariant();
+        var locationFilter = (GetString(filters, "location") ?? "all").Trim().ToLowerInvariant();
+        var from = GetDate(filters, "from")?.Date;
+        var to = GetDate(filters, "to")?.Date;
+
+        var query =
+            from vehicle in _context.Vehicles.AsNoTracking()
+            join status in _context.VehicleStatuses.AsNoTracking() on vehicle.vehicle_status_code equals status.vehicle_status_code into statuses
+            from status in statuses.DefaultIfEmpty()
+            join model in _context.Models.AsNoTracking() on vehicle.model_code equals model.model_code into models
+            from model in models.DefaultIfEmpty()
+            join type in _context.VehicleTypes.AsNoTracking() on vehicle.type_code equals type.type_code into types
+            from type in types.DefaultIfEmpty()
+            join garageSite in _context.Sites.AsNoTracking() on vehicle.location_code equals garageSite.Site_code into garageSites
+            from garageSite in garageSites.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking() on vehicle.Licence_receiver_site equals site.Site_code into sites
+            from site in sites.DefaultIfEmpty()
+            join fee in _context.LicenseFees.AsNoTracking() on model.licence_fee_code equals fee.licence_fee_code into fees
+            from fee in fees.DefaultIfEmpty()
+            where !vehicle.is_deleted
+            select new
+            {
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                vehicle.lic_register_number,
+                vehicle.lic_registration_doc,
+                vehicle.licence_due_date,
+                vehicle.cof_required,
+                vehicle.cof_last_done,
+                CofAmount = vehicle.Cof_amount,
+                LicenceReceiver = vehicle.Licence_receiver,
+                LicenceReceiverId = vehicle.Licence_receiver_id,
+                LicenceReceiverTel = vehicle.Licence_receiver_tel,
+                LicenceReceiverSiteCode = vehicle.Licence_receiver_site,
+                LicenceDateTaken = vehicle.Licence_date_taken,
+                vehicle.licence_comments,
+                vehicle.engine_number_1,
+                vehicle.chassis_number,
+                vehicle.vehicle_status_code,
+                Status = status != null ? status.status_description : null,
+                vehicle.location_code,
+                Garage = garageSite != null ? garageSite.description : null,
+                vehicle.type_code,
+                Type = type != null ? type.type_description : null,
+                Site = site != null ? site.description : null,
+                site.Department_number,
+                LicenceDescription = fee != null ? fee.licence_description : null,
+                LicenceFee = fee != null ? fee.licence_fee : null
+            };
+
+        if (statusFilter == "inservice")
+        {
+            query = query.Where(row => row.vehicle_status_code == 1);
+        }
+        else if (statusFilter == "notinservice")
+        {
+            query = query.Where(row => row.vehicle_status_code != 1);
+        }
+
+        if (locationFilter == "jhb")
+        {
+            query = query.Where(row => row.location_code == 1);
+        }
+        else if (locationFilter == "pta")
+        {
+            query = query.Where(row => row.location_code == 2);
+        }
+
+        if (from.HasValue)
+        {
+            query = query.Where(row => row.licence_due_date.HasValue && row.licence_due_date.Value.Date >= from.Value);
+        }
+
+        if (to.HasValue)
+        {
+            query = query.Where(row => row.licence_due_date.HasValue && row.licence_due_date.Value.Date <= to.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = mode switch
+            {
+                "GP" => query.Where(row => row.registration_number != null && row.registration_number.Contains(term)),
+                "REGISTER" => query.Where(row => row.lic_register_number != null && row.lic_register_number.Contains(term)),
+                "ENGINE" => query.Where(row => row.engine_number_1 != null && row.engine_number_1.Contains(term)),
+                "CHASSIS" => query.Where(row => row.chassis_number != null && row.chassis_number.Contains(term)),
+                "VIN" => query.Where(row => row.chassis_number != null && row.chassis_number.Contains(term)),
+                _ => query.Where(row => row.fleet_number != null && row.fleet_number.Contains(term))
+            };
+        }
+
+        var rows = await query
+            .OrderBy(row => row.fleet_number)
+            .ThenBy(row => row.registration_number)
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Licence Reports",
+            "License/RPTLicence.aspx",
+            true,
+            "Legacy licence module includes many report branches (GG/GP/register/engine/chassis/site/date). This approximation keeps the core licence record fields and lookup modes in one modern dynamic grid.",
+            rows,
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number),
+            Column("Vehicle Register Number", row => row.lic_register_number),
+            Column("Register Doc", row => row.lic_registration_doc),
+            Column("Licence Due Date", row => row.licence_due_date),
+            Column("COF Required", row => row.cof_required),
+            Column("COF Last Done", row => row.cof_last_done),
+            Column("COF Amount", row => row.CofAmount),
+            Column("Licence Receiver", row => row.LicenceReceiver),
+            Column("Licence Receiver ID", row => row.LicenceReceiverId),
+            Column("Licence Receiver Tel", row => row.LicenceReceiverTel),
+            Column("Licence Receiver Site Code", row => row.LicenceReceiverSiteCode),
+            Column("Licence Receiver Site", row => row.Site),
+            Column("Department Number", row => row.Department_number),
+            Column("Licence Date Taken", row => row.LicenceDateTaken),
+            Column("Licence Comments", row => row.licence_comments),
+            Column("Engine Number", row => row.engine_number_1),
+            Column("VIN / Chassis Number", row => row.chassis_number),
+            Column("Status Code", row => row.vehicle_status_code),
+            Column("Status", row => row.Status),
+            Column("Location Code", row => row.location_code),
+            Column("Garage", row => row.Garage),
+            Column("Type Code", row => row.type_code),
+            Column("Type", row => row.Type),
+            Column("Licence Description", row => row.LicenceDescription),
+            Column("Licence Fee", row => row.LicenceFee),
+            Column("VMF Code", row => row.vmf_code));
+    }
+
     private async Task<LegacyReportResultDto> BuildManagementAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var asOf = GetDate(filters, "asof")?.Date ?? DateTime.Today.Date;
@@ -964,6 +1660,181 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Average ODO", row => row.AverageOdo),
             Column("Maximum ODO", row => row.MaxOdo),
             Column("Average Purchase Amount", row => row.AvgPurchaseAmount));
+    }
+
+    private Task<LegacyReportResultDto> BuildManualsAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var rows = new[]
+        {
+            new { Sequence = "1", Manual = "General Information", Target = "manuals/RPT_underdev.aspx", Availability = "Under Development" },
+            new { Sequence = "2", Manual = "Accident Manual", Target = "Accident/Doc/Doc_Accidents.htm", Availability = "Available" },
+            new { Sequence = "3", Manual = "Auction Manual", Target = "Auction/Doc/Doc_Auctions.htm", Availability = "Available" },
+            new { Sequence = "4", Manual = "Call Centre Manual", Target = "CallCentre/Doc/Doc_CallCentre.htm", Availability = "Available" },
+            new { Sequence = "5", Manual = "Contract Manual", Target = "contracts/Docs/User Documentation for Contracts Module.html", Availability = "Available" },
+            new { Sequence = "6", Manual = "Electronic Log Sheet and Trip Authority Training Manual", Target = "Docs/Electronic Log Sheet and Trip Authority Training Manual.doc", Availability = "Available" },
+            new { Sequence = "7", Manual = "Financial Manual", Target = "manuals/RPT_underdev.aspx", Availability = "Under Development" },
+            new { Sequence = "8", Manual = "Fines Manual", Target = "Fines/Doc/Doc_Fines.htm", Availability = "Available" },
+            new { Sequence = "9", Manual = "Fuelcard Manual", Target = "Fuelcard/Doc/Doc_Fuelcards.htm", Availability = "Available" },
+            new { Sequence = "10", Manual = "Licence Manual", Target = "License/Doc/DOC_LICENCE.htm", Availability = "Available" },
+            new { Sequence = "11", Manual = "Logbook Manual", Target = "Logbook/Doc/Doc_Logbooks.htm", Availability = "Available" },
+            new { Sequence = "12", Manual = "Logsheet Manual", Target = "Logs/Doc/Doc_Logsheets.htm", Availability = "Available" },
+            new { Sequence = "13", Manual = "Losses Manual", Target = "Losses/Doc/Doc_Losses.htm", Availability = "Available" },
+            new { Sequence = "14", Manual = "Private Hire Manual", Target = "Private_Hire/Doc/Doc_PrivateHire.htm", Availability = "Available" },
+            new { Sequence = "15", Manual = "Reports Manual", Target = "/Doc/Doc_Reports.htm", Availability = "Available" },
+            new { Sequence = "16", Manual = "Taxis Manual", Target = "Taxis/Doc/Doc_taxis.htm", Availability = "Available" },
+            new { Sequence = "17", Manual = "Trip Authority Manual", Target = "manuals/RPT_underdev.aspx", Availability = "Under Development" },
+            new { Sequence = "18", Manual = "Updating Trip Authorities Manual", Target = "Docs/Doc/Updating Trip Authorities Manual2.htm", Availability = "Available" },
+            new { Sequence = "19", Manual = "Troubleshoot Manual", Target = "TS_Log/Doc/Doc_Troubleshoot.htm", Availability = "Available" },
+            new { Sequence = "20", Manual = "User Admin Manual", Target = "/Doc/Doc_UserAdmin.htm", Availability = "Available" },
+            new { Sequence = "21", Manual = "Validation Data Manual", Target = "Validation/Doc/Doc_ValidationData.htm", Availability = "Available" },
+            new { Sequence = "22", Manual = "Vehicle Manual", Target = "manuals/RPT_underdev.aspx", Availability = "Under Development" },
+            new { Sequence = "23", Manual = "Workshop Manual", Target = "Workshop/Doc/Doc_Workshop.htm", Availability = "Available" }
+        };
+
+        return Task.FromResult(CreateDynamicResult(
+            "Manuals Menu",
+            "Manuals/RPTmanuals.aspx",
+            false,
+            null,
+            rows,
+            Column("Sequence", row => row.Sequence),
+            Column("Manual", row => row.Manual),
+            Column("Target", row => row.Target),
+            Column("Availability", row => row.Availability)));
+    }
+
+    private Task<LegacyReportResultDto> BuildPreviousFinYearMenuAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var rows = new[]
+        {
+            new
+            {
+                Sequence = "i",
+                ReportName = "Manual Logsheet Kilos captured in current Fin Year",
+                ReportKey = "previous-fin-year-manual-logs",
+                LegacyItem = "PreviousFinYearManualLogsCapturedInCurrentFinYear"
+            },
+            new
+            {
+                Sequence = "ii",
+                ReportName = "VIP & Taxi requisitions captured in current Fin Year",
+                ReportKey = "previous-fin-year-vip-taxi",
+                LegacyItem = "PreviousFinYearKiloLogsCapturedInCurrentFinYear"
+            }
+        };
+
+        return Task.FromResult(CreateDynamicResult(
+            "Previous Fin Year Reports",
+            "Finance/PreviousFinYear.aspx",
+            false,
+            null,
+            rows,
+            Column("Sequence", row => row.Sequence),
+            Column("Report Name", row => row.ReportName),
+            Column("Report Key", row => row.ReportKey),
+            Column("Legacy Item", row => row.LegacyItem)));
+    }
+
+    private async Task<LegacyReportResultDto> BuildPreviousFinYearManualLogsAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
+
+        var rows = await (
+            from logsheet in _context.Logsheets.AsNoTracking()
+            join vehicle in _context.Vehicles.AsNoTracking() on logsheet.vmf_code equals vehicle.vmf_code into logVehicles
+            from vehicle in logVehicles.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking() on logsheet.site_code equals site.Site_code into logSites
+            from site in logSites.DefaultIfEmpty()
+            where !logsheet.is_deleted
+                && GetFinancialYearKey(logsheet.date_created) == currentFinancialYear
+                && GetFinancialYearKey(logsheet.month) < currentFinancialYear
+            orderby logsheet.date_created descending, logsheet.log_code descending
+            select new
+            {
+                logsheet.log_code,
+                logsheet.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                logsheet.month,
+                logsheet.date_created,
+                logsheet.rek_num,
+                logsheet.start_odo,
+                logsheet.end_odo,
+                SiteCode = site != null ? site.Site_code : (short?)null,
+                Site = site != null ? site.description : null
+            })
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Previous Fin Year Manual Logsheet Kilos Captured in Current Fin Year",
+            "ShowReport.aspx?Item=PreviousFinYearManualLogsCapturedInCurrentFinYear",
+            false,
+            null,
+            rows,
+            Column("Log Code", row => row.log_code),
+            Column("VMF Code", row => row.vmf_code),
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number),
+            Column("Logsheet Month", row => row.month),
+            Column("Captured Date", row => row.date_created),
+            Column("Requisition Number", row => row.rek_num),
+            Column("Start ODO", row => row.start_odo),
+            Column("End ODO", row => row.end_odo),
+            Column("Site Code", row => row.SiteCode),
+            Column("Site", row => row.Site));
+    }
+
+    private async Task<LegacyReportResultDto> BuildPreviousFinYearVipTaxiAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
+
+        var rows = await (
+            from taxi in _context.Taxis.AsNoTracking()
+            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
+            from department in taxiDepartments.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking() on taxi.site_code equals site.Site_code into taxiSites
+            from site in taxiSites.DefaultIfEmpty()
+            where !taxi.is_deleted
+                && GetFinancialYearKey(taxi.date_created) == currentFinancialYear
+                && GetFinancialYearKey(taxi.date_required) < currentFinancialYear
+            orderby taxi.date_created descending, taxi.request_id descending
+            select new
+            {
+                taxi.request_id,
+                taxi.rek_num,
+                taxi.official,
+                taxi.rank,
+                taxi.vmf_code,
+                taxi.date_required,
+                taxi.date_created,
+                taxi.contractor_id,
+                DepartmentCode = department != null ? department.department_code : (short?)null,
+                Department = department != null ? department.description : null,
+                SiteCode = site != null ? site.Site_code : (short?)null,
+                Site = site != null ? site.description : null
+            })
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Previous Fin Year VIP & Taxi Requisitions Captured in Current Fin Year",
+            "ShowReport.aspx?Item=PreviousFinYearKiloLogsCapturedInCurrentFinYear",
+            false,
+            null,
+            rows,
+            Column("Request ID", row => row.request_id),
+            Column("Requisition Number", row => row.rek_num),
+            Column("Official", row => row.official),
+            Column("Rank", row => row.rank),
+            Column("Vehicle", row => row.vmf_code),
+            Column("Date Required", row => row.date_required),
+            Column("Captured Date", row => row.date_created),
+            Column("Contractor ID", row => row.contractor_id),
+            Column("Department Code", row => row.DepartmentCode),
+            Column("Department", row => row.Department),
+            Column("Site Code", row => row.SiteCode),
+            Column("Site", row => row.Site));
     }
 
     private async Task<LegacyReportResultDto> BuildRegistrationCertificatesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
@@ -1156,6 +2027,164 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Comment", row => row.comment));
     }
 
+    private Task<LegacyReportResultDto> BuildTaxisMenuAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var rows = new[]
+        {
+            new { Sequence = "1", ReportName = "Future booking made for my department", LegacyTarget = "Taxis/RPT_My_reqs.aspx", ReportKey = "taxis-future-bookings" },
+            new { Sequence = "2", ReportName = "History bookings for period", LegacyTarget = "Taxis/RPT_My_reqs2.aspx", ReportKey = "taxis-history-bookings" },
+            new { Sequence = "3", ReportName = "List of Requisition Numbers for a period", LegacyTarget = "Taxis/RPT_reqno_taxi_main.aspx", ReportKey = "taxis-requisition-list" },
+            new { Sequence = "4", ReportName = "Taxis Per Hire Company", LegacyTarget = "Taxis/RPT_taxis_per_company1_c.aspx", ReportKey = "taxis-per-hire-company" },
+            new { Sequence = "5", ReportName = "List Of all Taxis in service in various departments", LegacyTarget = "Taxis/RPT_list_of_taxis_inservice_per_department.aspx", ReportKey = "taxis-list-inservice-per-department" },
+            new { Sequence = "6", ReportName = "List Of all Taxis in various departments", LegacyTarget = "Taxis/RPT_list_of_taxis_per_department.aspx", ReportKey = "taxis-list-per-department" },
+            new { Sequence = "7", ReportName = "Reprint A Requisition", LegacyTarget = "Taxis/Report_Request_GGVIP_reprint_1_2.aspx", ReportKey = "taxis-reprint-requisition" },
+            new { Sequence = "8", ReportName = "Reprint A Taxi Log", LegacyTarget = "Taxis/Report_Reprint_Taxi_Log_1.aspx", ReportKey = "taxis-reprint-log" }
+        };
+
+        return Task.FromResult(CreateDynamicResult(
+            "Taxi Reports Menu",
+            "Taxis/RPTtaxis.aspx",
+            false,
+            null,
+            rows,
+            Column("Sequence", row => row.Sequence),
+            Column("Report Name", row => row.ReportName),
+            Column("Legacy Target", row => row.LegacyTarget),
+            Column("Report Key", row => row.ReportKey)));
+    }
+
+    private async Task<LegacyReportResultDto> BuildTaxisListPerDepartmentAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var search = GetString(filters, "search");
+
+        var query =
+            from taxi in _context.Taxis.AsNoTracking()
+            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
+            from department in taxiDepartments.DefaultIfEmpty()
+            where !taxi.is_deleted
+            select new
+            {
+                taxi.request_id,
+                taxi.rek_num,
+                taxi.department_code,
+                Department = department != null ? department.description : null,
+                taxi.vmf_code
+            };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(row =>
+                (row.rek_num != null && row.rek_num.Contains(term)) ||
+                (row.Department != null && row.Department.Contains(term)) ||
+                (row.vmf_code != null && row.vmf_code.Contains(term)) ||
+                row.request_id.ToString().Contains(term));
+        }
+
+        var rows = await query
+            .OrderBy(row => row.Department)
+            .ThenBy(row => row.rek_num)
+            .Select(row => new
+            {
+                row.request_id,
+                row.rek_num,
+                row.department_code,
+                row.Department,
+                row.vmf_code
+            })
+            .Distinct()
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        var numberedRows = rows
+            .Select((row, index) => new
+            {
+                Number = index + 1,
+                row.rek_num,
+                row.department_code,
+                row.Department,
+                row.vmf_code,
+                row.request_id
+            })
+            .ToList();
+
+        return CreateDynamicResult(
+            "Report On All Taxis in various Departments",
+            "Taxis/RPT_list_of_taxis_per_department.aspx",
+            true,
+            "Legacy report joins taxis via vehicle/logsheet to derive department text. This approximation uses taxis + department mappings and preserves requisition + department output.",
+            numberedRows,
+            Column("No.", row => row.Number),
+            Column("Requisition Number", row => row.rek_num),
+            Column("Department Code", row => row.department_code),
+            Column("Department", row => row.Department),
+            Column("VMF Code", row => row.vmf_code),
+            Column("Request ID", row => row.request_id));
+    }
+
+    private async Task<LegacyReportResultDto> BuildTaxisListInServicePerDepartmentAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var search = GetString(filters, "search");
+
+        var query =
+            from taxi in _context.Taxis.AsNoTracking()
+            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
+            from department in taxiDepartments.DefaultIfEmpty()
+            join vehicle in _context.Vehicles.AsNoTracking() on taxi.vmf_code equals vehicle.vmf_code.ToString() into taxiVehicles
+            from vehicle in taxiVehicles.DefaultIfEmpty()
+            where !taxi.is_deleted && vehicle != null && vehicle.vehicle_status_code == 1
+            select new
+            {
+                taxi.request_id,
+                taxi.rek_num,
+                taxi.department_code,
+                Department = department != null ? department.description : null,
+                taxi.vmf_code
+            };
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(row =>
+                (row.rek_num != null && row.rek_num.Contains(term)) ||
+                (row.Department != null && row.Department.Contains(term)) ||
+                (row.vmf_code != null && row.vmf_code.Contains(term)) ||
+                row.request_id.ToString().Contains(term));
+        }
+
+        var rows = await query
+            .OrderBy(row => row.Department)
+            .ThenBy(row => row.rek_num)
+            .Distinct()
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        var numberedRows = rows
+            .Select((row, index) => new
+            {
+                Number = index + 1,
+                row.rek_num,
+                row.department_code,
+                row.Department,
+                row.vmf_code,
+                row.request_id
+            })
+            .ToList();
+
+        return CreateDynamicResult(
+            "Report On All Taxis in service in various Departments",
+            "Taxis/RPT_list_of_taxis_inservice_per_department.aspx",
+            true,
+            "Legacy report filters on vehicle_status_code = 1. This approximation applies the same in-service status constraint.",
+            numberedRows,
+            Column("No.", row => row.Number),
+            Column("Requisition Number", row => row.rek_num),
+            Column("Department Code", row => row.department_code),
+            Column("Department", row => row.Department),
+            Column("VMF Code", row => row.vmf_code),
+            Column("Request ID", row => row.request_id));
+    }
+
     private async Task<LegacyReportResultDto> BuildTaxisFinancialAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var search = GetString(filters, "search");
@@ -1285,6 +2314,66 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Trip Incident Type Code", row => row.trip_incident_type_code),
             Column("User Access Code", row => row.user_access_code),
             Column("Contract Code", row => row.contract_code),
+            Column("VMF Code", row => row.vmf_code),
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number));
+    }
+
+    private async Task<LegacyReportResultDto> BuildTripsOpen31Async(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var days = Math.Max(1, GetInt(filters, "days") ?? 31);
+        var cutoffDate = DateTime.Today.AddDays(-days);
+
+        var rows = await (
+            from trip in _context.Trips.AsNoTracking()
+            join contract in _context.Contracts.AsNoTracking() on trip.contract_code equals contract.contract_code into tripContracts
+            from contract in tripContracts.DefaultIfEmpty()
+            join vehicle in _context.Vehicles.AsNoTracking() on contract.vmf_code equals vehicle.vmf_code into tripVehicles
+            from vehicle in tripVehicles.DefaultIfEmpty()
+            where !trip.is_deleted
+                && trip.issue_date.Date <= cutoffDate
+                && (!trip.expiry_date.HasValue || trip.expiry_date >= DateTime.Today.Date)
+            orderby trip.issue_date, trip.trip_authority_code
+            select new
+            {
+                trip.trip_authority_code,
+                trip.contract_code,
+                trip.issue_date,
+                trip.expiry_date,
+                trip.trip_request_number,
+                trip.trip_reason,
+                trip.approver_name,
+                trip.approver_rank,
+                trip.approver_tel,
+                trip.trip_type_code,
+                trip.trip_incident_type_code,
+                trip.end_odo_meter,
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number
+            })
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "Trips Open for Over 31 Days",
+            "ShowReport.aspx?Item=TripsOpenForOver31Days",
+            false,
+            null,
+            rows,
+            Column("Trip Authority Code", row => row.trip_authority_code),
+            Column("Contract Code", row => row.contract_code),
+            Column("Issue Date", row => row.issue_date),
+            Column("Expiry Date", row => row.expiry_date),
+            Column("Days Open", row => (DateTime.Today - row.issue_date.Date).Days),
+            Column("Trip Request Number", row => row.trip_request_number),
+            Column("Trip Reason", row => row.trip_reason),
+            Column("Approver Name", row => row.approver_name),
+            Column("Approver Rank", row => row.approver_rank),
+            Column("Approver Tel", row => row.approver_tel),
+            Column("Trip Type Code", row => row.trip_type_code),
+            Column("Trip Incident Type Code", row => row.trip_incident_type_code),
+            Column("End ODO Meter", row => row.end_odo_meter),
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
             Column("GP Number", row => row.registration_number));
@@ -1614,6 +2703,54 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Year Manufactured", row => row.year_manufactured));
     }
 
+    private async Task<LegacyReportResultDto> BuildVehicleStatusAllAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from vehicle in _context.Vehicles.AsNoTracking()
+            join status in _context.VehicleStatuses.AsNoTracking() on vehicle.vehicle_status_code equals status.vehicle_status_code into statuses
+            from status in statuses.DefaultIfEmpty()
+            join site in _context.Sites.AsNoTracking() on vehicle.location_code equals site.Site_code into sites
+            from site in sites.DefaultIfEmpty()
+            where !vehicle.is_deleted
+            orderby status.status_description, vehicle.fleet_number, vehicle.registration_number
+            select new
+            {
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                vehicle.vehicle_status_code,
+                Status = status != null ? status.status_description : null,
+                vehicle.vehicle_status_date,
+                vehicle.location_code,
+                Site = site != null ? site.description : null,
+                vehicle.year_manufactured,
+                vehicle.current_odo,
+                vehicle.take_on_date,
+                vehicle.sold_date
+            })
+            .Take(5000)
+            .ToListAsync(cancellationToken);
+
+        return CreateDynamicResult(
+            "All Vehicle Status",
+            "Finance/GeneratedReports.aspx?key=9.2%20All%20Vehicle%20Statuses",
+            true,
+            "Legacy report is generated from a separate report pipeline. This approximation projects the same core vehicle status fields from legacy tables.",
+            rows,
+            Column("VMF Code", row => row.vmf_code),
+            Column("GG Number", row => row.fleet_number),
+            Column("GP Number", row => row.registration_number),
+            Column("Vehicle Status Code", row => row.vehicle_status_code),
+            Column("Status", row => row.Status),
+            Column("Status Date", row => row.vehicle_status_date),
+            Column("Location Code", row => row.location_code),
+            Column("Site", row => row.Site),
+            Column("Year Manufactured", row => row.year_manufactured),
+            Column("Current ODO", row => row.current_odo),
+            Column("Take On Date", row => row.take_on_date),
+            Column("Sold Date", row => row.sold_date));
+    }
+
     private async Task<LegacyReportResultDto> BuildVehicleLogsReportAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var vmfCode = GetInt(filters, "vmf");
@@ -1622,7 +2759,9 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
         if (!vmfCode.HasValue && !string.IsNullOrWhiteSpace(search))
         {
-            vmfCode = await ResolveVehicleVmfCodeAsync(search, mode, cancellationToken);
+            vmfCode = string.IsNullOrWhiteSpace(GetString(filters, "mode"))
+                ? await ResolveLegacyVehicleVmfCodeAsync(search, cancellationToken)
+                : await ResolveVehicleVmfCodeAsync(search, mode, cancellationToken);
         }
 
         if (!vmfCode.HasValue)
@@ -1631,7 +2770,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 "Vehicle Logs Report",
                 "Logs/RPT_logsheet_per_vehicle.aspx",
                 true,
-                "Select a vehicle by GG, GP, engine, VIN/chassis, or invoice number to mirror the legacy per-vehicle logs page.",
+                "Select a vehicle by GG, GP, engine, or VIN/chassis to mirror the legacy per-vehicle logs page.",
                 Array.Empty<object>(),
                 Column("Section", _ => (object?)null));
         }
@@ -2114,6 +3253,26 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             ? value
             : null;
 
+    private async Task<int?> ResolveLegacyVehicleVmfCodeAsync(string? search, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return null;
+        }
+
+        var term = search.Trim();
+
+        return await _context.Vehicles.AsNoTracking()
+            .Where(vehicle => !vehicle.is_deleted
+                && ((vehicle.fleet_number != null && vehicle.fleet_number == term)
+                    || (vehicle.registration_number != null && vehicle.registration_number == term)
+                    || (vehicle.chassis_number != null && vehicle.chassis_number == term)
+                    || (vehicle.engine_number_1 != null && vehicle.engine_number_1 == term)))
+            .OrderBy(vehicle => vehicle.vmf_code)
+            .Select(vehicle => (int?)vehicle.vmf_code)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     private async Task<int?> ResolveVehicleVmfCodeAsync(string? search, string? mode, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(search))
@@ -2196,10 +3355,19 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private static int GetFinancialYear(IDictionary<string, string?> filters)
     {
+        var explicitYear = GetInt(filters, "FinYear") ?? GetInt(filters, "finYear") ?? GetInt(filters, "financialYear");
+        if (explicitYear.HasValue && explicitYear.Value > 0)
+        {
+            return explicitYear.Value;
+        }
+
         var startYear = GetDate(filters, "from")?.Year;
         var endYear = GetDate(filters, "to")?.Year;
         return startYear ?? endYear ?? DateTime.Today.Year;
     }
+
+    private static int GetFinancialYearKey(DateTime date)
+        => date.Month >= 4 ? date.Year : date.Year - 1;
 
     private static bool Contains(string? source, string term)
         => !string.IsNullOrWhiteSpace(source) && source.Contains(term, StringComparison.OrdinalIgnoreCase);

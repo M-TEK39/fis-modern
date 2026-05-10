@@ -57,7 +57,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/fines/reports">Menu</a>
                     </div>
                 </div>
@@ -118,7 +118,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/fines/reports/select">Fines Menu</a>
                     </div>
                 </div>
@@ -163,7 +163,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/fines/reports">Menu</a>
                     </div>
                 </div>
@@ -225,7 +225,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/fines/reports">Menu</a>
                     </div>
                 </div>
@@ -336,7 +336,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/fines/reports/select">Fines Menu</a>
                     </div>
                 </div>
@@ -411,7 +411,7 @@
                         </div>
                     </div>
                     <div class="form-actions">
-                        <button class="btn btn-primary btn-sm">Submit</button>
+                        <button class="btn btn-primary btn-sm" type="button" @onclick="LoadReports">Submit</button>
                         <a class="btn btn-secondary btn-sm" href="/fines/reports/select">Fines Menu</a>
                     </div>
                 </div>
@@ -613,6 +613,26 @@
             "ID of Responsable Person at Dept" => "8001015009087",
             _ => "-"
         };
+
+    private async Task LoadReports()
+    {
+        if (Mode == "one-vehicle")
+        {
+            await SearchOneVehicleAsync();
+            return;
+        }
+
+        if (Mode == "letter")
+        {
+            await SearchLetterVehicleAsync();
+            return;
+        }
+
+        if (Mode == "vehicle")
+        {
+            await SearchVehicleModeAsync();
+        }
+    }
 
     private async Task SearchOneVehicleAsync()
     {

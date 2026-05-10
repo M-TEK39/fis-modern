@@ -904,7 +904,7 @@
                         </div>
                         <div class="form-field">
                             <label class="form-label">@(_letterVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
-                            <input class="form-input" placeholder="@(_letterVehicleSearchMode == "gg" ? "Enter GG number" : "Enter GP number")" />
+                            <input class="form-input" @bind="_letterVehicleSearchTerm" placeholder="@(_letterVehicleSearchMode == "gg" ? "Enter GG number" : "Enter GP number")" />
                         </div>
                     </div>
                     <div class="form-actions">
@@ -1173,6 +1173,7 @@
     private string _oneVehicleSearchMode = "gp";
     private string _letterVehicleSearchMode = "gp";
     private string _oneVehicleSearchTerm = string.Empty;
+    private string _letterVehicleSearchTerm = string.Empty;
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private int? _selectedDriverCode;
@@ -1194,6 +1195,28 @@
 
     private async Task LoadReports()
     {
+        if (Mode == "one-vehicle")
+        {
+            await SearchOneVehicleAsync();
+        }
+        else if (Mode == "letter-outstanding-docs" || Mode == "letter-inspection")
+        {
+            var keyword = _letterVehicleSearchTerm.Trim();
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                try
+                {
+                    var matches = await VehicleLookupService.SearchAsync(keyword);
+                    _oneVehicleMatches = RankVehicleMatches(matches, keyword, _letterVehicleSearchMode == "gg");
+                    _oneVehicleSelectedVmfCode = _oneVehicleMatches.FirstOrDefault()?.VmfCode;
+                }
+                catch (Exception ex)
+                {
+                    await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+                }
+            }
+        }
+
         _recentReports = await AccidentService.GetRecentReportsAsync();
         _page = 1;
     }
@@ -1271,6 +1294,7 @@
         }
 
         _letterVehicleSearchMode = mode;
+        _letterVehicleSearchTerm = string.Empty;
     }
 
     private void PreviousPage()

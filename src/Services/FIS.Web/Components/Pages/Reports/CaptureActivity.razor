@@ -1,13 +1,6 @@
 @page "/reports/capture-activity"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@inject CaptureActivityApiService CaptureActivityService
-@inject SiteApiService SiteService
-@inject UserApiService UserService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Capture Activity Report - Fleet Information System</PageTitle>
@@ -18,14 +11,10 @@
             <i class="bx bx-list-check"></i>
             Capture Activity Report
         </h1>
-        <p class="page-description">Shows all captured records by module within a selected date range.</p>
+        <p class="page-description">Legacy-style capture activity filter flow with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
-        @if (_isResultView)
-        {
-            <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Refresh</button>
-        }
     </div>
 </div>
 
@@ -54,162 +43,49 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label">Site</label>
-                        <select class="form-select" @bind="_siteCodeText">
-                            <option value="">All sites</option>
-                            @foreach (var site in _sites.OrderBy(s => s.Description))
-                            {
-                                <option value="@site.SiteCode">@($"{ValueOrDash(site.Description)} ({site.SiteCode})")</option>
-                            }
-                        </select>
+                        <input class="form-input" @bind="_siteCodeText" placeholder="All sites" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">GG Number or VMF</label>
-                        <input class="form-input" @bind="_vehicleSearch" @bind:event="oninput" placeholder="GG123 or 14028" />
+                        <input class="form-input" @bind="_vehicleSearch" placeholder="GG123 or 14028" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Captured By</label>
-                        <select class="form-select" @bind="_capturedByText">
-                            <option value="">All users</option>
-                            @foreach (var user in _users.OrderBy(u => u.FirstName).ThenBy(u => u.LastName))
-                            {
-                                <option value="@user.UserAccessCode">@($"{user.FirstName} {user.LastName} ({user.UserAccessCode})")</option>
-                            }
-                        </select>
+                        <input class="form-input" @bind="_capturedByText" placeholder="User code" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResults">Submit</button>
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 </div>
             </div>
         </div>
     }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="capture-activity" FiltersUrl="@_pageRoute" />
-    }
     else
     {
-
-    @if (!string.IsNullOrWhiteSpace(_statusMessage))
-    {
-        <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-15">
-            @_statusMessage
-        </div>
-    }
-
-    @if (_loading)
-    {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading capture activity...</p>
-        </div>
-    }
-    else
-    {
-        <div class="capture-summary-grid fis-mt-15">
-            @if (_summaryRows.Count == 0)
-            {
-                <div class="capture-summary-card">
-                    <div class="capture-summary-label">No data</div>
-                    <div class="capture-summary-value">0</div>
-                </div>
-            }
-            else
-            {
-                @foreach (var row in _summaryRows)
-                {
-                    <div class="capture-summary-card">
-                        <div class="capture-summary-label">@row.Key</div>
-                        <div class="capture-summary-value">@row.Value</div>
-                    </div>
-                }
-            }
-        </div>
-
-        <div class="table-container fis-mt-15">
+        <div class="table-container">
             <div class="table-header">
-                <span class="table-title">Total Captures: @_report.TotalCount</span>
+                <span class="table-title">Capture Activity Report</span>
                 <div class="table-controls">
-                    <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || FlattenedRows.Count == 0)">Download CSV</button>
+                    <a class="btn btn-secondary btn-sm" href="/reports/capture-activity">Back to Filters</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
         </div>
 
-        @foreach (var module in OrderedModules)
-        {
-            var moduleRows = _report.Details.TryGetValue(module, out var rows) ? rows : new List<CaptureActivityDetailDto>();
-            <div class="table-container fis-mt-15">
-                <div class="table-header">
-                    <button class="btn btn-secondary btn-sm" @onclick="() => ToggleModule(module)">
-                        @(_expandedModules.Contains(module) ? "Hide" : "Show")
-                    </button>
-                    <span class="table-title">@module (@moduleRows.Count)</span>
-                </div>
-                @if (_expandedModules.Contains(module))
-                {
-                    <div class="table-wrapper">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Record ID</th>
-                                    <th>VMF</th>
-                                    <th>GG Number</th>
-                                    <th>GP Number</th>
-                                    <th>Description</th>
-                                    <th>Date Captured</th>
-                                    <th>Captured By</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (moduleRows.Count == 0)
-                                {
-                                    <tr><td colspan="7">No records found.</td></tr>
-                                }
-                                else
-                                {
-                                    @foreach (var row in moduleRows)
-                                    {
-                                        <tr>
-                                            <td>@row.RecordId</td>
-                                            <td>@(row.VmfCode?.ToString() ?? "-")</td>
-                                            <td>@ValueOrDash(row.FleetNumber)</td>
-                                            <td>@ValueOrDash(row.RegistrationNumber)</td>
-                                            <td>@ValueOrDash(row.Description)</td>
-                                            <td>@(row.DateCaptured?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
-                                            <td>@ResolveUserLabel(row.CapturedByUserCode)</td>
-                                        </tr>
-                                    }
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-        }
-    }
+        <LegacyDynamicReportGrid ReportKey="capture-activity" FiltersUrl="/reports/capture-activity" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _statusError;
-    private string _statusMessage = string.Empty;
     private DateTime _dateFrom = DateTime.Today.AddDays(-7);
     private DateTime _dateTo = DateTime.Today;
     private string _module = "All";
     private string _siteCodeText = string.Empty;
     private string _vehicleSearch = string.Empty;
     private string _capturedByText = string.Empty;
-    private List<SiteResponseDto> _sites = new();
-    private List<UserProfileDto> _users = new();
-    private CaptureActivityReportDto _report = new();
-    private HashSet<string> _expandedModules = new(StringComparer.OrdinalIgnoreCase);
 
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/capture-activity";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
@@ -234,39 +110,38 @@
 
     protected override Task OnParametersSetAsync()
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
-        {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
+        _dateFrom = ReportFilterHelper.ParseDate(QFrom) ?? _dateFrom;
+        _dateTo = ReportFilterHelper.ParseDate(QTo) ?? _dateTo;
+        _module = QModule ?? _module;
+        _siteCodeText = QSite ?? _siteCodeText;
+        _vehicleSearch = QVehicle ?? _vehicleSearch;
+        _capturedByText = QCapturedBy ?? _capturedByText;
         return Task.CompletedTask;
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private void NavigateToResults()
     {
-        { "from", ReportFilterHelper.FormatDate(_dateFrom) },
-        { "to", ReportFilterHelper.FormatDate(_dateTo) },
-        { "module", _module },
-        { "site", _siteCodeText },
-        { "vehicle", _vehicleSearch },
-        { "capturedby", _capturedByText },
-    };
+        var filters = new Dictionary<string, string?>
+        {
+            ["from"] = ReportFilterHelper.FormatDate(_dateFrom),
+            ["to"] = ReportFilterHelper.FormatDate(_dateTo),
+            ["module"] = _module,
+            ["site"] = _siteCodeText,
+            ["vehicle"] = _vehicleSearch,
+            ["capturedby"] = _capturedByText,
+        };
 
-    private void ApplyQueryFilters()
-    {
-        _dateFrom = ReportFilterHelper.ParseDate(QFrom) ?? DateTime.Today.AddDays(-7);
-        _dateTo = ReportFilterHelper.ParseDate(QTo) ?? DateTime.Today;
-        _module = QModule ?? "All";
-        _siteCodeText = QSite ?? string.Empty;
-        _vehicleSearch = QVehicle ?? string.Empty;
-        _capturedByText = QCapturedBy ?? string.Empty;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/capture-activity", filters));
     }
 
-    private void NavigateToResultsAsync()
+    private void ResetFilters()
     {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
+        _dateFrom = DateTime.Today.AddDays(-7);
+        _dateTo = DateTime.Today;
+        _module = "All";
+        _siteCodeText = string.Empty;
+        _vehicleSearch = string.Empty;
+        _capturedByText = string.Empty;
     }
 
     private static readonly List<string> _modules =
@@ -278,198 +153,8 @@
         "Fines",
         "JobCards",
         "Logbooks",
-        "Documents",
-        "Remarks"
+        "Trips",
+        "Taxis",
+        "FuelCards"
     ];
-
-    private List<KeyValuePair<string, int>> _summaryRows = new();
-    private IEnumerable<string> OrderedModules => _modules.Where(m => m != "All" && _report.Details.ContainsKey(m));
-    private List<CaptureActivityDetailDto> FlattenedRows => _report.Details
-        .OrderBy(k => k.Key)
-        .SelectMany(k => k.Value.Select(v =>
-        {
-            v.Module ??= k.Key;
-            return v;
-        }))
-        .ToList();
-
-    protected override async Task OnInitializedAsync()
-    {
-        _sites = await SiteService.GetAllAsync();
-        _users = await UserService.GetAllProfilesAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        _statusMessage = string.Empty;
-        _statusError = false;
-
-        try
-        {
-            if (_dateTo < _dateFrom)
-            {
-                (_dateFrom, _dateTo) = (_dateTo, _dateFrom);
-            }
-
-            short? siteCode = short.TryParse(_siteCodeText, out var parsedSiteCode) ? parsedSiteCode : null;
-            int? capturedBy = int.TryParse(_capturedByText, out var parsedCapturedBy) ? parsedCapturedBy : null;
-            var vmfCode = await ResolveVmfFilterAsync();
-            if (_statusError)
-            {
-                return;
-            }
-
-            _report = await CaptureActivityService.GetReportAsync(
-                _dateFrom,
-                _dateTo,
-                _module,
-                siteCode,
-                vmfCode,
-                capturedBy);
-
-            _summaryRows = _report.Summary
-                .OrderByDescending(k => k.Value)
-                .ThenBy(k => k.Key)
-                .ToList();
-
-            _expandedModules = _report.Details.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-            _statusMessage = "Request completed successfully.";
-        }
-        catch (Exception ex)
-        {
-            _statusError = true;
-            _statusMessage = "Unable to load capture activity report.";
-            await JSRuntime.InvokeVoidAsync("console.error", $"Capture activity report error: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task<int?> ResolveVmfFilterAsync()
-    {
-        var text = _vehicleSearch.Trim();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return null;
-        }
-
-        if (int.TryParse(text, out var vmfCode))
-        {
-            return vmfCode;
-        }
-
-        var matches = await VehicleService.SearchVehiclesAsync(text);
-        var exact = matches.FirstOrDefault(v =>
-            string.Equals(v.fleet_number?.Trim(), text, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(v.registration_number?.Trim(), text, StringComparison.OrdinalIgnoreCase));
-
-        if (exact != null)
-        {
-            return exact.vmf_code;
-        }
-
-        var first = matches.FirstOrDefault();
-        if (first != null)
-        {
-            return first.vmf_code;
-        }
-
-        _statusError = true;
-        _statusMessage = "Vehicle filter not found. Use GG number, GP number, or VMF code.";
-        return null;
-    }
-
-    private void ToggleModule(string module)
-    {
-        if (_expandedModules.Contains(module))
-        {
-            _expandedModules.Remove(module);
-            return;
-        }
-
-        _expandedModules.Add(module);
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var rows = FlattenedRows;
-        if (rows.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", new[]
-            {
-                CsvCell("Module"),
-                CsvCell("Record ID"),
-                CsvCell("VMF"),
-                CsvCell("GG Number"),
-                CsvCell("GP Number"),
-                CsvCell("Description"),
-                CsvCell("Date Captured"),
-                CsvCell("Captured By")
-            })
-        };
-
-        foreach (var row in rows)
-        {
-            lines.Add(string.Join(",", new[]
-            {
-                CsvCell(ValueOrDash(row.Module)),
-                CsvCell(row.RecordId.ToString()),
-                CsvCell(row.VmfCode?.ToString() ?? "-"),
-                CsvCell(ValueOrDash(row.FleetNumber)),
-                CsvCell(ValueOrDash(row.RegistrationNumber)),
-                CsvCell(ValueOrDash(row.Description)),
-                CsvCell(row.DateCaptured?.ToString("yyyy-MM-dd HH:mm") ?? "-"),
-                CsvCell(ResolveUserLabel(row.CapturedByUserCode))
-            }));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"capture_activity_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private void ResetFilters()
-    {
-        _dateFrom = DateTime.Today.AddDays(-7);
-        _dateTo = DateTime.Today;
-        _module = "All";
-        _siteCodeText = string.Empty;
-        _vehicleSearch = string.Empty;
-        _capturedByText = string.Empty;
-        _statusMessage = string.Empty;
-        _statusError = false;
-    }
-
-    private string ResolveUserLabel(int? userCode)
-    {
-        if (!userCode.HasValue)
-        {
-            return "-";
-        }
-
-        var user = _users.FirstOrDefault(u => u.UserAccessCode == userCode.Value);
-        if (user == null)
-        {
-            return userCode.Value.ToString();
-        }
-
-        return $"{user.FirstName} {user.LastName} ({user.UserAccessCode})";
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
 }

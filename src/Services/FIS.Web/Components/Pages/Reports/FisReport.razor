@@ -1,5 +1,9 @@
 @page "/reports/fis-report"
 @rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IConfiguration Configuration
 
 <PageTitle>FIS Report Main Menu - Fleet Information System</PageTitle>
 
@@ -120,24 +124,26 @@
                     <a class="menu-item-link" href="/reports/clearance">25) Clearance Reports</a>
                     <span class="menu-item-badge">Menu</span>
                 </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/reports/taxis-financial">26) Financial Reports: Taxis</a>
-                    <span class="menu-item-badge">Menu</span>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/reports/management">27) Management Reports</a>
-                    <span class="menu-item-badge">Menu</span>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/reports/unallocated-vehicles">28) Un-allocated vehicles Report</a>
-                    <span class="menu-item-badge">Menu</span>
-                </div>
+                @if (_hasReportsRole)
+                {
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/taxis-financial">26) Financial Reports: Taxis</a>
+                        <span class="menu-item-badge">Menu</span>
+                    </div>
+                }
+                @if (_hasManagementReportsRole)
+                {
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/management">27) Management Reports</a>
+                        <span class="menu-item-badge">Menu</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/unallocated-vehicles">28) Un-allocated vehicles Report</a>
+                        <span class="menu-item-badge">Menu</span>
+                    </div>
+                }
                 <div class="menu-item">
                     <a class="menu-item-link" href="/reports/audit-trail">29) Audit Trail Reports</a>
-                    <span class="menu-item-badge">Menu</span>
-                </div>
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/reports/capture-activity">30) Capture Activity Report</a>
                     <span class="menu-item-badge">Menu</span>
                 </div>
                 <div class="menu-item">
@@ -151,9 +157,9 @@
             <div class="menu-tile-header">
                 <span>Report Requests</span>
             </div>
-            <div class="menu-tile-body">
-                <div class="menu-item">
-                    <a class="menu-item-link" href="/reports/request">Request additional reports from the developer</a>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                    <a class="menu-item-link" href="@_requestReportsHref">Request additional reports from the developer</a>
                     <span class="menu-item-badge">Menu</span>
                 </div>
             </div>
@@ -161,3 +167,42 @@
     </div>
 
 </div>
+
+@code {
+    private bool _hasReportsRole = true;
+    private bool _hasManagementReportsRole;
+    private string _requestReportsHref = "mailto:";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            _hasReportsRole = false;
+            _hasManagementReportsRole = false;
+            return;
+        }
+
+        _hasReportsRole = HasRole(user, "Reports");
+        _hasManagementReportsRole = HasRole(user, "Management Reports");
+        _requestReportsHref = $"mailto:{Configuration["AdministratorMail"] ?? string.Empty}";
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+}

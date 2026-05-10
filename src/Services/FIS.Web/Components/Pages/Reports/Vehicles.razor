@@ -1,10 +1,5 @@
 @page "/reports/vehicles"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Vehicle Reports - Fleet Information System</PageTitle>
@@ -15,10 +10,10 @@
             <i class="bx bx-car"></i>
             Vehicle Reports
         </h1>
-        <p class="page-description">Vehicle list report with legacy-aligned model, type, status, and site descriptions.</p>
+        <p class="page-description">Legacy vehicle report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
         <a class="btn btn-primary btn-sm" href="/vehicles">Vehicle Master</a>
     </div>
 </div>
@@ -26,270 +21,141 @@
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Number Type</label>
-                        <div class="contract-search-radio">
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
-                                GG
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
-                                GP
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />
-                                Engine
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />
-                                VIN / Chassis
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' />
-                                Invoice
-                            </label>
-                        </div>
-                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
-                    </div>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Vehicle Report Menu</span>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadVehiclesAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ClearSearch">Reset</button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-by-number")'>1) Information On A Vehicle BY GG, Registration, Engine or Chassis Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-by-barcode")'>2) Information On A Vehicle BY barcode</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-vehicles")'>3) Information On All Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicles-with-history")'>4) Information On Vehicles With A History</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("selected-vehicles")'>5) Report For Selected Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("older-than-5y-over-120k")'>6) Vehicles Older Than 5 Years And Done More Than 120000 km's</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("older-than-5y-over-120k-period")'>7) Vehicles Older Than 5 Years And Done More Than 120000 km's WITH km's Travelled for a period</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("provincial-numbers")'>8) Vehicles With Provincial Numbers</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("value-inservice")'>9) Value Of IN SERVICE Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("inservice-per-gg")'>10) All IN SERVICE Vehicles per GG Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("inservice-per-dept")'>11) All IN SERVICE Vehicles per Department</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("inservice-wesbank")'>12) All IN SERVICE Vehicles with Departments or Blank (for Wesbank)</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-with-barcodes")'>13) All vehicles with barcodes</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("replaced-per-dept")'>14) All vehicles replaced/not replaced per Department</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("lpg-converted")'>15) All LPG Converted Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("extended-service")'>16) All Extended Service Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-extras")'>17) All Vehicles fitted with Extra's e.g."Tyre Safety Bands", "Netstar"</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicles-els-manual")'>18) Information On Vehicles on ELS or Manual LOGSHEET</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("universal-selected")'>19) Universal report for selected vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="vehicles" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Vehicle Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _vehicles.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/vehicles">Back to Vehicle Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>GP Number</th>
-                        <th>Model</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Site</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading report...</td></tr>
-                    }
-                    else if (_vehicles.Count == 0)
-                    {
-                        <tr><td colspan="6">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var vehicle in _vehicles)
-                        {
-                            <tr>
-                                <td>@ValueOrDash(vehicle.fleet_number)</td>
-                                <td>@ValueOrDash(vehicle.registration_number)</td>
-                                <td>@ValueOrDash(vehicle.model_name)</td>
-                                <td>@ValueOrDash(vehicle.type_name)</td>
-                                <td>@ValueOrDash(vehicle.status_description)</td>
-                                <td>@ValueOrDash(vehicle.location_description)</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/vehicles" />
     }
 </div>
 
 @code {
-    private string _searchTerm = string.Empty;
-    private string _searchMode = "GG";
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<VehicleDto> _vehicles = new();
-    private readonly List<ExportField> _exportFields =
-    [
-        new("fleet_number", "GG Number", true),
-        new("registration_number", "GP Number", true),
-        new("model_name", "Model", true),
-        new("type_name", "Type", true),
-        new("status_description", "Status", true),
-        new("location_description", "Site", true)
-    ];
-
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/vehicles";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "mode")]
-    public string? QMode { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "search")]
-    public string? QSearch { get; set; }
-
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-
-        return Task.CompletedTask;
-    }
-
-    private Dictionary<string, string?> BuildQueryFilters() => new()
-    {
-        { "mode", _searchMode },
-        { "search", _searchTerm },
-    };
-
-    private void ApplyQueryFilters()
-    {
-        _searchMode = QMode ?? "GG";
-        _searchTerm = QSearch ?? string.Empty;
-    }
-
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    private async Task LoadVehiclesAsync()
-    {
-        _loading = true;
-        try
-        {
-            var query = _searchTerm.Trim();
-            var page = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 250, search: string.IsNullOrWhiteSpace(query) ? null : query);
-            _vehicles = string.IsNullOrWhiteSpace(query)
-                ? page.Data
-                : VehicleSearchHelper.RankVehicleMatches(page.Data, query, _searchMode);
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicle report: {ex.Message}");
-            _vehicles = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void ClearSearch()
-    {
-        _searchTerm = string.Empty;
-    }
-
-    private void SetSearchMode(string mode)
-    {
-        _searchMode = mode;
-        _vehicles = new();
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _vehicles)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "fleet_number" => ValueOrDash(row.fleet_number),
-                "registration_number" => ValueOrDash(row.registration_number),
-                "model_name" => ValueOrDash(row.model_name),
-                "type_name" => ValueOrDash(row.type_name),
-                "status_description" => ValueOrDash(row.status_description),
-                "location_description" => ValueOrDash(row.location_description),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"vehicles_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/vehicles", filters));
     }
 
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string CsvCell(string? value)
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
+        "vehicle-by-number" => "vehicles",
+        "vehicle-by-barcode" => "vehicle-by-barcode",
+        "all-vehicles" => "vehicles",
+        "vehicles-with-history" => "vehicles-with-history",
+        "selected-vehicles" => "vehicles-selected",
+        "older-than-5y-over-120k" => "vehicles-older-than-5y-over-120k",
+        "older-than-5y-over-120k-period" => "vehicles-older-than-5y-over-120k-period",
+        "provincial-numbers" => "vehicles-provincial-numbers",
+        "value-inservice" => "vehicles-value-inservice",
+        "inservice-per-gg" => "vehicles-inservice-per-gg",
+        "inservice-per-dept" => "vehicles-inservice-per-dept",
+        "inservice-wesbank" => "vehicles-inservice-wesbank",
+        "all-with-barcodes" => "vehicles-with-barcodes",
+        "replaced-per-dept" => "vehicles-replaced-per-dept",
+        "lpg-converted" => "vehicles-lpg-converted",
+        "extended-service" => "vehicles-extended-service",
+        "vehicle-extras" => "vehicles-extras",
+        "vehicles-els-manual" => "vehicles-els-manual",
+        "universal-selected" => "vehicles-universal-selected",
+        _ => "vehicles"
+    };
 
-    private sealed class ExportField
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
+        "vehicle-by-number" => "Information On A Vehicle BY GG, Registration, Engine or Chassis Number",
+        "vehicle-by-barcode" => "Information On A Vehicle BY barcode",
+        "all-vehicles" => "Information On All Vehicles",
+        "vehicles-with-history" => "Information On Vehicles With A History",
+        "selected-vehicles" => "Report For Selected Vehicles",
+        "older-than-5y-over-120k" => "Vehicles Older Than 5 Years And Done More Than 120000 km's",
+        "older-than-5y-over-120k-period" => "Vehicles Older Than 5 Years And Done More Than 120000 km's WITH km's Travelled for a period",
+        "provincial-numbers" => "Vehicles With Provincial Numbers",
+        "value-inservice" => "Value Of IN SERVICE Vehicles",
+        "inservice-per-gg" => "All IN SERVICE Vehicles per GG Number",
+        "inservice-per-dept" => "All IN SERVICE Vehicles per Department",
+        "inservice-wesbank" => "All IN SERVICE Vehicles with Departments or Blank (for Wesbank)",
+        "all-with-barcodes" => "All vehicles with barcodes",
+        "replaced-per-dept" => "All vehicles replaced/not replaced per Department",
+        "lpg-converted" => "All LPG Converted Vehicles",
+        "extended-service" => "All Extended Service Vehicles",
+        "vehicle-extras" => "All Vehicles fitted with Extra's e.g. Tyre Safety Bands, Netstar",
+        "vehicles-els-manual" => "Information On Vehicles on ELS or Manual LOGSHEET",
+        "universal-selected" => "Universal report for selected vehicles",
+        _ => "Vehicle Reports"
+    };
 
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "vehicle-by-number" => "vehicle-by-number",
+            "vehicle-by-barcode" => "vehicle-by-barcode",
+            "all-vehicles" => "all-vehicles",
+            "vehicles-with-history" => "vehicles-with-history",
+            "selected-vehicles" => "selected-vehicles",
+            "older-than-5y-over-120k" => "older-than-5y-over-120k",
+            "older-than-5y-over-120k-period" => "older-than-5y-over-120k-period",
+            "provincial-numbers" => "provincial-numbers",
+            "value-inservice" => "value-inservice",
+            "inservice-per-gg" => "inservice-per-gg",
+            "inservice-per-dept" => "inservice-per-dept",
+            "inservice-wesbank" => "inservice-wesbank",
+            "all-with-barcodes" => "all-with-barcodes",
+            "replaced-per-dept" => "replaced-per-dept",
+            "lpg-converted" => "lpg-converted",
+            "extended-service" => "extended-service",
+            "vehicle-extras" => "vehicle-extras",
+            "vehicles-els-manual" => "vehicles-els-manual",
+            "universal-selected" => "universal-selected",
+            _ => "all-vehicles"
+        };
 }

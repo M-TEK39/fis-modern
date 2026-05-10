@@ -1,9 +1,6 @@
 @page "/reports/logsheets"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@inject ReportCatalogApiService ReportCatalogService
-@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Log Sheet Reports - Fleet Information System</PageTitle>
 
@@ -13,179 +10,100 @@
             <i class="bx bx-file"></i>
             Log Sheet Reports
         </h1>
-        <p class="page-description">Log sheet report catalog.</p>
+        <p class="page-description">Legacy log sheet report menu with modern UI presentation.</p>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/logsheets">Log Sheet Module</a>
     </div>
 </div>
 
 <div class="page-content">
-    @if (_loading)
+    @if (!_isResultView)
     {
-        <div class="loading-state">
-            <div class="spinner"></div>
-            <p>Loading reports...</p>
-        </div>
-    }
-    else if (_reports.Count == 0)
-    {
-        <div class="empty-state">
-            <i class="bx bx-file"></i>
-            <h3>No reports available</h3>
-            <p>Report catalog unavailable or empty.</p>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Log Report Main Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle")'>1) Log Report On One Vehicle</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-odo-balance")'>2) Report Per Vehicle - Log Odo Balance</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-contract-els-manual")'>3) Vehicle report - View: Contracts, ELS &amp; Manual Logs Details in one report</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicle-details-per-rek")'>4) Report Vehicle Details Per Rek num.</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-outstanding")'>5) All outstanding Logsheets</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("per-dept-site")'>6) Logsheet Report per Department or Site</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">7) Return to Main Report Page</a><span class="menu-item-badge">Menu</span></div>
+                </div>
+            </div>
         </div>
     }
     else
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@_reports.Count report(s)</span>
+                <span class="table-title">@GetSelectedCaption()</span>
                 <div class="table-controls">
-                    <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                    <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _reports.Count == 0)">Download CSV</button>
+                    <a class="btn btn-secondary btn-sm" href="/reports/logsheets">Back to Log Sheet Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
-            </div>
-            @if (_showFieldSelector)
-            {
-                <div class="form-card fis-mb-075">
-                    <div class="form-card-body">
-                        <div class="form-grid">
-                            @foreach (var field in _exportFields)
-                            {
-                                <div class="form-field">
-                                    <label class="form-label">
-                                        <input type="checkbox" @bind="field.Selected" />
-                                        @field.Label
-                                    </label>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                </div>
-            }
-            <div class="table-wrapper">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Report</th>
-                            <th>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var report in PagedReports)
-                        {
-                            <tr>
-                                <td>@report.Name</td>
-                                <td>@report.Description</td>
-                            </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
-            <div class="pagination-controls fis-mt-1">
-                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
         </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/logsheets" />
     }
 </div>
 
 @code {
-    private bool _loading = true;
-    private bool _showFieldSelector;
-    private List<ReportDto> _reports = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("report", "Report", true),
-        new("description", "Description", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private IEnumerable<ReportDto> PagedReports => _reports.Skip((_page - 1) * _pageSize).Take(_pageSize);
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_reports.Count / (double)_pageSize));
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        try
+        var filters = new Dictionary<string, string?>
         {
-            _reports = await ReportCatalogService.GetAvailableAsync();
-            _page = Math.Min(_page, TotalPages);
-        }
-        catch (Exception ex)
-        {
-            _reports = new();
-            _page = 1;
-            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
-        }
-        finally
-        {
-            _loading = false;
-        }
+            ["rtype"] = reportType
+        };
+
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/logsheets", filters));
     }
 
-    private void PreviousPage()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        if (_page > 1)
+        "one-vehicle" => "logsheets-one-vehicle",
+        "vehicle-odo-balance" => "logsheets-vehicle-odo-balance",
+        "vehicle-contract-els-manual" => "vehicle-logs-report",
+        "vehicle-details-per-rek" => "logsheets-vehicle-details-per-rek",
+        "all-outstanding" => "logsheets-all-outstanding",
+        "per-dept-site" => "logsheets",
+        _ => "logsheets"
+    };
+
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
+    {
+        "one-vehicle" => "Log Report On One Vehicle",
+        "vehicle-odo-balance" => "Report Per Vehicle - Log Odo Balance",
+        "vehicle-contract-els-manual" => "Vehicle report - View: Contracts, ELS & Manual Logs Details in one report",
+        "vehicle-details-per-rek" => "Report Vehicle Details Per Rek num.",
+        "all-outstanding" => "All outstanding Logsheets",
+        "per-dept-site" => "Logsheet Report per Department or Site",
+        _ => "Log Sheet Reports"
+    };
+
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _reports)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "report" => row.Name ?? "-",
-                "description" => row.Description ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"logsheet_reports_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+            "one-vehicle" => "one-vehicle",
+            "vehicle-odo-balance" => "vehicle-odo-balance",
+            "vehicle-contract-els-manual" => "vehicle-contract-els-manual",
+            "vehicle-details-per-rek" => "vehicle-details-per-rek",
+            "all-outstanding" => "all-outstanding",
+            "per-dept-site" => "per-dept-site",
+            _ => "per-dept-site"
+        };
 }

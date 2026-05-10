@@ -1,11 +1,6 @@
 @page "/reports/contract-history"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@inject ContractApiService ContractService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Contract History - Fleet Information System</PageTitle>
@@ -16,7 +11,7 @@
             <i class="bx bx-history"></i>
             Contract History
         </h1>
-        <p class="page-description">Search vehicle and view historical contract activity.</p>
+        <p class="page-description">Legacy contract-history search flow with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
@@ -33,151 +28,41 @@
                     <div class="form-field">
                         <label class="form-label">Number Type</label>
                         <div class="contract-search-radio">
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
-                                GG
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
-                                GP
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />
-                                Engine
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />
-                                VIN / Chassis
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' />
-                                Invoice
-                            </label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />GG</label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />GP</label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />Engine</label>
+                            <label class="form-radio-label"><input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />VIN / Chassis</label>
                         </div>
-                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Vehicle Match</label>
-                        <select class="form-select" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
-                            <option value="">Select vehicle</option>
-                            @foreach (var vehicle in _vehicleMatches)
-                            {
-                                <option value="@vehicle.vmf_code">@GetVehicleLabel(vehicle)</option>
-                            }
-                        </select>
+                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Enter GG, GP, Engine or VIN/Chassis" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_loading">Find</button>
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadHistoryForSelectedVehicleAsync" disabled="@(_loading || !_selectedVmfCode.HasValue)">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ClearFilters">Reset</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResults">Submit</button>
+                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="contract-history" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Contract History Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-secondary btn-sm" @onclick="OpenHtmlAsync" disabled="@(_loading || _history.Count == 0)">Open HTML</button>
-                <button class="btn btn-secondary btn-sm" @onclick="PrintPdfAsync" disabled="@(_loading || _history.Count == 0)">Print PDF</button>
-                <button class="btn btn-secondary btn-sm" @onclick="DownloadExcelAsync" disabled="@(_loading || _history.Count == 0)">Download Excel</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _history.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">Contract History</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/contract-history">Back to Search</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Contract ID</th>
-                        <th>GG Number</th>
-                        <th>GP Number</th>
-                        <th>Status</th>
-                        <th>Current</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="7">Loading history...</td></tr>
-                    }
-                    else if (_history.Count == 0)
-                    {
-                        <tr><td colspan="7">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in _history)
-                        {
-                            <tr>
-                                <td>@row.contract_id</td>
-                                <td>@ValueOrDash(row.fleet_number)</td>
-                                <td>@ValueOrDash(row.vehicle_registration)</td>
-                                <td>@ValueOrDash(row.status)</td>
-                                <td>@ValueOrDash(row.still_current)</td>
-                                <td>@row.start_date.ToString("yyyy-MM-dd")</td>
-                                <td>@(row.end_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="contract-history" FiltersUrl="/reports/contract-history" />
     }
 </div>
 
 @code {
-    private string _searchTerm = string.Empty;
     private string _searchMode = "GG";
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<VehicleDto> _vehicleMatches = new();
-    private int? _selectedVmfCode;
-    private List<ContractDto> _history = new();
-    private readonly List<ExportField> _exportFields =
-    [
-        new("contract_id", "Contract ID", true),
-        new("gg_number", "GG Number", true),
-        new("gp_number", "GP Number", true),
-        new("status", "Status", true),
-        new("current", "Current", true),
-        new("start_date", "Start Date", true),
-        new("end_date", "End Date", true)
-    ];
-
+    private string _searchTerm = string.Empty;
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/contract-history";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
@@ -188,276 +73,28 @@
     [Parameter, SupplyParameterFromQuery(Name = "search")]
     public string? QSearch { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "vmf")]
-    public string? QVmf { get; set; }
-
     protected override Task OnParametersSetAsync()
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
-        {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-
+        _searchMode = QMode ?? _searchMode;
+        _searchTerm = QSearch ?? _searchTerm;
         return Task.CompletedTask;
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private void SetSearchMode(string value) => _searchMode = value;
+
+    private void NavigateToResults()
     {
-        { "mode", _searchMode },
-        { "search", _searchTerm },
-        { "vmf", _selectedVmfCode?.ToString() },
-    };
-
-    private void ApplyQueryFilters()
-    {
-        _searchMode = QMode ?? "GG";
-        _searchTerm = QSearch ?? string.Empty;
-        _selectedVmfCode = int.TryParse(QVmf, out var v) ? v : null;
-    }
-
-    private void NavigateToResultsAsync()
-    {
-        if (_selectedVmfCode.HasValue)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-        }
-    }
-
-    private async Task SearchVehiclesAsync()
-    {
-        if (string.IsNullOrWhiteSpace(_searchTerm))
-        {
-            _vehicleMatches = new();
-            _selectedVmfCode = null;
-            _history = new();
-            return;
-        }
-
-        _loading = true;
-        try
-        {
-            var query = _searchTerm.Trim();
-            var matches = await VehicleService.SearchVehiclesAsync(query);
-            _vehicleMatches = VehicleSearchHelper.RankVehicleMatches(matches, query, _searchMode);
-            _history = new();
-
-            if (_vehicleMatches.All(v => v.vmf_code != _selectedVmfCode))
-            {
-                _selectedVmfCode = null;
-                _history = new();
-            }
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error searching vehicle for history: {ex.Message}");
-            _vehicleMatches = new();
-            _history = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task LoadHistoryForSelectedVehicleAsync()
-    {
-        if (!_selectedVmfCode.HasValue)
-        {
-            _history = new();
-            return;
-        }
-
-        _loading = true;
-        try
-        {
-            var contracts = await ContractService.GetRecentContractsWindowAsync();
-            _history = contracts
-                .Where(c => c.vmf_code == _selectedVmfCode.Value)
-                .OrderByDescending(c => c.contract_id)
-                .ToList();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading contract history: {ex.Message}");
-            _history = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void ClearFilters()
-    {
-        _searchTerm = string.Empty;
-        _vehicleMatches = new();
-        _selectedVmfCode = null;
-        _history = new();
-    }
-
-    private void SetSearchMode(string mode)
-    {
-        _searchMode = mode;
-        _vehicleMatches = new();
-        _selectedVmfCode = null;
-        _history = new();
-    }
-
-    private static string GetVehicleLabel(VehicleDto vehicle)
-        => $"{ValueOrDash(vehicle.fleet_number)} / {ValueOrDash(vehicle.registration_number)} ({vehicle.vmf_code})";
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["mode"] = _searchMode,
+            ["search"] = _searchTerm
         };
-
-        foreach (var row in _history)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "contract_id" => row.contract_id.ToString(),
-                "gg_number" => ValueOrDash(row.fleet_number),
-                "gp_number" => ValueOrDash(row.vehicle_registration),
-                "status" => ValueOrDash(row.status),
-                "current" => ValueOrDash(row.still_current),
-                "start_date" => row.start_date.ToString("yyyy-MM-dd"),
-                "end_date" => row.end_date?.ToString("yyyy-MM-dd") ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"contract_history_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/contract-history", filters));
     }
 
-    private async Task DownloadExcelAsync()
+    private void ResetFilters()
     {
-        var html = BuildReportHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        var fileName = $"contract_history_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
-    }
-
-    private async Task OpenHtmlAsync()
-    {
-        var html = BuildReportHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Contract History");
-    }
-
-    private async Task PrintPdfAsync()
-    {
-        var html = BuildReportHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Contract History");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private string BuildReportHtml()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (_history.Count == 0 || selected.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
-        var body = string.Join(
-            string.Empty,
-            _history.Select(row =>
-            {
-                var cells = selected.Select(field => field.Key switch
-                {
-                    "contract_id" => row.contract_id.ToString(),
-                    "gg_number" => ValueOrDash(row.fleet_number),
-                    "gp_number" => ValueOrDash(row.vehicle_registration),
-                    "status" => ValueOrDash(row.status),
-                    "current" => ValueOrDash(row.still_current),
-                    "start_date" => row.start_date.ToString("yyyy-MM-dd"),
-                    "end_date" => row.end_date?.ToString("yyyy-MM-dd") ?? "-",
-                    _ => "-"
-                });
-
-                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
-            }));
-
-        var html = new System.Text.StringBuilder();
-        html.AppendLine("<!doctype html>");
-        html.AppendLine("<html>");
-        html.AppendLine("<head>");
-        html.AppendLine("<meta charset=\"utf-8\" />");
-        html.AppendLine("<title>Contract History</title>");
-        html.AppendLine("<style>");
-        html.AppendLine("body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }");
-        html.AppendLine("h1 { font-size: 20px; margin: 0 0 12px 0; }");
-        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
-        html.AppendLine("th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 12px; }");
-        html.AppendLine("th { background: #f3f4f6; }");
-        html.AppendLine("</style>");
-        html.AppendLine("</head>");
-        html.AppendLine("<body>");
-        html.AppendLine("<h1>Contract History</h1>");
-        html.AppendLine("<table>");
-        html.AppendLine($"<thead><tr>{head}</tr></thead>");
-        html.AppendLine($"<tbody>{body}</tbody>");
-        html.AppendLine("</table>");
-        html.AppendLine("</body>");
-        html.AppendLine("</html>");
-        return html.ToString();
-    }
-
-    private static string HtmlEncode(string? value)
-        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
+        _searchMode = "GG";
+        _searchTerm = string.Empty;
     }
 }

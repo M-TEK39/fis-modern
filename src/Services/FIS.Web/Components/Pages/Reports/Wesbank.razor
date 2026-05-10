@@ -1,22 +1,16 @@
 @page "/reports/wesbank"
 @rendermode InteractiveServer
-@using System.Text.Json
-@using FIS.Web.Models
-@using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@inject FinanceApiService FinanceService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
-<PageTitle>Wesbank First Auto Reports - Fleet Information System</PageTitle>
+<PageTitle>Wesbank Transaction Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-receipt"></i>
-            Wesbank First Auto Reports
+            Wesbank Transaction Reports
         </h1>
-        <p class="page-description">Wesbank expenses report runner with summary and detailed modes.</p>
+        <p class="page-description">Legacy Wesbank transaction report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
@@ -27,363 +21,90 @@
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Report Mode</label>
-                        <select class="form-select" @bind="_mode">
-                            <option value="summary-all">Summary (All Inclusive)</option>
-                            <option value="summary-selection">Summary (Selection)</option>
-                            <option value="detailed-all">Detailed (All Inclusive)</option>
-                            <option value="detailed-selection">Detailed (Selection)</option>
-                        </select>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Start Date</label>
-                        <InputDate class="form-input" @bind-Value="_startDate" />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">End Date</label>
-                        <InputDate class="form-input" @bind-Value="_endDate" />
-                    </div>
-                    @if (RequiresProvince)
-                    {
-                        <div class="form-field">
-                            <label class="form-label">Province</label>
-                            <select class="form-select" @bind="_selectedProvince">
-                                <option value="">Select Province</option>
-                                @foreach (var province in _provinces)
-                                {
-                                    <option value="@province.Value">@province.Label</option>
-                                }
-                            </select>
-                        </div>
-                    }
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Wesbank Transaction Reports Menu</span>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+                <div class="menu-tile-body">
+                    <div class="menu-section-title">One Vehicle Report</div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle")'>1) Wesbank Transaction Report for ONE Vehicle</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle-period")'>2) Wesbank Transaction Report for ONE Vehicle, for a Period</a><span class="menu-item-badge">Report</span></div>
+
+                    <div class="menu-section-title">Wesbank Transactions Report for ALL Vehicles</div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-dept-site")'>3) Wesbank Transaction Report for ONE Dept Site</a><span class="menu-item-badge">Report</span></div>
+
+                    <div class="menu-section-title">Other Wesbank Transaction Reports</div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("overfills")'>4) Exeption Report Overfills</a><span class="menu-item-badge">Exception</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("multiple-daily-fuels")'>5) Exeption Multiple Daily Fuel Transactions</a><span class="menu-item-badge">Exception</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
-                @if (!string.IsNullOrWhiteSpace(_statusMessage))
-                {
-                    <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
-                        @_statusMessage
-                    </div>
-                }
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="wesbank" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Wesbank Report Result</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/wesbank">Back to Wesbank Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Item</th>
-                        <th>Value</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="2">Running report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="2">No records found for the selected parameters.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.Key</td>
-                                <td>@row.Value</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/wesbank" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _statusError;
-    private string _statusMessage = string.Empty;
-    private string _mode = "summary-all";
-    private DateTime? _startDate = DateTime.Today.AddMonths(-1);
-    private DateTime? _endDate = DateTime.Today;
-    private string _selectedProvince = string.Empty;
-    private List<FinanceOptionDto> _provinces = new();
-    private List<KeyValuePair<string, string>> _rows = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private bool _showFieldSelector;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("item", "Item", true),
-        new("value", "Value", true)
-    ];
-
-    private List<KeyValuePair<string, string>> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
-    private bool RequiresProvince => _mode is "summary-selection" or "detailed-selection";
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/wesbank";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "rmode")]
-    public string? QRmode { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "from")]
-    public string? QFrom { get; set; }
-
-    [Parameter, SupplyParameterFromQuery(Name = "to")]
-    public string? QTo { get; set; }
-
-    [Parameter, SupplyParameterFromQuery(Name = "province")]
-    public string? QProvince { get; set; }
-
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
+            ["rtype"] = reportType
+        };
 
-        return Task.CompletedTask;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/wesbank", filters));
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        { "rmode", _mode },
-        { "from", ReportFilterHelper.FormatDate(_startDate) },
-        { "to", ReportFilterHelper.FormatDate(_endDate) },
-        { "province", _selectedProvince },
+        "one-vehicle" => "wesbank-one-vehicle",
+        "one-vehicle-period" => "wesbank-one-vehicle-period",
+        "one-dept-site" => "wesbank-one-dept-site",
+        "overfills" => "wesbank-overfills",
+        "multiple-daily-fuels" => "wesbank-multiple-daily-fuels",
+        _ => "wesbank"
     };
 
-    private void ApplyQueryFilters()
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        _mode = QRmode ?? "summary-all";
-        _startDate = ReportFilterHelper.ParseDate(QFrom) ?? DateTime.Today.AddMonths(-1);
-        _endDate = ReportFilterHelper.ParseDate(QTo) ?? DateTime.Today;
-        _selectedProvince = QProvince ?? string.Empty;
-    }
+        "one-vehicle" => "Wesbank Transaction Report for ONE Vehicle",
+        "one-vehicle-period" => "Wesbank Transaction Report for ONE Vehicle, for a Period",
+        "one-dept-site" => "Wesbank Transaction Report for ONE Dept Site",
+        "overfills" => "Exeption Report Overfills",
+        "multiple-daily-fuels" => "Exeption Multiple Daily Fuel Transactions",
+        _ => "Wesbank Transaction Reports"
+    };
 
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        _provinces = await FinanceService.GetProvincesAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        _statusMessage = string.Empty;
-
-        try
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            var result = await FinanceService.PostActionAsync("api/Report/universal", new
-            {
-                reportType = "financial",
-                parameters = new Dictionary<string, object?>
-                {
-                    ["mode"] = _mode,
-                    ["provinceCode"] = _selectedProvince
-                },
-                startDate = _startDate,
-                endDate = _endDate
-            });
-
-            _statusError = !result.Success;
-            _statusMessage = result.Success
-                ? "Request completed successfully."
-                : result.Message;
-
-            _rows = ParseResultBody(result.ResponseBody);
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            _statusError = true;
-            _statusMessage = "Failed to run report.";
-            _rows = new();
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading Wesbank report: {ex.Message}");
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void ResetFilters()
-    {
-        _mode = "summary-all";
-        _startDate = DateTime.Today.AddMonths(-1);
-        _endDate = DateTime.Today;
-        _selectedProvince = string.Empty;
-    }
-
-    private static List<KeyValuePair<string, string>> ParseResultBody(string? body)
-    {
-        var rows = new List<KeyValuePair<string, string>>();
-
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return rows;
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-
-            if (root.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var property in root.EnumerateObject())
-                {
-                    rows.Add(new KeyValuePair<string, string>(property.Name, property.Value.ToString()));
-                }
-                return rows;
-            }
-
-            if (root.ValueKind == JsonValueKind.Array)
-            {
-                var index = 1;
-                foreach (var item in root.EnumerateArray())
-                {
-                    rows.Add(new KeyValuePair<string, string>($"Row {index}", item.ToString()));
-                    index++;
-                }
-            }
-        }
-        catch
-        {
-            rows.Add(new KeyValuePair<string, string>("Response", body));
-        }
-
-        return rows;
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "item" => row.Key,
-                "value" => row.Value,
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"wesbank_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+            "one-vehicle" => "one-vehicle",
+            "one-vehicle-period" => "one-vehicle-period",
+            "one-dept-site" => "one-dept-site",
+            "overfills" => "overfills",
+            "multiple-daily-fuels" => "multiple-daily-fuels",
+            _ => "one-vehicle"
+        };
 }

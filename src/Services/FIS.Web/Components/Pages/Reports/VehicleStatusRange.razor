@@ -1,11 +1,8 @@
 @page "/reports/vehicle-status-range"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
 @using FIS.Web.Components.Shared
+@using FIS.Web.Services
 @inject VehicleApiService VehicleService
-@inject SiteApiService SiteService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Vehicle Status in Date Range - Fleet Information System</PageTitle>
@@ -16,7 +13,7 @@
             <i class="bx bx-calendar-check"></i>
             Vehicle Status in Date Range
         </h1>
-        <p class="page-description">Filter vehicles by status and status date range.</p>
+        <p class="page-description">Legacy vehicle status filter flow with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
@@ -33,7 +30,7 @@
                     <div class="form-field">
                         <label class="form-label">Vehicle Status</label>
                         <select class="form-select" @bind="_selectedStatus">
-                            <option value="">All</option>
+                            <option value="">View All</option>
                             @foreach (var status in _availableStatuses)
                             {
                                 <option value="@status">@status</option>
@@ -41,134 +38,44 @@
                         </select>
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Status Date From</label>
+                        <label class="form-label">Start Date</label>
                         <InputDate class="form-input" @bind-Value="_startDate" />
                     </div>
                     <div class="form-field">
-                        <label class="form-label">Status Date To</label>
+                        <label class="form-label">End Date</label>
                         <InputDate class="form-input" @bind-Value="_endDate" />
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
+                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResults">Submit</button>
                     <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
                 </div>
             </div>
         </div>
     }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="vehicle-status-range" FiltersUrl="@_pageRoute" />
-    }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Vehicle Status Range Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">List of vehicles by selected status in a date range</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/vehicle-status-range">Back to Vehicle Status Filters</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>GP Number</th>
-                        <th>Vehicle</th>
-                        <th>Status</th>
-                        <th>Status Date</th>
-                        <th>Site</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="6">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@ValueOrDash(row.fleet_number)</td>
-                                <td>@ValueOrDash(row.registration_number)</td>
-                                <td>@GetVehicleLabel(row)</td>
-                                <td>@ValueOrDash(row.status_description)</td>
-                                <td>@(row.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-")</td>
-                                <td>@GetSiteLabel(row.site_code)</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="vehicle-status-range" FiltersUrl="/reports/vehicle-status-range" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
     private string _selectedStatus = string.Empty;
     private DateTime? _startDate = DateTime.Today.AddMonths(-6);
     private DateTime? _endDate = DateTime.Today;
     private List<string> _availableStatuses = new();
-    private List<VehicleDto> _sourceVehicles = new();
-    private List<VehicleDto> _rows = new();
-    private List<SiteResponseDto> _sites = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("gg_number", "GG Number", true),
-        new("gp_number", "GP Number", true),
-        new("vehicle", "Vehicle", true),
-        new("status", "Status", true),
-        new("status_date", "Status Date", true),
-        new("site", "Site", true)
-    ];
-
-    private List<VehicleDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
 
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/vehicle-status-range";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
@@ -182,88 +89,35 @@
     [Parameter, SupplyParameterFromQuery(Name = "to")]
     public string? QTo { get; set; }
 
+    protected override async Task OnInitializedAsync()
+    {
+        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
+        _availableStatuses = vehicles.Data
+            .Select(v => v.status_description)
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v)
+            .ToList()!;
+    }
+
     protected override Task OnParametersSetAsync()
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
-        {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-
+        _selectedStatus = QStatus ?? _selectedStatus;
+        _startDate = ReportFilterHelper.ParseDate(QFrom) ?? _startDate;
+        _endDate = ReportFilterHelper.ParseDate(QTo) ?? _endDate;
         return Task.CompletedTask;
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private void NavigateToResults()
     {
-        { "status", _selectedStatus },
-        { "from", ReportFilterHelper.FormatDate(_startDate) },
-        { "to", ReportFilterHelper.FormatDate(_endDate) },
-    };
-
-    private void ApplyQueryFilters()
-    {
-        _selectedStatus = QStatus ?? string.Empty;
-        _startDate = ReportFilterHelper.ParseDate(QFrom) ?? DateTime.Today.AddMonths(-6);
-        _endDate = ReportFilterHelper.ParseDate(QTo) ?? DateTime.Today;
-    }
-
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadBaseDataAsync();
-    }
-
-    private async Task LoadBaseDataAsync()
-    {
-        _sites = await SiteService.GetAllAsync();
-        var vehiclesPage = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-        _sourceVehicles = vehiclesPage.Data;
-        _availableStatuses = _sourceVehicles
-            .Select(v => v.status_description?.Trim())
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(s => s)
-            .Cast<string>()
-            .ToList();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            var start = _startDate ?? DateTime.MinValue;
-            var end = _endDate ?? DateTime.MaxValue;
-            if (end < start)
-            {
-                (start, end) = (end, start);
-            }
+            ["status"] = _selectedStatus,
+            ["from"] = ReportFilterHelper.FormatDate(_startDate),
+            ["to"] = ReportFilterHelper.FormatDate(_endDate)
+        };
 
-            _rows = _sourceVehicles
-                .Where(v => string.IsNullOrWhiteSpace(_selectedStatus)
-                    || string.Equals(v.status_description?.Trim(), _selectedStatus, StringComparison.OrdinalIgnoreCase))
-                .Where(v => v.vehicle_status_date.HasValue)
-                .Where(v => v.vehicle_status_date!.Value.Date >= start.Date && v.vehicle_status_date.Value.Date <= end.Date)
-                .OrderByDescending(v => v.vehicle_status_date)
-                .ToList();
-
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading vehicle status range report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/vehicle-status-range", filters));
     }
 
     private void ResetFilters()
@@ -271,96 +125,5 @@
         _selectedStatus = string.Empty;
         _startDate = DateTime.Today.AddMonths(-6);
         _endDate = DateTime.Today;
-    }
-
-    private string GetSiteLabel(short? siteCode)
-    {
-        if (!siteCode.HasValue)
-        {
-            return "-";
-        }
-
-        var site = _sites.FirstOrDefault(s => s.SiteCode == siteCode.Value);
-        return site == null ? siteCode.Value.ToString() : $"{ValueOrDash(site.Description)} ({site.SiteCode})";
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string GetVehicleLabel(VehicleDto row)
-        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
-        };
-
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "gg_number" => ValueOrDash(row.fleet_number),
-                "gp_number" => ValueOrDash(row.registration_number),
-                "vehicle" => GetVehicleLabel(row),
-                "status" => ValueOrDash(row.status_description),
-                "status_date" => row.vehicle_status_date?.ToString("yyyy-MM-dd") ?? "-",
-                "site" => GetSiteLabel(row.site_code),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"vehicle_status_range_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
     }
 }

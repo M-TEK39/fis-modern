@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "5hOLvhFFC/Y6kqt6oLHGPP2X8J9vidHgQKrDdNsT/vJBNjkuDJr0inGQG74xXEeqG7TYEbA/vEd7HkQ2kGBiwg==",
+  "dgSpecHash": "gHCawH7P41cjYWlvP6QMFd9WhHmUuUpQtPCNVN/o74WQj/DCKoIBP7B+IDYL9I/kWaBCc+M4gPJSsfpawb7qAg==",
   "success": true,
   "projectFilePath": "/home/dev/work/fis-modern/src/Services/FIS.Api/FIS.Api.csproj",
   "expectedPackageFiles": [

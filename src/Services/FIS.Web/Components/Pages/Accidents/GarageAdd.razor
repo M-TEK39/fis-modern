@@ -4,6 +4,8 @@
 @using FIS.Web.Services
 @inject SiteApiService SiteService
 @inject DriverApiService DriverService
+@inject AccidentApiService AccidentService
+@inject NavigationManager Navigation
 
 <PageTitle>Add Accident (Garage) - Fleet Information System</PageTitle>
 
@@ -35,7 +37,7 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Date Reported</label>
-                        <input class="form-input" />
+                    <input class="form-input" value="@_accidentDateText" @oninput="OnAccidentDateInput" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Accident Date</label>
@@ -43,7 +45,7 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label">Accident Time</label>
-                        <input class="form-input" maxlength="5" />
+                        <input class="form-input" maxlength="5" value="@_accidentTimeText" @oninput="OnAccidentTimeInput" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">GG Car KM</label>
@@ -60,12 +62,15 @@
                 <div class="form-grid">
                     <div class="form-field form-group-full">
                         <label class="form-label">Accident Description</label>
-                        <input class="form-input" maxlength="60" />
+                        <input class="form-input" maxlength="60" @bind="_accidentDescription" />
                     </div>
                     <div class="form-field">
                         <label class="form-label">Accident Category</label>
-                        <select class="form-select">
+                        <select class="form-select" @bind="_severity">
                             <option value="">Select...</option>
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
                         </select>
                     </div>
                     <div class="form-field">
@@ -148,7 +153,7 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label">Authority</label>
-                        <input class="form-input" maxlength="60" />
+                        <input class="form-input" maxlength="60" @bind="_accidentLocation" />
                     </div>
                 </div>
             </div>
@@ -306,9 +311,13 @@
             </div>
 
             <div class="form-actions">
-                <button class="btn btn-primary">Submit</button>
+                <button class="btn btn-primary" type="button" @onclick="HandleSubmit" disabled="@_submitting">@( _submitting ? "Submitting..." : "Submit")</button>
                 <a class="btn btn-secondary" href="/accidents/garage">Back</a>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_submitMessage))
+            {
+                <div class="alert alert-info fis-mt-1">@_submitMessage</div>
+            }
         </div>
     </div>
 </div>
@@ -320,6 +329,13 @@
     private short? _selectedSiteCode;
     private string _driverName = string.Empty;
     private string _driverIdNumber = string.Empty;
+    private string? _submitMessage;
+    private string _accidentDateText = DateTime.Today.ToString("yyyy-MM-dd");
+    private string _accidentTimeText = string.Empty;
+    private string _accidentDescription = string.Empty;
+    private string _accidentLocation = string.Empty;
+    private string _severity = "Low";
+    private bool _submitting;
 
     protected override async Task OnInitializedAsync()
     {
@@ -348,8 +364,68 @@
         return Task.CompletedTask;
     }
 
+    private async Task HandleSubmit()
+    {
+        _submitMessage = null;
+        if (!DateTime.TryParse(_accidentDateText, out var accidentDate))
+        {
+            _submitMessage = "Please provide a valid accident date.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_accidentDescription))
+        {
+            _submitMessage = "Accident description is required.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_accidentLocation))
+        {
+            _submitMessage = "Accident location is required.";
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            var payload = new AccidentDto
+            {
+                accident_date = accidentDate,
+                date_reported = DateTime.Now,
+                accident_description = _accidentDescription.Trim(),
+                accident_location = _accidentLocation.Trim(),
+                severity = string.IsNullOrWhiteSpace(_severity) ? "Low" : _severity,
+                driver_id = _selectedDriverCode,
+                driver_name = _driverName,
+                police_case_number = _driverIdNumber,
+                notes = string.IsNullOrWhiteSpace(_accidentTimeText) ? null : $"Accident Time: {_accidentTimeText.Trim()}"
+            };
+
+            await AccidentService.CreateAccidentAsync(payload);
+            Navigation.NavigateTo("/accidents/garage");
+        }
+        catch (Exception ex)
+        {
+            _submitMessage = $"Submit failed: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
     private static string SiteOptionLabel(SiteResponseDto site)
         => $"{site.Description} ({site.SiteCode})";
+
+    private void OnAccidentDateInput(ChangeEventArgs e)
+    {
+        _accidentDateText = e.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnAccidentTimeInput(ChangeEventArgs e)
+    {
+        _accidentTimeText = e.Value?.ToString() ?? string.Empty;
+    }
 
     private static string DriverOptionLabel(DriverDto driver)
     {

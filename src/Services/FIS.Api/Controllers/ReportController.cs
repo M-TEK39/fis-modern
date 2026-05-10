@@ -55,6 +55,9 @@ public class ReportController : BaseApiController
                 filters.Remove("view");
             }
 
+            ExpandLegacyParameterPairs(filters);
+            NormalizeLegacyAliases(filters);
+
             var report = await _legacyReportResultService.GetReportAsync(reportKey, filters, cancellationToken);
             return Ok(report);
         }
@@ -67,6 +70,57 @@ public class ReportController : BaseApiController
         {
             _logger.LogError(ex, "Error generating dynamic legacy report {ReportKey}", reportKey);
             return StatusCode(500, new { error = "Failed to generate legacy report", message = ex.Message });
+        }
+    }
+
+    private static void ExpandLegacyParameterPairs(IDictionary<string, string?> filters)
+    {
+        var hasNumberedParameters = filters.Keys.Any(key => key.StartsWith("ParamName", StringComparison.OrdinalIgnoreCase));
+        if (!hasNumberedParameters)
+        {
+            return;
+        }
+
+        for (var index = 1; index <= 20; index++)
+        {
+            var nameKey = $"ParamName{index}";
+            var valueKey = $"ParamValue{index}";
+
+            if (!filters.TryGetValue(nameKey, out var parameterName) || string.IsNullOrWhiteSpace(parameterName))
+            {
+                continue;
+            }
+
+            filters.TryGetValue(valueKey, out var parameterValue);
+            if (!filters.ContainsKey(parameterName))
+            {
+                filters[parameterName] = parameterValue;
+            }
+        }
+    }
+
+    private static void NormalizeLegacyAliases(IDictionary<string, string?> filters)
+    {
+        CopyAliasIfMissing(filters, "from", "StartDate");
+        CopyAliasIfMissing(filters, "from", "FromDate");
+        CopyAliasIfMissing(filters, "to", "EndDate");
+        CopyAliasIfMissing(filters, "to", "ToDate");
+        CopyAliasIfMissing(filters, "dept", "DepartmentID");
+        CopyAliasIfMissing(filters, "site", "SiteID");
+        CopyAliasIfMissing(filters, "search", "txtNum");
+        CopyAliasIfMissing(filters, "vmf", "v_code");
+    }
+
+    private static void CopyAliasIfMissing(IDictionary<string, string?> filters, string canonicalKey, string aliasKey)
+    {
+        if (filters.ContainsKey(canonicalKey))
+        {
+            return;
+        }
+
+        if (filters.TryGetValue(aliasKey, out var value) && !string.IsNullOrWhiteSpace(value))
+        {
+            filters[canonicalKey] = value;
         }
     }
 

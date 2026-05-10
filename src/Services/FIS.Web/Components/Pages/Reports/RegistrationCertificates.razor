@@ -1,10 +1,5 @@
 @page "/reports/registration-certificates"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@inject ReportApiService ReportService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Registration Certificates - Fleet Information System</PageTitle>
@@ -15,7 +10,7 @@
             <i class="bx bx-id-card"></i>
             Registration Certificates
         </h1>
-        <p class="page-description">Legacy registration certificate report sourced from scanned certificate records.</p>
+        <p class="page-description">Legacy registration certificate menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
@@ -26,326 +21,82 @@
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Number Type</label>
-                        <div class="contract-search-radio">
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
-                                GG
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
-                                GP
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />
-                                Engine
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />
-                                VIN / Chassis
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' />
-                                Invoice
-                            </label>
-                        </div>
-                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
-                    </div>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Registration Certificate Menu</span>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-vehicles")'>1) Registration Certificates for All Vehicles</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-vehicle")'>2) Registration Certificate for One Vehicle</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/fis-report">3) Return To Main Page</a>
+                        <span class="menu-item-badge">Menu</span>
+                    </div>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="registration-certificates" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Registration Certificates Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/registration-certificates">Back to Registration Certificate Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Fleet Number</th>
-                        <th>Registration Number</th>
-                        <th>From</th>
-                        <th>To</th>
-                        <th>Date Uploaded</th>
-                        <th>Registration Certificate</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="6">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@ValueOrDash(row.fleet_number)</td>
-                                <td>@ValueOrDash(row.registration_number)</td>
-                                <td>@FormatDate(row.period_from)</td>
-                                <td>@FormatDate(row.period_to)</td>
-                                <td>@FormatDate(row.date_uploaded)</td>
-                                <td>@ValueOrDash(row.registration_certificate)</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/registration-certificates" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private string _searchMode = "GG";
-    private string _searchTerm = string.Empty;
-    private List<RegistrationCertificateRow> _rows = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private bool _showFieldSelector;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("fleet_number", "Fleet Number", true),
-        new("registration_number", "Registration Number", true),
-        new("period_from", "From", true),
-        new("period_to", "To", true),
-        new("date_uploaded", "Date Uploaded", true),
-        new("registration_certificate", "Registration Certificate", true)
-    ];
-
-    private List<RegistrationCertificateRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/registration-certificates";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "mode")]
-    public string? QMode { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "search")]
-    public string? QSearch { get; set; }
-
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
+            ["rtype"] = reportType
+        };
 
-        return Task.CompletedTask;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/registration-certificates", filters));
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        { "mode", _searchMode },
-        { "search", _searchTerm },
+        "all-vehicles" => "registration-certificates",
+        "one-vehicle" => "registration-certificate-one-vehicle",
+        _ => "registration-certificates"
     };
 
-    private void ApplyQueryFilters()
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        _searchMode = QMode ?? "GG";
-        _searchTerm = QSearch ?? string.Empty;
-    }
+        "all-vehicles" => "Registration Certificates for All Vehicles",
+        "one-vehicle" => "Registration Certificate for One Vehicle",
+        _ => "Registration Certificates"
+    };
 
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            var search = _searchTerm.Trim();
-            var report = await ReportService.GetRegistrationCertificatesAsync(_searchMode, search);
-
-            var rows = report.Certificates.Select(c => new RegistrationCertificateRow
-            {
-                vmf_code = c.VmfCode,
-                fleet_number = c.FleetNumber,
-                registration_number = c.RegistrationNumber,
-                period_from = c.PeriodFrom,
-                period_to = c.PeriodTo,
-                date_uploaded = c.DateUploaded,
-                registration_certificate = c.RegistrationCertificate
-            });
-
-            _rows = rows
-                .OrderBy(v => v.fleet_number)
-                .ThenBy(v => v.period_from ?? DateTime.MaxValue)
-                .ThenBy(v => v.registration_number)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading registration certificates report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private Task ResetFiltersAsync()
-    {
-        _searchTerm = string.Empty;
-        _searchMode = "GG";
-        return Task.CompletedTask;
-    }
-
-    private void SetSearchMode(string mode)
-    {
-        _searchMode = mode;
-    }
-
-    private static string FormatDate(DateTime? value)
-        => value?.ToString("yyyy-MM-dd") ?? "-";
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "fleet_number" => ValueOrDash(row.fleet_number),
-                "registration_number" => ValueOrDash(row.registration_number),
-                "period_from" => FormatDate(row.period_from),
-                "period_to" => FormatDate(row.period_to),
-                "date_uploaded" => FormatDate(row.date_uploaded),
-                "registration_certificate" => ValueOrDash(row.registration_certificate),
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"registration_certificates_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
-
-    private sealed class RegistrationCertificateRow
-    {
-        public int vmf_code { get; set; }
-        public string? fleet_number { get; set; }
-        public string? registration_number { get; set; }
-        public DateTime? period_from { get; set; }
-        public DateTime? period_to { get; set; }
-        public DateTime? date_uploaded { get; set; }
-        public string? registration_certificate { get; set; }
-    }
+            "all-vehicles" => "all-vehicles",
+            "one-vehicle" => "one-vehicle",
+            _ => "all-vehicles"
+        };
 }

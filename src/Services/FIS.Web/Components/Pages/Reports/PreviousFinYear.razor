@@ -1,255 +1,74 @@
 @page "/reports/previous-fin-year"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
+@using FIS.Web.Components.Shared
+@inject NavigationManager Navigation
 
-<PageTitle>Previous Fin Year Transactions in Current Year - Fleet Information System</PageTitle>
+<PageTitle>Previous Fin Year Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
             <i class="bx bx-history"></i>
-            Previous Fin Year Transactions Captured in Current Fin Year
+            Previous Fin Year Reports
         </h1>
-        <p class="page-description">Detect vehicles where effective transaction date differs from capture year.</p>
+        <p class="page-description">Legacy report set for previous financial-year transactions captured in the current financial year.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
-        <a class="btn btn-primary btn-sm" href="/vehicles">Vehicle Master</a>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">Previous Fin Year Capture Exceptions</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Previous Fin Year Reports</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <button type="button" class="btn btn-primary btn-sm" @onclick='() => NavigateToResults("manual")'>
+                            i) Manual Logsheet Kilos captured in current Fin Year
+                        </button>
+                    </div>
+                    <div class="menu-item fis-mt-075">
+                        <button type="button" class="btn btn-primary btn-sm" @onclick='() => NavigateToResults("vip-taxi")'>
+                            ii) VIP &amp; Taxi requisitions captured in current Fin Year
+                        </button>
                     </div>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>GP Number</th>
-                        <th>Vehicle</th>
-                        <th>Transaction Date</th>
-                        <th>Captured Date</th>
-                        <th>Exception</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="6">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="6">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@ValueOrDash(row.Vehicle.fleet_number)</td>
-                                <td>@ValueOrDash(row.Vehicle.registration_number)</td>
-                                <td>@GetVehicleLabel(row.Vehicle)</td>
-                                <td>@row.TransactionDate.ToString("yyyy-MM-dd")</td>
-                                <td>@row.CapturedDate.ToString("yyyy-MM-dd")</td>
-                                <td>@row.Reason</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+    }
+    else
+    {
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="@_pageRoute" />
+    }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<FinYearExceptionRow> _rows = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("gg_number", "GG Number", true),
-        new("gp_number", "GP Number", true),
-        new("vehicle", "Vehicle", true),
-        new("transaction_date", "Transaction Date", true),
-        new("captured_date", "Captured Date", true),
-        new("exception", "Exception", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
+    private const string _pageRoute = "/reports/previous-fin-year";
 
-    private List<FinYearExceptionRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "kind")]
+    public string? Kind { get; set; }
+
+    private void NavigateToResults(string kind)
     {
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            var vehicles = (await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000)).Data;
-            var currentYear = DateTime.Today.Year;
-            var results = new List<FinYearExceptionRow>();
-
-            foreach (var vehicle in vehicles)
-            {
-                var capturedDate = vehicle.date_created ?? vehicle.captured_date;
-                var transactionDate = vehicle.purchase_date ?? vehicle.take_on_date;
-
-                if (!capturedDate.HasValue || !transactionDate.HasValue)
-                {
-                    continue;
-                }
-
-                if (capturedDate.Value.Year == currentYear && transactionDate.Value.Year < currentYear)
-                {
-                    results.Add(new FinYearExceptionRow(
-                        Vehicle: vehicle,
-                        TransactionDate: transactionDate.Value,
-                        CapturedDate: capturedDate.Value,
-                        Reason: "Transaction belongs to previous financial year but captured this year."));
-                }
-            }
-
-            _rows = results
-                .OrderByDescending(r => r.CapturedDate)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading previous-fin-year report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string GetVehicleLabel(VehicleDto row)
-        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            { "kind", kind }
         };
 
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "gg_number" => ValueOrDash(row.Vehicle.fleet_number),
-                "gp_number" => ValueOrDash(row.Vehicle.registration_number),
-                "vehicle" => GetVehicleLabel(row.Vehicle),
-                "transaction_date" => row.TransactionDate.ToString("yyyy-MM-dd"),
-                "captured_date" => row.CapturedDate.ToString("yyyy-MM-dd"),
-                "exception" => row.Reason,
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"previous_fin_year_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, filters));
     }
 
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
-
-    private sealed record FinYearExceptionRow(
-        VehicleDto Vehicle,
-        DateTime TransactionDate,
-        DateTime CapturedDate,
-        string Reason);
+    private string GetReportKey()
+        => string.Equals(Kind, "vip-taxi", StringComparison.OrdinalIgnoreCase)
+            ? "previous-fin-year-vip-taxi"
+            : "previous-fin-year-manual-logs";
 }

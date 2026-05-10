@@ -1,11 +1,5 @@
 @page "/reports/departments-sites"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@using FIS.Web.Components.Shared
-@inject DepartmentApiService DepartmentService
-@inject SiteApiService SiteService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Department &amp; Site Reports - Fleet Information System</PageTitle>
@@ -16,632 +10,100 @@
             <i class="bx bx-buildings"></i>
             Department &amp; Site Reports
         </h1>
-        <p class="page-description">Department and site reporting aligned to menu flow.</p>
+        <p class="page-description">Legacy department and site report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
-        <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
-        <a class="btn btn-primary btn-sm" href="/departments">Departments</a>
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/departments">Departments Module</a>
     </div>
 </div>
 
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Department</label>
-                        <select class="form-select" @bind="_departmentCode">
-                            <option value="">All Departments</option>
-                            @foreach (var department in _departments.OrderBy(d => d.department_description))
-                            {
-                                <option value="@department.department_code">@($"{ValueOrDash(department.department_description)} ({department.department_code})")</option>
-                            }
-                        </select>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" @bind="_statusFilter">
-                            <option value="all">All</option>
-                            <option value="active">Active only</option>
-                            <option value="inactive">Inactive only</option>
-                        </select>
-                    </div>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Department Reports Menu</span>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadDataAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-department")'>1) One Department</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-site")'>2) One Site</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-dept-site-count")'>3) All Departments &amp; Site with number vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-dept-site-contact")'>4) All Departments &amp; Sites with contact details</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicles-on-els")'>5) List of Vehicles on ELS</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("vehicles-on-manual-logs")'>6) List of Vehicles on Manual LOGSHEETS</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("outstanding-logs-combined")'>7) Outstanding Logs per Dept : ELS and Manual Logs Combined</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="departments-sites" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Departments</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleDepartmentFieldSelector">Select Fields</button>
-                <button class="btn btn-secondary btn-sm" @onclick="OpenDepartmentHtmlAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Open HTML</button>
-                <button class="btn btn-secondary btn-sm" @onclick="PrintDepartmentPdfAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Print PDF</button>
-                <button class="btn btn-secondary btn-sm" @onclick="DownloadDepartmentExcelAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Download Excel</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadDepartmentCsvAsync" disabled="@(_loading || _filteredDepartments.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showDepartmentFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _departmentExportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/departments-sites">Back to Department &amp; Site Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Department</th>
-                        <th>Description</th>
-                        <th>Contact Person</th>
-                        <th>Telephone</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="5">Loading report...</td></tr>
-                    }
-                    else if (PagedDepartments.Count == 0)
-                    {
-                        <tr><td colspan="5">No departments found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var department in PagedDepartments)
-                        {
-                            <tr>
-                                <td>@department.department_code</td>
-                                <td>@ValueOrDash(department.department_description)</td>
-                                <td>@ValueOrDash(department.contact_person)</td>
-                                <td>@ValueOrDash(department.telephone)</td>
-                                <td>@(department.dept_active ? "Active" : "Inactive")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_filteredDepartments.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevDepartmentPage" disabled="@(_departmentPage <= 1)">Previous</button>
-                <div class="pagination-info">Page @_departmentPage of @DepartmentTotalPages</div>
-                <button class="pagination-btn" @onclick="NextDepartmentPage" disabled="@(_departmentPage >= DepartmentTotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_filteredDepartments.Count | Page size: @_pageSize</div>
-        }
-    </div>
 
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Sites</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleSiteFieldSelector">Select Fields</button>
-                <button class="btn btn-secondary btn-sm" @onclick="OpenSiteHtmlAsync" disabled="@(_loading || _filteredSites.Count == 0)">Open HTML</button>
-                <button class="btn btn-secondary btn-sm" @onclick="PrintSitePdfAsync" disabled="@(_loading || _filteredSites.Count == 0)">Print PDF</button>
-                <button class="btn btn-secondary btn-sm" @onclick="DownloadSiteExcelAsync" disabled="@(_loading || _filteredSites.Count == 0)">Download Excel</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadSiteCsvAsync" disabled="@(_loading || _filteredSites.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showSiteFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _siteExportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Site</th>
-                        <th>Department</th>
-                        <th>Description</th>
-                        <th>Telephone</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="5">Loading report...</td></tr>
-                    }
-                    else if (PagedSites.Count == 0)
-                    {
-                        <tr><td colspan="5">No sites found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var site in PagedSites)
-                        {
-                            <tr>
-                                <td>@site.SiteCode</td>
-                                <td>@GetDepartmentLabel(site.DepartmentCode)</td>
-                                <td>@ValueOrDash(site.Description)</td>
-                                <td>@ValueOrDash(site.Telephone)</td>
-                                <td>@(site.SiteActive ? "Active" : "Inactive")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
-        @if (_filteredSites.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevSitePage" disabled="@(_sitePage <= 1)">Previous</button>
-                <div class="pagination-info">Page @_sitePage of @SiteTotalPages</div>
-                <button class="pagination-btn" @onclick="NextSitePage" disabled="@(_sitePage >= SiteTotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_filteredSites.Count | Page size: @_pageSize</div>
-        }
-    </div>
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/departments-sites" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private List<DepartmentDto> _departments = new();
-    private List<DepartmentDto> _filteredDepartments = new();
-    private List<SiteResponseDto> _sites = new();
-    private List<SiteResponseDto> _filteredSites = new();
-    private string _departmentCode = string.Empty;
-    private string _statusFilter = "all";
-    private int _departmentPage = 1;
-    private int _sitePage = 1;
-    private const int _pageSize = 12;
-    private bool _showDepartmentFieldSelector;
-    private bool _showSiteFieldSelector;
-    private readonly List<ExportField> _departmentExportFields =
-    [
-        new("department", "Department", true),
-        new("description", "Description", true),
-        new("contact", "Contact Person", true),
-        new("telephone", "Telephone", true),
-        new("status", "Status", true)
-    ];
-    private readonly List<ExportField> _siteExportFields =
-    [
-        new("site", "Site", true),
-        new("department", "Department", true),
-        new("description", "Description", true),
-        new("telephone", "Telephone", true),
-        new("status", "Status", true)
-    ];
-
-    private List<DepartmentDto> PagedDepartments => _filteredDepartments.Skip((_departmentPage - 1) * _pageSize).Take(_pageSize).ToList();
-    private List<SiteResponseDto> PagedSites => _filteredSites.Skip((_sitePage - 1) * _pageSize).Take(_pageSize).ToList();
-    private int DepartmentTotalPages => Math.Max(1, (int)Math.Ceiling(_filteredDepartments.Count / (double)_pageSize));
-    private int SiteTotalPages => Math.Max(1, (int)Math.Ceiling(_filteredSites.Count / (double)_pageSize));
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/departments-sites";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "dept")]
-    public string? QDept { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "status")]
-    public string? QStatus { get; set; }
-
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
-        {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-
-        return Task.CompletedTask;
+        var filters = new Dictionary<string, string?> { ["rtype"] = reportType };
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/departments-sites", filters));
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        { "dept", _departmentCode },
-        { "status", _statusFilter },
+        "one-department" => "departments-one-department",
+        "one-site" => "departments-one-site",
+        "all-dept-site-count" => "departments-sites",
+        "all-dept-site-contact" => "departments-sites-contact",
+        "vehicles-on-els" => "departments-vehicles-els",
+        "vehicles-on-manual-logs" => "departments-vehicles-manual-logs",
+        "outstanding-logs-combined" => "departments-outstanding-logs-combined",
+        _ => "departments-sites"
     };
 
-    private void ApplyQueryFilters()
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        _departmentCode = QDept ?? string.Empty;
-        _statusFilter = QStatus ?? "all";
-    }
+        "one-department" => "One Department",
+        "one-site" => "One Site",
+        "all-dept-site-count" => "All Departments & Site with number vehicles",
+        "all-dept-site-contact" => "All Departments & Sites with contact details",
+        "vehicles-on-els" => "List of Vehicles on ELS",
+        "vehicles-on-manual-logs" => "List of Vehicles on Manual LOGSHEETS",
+        "outstanding-logs-combined" => "Outstanding Logs per Dept : ELS and Manual Logs Combined",
+        _ => "Department & Site Reports"
+    };
 
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadDataAsync();
-    }
-
-    private async Task LoadDataAsync()
-    {
-        _loading = true;
-        try
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            _departments = await DepartmentService.GetDepartmentsAsync();
-            _sites = await SiteService.GetAllAsync();
-            ApplyFilters();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading department/site report: {ex.Message}");
-            _departments = new();
-            _sites = new();
-            _filteredDepartments = new();
-            _filteredSites = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void ApplyFilters()
-    {
-        short? selectedDepartment = short.TryParse(_departmentCode, out var departmentCode) ? departmentCode : null;
-
-        _filteredDepartments = _departments
-            .Where(d => !selectedDepartment.HasValue || d.department_code == selectedDepartment.Value)
-            .Where(d => _statusFilter == "all"
-                || (_statusFilter == "active" && d.dept_active)
-                || (_statusFilter == "inactive" && !d.dept_active))
-            .OrderBy(d => d.department_description)
-            .ToList();
-
-        _filteredSites = _sites
-            .Where(s => !selectedDepartment.HasValue || s.DepartmentCode == selectedDepartment.Value)
-            .Where(s => _statusFilter == "all"
-                || (_statusFilter == "active" && s.SiteActive)
-                || (_statusFilter == "inactive" && !s.SiteActive))
-            .OrderBy(s => s.Description)
-            .ToList();
-
-        _departmentPage = 1;
-        _sitePage = 1;
-    }
-
-    private void ResetFilters()
-    {
-        _departmentCode = string.Empty;
-        _statusFilter = "all";
-        ApplyFilters();
-    }
-
-    private string GetDepartmentLabel(short? departmentCode)
-    {
-        if (!departmentCode.HasValue)
-        {
-            return "-";
-        }
-
-        var department = _departments.FirstOrDefault(d => d.department_code == departmentCode.Value);
-        return department == null
-            ? departmentCode.Value.ToString()
-            : $"{ValueOrDash(department.department_description)} ({department.department_code})";
-    }
-
-    private void PrevDepartmentPage()
-    {
-        if (_departmentPage > 1)
-        {
-            _departmentPage--;
-        }
-    }
-
-    private void NextDepartmentPage()
-    {
-        if (_departmentPage < DepartmentTotalPages)
-        {
-            _departmentPage++;
-        }
-    }
-
-    private void PrevSitePage()
-    {
-        if (_sitePage > 1)
-        {
-            _sitePage--;
-        }
-    }
-
-    private void NextSitePage()
-    {
-        if (_sitePage < SiteTotalPages)
-        {
-            _sitePage++;
-        }
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private void ToggleDepartmentFieldSelector()
-    {
-        _showDepartmentFieldSelector = !_showDepartmentFieldSelector;
-    }
-
-    private void ToggleSiteFieldSelector()
-    {
-        _showSiteFieldSelector = !_showSiteFieldSelector;
-    }
-
-    private async Task DownloadDepartmentCsvAsync()
-    {
-        var selected = _departmentExportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _filteredDepartments)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "department" => row.department_code.ToString(),
-                "description" => ValueOrDash(row.department_description),
-                "contact" => ValueOrDash(row.contact_person),
-                "telephone" => ValueOrDash(row.telephone),
-                "status" => row.dept_active ? "Active" : "Inactive",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"departments_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private async Task DownloadDepartmentExcelAsync()
-    {
-        var html = BuildDepartmentHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        var fileName = $"departments_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
-    }
-
-    private async Task OpenDepartmentHtmlAsync()
-    {
-        var html = BuildDepartmentHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Departments Report");
-    }
-
-    private async Task PrintDepartmentPdfAsync()
-    {
-        var html = BuildDepartmentHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Departments Report");
-    }
-
-    private async Task DownloadSiteCsvAsync()
-    {
-        var selected = _siteExportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _filteredSites)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "site" => row.SiteCode.ToString(),
-                "department" => GetDepartmentLabel(row.DepartmentCode),
-                "description" => ValueOrDash(row.Description),
-                "telephone" => ValueOrDash(row.Telephone),
-                "status" => row.SiteActive ? "Active" : "Inactive",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"sites_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private async Task DownloadSiteExcelAsync()
-    {
-        var html = BuildSiteHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        var fileName = $"sites_report_{DateTime.Now:yyyyMMdd_HHmm}.xls";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, html, "application/vnd.ms-excel;charset=utf-8");
-    }
-
-    private async Task OpenSiteHtmlAsync()
-    {
-        var html = BuildSiteHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.openHtml", html, "Sites Report");
-    }
-
-    private async Task PrintSitePdfAsync()
-    {
-        var html = BuildSiteHtml();
-        if (string.IsNullOrWhiteSpace(html))
-        {
-            return;
-        }
-
-        await JSRuntime.InvokeVoidAsync("fisPrint.printHtml", html, "Sites Report");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private string BuildDepartmentHtml()
-    {
-        var selected = _departmentExportFields.Where(f => f.Selected).ToList();
-        if (_filteredDepartments.Count == 0 || selected.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
-        var body = string.Join(
-            string.Empty,
-            _filteredDepartments.Select(row =>
-            {
-                var cells = selected.Select(field => field.Key switch
-                {
-                    "department" => row.department_code.ToString(),
-                    "description" => ValueOrDash(row.department_description),
-                    "contact" => ValueOrDash(row.contact_person),
-                    "telephone" => ValueOrDash(row.telephone),
-                    "status" => row.dept_active ? "Active" : "Inactive",
-                    _ => "-"
-                });
-
-                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
-            }));
-
-        return BuildHtmlDocument("Departments Report", head, body);
-    }
-
-    private string BuildSiteHtml()
-    {
-        var selected = _siteExportFields.Where(f => f.Selected).ToList();
-        if (_filteredSites.Count == 0 || selected.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var head = string.Join(string.Empty, selected.Select(field => $"<th>{HtmlEncode(field.Label)}</th>"));
-        var body = string.Join(
-            string.Empty,
-            _filteredSites.Select(row =>
-            {
-                var cells = selected.Select(field => field.Key switch
-                {
-                    "site" => row.SiteCode.ToString(),
-                    "department" => GetDepartmentLabel(row.DepartmentCode),
-                    "description" => ValueOrDash(row.Description),
-                    "telephone" => ValueOrDash(row.Telephone),
-                    "status" => row.SiteActive ? "Active" : "Inactive",
-                    _ => "-"
-                });
-
-                return $"<tr>{string.Join(string.Empty, cells.Select(value => $"<td>{HtmlEncode(value)}</td>"))}</tr>";
-            }));
-
-        return BuildHtmlDocument("Sites Report", head, body);
-    }
-
-    private static string BuildHtmlDocument(string title, string head, string body)
-    {
-        var html = new System.Text.StringBuilder();
-        html.AppendLine("<!doctype html>");
-        html.AppendLine("<html>");
-        html.AppendLine("<head>");
-        html.AppendLine("<meta charset=\"utf-8\" />");
-        html.AppendLine($"<title>{HtmlEncode(title)}</title>");
-        html.AppendLine("<style>");
-        html.AppendLine("body { font-family: Arial, sans-serif; margin: 16px; color: #1f2937; }");
-        html.AppendLine("h1 { font-size: 20px; margin: 0 0 12px 0; }");
-        html.AppendLine("table { border-collapse: collapse; width: 100%; }");
-        html.AppendLine("th, td { border: 1px solid #d1d5db; padding: 6px 8px; text-align: left; font-size: 12px; }");
-        html.AppendLine("th { background: #f3f4f6; }");
-        html.AppendLine("</style>");
-        html.AppendLine("</head>");
-        html.AppendLine("<body>");
-        html.AppendLine($"<h1>{HtmlEncode(title)}</h1>");
-        html.AppendLine("<table>");
-        html.AppendLine($"<thead><tr>{head}</tr></thead>");
-        html.AppendLine($"<tbody>{body}</tbody>");
-        html.AppendLine("</table>");
-        html.AppendLine("</body>");
-        html.AppendLine("</html>");
-        return html.ToString();
-    }
-
-    private static string HtmlEncode(string? value)
-        => System.Net.WebUtility.HtmlEncode(value ?? string.Empty);
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+            "one-department" => "one-department",
+            "one-site" => "one-site",
+            "all-dept-site-count" => "all-dept-site-count",
+            "all-dept-site-contact" => "all-dept-site-contact",
+            "vehicles-on-els" => "vehicles-on-els",
+            "vehicles-on-manual-logs" => "vehicles-on-manual-logs",
+            "outstanding-logs-combined" => "outstanding-logs-combined",
+            _ => "all-dept-site-count"
+        };
 }

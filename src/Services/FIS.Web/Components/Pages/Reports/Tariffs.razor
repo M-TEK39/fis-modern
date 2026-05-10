@@ -1,10 +1,6 @@
 @page "/reports/tariffs"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
-@inject TariffApiService TariffService
-@inject ClassApiService ClassService
-@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>Tariffs Reports - Fleet Information System</PageTitle>
 
@@ -14,326 +10,96 @@
             <i class="bx bx-calculator"></i>
             Tariffs Reports
         </h1>
-        <p class="page-description">Tariff reporting hub with quick links and live snapshot.</p>
+        <p class="page-description">Legacy tariffs report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
-        <a class="btn btn-primary btn-sm" href="/reports/tariffs-fin-year">Tariffs Fin Year</a>
+        <a class="btn btn-primary btn-sm" href="/validation">Validation Module</a>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="menu-tiles">
-        <div class="menu-tile">
-            <div class="menu-tile-header">
-                <span>Tariff Reports</span>
-            </div>
-            <div class="menu-tile-body">
-                <div class="menu-item"><a class="menu-item-link" href="/reports/tariffs-fin-year">11) Published Tariffs in Financial Year</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/reports/tariffs-class-2007">12) Tariffs by Class (2007 and Earlier)</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/reports/tariffs-per-vehicle">13) Tariffs per Vehicle (2008 and Later)</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/reports/vehicles-no-tariff">9.7) Vehicles with Expired or No Tariff</a></div>
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Tariffs Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("class-codes-with-tariffs")'>1) Class codes with tariffs</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("licence-fees")'>2) Licence fees</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("make-model-with-tariffs")'>3) Make Model with tariffs</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("private-taxi-tariffs")'>4) Private Taxi Tariffs</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("nom-vehicles-without-tariffs")'>5) List of NOM Vehicles that don't have Tariffs</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
+                </div>
             </div>
         </div>
-    </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/tariffs">Back to Tariffs Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
+            </div>
+        </div>
 
-    <div class="form-card fis-mt-15">
-        <div class="form-card-body">
-            <div class="form-grid">
-                <div class="form-field">
-                    <label class="form-label">Class</label>
-                    <select class="form-select" @bind="_classCode" @bind:after="LoadReportAsync">
-                        <option value="">All classes</option>
-                        @foreach (var item in _classes.OrderBy(c => c.class_description))
-                        {
-                            <option value="@item.class_code">@($"{ValueOrDash(item.class_description)} ({item.class_code})")</option>
-                        }
-                    </select>
-                </div>
-                <div class="form-field">
-                    <label class="form-label">Year Manufactured</label>
-                    <input class="form-input" type="number" min="1900" max="2100" @bind="_yearManufactured" @bind:after="LoadReportAsync" />
-                </div>
-                <div class="form-field">
-                    <label class="form-label">Approval Status</label>
-                    <select class="form-select" @bind="_tariffApprovalStatus" @bind:after="LoadReportAsync">
-                        <option value="">All statuses</option>
-                        <option value="0">Draft</option>
-                        <option value="1">Pending Approval</option>
-                        <option value="2">Approved</option>
-                        <option value="3">Rejected</option>
-                    </select>
-                </div>
-                <div class="form-field">
-                    <label class="form-label">Effective On</label>
-                    <input class="form-input" type="date" @bind="_effectiveOn" @bind:after="LoadReportAsync" />
-                </div>
-            </div>
-            <div class="form-actions">
-                <button class="btn btn-secondary btn-sm" @onclick="ClearFilters" disabled="@_loading">Clear Filters</button>
-                <button class="btn btn-primary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Refresh</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Tariff Snapshot</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
-                </div>
-            </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Tariff ID</th>
-                        <th>Class</th>
-                        <th>Year</th>
-                        <th>Status</th>
-                        <th>Monthly Fixed (R)</th>
-                        <th>Monthly ODO (R)</th>
-                        <th>Daily Fixed (R)</th>
-                        <th>Hourly Fixed (R)</th>
-                        <th>Fuel/KM (R)</th>
-                        <th>Effective Start</th>
-                        <th>Effective End</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="11">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="11">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.tariff_code</td>
-                                <td>@GetClassLabel(row.class_code)</td>
-                                <td>@row.year_manufactured</td>
-                                <td>@ValueOrDash(row.approval_status_text)</td>
-                                <td>@FormatCurrency(row.monthly_fixed_amount)</td>
-                                <td>@FormatCurrency(row.monthly_odo_amount)</td>
-                                <td>@FormatCurrency(row.daily_fixed_amount)</td>
-                                <td>@FormatCurrency(row.hourly_fixed_amount)</td>
-                                <td>@FormatCurrency(row.fuel_kilo_tariff)</td>
-                                <td>@FormatDate(row.effective_start_date)</td>
-                                <td>@FormatDate(row.effective_end_date)</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
-        </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-        }
-        <div class="pagination-meta">Showing @_totalCount tariff(s) | Page size: @_pageSize</div>
-    </div>
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/tariffs" />
+    }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private int _page = 1;
-    private const int _pageSize = 12;
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private short? _classCode;
-    private short? _yearManufactured;
-    private short? _tariffApprovalStatus;
-    private DateTime? _effectiveOn;
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    private int _totalCount;
-    private List<ClassDto> _classes = new();
-    private List<TariffManagementItemDto> _rows = new();
-    private readonly List<ExportField> _exportFields =
-    [
-        new("tariff_code", "Tariff ID", true),
-        new("class", "Class", true),
-        new("year_manufactured", "Year", true),
-        new("approval_status_text", "Status", true),
-        new("monthly_fixed_amount", "Monthly Fixed (R)", true),
-        new("monthly_odo_amount", "Monthly ODO (R)", true),
-        new("daily_fixed_amount", "Daily Fixed (R)", true),
-        new("hourly_fixed_amount", "Hourly Fixed (R)", true),
-        new("fuel_kilo_tariff", "Fuel/KM (R)", true),
-        new("effective_start_date", "Effective Start", true),
-        new("effective_end_date", "Effective End", true)
-    ];
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    private List<TariffManagementItemDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
-
-    protected override async Task OnInitializedAsync()
+    private void NavigateToReport(string reportType)
     {
-        _classes = await ClassService.GetClassesAsync();
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            var result = await TariffService.GetTariffManagementAsync(new TariffManagementFilter
-            {
-                class_code = _classCode,
-                year_manufactured = _yearManufactured,
-                tariff_approval_status = _tariffApprovalStatus,
-                effective_on = _effectiveOn
-            });
-
-            _rows = result.tariffs
-                .OrderBy(r => r.class_code)
-                .ThenByDescending(r => r.year_manufactured)
-                .ThenBy(r => r.tariff_code)
-                .ToList();
-            _totalCount = result.total_count > 0 ? result.total_count : _rows.Count;
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tariffs report: {ex.Message}");
-            _rows = new();
-            _totalCount = 0;
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task ClearFilters()
-    {
-        _classCode = null;
-        _yearManufactured = null;
-        _tariffApprovalStatus = null;
-        _effectiveOn = null;
-        await LoadReportAsync();
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _rows)
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/tariffs", filters));
+    }
+
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
+    {
+        "class-codes-with-tariffs" => "tariffs-class-codes",
+        "licence-fees" => "tariffs-licence-fees",
+        "make-model-with-tariffs" => "tariffs-make-model",
+        "private-taxi-tariffs" => "tariffs-private-taxi",
+        "nom-vehicles-without-tariffs" => "vehicles-no-tariff",
+        _ => "tariffs-class-codes"
+    };
+
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
+    {
+        "class-codes-with-tariffs" => "Class codes with tariffs",
+        "licence-fees" => "Licence fees",
+        "make-model-with-tariffs" => "Make Model with tariffs",
+        "private-taxi-tariffs" => "Private Taxi Tariffs",
+        "nom-vehicles-without-tariffs" => "List of NOM Vehicles that don't have Tariffs",
+        _ => "Tariffs Reports"
+    };
+
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            var values = selected.Select(field => field.Key switch
-            {
-                "tariff_code" => row.tariff_code.ToString(),
-                "class" => GetClassLabel(row.class_code),
-                "year_manufactured" => row.year_manufactured.ToString(),
-                "approval_status_text" => ValueOrDash(row.approval_status_text),
-                "monthly_fixed_amount" => FormatCurrency(row.monthly_fixed_amount),
-                "monthly_odo_amount" => FormatCurrency(row.monthly_odo_amount),
-                "daily_fixed_amount" => FormatCurrency(row.daily_fixed_amount),
-                "hourly_fixed_amount" => FormatCurrency(row.hourly_fixed_amount),
-                "fuel_kilo_tariff" => FormatCurrency(row.fuel_kilo_tariff),
-                "effective_start_date" => FormatDate(row.effective_start_date),
-                "effective_end_date" => FormatDate(row.effective_end_date),
-                _ => "-"
-            });
-
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"tariffs_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private string GetClassLabel(short classCode)
-    {
-        var item = _classes.FirstOrDefault(c => c.class_code == classCode);
-        return item == null ? classCode.ToString() : $"{ValueOrDash(item.class_description)} ({item.class_code})";
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string FormatDate(DateTime? value)
-        => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
-
-    private static string FormatCurrency(decimal? value)
-        => value.HasValue ? value.Value.ToString("N2") : "-";
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+            "class-codes-with-tariffs" => "class-codes-with-tariffs",
+            "licence-fees" => "licence-fees",
+            "make-model-with-tariffs" => "make-model-with-tariffs",
+            "private-taxi-tariffs" => "private-taxi-tariffs",
+            "nom-vehicles-without-tariffs" => "nom-vehicles-without-tariffs",
+            _ => "class-codes-with-tariffs"
+        };
 }

@@ -1,11 +1,6 @@
 @page "/reports/asset-list"
 @rendermode InteractiveServer
-@using FIS.Web.Models
-@using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@inject ReportApiService ReportService
-@inject SiteApiService SiteService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Asset List - Fleet Information System</PageTitle>
@@ -16,7 +11,7 @@
             <i class="bx bx-list-ul"></i>
             Asset List: New &amp; In-Service Vehicles
         </h1>
-        <p class="page-description">Asset-focused list for vehicles in New and In Service status.</p>
+        <p class="page-description">Legacy asset list submenu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
@@ -27,405 +22,80 @@
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Number Type</label>
-                        <div class="contract-search-radio">
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' />
-                                GG
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' />
-                                GP
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' />
-                                Engine
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' />
-                                VIN / Chassis
-                            </label>
-                            <label class="form-radio-label">
-                                <input type="radio" name="searchMode" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' />
-                                Invoice
-                            </label>
-                        </div>
-                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">Site</label>
-                        <select class="form-select" @bind="_siteCode">
-                            <option value="">All</option>
-                            @foreach (var site in _sites.OrderBy(s => s.Description))
-                            {
-                                <option value="@site.SiteCode">@($"{ValueOrDash(site.Description)} ({site.SiteCode})")</option>
-                            }
-                        </select>
-                    </div>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Asset List: All Vehicles Reports New & In-Service</span>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-departments")'>i) Asset List: All Vehicles in FIS with status New &amp; In-Service (All Departments)</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("by-province")'>ii) Asset List: All Vehicles in FIS with status New &amp; In-Service (View by PROVINCE)</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("by-department")'>iii) Asset List: All Vehicles in FIS with status New &amp; In-Service (View by DEPARTMENT)</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("by-site")'>iv) Asset List: All Vehicles in FIS with status New &amp; In-Service (View by SITE)</a><span class="menu-item-badge">Report</span></div>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="asset-list" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Asset List Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/asset-list">Back to Asset List Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports">Reports Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>GG Number</th>
-                        <th>GP Number</th>
-                        <th>Vehicle</th>
-                        <th>Status</th>
-                        <th>Site</th>
-                        <th>Year</th>
-                        <th>Current ODO</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="7">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="7">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@ValueOrDash(row.fleet_number)</td>
-                                <td>@ValueOrDash(row.registration_number)</td>
-                                <td>@GetVehicleLabel(row)</td>
-                                <td>@ValueOrDash(row.status_text)</td>
-                                <td>@GetSiteLabel(row)</td>
-                                <td>@(row.year_manufactured?.ToString() ?? "-")</td>
-                                <td>@(row.current_odo?.ToString("N0") ?? "-")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/asset-list" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private string _searchMode = "GG";
-    private string _searchTerm = string.Empty;
-    private string _siteCode = string.Empty;
-    private List<AssetListRow> _rows = new();
-    private List<SiteResponseDto> _sites = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("gg_number", "GG Number", true),
-        new("gp_number", "GP Number", true),
-        new("vehicle", "Vehicle", true),
-        new("status", "Status", true),
-        new("site", "Site", true),
-        new("year", "Year", true),
-        new("current_odo", "Current ODO", true)
-    ];
-
-    private List<AssetListRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/asset-list";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "mode")]
-    public string? QMode { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "search")]
-    public string? QSearch { get; set; }
-
-    [Parameter, SupplyParameterFromQuery(Name = "site")]
-    public string? QSite { get; set; }
-
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
-        return Task.CompletedTask;
+            ["rtype"] = reportType
+        };
+
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/asset-list", filters));
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        { "mode", _searchMode },
-        { "search", _searchTerm },
-        { "site", _siteCode },
+        "all-departments" => "asset-list",
+        "by-province" => "asset-list-by-province",
+        "by-department" => "asset-list-by-department",
+        "by-site" => "asset-list-by-site",
+        _ => "asset-list"
     };
 
-    private void ApplyQueryFilters()
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        _searchMode = QMode ?? "GG";
-        _searchTerm = QSearch ?? string.Empty;
-        _siteCode = QSite ?? string.Empty;
-    }
+        "all-departments" => "Asset List: All Vehicles in FIS with status New & In-Service (All Departments)",
+        "by-province" => "Asset List: All Vehicles in FIS with status New & In-Service (View by PROVINCE)",
+        "by-department" => "Asset List: All Vehicles in FIS with status New & In-Service (View by DEPARTMENT)",
+        "by-site" => "Asset List: All Vehicles in FIS with status New & In-Service (View by SITE)",
+        _ => "Asset List: All Vehicles Reports New & In-Service"
+    };
 
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        _sites = await SiteService.GetAllAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            var search = _searchTerm.Trim();
-            var selectedSite = short.TryParse(_siteCode, out var siteCode) ? siteCode : (short?)null;
-
-            var report = await ReportService.GetNewInServiceReportAsync(
-                search: string.IsNullOrWhiteSpace(search) ? null : search,
-                location_code: selectedSite);
-
-            var rows = report.vehicles.Select(v =>
-            {
-                return new AssetListRow
-                     {
-                         vmf_code = v.vmf_code,
-                         fleet_number = v.fleet_number,
-                         registration_number = v.registration_number,
-                         chassis_number = v.chassis_number,
-                         engine_number_1 = v.engine_number_1,
-                         invoice_number = v.invoice_number,
-                         status_text = v.status_text,
-                         site_name = v.site_name,
-                         location_code = v.location_code,
-                    year_manufactured = v.year_manufactured,
-                    current_odo = v.current_odo
-                };
-            });
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                rows = rows.Where(r => MatchesSearchMode(r, search, _searchMode));
-            }
-
-            _rows = rows
-                .Where(r => !selectedSite.HasValue || r.location_code == selectedSite.Value)
-                .OrderBy(r => r.fleet_number)
-                .ThenBy(r => r.registration_number)
-                .ToList();
-
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading asset list report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private Task ResetFiltersAsync()
-    {
-        _searchTerm = string.Empty;
-        _siteCode = string.Empty;
-        _searchMode = "GG";
-        return Task.CompletedTask;
-    }
-
-    private void SetSearchMode(string mode)
-    {
-        _searchMode = mode;
-    }
-
-    private string GetSiteLabel(AssetListRow row)
-    {
-        if (!string.IsNullOrWhiteSpace(row.site_name))
-        {
-            return row.site_name!;
-        }
-
-        if (!row.location_code.HasValue)
-        {
-            return "-";
-        }
-
-        var site = _sites.FirstOrDefault(s => s.SiteCode == row.location_code.Value);
-        return site == null ? row.location_code.Value.ToString() : $"{ValueOrDash(site.Description)} ({site.SiteCode})";
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static bool Contains(string? value, string term)
-        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
-
-    private static bool MatchesSearchMode(AssetListRow row, string term, string mode)
-        => VehicleSearchHelper.NormalizeMode(mode) switch
-        {
-            VehicleSearchHelper.GpMode => Contains(row.registration_number, term),
-            VehicleSearchHelper.EngineMode => Contains(row.engine_number_1, term),
-            VehicleSearchHelper.VinMode => Contains(row.chassis_number, term),
-            VehicleSearchHelper.InvoiceMode => Contains(row.invoice_number, term),
-            _ => Contains(row.fleet_number, term)
+            "all-departments" => "all-departments",
+            "by-province" => "by-province",
+            "by-department" => "by-department",
+            "by-site" => "by-site",
+            _ => "all-departments"
         };
-
-    private static string GetVehicleLabel(AssetListRow row)
-        => $"{ValueOrDash(row.fleet_number)} / {ValueOrDash(row.registration_number)} ({row.vmf_code})";
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
-        };
-
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "gg_number" => ValueOrDash(row.fleet_number),
-                "gp_number" => ValueOrDash(row.registration_number),
-                "vehicle" => GetVehicleLabel(row),
-                "status" => ValueOrDash(row.status_text),
-                "site" => GetSiteLabel(row),
-                "year" => row.year_manufactured?.ToString() ?? "-",
-                "current_odo" => row.current_odo?.ToString("N0") ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"asset_list_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
-
-    private sealed class AssetListRow
-    {
-        public int vmf_code { get; set; }
-        public string? fleet_number { get; set; }
-        public string? registration_number { get; set; }
-        public string? chassis_number { get; set; }
-        public string? engine_number_1 { get; set; }
-        public string? invoice_number { get; set; }
-        public string? status_text { get; set; }
-        public short? location_code { get; set; }
-        public string? site_name { get; set; }
-        public short? year_manufactured { get; set; }
-        public int? current_odo { get; set; }
-    }
 }

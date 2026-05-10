@@ -1,9 +1,6 @@
 @page "/reports/users"
 @rendermode InteractiveServer
-@using FIS.Web.Services
-@inject UserApiService UserService
-@inject SiteApiService SiteService
-@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>User Reports - Fleet Information System</PageTitle>
 
@@ -13,7 +10,7 @@
             <i class="bx bx-user"></i>
             User Reports
         </h1>
-        <p class="page-description">User profile and access-level report.</p>
+        <p class="page-description">Legacy user report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
@@ -22,230 +19,91 @@
 </div>
 
 <div class="page-content">
-    <div class="table-container">
-        <div class="table-header">
-            <span class="table-title">User Profiles</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Users Report Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("one-user")'>1) Information On One User</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-users")'>2) Information On All Users</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("users-added")'>3) Information On All Users Accounts Added On The System</a>
+                        <span class="menu-item-badge">Report</span>
+                    </div>
+                    <div class="menu-item">
+                        <a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a>
+                        <span class="menu-item-badge">Menu</span>
                     </div>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>User ID</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Telephone</th>
-                        <th>Site</th>
-                        <th>User Active</th>
-                        <th>Access Level</th>
-                        <th>Last Log On</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="8">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="8">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.UserAccessCode</td>
-                                <td>@($"{ValueOrDash(row.FirstName)} {ValueOrDash(row.LastName)}")</td>
-                                <td>@ValueOrDash(row.Email)</td>
-                                <td>@ValueOrDash(row.Telephone)</td>
-                                <td>@GetSiteLabel(row.SiteCode)</td>
-                                <td>@(row.UserActive ? "Yes" : "No")</td>
-                                <td>@row.AccessLevel</td>
-                                <td>@(row.LastLogOn?.ToString("yyyy-MM-dd HH:mm") ?? "-")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/users">Back to Users Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
             </div>
-            <div class="pagination-meta">Total records: @_rows.Count | Page size: @_pageSize</div>
-        }
-    </div>
+        </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/users" />
+    }
 </div>
 
 @code {
-    private bool _loading;
-    private bool _showFieldSelector;
-    private List<UserProfileDto> _rows = new();
-    private Dictionary<short, string> _siteLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("user_id", "User ID", true),
-        new("name", "Name", true),
-        new("email", "Email", true),
-        new("telephone", "Telephone", true),
-        new("site", "Site", true),
-        new("active", "User Active", true),
-        new("access_level", "Access Level", true),
-        new("last_log_on", "Last Log On", true)
-    ];
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private List<UserProfileDto> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        await LoadReportAsync();
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+        var filters = new Dictionary<string, string?>
         {
-            var sites = await SiteService.GetAllAsync();
-            _siteLabels = sites
-                .GroupBy(s => s.SiteCode)
-                .ToDictionary(
-                    g => g.Key,
-                    g => $"{ValueOrDash(g.First().Description)} ({g.Key})");
-
-            _rows = (await UserService.GetAllProfilesAsync())
-                .OrderBy(u => u.FirstName)
-                .ThenBy(u => u.LastName)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading user report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private string GetSiteLabel(short? siteCode)
-    {
-        if (!siteCode.HasValue)
-        {
-            return "-";
-        }
-
-        return _siteLabels.TryGetValue(siteCode.Value, out var label)
-            ? label
-            : siteCode.Value.ToString();
-    }
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string>
-        {
-            string.Join(",", selected.Select(f => CsvCell(f.Label)))
+            ["rtype"] = reportType
         };
 
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "user_id" => row.UserAccessCode.ToString(),
-                "name" => $"{ValueOrDash(row.FirstName)} {ValueOrDash(row.LastName)}",
-                "email" => ValueOrDash(row.Email),
-                "telephone" => ValueOrDash(row.Telephone),
-                "site" => GetSiteLabel(row.SiteCode),
-                "active" => row.UserActive ? "Yes" : "No",
-                "access_level" => row.AccessLevel.ToString(),
-                "last_log_on" => row.LastLogOn?.ToString("yyyy-MM-dd HH:mm") ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"users_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/users", filters));
     }
 
-    private static string CsvCell(string? value)
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
+        "one-user" => "users-one",
+        "all-users" => "users",
+        "users-added" => "users-added",
+        _ => "users"
+    };
 
-    private sealed class ExportField
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
+        "one-user" => "Information On One User",
+        "all-users" => "Information On All Users",
+        "users-added" => "Information On All Users Accounts Added On The System",
+        _ => "User Reports"
+    };
 
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "one-user" => "one-user",
+            "all-users" => "all-users",
+            "users-added" => "users-added",
+            _ => "all-users"
+        };
 }

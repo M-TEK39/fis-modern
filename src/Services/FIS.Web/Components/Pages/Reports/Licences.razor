@@ -1,57 +1,157 @@
 @page "/reports/licences"
 @rendermode InteractiveServer
-@using FIS.Web.Services
 @inject NavigationManager Navigation
-@inject LicenseReportApiService ReportService
-@inject IJSRuntime JS
 
 <PageTitle>Licence Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
     <div class="page-header-content">
         <h1 class="page-title">
-            <i class="bx bx-file"></i>
+            <i class="bx bx-id-card"></i>
             Licence Reports
         </h1>
-        <p class="page-description">Licence reporting workflow and report launcher.</p>
+        <p class="page-description">Legacy licence report menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
-        <button class="btn btn-secondary btn-sm" @onclick='() => Navigation.NavigateTo("/licenses/reports")'>Open Licence Reports</button>
+        <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+        <a class="btn btn-primary btn-sm" href="/licenses/reports">Licence Module</a>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="empty-state">
-        <i class="bx bx-file"></i>
-        <h3>Licence Reports</h3>
-        <p>Use this page to launch and validate licence report output.</p>
-        <button class="btn btn-primary btn-sm" @onclick="ValidateReportAccessAsync">Validate Report Access</button>
-        @if (!string.IsNullOrWhiteSpace(_statusMessage))
-        {
-            <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-10">
-                @_statusMessage
+    @if (!_isResultView)
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Licence Reports Menu</span>
+                </div>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("gg-number")'>1) Licence Report for a GG Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("prov-reg-number")'>2) Licence Report for a Prov Reg Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("register-number")'>3) Licence Report for a Register Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("engine-number")'>4) Licence Report for an Engine Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("chassis-number")'>5) Licence Report for a Chassis Number</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("site")'>6) Licence Report for a Site</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-vehicles")'>7) Licence Report on ALL Vehicles</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("dept-sites-period")'>8) Licences, for a Dept, with All Sites, for a period</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("expire-date")'>9) Report on Licence EXPIRE DATE</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("month-fees")'>10) Licences fees for a month</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("old-expire-dates")'>11) Licences of "In Service" Vehicles, with OLD Expire Dates</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("sap-info")'>12) SAP Information</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("cof-info")'>13) COF Information</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("make-model-fee")'>14) table : Make &amp; Model with Licence Fee</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("all-with-model-tare-fee")'>15) All Vehicles with Make &amp; Model &amp; Tare &amp; Licence Fee</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("data-workgroup")'>16) Data Workgroup - Report for Each Or Group of Vehicle</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("data-workgroup-latest")'>17) Data Workgroup - Only Latest Report for Each Or Group of Vehicle</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("received-by-ggmt")'>18) Licence Received by GGMT : Receiver Name and Date</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
+                </div>
             </div>
-        }
-    </div>
+        </div>
+    }
+    else
+    {
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/licences">Back to Licence Reports Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
+                </div>
+            </div>
+        </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/licences" />
+    }
 </div>
 
 @code {
-    private bool _statusError;
-    private string _statusMessage = string.Empty;
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
 
-    private async Task ValidateReportAccessAsync()
+    [Parameter, SupplyParameterFromQuery(Name = "view")]
+    public string? ViewMode { get; set; }
+
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
+
+    private void NavigateToReport(string reportType)
     {
-        try
+        var filters = new Dictionary<string, string?>
         {
-            await ReportService.GetAllAsync<Dictionary<string, object>>(new { });
-            _statusError = false;
-            _statusMessage = "Request completed successfully.";
-        }
-        catch (Exception ex)
-        {
-            _statusError = true;
-            _statusMessage = "Unable to validate report access.";
-            await JS.InvokeVoidAsync("console.error", $"Error validating licence report access: {ex.Message}");
-        }
+            ["rtype"] = reportType
+        };
+
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/licences", filters));
     }
+
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
+    {
+        "gg-number" => "licences-gg-number",
+        "prov-reg-number" => "licences-prov-reg-number",
+        "register-number" => "licences-register-number",
+        "engine-number" => "licences-engine-number",
+        "chassis-number" => "licences-chassis-number",
+        "site" => "licences-site",
+        "all-vehicles" => "licences",
+        "dept-sites-period" => "licences-dept-sites-period",
+        "expire-date" => "licences-expire-date",
+        "month-fees" => "licences-month-fees",
+        "old-expire-dates" => "licences-old-expire-dates",
+        "sap-info" => "licences-sap-info",
+        "cof-info" => "licences-cof-info",
+        "make-model-fee" => "licences-make-model-fee",
+        "all-with-model-tare-fee" => "licences-all-with-model-tare-fee",
+        "data-workgroup" => "licences-data-workgroup",
+        "data-workgroup-latest" => "licences-data-workgroup-latest",
+        "received-by-ggmt" => "licences-received-by-ggmt",
+        _ => "licences"
+    };
+
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
+    {
+        "gg-number" => "Licence Report for a GG Number",
+        "prov-reg-number" => "Licence Report for a Prov Reg Number",
+        "register-number" => "Licence Report for a Register Number",
+        "engine-number" => "Licence Report for an Engine Number",
+        "chassis-number" => "Licence Report for a Chassis Number",
+        "site" => "Licence Report for a Site",
+        "all-vehicles" => "Licence Report on ALL Vehicles",
+        "dept-sites-period" => "Licences, for a Dept, with All Sites, for a period",
+        "expire-date" => "Report on Licence EXPIRE DATE",
+        "month-fees" => "Licences fees for a month",
+        "old-expire-dates" => "Licences of In Service Vehicles, with OLD Expire Dates",
+        "sap-info" => "SAP Information",
+        "cof-info" => "COF Information",
+        "make-model-fee" => "table : Make & Model with Licence Fee",
+        "all-with-model-tare-fee" => "All Vehicles with Make & Model & Tare & Licence Fee",
+        "data-workgroup" => "Data Workgroup - Report for Each Or Group of Vehicle",
+        "data-workgroup-latest" => "Data Workgroup - Only Latest Report for Each Or Group of Vehicle",
+        "received-by-ggmt" => "Licence Received by GGMT : Receiver Name and Date",
+        _ => "Licence Reports"
+    };
+
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "gg-number" => "gg-number",
+            "prov-reg-number" => "prov-reg-number",
+            "register-number" => "register-number",
+            "engine-number" => "engine-number",
+            "chassis-number" => "chassis-number",
+            "site" => "site",
+            "all-vehicles" => "all-vehicles",
+            "dept-sites-period" => "dept-sites-period",
+            "expire-date" => "expire-date",
+            "month-fees" => "month-fees",
+            "old-expire-dates" => "old-expire-dates",
+            "sap-info" => "sap-info",
+            "cof-info" => "cof-info",
+            "make-model-fee" => "make-model-fee",
+            "all-with-model-tare-fee" => "all-with-model-tare-fee",
+            "data-workgroup" => "data-workgroup",
+            "data-workgroup-latest" => "data-workgroup-latest",
+            "received-by-ggmt" => "received-by-ggmt",
+            _ => "all-vehicles"
+        };
 }

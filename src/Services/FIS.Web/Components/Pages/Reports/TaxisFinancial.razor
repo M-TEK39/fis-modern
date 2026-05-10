@@ -1,11 +1,6 @@
 @page "/reports/taxis-financial"
 @rendermode InteractiveServer
-@using System.Text.Json
-@using FIS.Web.Services
 @using FIS.Web.Components.Shared
-@inject TaxiApiService TaxiService
-@inject VehicleApiService VehicleService
-@inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
 <PageTitle>Financial Reports: Taxis - Fleet Information System</PageTitle>
@@ -16,7 +11,7 @@
             <i class="bx bx-money"></i>
             Financial Reports: Taxis
         </h1>
-        <p class="page-description">Taxi requisitions with financial capture details.</p>
+        <p class="page-description">Legacy taxi financial reports menu with modern UI presentation.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
@@ -27,444 +22,89 @@
 <div class="page-content">
     @if (!_isResultView)
     {
-        <div class="form-card">
-            <div class="form-card-body">
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">Search</label>
-                        <input class="form-input" @bind="_searchTerm" @bind:event="oninput" placeholder="Req #, GG/GP, official, company" />
-                    </div>
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <div class="menu-tile-header">
+                    <span>Taxi Reports</span>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-primary btn-sm" @onclick="NavigateToResultsAsync">Submit</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="LoadReportAsync" disabled="@_loading">Preview Modern Table</button>
-                    <button type="button" class="btn btn-secondary btn-sm" @onclick="ResetFilters">Reset</button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("general-requisitions")'>1) General Reports: Requisitions</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("requisitions-per-department")'>2) Requisitions per Department</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("outstanding-logsheets")'>3) All Outstanding Log sheets</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("log-odometer-gg")'>4) Log Odometer (GG Vehicles)</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("cancellations")'>5) Cancellations</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="javascript:void(0)" @onclick='() => NavigateToReport("no-objective-or-responsibility")'>6) Taxi log sheets with no Objective or Responsibility codes</a><span class="menu-item-badge">Report</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports/fis-report">Return To Main Page</a><span class="menu-item-badge">Menu</span></div>
                 </div>
             </div>
         </div>
-    }
-    @if (_isResultView)
-    {
-        <LegacyDynamicReportGrid ReportKey="taxis-financial" FiltersUrl="@_pageRoute" />
     }
     else
     {
-
-    <div class="table-container fis-mt-15">
-        <div class="table-header">
-            <span class="table-title">Taxi Financial Report</span>
-            <div class="table-controls">
-                <button class="btn btn-secondary btn-sm" @onclick="ToggleFieldSelector">Select Fields</button>
-                <button class="btn btn-primary btn-sm" @onclick="DownloadCsvAsync" disabled="@(_loading || _rows.Count == 0)">Download CSV</button>
-            </div>
-        </div>
-        @if (_showFieldSelector)
-        {
-            <div class="form-card fis-mb-075">
-                <div class="form-card-body">
-                    <div class="form-grid">
-                        @foreach (var field in _exportFields)
-                        {
-                            <div class="form-field">
-                                <label class="form-label">
-                                    <input type="checkbox" @bind="field.Selected" />
-                                    @field.Label
-                                </label>
-                            </div>
-                        }
-                    </div>
+        <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@GetSelectedCaption()</span>
+                <div class="table-controls">
+                    <a class="btn btn-secondary btn-sm" href="/reports/taxis-financial">Back to Financial Reports: Taxis Menu</a>
+                    <a class="btn btn-secondary btn-sm" href="/reports/fis-report">FIS Report Menu</a>
                 </div>
             </div>
-        }
-        <div class="table-wrapper">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Request ID</th>
-                        <th>Requisition Number</th>
-                        <th>Official</th>
-                        <th>Vehicle</th>
-                        <th>Company</th>
-                        <th>Date Required</th>
-                        <th>Status</th>
-                        <th>Amount (R)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_loading)
-                    {
-                        <tr><td colspan="8">Loading report...</td></tr>
-                    }
-                    else if (PagedRows.Count == 0)
-                    {
-                        <tr><td colspan="8">No records found.</td></tr>
-                    }
-                    else
-                    {
-                        @foreach (var row in PagedRows)
-                        {
-                            <tr>
-                                <td>@row.RequestId</td>
-                                <td>@ValueOrDash(row.RequisitionNumber)</td>
-                                <td>@ValueOrDash(row.Official)</td>
-                                <td>@GetVehicleLabel(row.Vehicle)</td>
-                                <td>@ValueOrDash(row.Company)</td>
-                                <td>@FormatDate(row.DateRequired)</td>
-                                <td>@ValueOrDash(row.Status)</td>
-                                <td>@(row.Amount?.ToString("N2") ?? "-")</td>
-                            </tr>
-                        }
-                    }
-                </tbody>
-            </table>
         </div>
-        <div class="pagination-meta">Total records: @_rows.Count | Total amount: @TotalAmount.ToString("N2")</div>
-        @if (_rows.Count > _pageSize)
-        {
-            <div class="pagination">
-                <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-            </div>
-            <div class="pagination-meta">Page size: @_pageSize</div>
-        }
-    </div>
+
+        <LegacyDynamicReportGrid ReportKey="@GetReportKey()" FiltersUrl="/reports/taxis-financial" />
     }
 </div>
 
 @code {
-    private bool _loading;
-    private string _searchTerm = string.Empty;
-    private List<TaxiFinancialRow> _rows = new();
-    private Dictionary<int, string> _vehicleLabels = new();
-    private int _page = 1;
-    private const int _pageSize = 12;
-    private bool _showFieldSelector;
-    private readonly List<ExportField> _exportFields =
-    [
-        new("request_id", "Request ID", true),
-        new("requisition_number", "Requisition Number", true),
-        new("official", "Official", true),
-        new("vehicle", "Vehicle", true),
-        new("company", "Company", true),
-        new("date_required", "Date Required", true),
-        new("status", "Status", true),
-        new("amount", "Amount (R)", true)
-    ];
-
-    private List<TaxiFinancialRow> PagedRows => _rows.Skip((_page - 1) * _pageSize).Take(_pageSize).ToList();
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_rows.Count / (double)_pageSize));
-    private decimal TotalAmount => _rows.Sum(r => r.Amount ?? 0m);
-
     private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
-    private const string _pageRoute = "/reports/taxis-financial";
-    private string? _lastAutoLoadUri;
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
 
-    [Parameter, SupplyParameterFromQuery(Name = "search")]
-    public string? QSearch { get; set; }
+    [Parameter, SupplyParameterFromQuery(Name = "rtype")]
+    public string? QReportType { get; set; }
 
-    protected override Task OnParametersSetAsync()
+    private void NavigateToReport(string reportType)
     {
-        var uri = Navigation.Uri;
-        if (_isResultView && uri != _lastAutoLoadUri)
+        var filters = new Dictionary<string, string?>
         {
-            _lastAutoLoadUri = uri;
-            ApplyQueryFilters();
-        }
+            ["rtype"] = reportType
+        };
 
-        return Task.CompletedTask;
+        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/taxis-financial", filters));
     }
 
-    private Dictionary<string, string?> BuildQueryFilters() => new()
+    private string GetReportKey() => NormalizeReportType(QReportType) switch
     {
-        { "search", _searchTerm },
+        "general-requisitions" => "taxis-fin-general-requisitions",
+        "requisitions-per-department" => "taxis-fin-requisitions-per-department",
+        "outstanding-logsheets" => "taxis-fin-outstanding-logsheets",
+        "log-odometer-gg" => "taxis-fin-log-odometer-gg",
+        "cancellations" => "taxis-fin-cancellations",
+        "no-objective-or-responsibility" => "taxis-fin-no-objective-or-responsibility",
+        _ => "taxis-financial"
     };
 
-    private void ApplyQueryFilters()
+    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
     {
-        _searchTerm = QSearch ?? string.Empty;
-    }
+        "general-requisitions" => "General Reports: Requisitions",
+        "requisitions-per-department" => "Requisitions per Department",
+        "outstanding-logsheets" => "All Outstanding Log sheets",
+        "log-odometer-gg" => "Log Odometer (GG Vehicles)",
+        "cancellations" => "Cancellations",
+        "no-objective-or-responsibility" => "Taxi log sheets with no Objective or Responsibility codes",
+        _ => "Taxi Reports"
+    };
 
-    private void NavigateToResultsAsync()
-    {
-        _lastAutoLoadUri = null;
-        Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl(_pageRoute, BuildQueryFilters()));
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-        _vehicleLabels = vehicles.Data
-            .GroupBy(v => v.vmf_code)
-            .ToDictionary(g => g.Key, g => $"{ValueOrDash(g.First().fleet_number)} / {ValueOrDash(g.First().registration_number)} ({g.Key})");
-
-    }
-
-    private async Task LoadReportAsync()
-    {
-        _loading = true;
-        try
+    private static string NormalizeReportType(string? value)
+        => value?.Trim().ToLowerInvariant() switch
         {
-            var raw = await TaxiService.GetAllAsync<Dictionary<string, JsonElement>>();
-            var rows = raw.Select(MapTaxiFinancialRow);
-            var q = _searchTerm.Trim();
-
-            if (!string.IsNullOrWhiteSpace(q))
-            {
-                rows = rows.Where(r =>
-                    r.RequestId.ToString().Contains(q, StringComparison.OrdinalIgnoreCase)
-                    || Contains(r.RequisitionNumber, q)
-                    || Contains(r.Official, q)
-                    || Contains(r.Vehicle, q)
-                    || Contains(r.Company, q));
-            }
-
-            _rows = rows
-                .OrderByDescending(r => r.DateRequired)
-                .ThenByDescending(r => r.RequestId)
-                .ToList();
-            _page = 1;
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading taxis financial report: {ex.Message}");
-            _rows = new();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void ResetFilters()
-    {
-        _searchTerm = string.Empty;
-    }
-
-    private string GetVehicleLabel(string? rawVehicle)
-    {
-        if (int.TryParse(rawVehicle, out var vmfCode) && _vehicleLabels.TryGetValue(vmfCode, out var label))
-        {
-            return label;
-        }
-
-        return ValueOrDash(rawVehicle);
-    }
-
-    private static TaxiFinancialRow MapTaxiFinancialRow(Dictionary<string, JsonElement> row)
-    {
-        return new TaxiFinancialRow
-        {
-            RequestId = GetInt(row, "request_id", "requestId"),
-            RequisitionNumber = GetString(row, "rek_num", "requisition_number", "request_number"),
-            Official = GetString(row, "official", "official_name", "driver_name"),
-            Vehicle = GetString(row, "vmf_code", "fleet_number", "registration_number", "gg_number"),
-            Company = GetString(row, "company_name", "company", "supplier_name", "address_1"),
-            DateRequired = GetDate(row, "date_required", "date_captured", "request_date"),
-            Status = GetString(row, "rank", "status", "request_status"),
-            Amount = GetDecimal(row, "total_amount", "amount", "taxi_amount", "invoice_amount", "cost")
+            "general-requisitions" => "general-requisitions",
+            "requisitions-per-department" => "requisitions-per-department",
+            "outstanding-logsheets" => "outstanding-logsheets",
+            "log-odometer-gg" => "log-odometer-gg",
+            "cancellations" => "cancellations",
+            "no-objective-or-responsibility" => "no-objective-or-responsibility",
+            _ => "general-requisitions"
         };
-    }
-
-    private static string? GetString(Dictionary<string, JsonElement> row, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (TryGetCaseInsensitive(row, key, out var value))
-            {
-                if (value.ValueKind == JsonValueKind.String)
-                {
-                    var stringValue = value.GetString();
-                    if (!string.IsNullOrWhiteSpace(stringValue))
-                    {
-                        return stringValue;
-                    }
-                }
-                else if (value.ValueKind is JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False)
-                {
-                    return value.ToString();
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static int GetInt(Dictionary<string, JsonElement> row, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (!TryGetCaseInsensitive(row, key, out var value))
-            {
-                continue;
-            }
-
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var intValue))
-            {
-                return intValue;
-            }
-
-            if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out intValue))
-            {
-                return intValue;
-            }
-        }
-
-        return 0;
-    }
-
-    private static DateTime? GetDate(Dictionary<string, JsonElement> row, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (!TryGetCaseInsensitive(row, key, out var value))
-            {
-                continue;
-            }
-
-            if (value.ValueKind == JsonValueKind.String && DateTime.TryParse(value.GetString(), out var dateValue))
-            {
-                return dateValue;
-            }
-        }
-
-        return null;
-    }
-
-    private static decimal? GetDecimal(Dictionary<string, JsonElement> row, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (!TryGetCaseInsensitive(row, key, out var value))
-            {
-                continue;
-            }
-
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var decimalValue))
-            {
-                return decimalValue;
-            }
-
-            if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(), out decimalValue))
-            {
-                return decimalValue;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool TryGetCaseInsensitive(Dictionary<string, JsonElement> row, string key, out JsonElement value)
-    {
-        if (row.TryGetValue(key, out value))
-        {
-            return true;
-        }
-
-        var match = row.FirstOrDefault(pair => pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
-        if (!string.IsNullOrWhiteSpace(match.Key))
-        {
-            value = match.Value;
-            return true;
-        }
-
-        value = default;
-        return false;
-    }
-
-    private static bool Contains(string? value, string term)
-        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
-
-    private static string ValueOrDash(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string FormatDate(DateTime? value)
-        => value?.ToString("yyyy-MM-dd") ?? "-";
-
-    private void PrevPage()
-    {
-        if (_page > 1)
-        {
-            _page--;
-        }
-    }
-
-    private void NextPage()
-    {
-        if (_page < TotalPages)
-        {
-            _page++;
-        }
-    }
-
-    private void ToggleFieldSelector()
-    {
-        _showFieldSelector = !_showFieldSelector;
-    }
-
-    private async Task DownloadCsvAsync()
-    {
-        var selected = _exportFields.Where(f => f.Selected).ToList();
-        if (selected.Count == 0)
-        {
-            return;
-        }
-
-        var lines = new List<string> { string.Join(",", selected.Select(f => CsvCell(f.Label))) };
-        foreach (var row in _rows)
-        {
-            var values = selected.Select(field => field.Key switch
-            {
-                "request_id" => row.RequestId.ToString(),
-                "requisition_number" => ValueOrDash(row.RequisitionNumber),
-                "official" => ValueOrDash(row.Official),
-                "vehicle" => GetVehicleLabel(row.Vehicle),
-                "company" => ValueOrDash(row.Company),
-                "date_required" => FormatDate(row.DateRequired),
-                "status" => ValueOrDash(row.Status),
-                "amount" => row.Amount?.ToString("N2") ?? "-",
-                _ => "-"
-            });
-            lines.Add(string.Join(",", values.Select(CsvCell)));
-        }
-
-        var csv = string.Join(Environment.NewLine, lines);
-        var fileName = $"taxis_financial_report_{DateTime.Now:yyyyMMdd_HHmm}.csv";
-        await JSRuntime.InvokeVoidAsync("fisDownload.downloadText", fileName, csv, "text/csv;charset=utf-8");
-    }
-
-    private static string CsvCell(string? value)
-    {
-        var safe = (value ?? string.Empty).Replace("\"", "\"\"");
-        return $"\"{safe}\"";
-    }
-
-    private sealed class TaxiFinancialRow
-    {
-        public int RequestId { get; set; }
-        public string? RequisitionNumber { get; set; }
-        public string? Official { get; set; }
-        public string? Vehicle { get; set; }
-        public string? Company { get; set; }
-        public DateTime? DateRequired { get; set; }
-        public string? Status { get; set; }
-        public decimal? Amount { get; set; }
-    }
-
-    private sealed class ExportField
-    {
-        public ExportField(string key, string label, bool selected)
-        {
-            Key = key;
-            Label = label;
-            Selected = selected;
-        }
-
-        public string Key { get; }
-        public string Label { get; }
-        public bool Selected { get; set; }
-    }
 }

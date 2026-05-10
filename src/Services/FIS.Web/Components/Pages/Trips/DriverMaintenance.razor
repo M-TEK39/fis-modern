@@ -32,8 +32,8 @@
                 <div class="contract-action-group">
                     <button class="btn btn-secondary btn-sm" @onclick='() => SetActiveTab("add")'>Add Driver</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SetActiveTab("update")'>Update Driver</button>
-                    <button class="btn btn-danger btn-sm">Delete Driver</button>
-                    <button class="btn btn-secondary btn-sm">Back</button>
+                    <button class="btn btn-danger btn-sm" type="button" @onclick="DeleteSelectedViewDriverAsync">Delete Driver</button>
+                    <a class="btn btn-secondary btn-sm" href="/trips">Back</a>
                 </div>
 
                 <div class="form-grid fis-mt-1">
@@ -76,8 +76,8 @@
                 <div class="contract-action-group">
                     <button class="btn btn-secondary btn-sm" @onclick='() => SetActiveTab("view")'>View Driver(s)</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SetActiveTab("update")'>Update Driver</button>
-                    <button class="btn btn-danger btn-sm">Delete Driver</button>
-                    <button class="btn btn-secondary btn-sm">Back</button>
+                    <button class="btn btn-danger btn-sm" type="button" @onclick="DeleteSelectedEditDriverAsync">Delete Driver</button>
+                    <a class="btn btn-secondary btn-sm" href="/trips">Back</a>
                 </div>
 
                 <div class="form-grid fis-mt-1">
@@ -163,8 +163,8 @@
                 <div class="contract-action-group">
                     <button class="btn btn-secondary btn-sm" @onclick='() => SetActiveTab("view")'>View Driver(s)</button>
                     <button class="btn btn-secondary btn-sm" @onclick='() => SetActiveTab("add")'>Add Driver</button>
-                    <button class="btn btn-danger btn-sm">Delete Driver</button>
-                    <button class="btn btn-secondary btn-sm">Back</button>
+                    <button class="btn btn-danger btn-sm" type="button" @onclick="DeleteSelectedEditDriverAsync">Delete Driver</button>
+                    <a class="btn btn-secondary btn-sm" href="/trips">Back</a>
                 </div>
 
                 <div class="form-grid fis-mt-1">
@@ -375,6 +375,55 @@
         {
             _drivers = await DriverService.GetDriversAsync();
         }
+    }
+
+    private async Task DeleteSelectedViewDriverAsync()
+    {
+        _isError = false;
+        _message = string.Empty;
+        if (!_selectedViewDriverCode.HasValue || _selectedViewDriverCode.Value <= 0)
+        {
+            _isError = true;
+            _message = "Select a driver before deleting.";
+            return;
+        }
+
+        var success = await DriverService.DeleteDriverAsync(_selectedViewDriverCode.Value);
+        _isError = !success;
+        _message = success ? "Driver deleted successfully." : "Unable to delete driver.";
+        if (!success)
+        {
+            return;
+        }
+
+        _drivers = await DriverService.GetDriversAsync();
+        _selectedViewDriverCode = null;
+        _viewDriver = null;
+    }
+
+    private async Task DeleteSelectedEditDriverAsync()
+    {
+        _isError = false;
+        _message = string.Empty;
+        if (!_selectedEditDriverCode.HasValue || _selectedEditDriverCode.Value <= 0)
+        {
+            _isError = true;
+            _message = "Select a driver before deleting.";
+            return;
+        }
+
+        var success = await DriverService.DeleteDriverAsync(_selectedEditDriverCode.Value);
+        _isError = !success;
+        _message = success ? "Driver deleted successfully." : "Unable to delete driver.";
+        if (!success)
+        {
+            return;
+        }
+
+        _drivers = await DriverService.GetDriversAsync();
+        _selectedEditDriverCode = null;
+        _editDriver = NewDriver();
+        _activeTab = "view";
     }
 
     private static bool ValidateDriver(DriverDto driver)
