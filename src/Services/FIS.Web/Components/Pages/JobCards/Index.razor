@@ -53,12 +53,36 @@
 
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">All Job Cards Snapshot</span>
+                <span class="table-title">All Job Cards Snapshot (@FilteredJobCards.Count)</span>
                 <div class="table-controls">
+                    <select class="form-select" @bind="_statusFilter" @bind:after="ResetOverviewPaging">
+                        <option value="">All job cards</option>
+                        <option value="open">Open job cards</option>
+                        <option value="closed">Closed job cards</option>
+                        <option value="vehicle">Vehicle-linked job cards</option>
+                        <option value="captured">Captured date set</option>
+                    </select>
                     <button class="btn btn-secondary btn-sm" @onclick="RefreshJobCardOverviewAsync" disabled="@_loadingOverview">
                         <i class="bx bx-refresh"></i>
                         Refresh
                     </button>
+                </div>
+            </div>
+            <div class="search-bar">
+                <div class="search-input-wrapper">
+                    <i class="bx bx-search"></i>
+                    <input class="search-input"
+                           type="search"
+                           placeholder="Search job card, GG number, registration, description, status..."
+                           @bind="_searchTerm"
+                           @bind:event="oninput"
+                           @bind:after="ResetOverviewPaging" />
+                    @if (!string.IsNullOrWhiteSpace(_searchTerm))
+                    {
+                        <button type="button" class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                            <i class="bx bx-x"></i>
+                        </button>
+                    }
                 </div>
             </div>
 
@@ -74,7 +98,7 @@
                     <p>Loading job cards...</p>
                 </div>
             }
-            else if (_jobCardOverview.Count == 0)
+            else if (FilteredJobCards.Count == 0)
             {
                 <div class="empty-state">
                     <i class="bx bx-info-circle"></i>
@@ -116,7 +140,7 @@
                     <div class="pagination-info">Page @_overviewPage of @OverviewTotalPages</div>
                     <button class="pagination-btn" @onclick="NextOverviewPage" disabled="@(_overviewPage >= OverviewTotalPages)">Next</button>
                 </div>
-                <div class="pagination-meta">Total records: @_jobCardOverview.Count | Page size: @_overviewPageSize</div>
+                <div class="pagination-meta">Total records: @FilteredJobCards.Count | Page size: @_overviewPageSize</div>
             }
         </div>
     }
@@ -131,16 +155,23 @@
     private bool _overviewError;
     private string _overviewMessage = string.Empty;
     private List<JobCardDto> _jobCardOverview = new();
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = string.Empty;
     private int _overviewPage = 1;
     private readonly int _overviewPageSize = 12;
 
+    private List<JobCardDto> FilteredJobCards => _jobCardOverview
+        .Where(MatchesSearch)
+        .Where(MatchesFilter)
+        .ToList();
+
     private IEnumerable<JobCardDto> PagedJobCards
-        => _jobCardOverview
+        => FilteredJobCards
             .Skip((_overviewPage - 1) * _overviewPageSize)
             .Take(_overviewPageSize);
 
     private int OverviewTotalPages
-        => Math.Max(1, (int)Math.Ceiling(_jobCardOverview.Count / (double)_overviewPageSize));
+        => Math.Max(1, (int)Math.Ceiling(FilteredJobCards.Count / (double)_overviewPageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -233,6 +264,44 @@
         await LoadOverviewAsync();
     }
 
+    private void ResetOverviewPaging()
+    {
+        _overviewPage = 1;
+    }
+
+    private void ClearSearch()
+    {
+        _searchTerm = string.Empty;
+        _overviewPage = 1;
+    }
+
+    private bool MatchesSearch(JobCardDto row)
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return true;
+        }
+
+        var search = _searchTerm.Trim();
+        return Contains(row.JobCardId.ToString(), search) ||
+            Contains(row.GGNumber, search) ||
+            Contains(row.RegistrationNumber, search) ||
+            Contains(row.JobDescription, search) ||
+            Contains(row.Status, search);
+    }
+
+    private bool MatchesFilter(JobCardDto row)
+    {
+        return _statusFilter switch
+        {
+            "open" => Contains(row.Status, "open"),
+            "closed" => Contains(row.Status, "closed") || Contains(row.Status, "complete"),
+            "vehicle" => !string.IsNullOrWhiteSpace(row.GGNumber) || !string.IsNullOrWhiteSpace(row.RegistrationNumber),
+            "captured" => row.DateCreated.HasValue,
+            _ => true
+        };
+    }
+
     private void PrevOverviewPage()
     {
         if (_overviewPage > 1)
@@ -254,4 +323,7 @@
 
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static bool Contains(string? value, string search)
+        => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 }

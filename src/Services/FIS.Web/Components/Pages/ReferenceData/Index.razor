@@ -129,11 +129,52 @@
             <LossTypesTab />
         }
     </div>
+
+    <DataPreviewTable Title="Validation Data Preview"
+                      SearchPlaceholder="Search validation area, category, route..."
+                      EmptyMessage="No validation data categories match the current search or filter."
+                      EmptyIcon="bx bx-check-shield"
+                      IsLoading="false"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
 @code {
     private string _activeTab = "makes";
     [SupplyParameterFromQuery(Name = "tab")]
     public string? Tab { get; set; }
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("category", "Category"),
+        new("area", "Validation Area"),
+        new("route", "Route")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Vehicle validation", "category", "Vehicle"),
+        new("Organisation validation", "category", "Organisation"),
+        new("Licence validation", "category", "Licence"),
+        new("Operational validation", "category", "Operational")
+    ];
+
+    private readonly IReadOnlyList<Dictionary<string, string?>> _rows =
+    [
+        Row("Vehicle", "Vehicle Makes", "/reference-data?tab=makes"),
+        Row("Vehicle", "Vehicle Types", "/reference-data?tab=types"),
+        Row("Vehicle", "Fuel Types", "/reference-data?tab=fueltypes"),
+        Row("Vehicle", "Vehicle Classes", "/reference-data?tab=classes"),
+        Row("Operational", "Units of Measure", "/reference-data?tab=units"),
+        Row("Licence", "License Types", "/reference-data?tab=licenses"),
+        Row("Vehicle", "Vehicle Models", "/reference-data?tab=models"),
+        Row("Organisation", "Departments", "/reference-data?tab=departments"),
+        Row("Organisation", "Sites", "/reference-data?tab=sites"),
+        Row("Licence", "License Fees", "/reference-data?tab=licensefees"),
+        Row("Licence", "Drivers Licenses", "/reference-data?tab=driverlicenses"),
+        Row("Vehicle", "Extras", "/reference-data?tab=extras"),
+        Row("Operational", "Loss Types", "/reference-data?tab=losstypes")
+    ];
 
     protected override void OnParametersSet()
     {
@@ -158,5 +199,15 @@
     private void SetActiveTab(string tab)
     {
         _activeTab = tab;
+    }
+
+    private static Dictionary<string, string?> Row(string category, string area, string route)
+    {
+        return new Dictionary<string, string?>
+        {
+            ["category"] = category,
+            ["area"] = area,
+            ["route"] = route
+        };
     }
 }

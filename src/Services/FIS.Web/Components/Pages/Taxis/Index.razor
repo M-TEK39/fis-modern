@@ -187,7 +187,33 @@
             {
                 <div class="table-container">
                     <div class="table-header">
-                        <span class="table-title">@_taxis.Count Taxi record(s)</span>
+                        <span class="table-title">@FilteredTaxis.Count Taxi record(s)</span>
+                        <div class="table-controls">
+                            <select class="form-select" @bind="_statusFilter" @bind:after="ApplyTaxiFilters">
+                                <option value="">All taxi records</option>
+                                <option value="pending">Pending records</option>
+                                <option value="completed">Completed records</option>
+                                <option value="withVehicle">Vehicle-linked records</option>
+                                <option value="withDriver">Driver captured records</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="search-bar">
+                        <div class="search-input-wrapper">
+                            <i class="bx bx-search"></i>
+                            <input class="search-input"
+                                   type="search"
+                                   placeholder="Search taxi number, driver, vehicle, status, notes..."
+                                   @bind="_searchTerm"
+                                   @bind:event="oninput"
+                                   @bind:after="ApplyTaxiFilters" />
+                            @if (!string.IsNullOrWhiteSpace(_searchTerm))
+                            {
+                                <button type="button" class="search-clear" @onclick="ClearTaxiSearch" aria-label="Clear search">
+                                    <i class="bx bx-x"></i>
+                                </button>
+                            }
+                        </div>
                     </div>
                     <div class="table-wrapper">
                         <table class="data-table">
@@ -216,14 +242,12 @@
                         </tbody>
                         </table>
                     </div>
-                    @if (TotalPages > 1)
-                    {
-                        <div class="pagination-controls">
-                            <button class="btn btn-secondary btn-sm" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
-                            <span>Page @_page of @TotalPages</span>
-                            <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-                        </div>
-                    }
+                    <div class="pagination-controls fis-mt-1">
+                        <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                        <div class="pagination-info">Page @_page of @TotalPages</div>
+                        <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+                    </div>
+                    <div class="pagination-meta">Total records: @FilteredTaxis.Count | Page size: @_pageSize</div>
                 </div>
             }
         </div>
@@ -235,8 +259,14 @@
     private int _page = 1;
     private const int _pageSize = 12;
     private List<TaxiItem> _taxis = new();
-    private IEnumerable<TaxiItem> PagedTaxis => _taxis.Skip((_page - 1) * _pageSize).Take(_pageSize);
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_taxis.Count / (double)_pageSize));
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = string.Empty;
+    private List<TaxiItem> FilteredTaxis => _taxis
+        .Where(MatchesSearch)
+        .Where(MatchesFilter)
+        .ToList();
+    private IEnumerable<TaxiItem> PagedTaxis => FilteredTaxis.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredTaxis.Count / (double)_pageSize));
 
     private bool _showHelp = true;
     private bool _showRequisitions = true;
@@ -284,6 +314,44 @@
     private void ToggleReports() => _showReports = !_showReports;
     private void ToggleOther() => _showOther = !_showOther;
 
+    private void ApplyTaxiFilters()
+    {
+        _page = 1;
+    }
+
+    private void ClearTaxiSearch()
+    {
+        _searchTerm = string.Empty;
+        _page = 1;
+    }
+
+    private bool MatchesSearch(TaxiItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return true;
+        }
+
+        var search = _searchTerm.Trim();
+        return Contains(item.Number, search) ||
+            Contains(item.Driver, search) ||
+            Contains(item.Vehicle, search) ||
+            Contains(item.Status, search) ||
+            Contains(item.Notes, search);
+    }
+
+    private bool MatchesFilter(TaxiItem item)
+    {
+        return _statusFilter switch
+        {
+            "pending" => Contains(item.Status, "pending") || Contains(item.Notes, "pending"),
+            "completed" => Contains(item.Status, "complete") || Contains(item.Status, "closed"),
+            "withVehicle" => !string.IsNullOrWhiteSpace(item.Vehicle) && !string.Equals(item.Vehicle, "Unknown", StringComparison.OrdinalIgnoreCase),
+            "withDriver" => !string.IsNullOrWhiteSpace(item.Driver) && !string.Equals(item.Driver, "Unknown", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
     private void PreviousPage()
     {
         if (_page > 1)
@@ -318,4 +386,7 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static bool Contains(string? value, string search)
+        => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 }

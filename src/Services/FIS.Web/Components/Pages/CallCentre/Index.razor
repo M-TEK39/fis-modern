@@ -1,5 +1,9 @@
 @page "/call-centre"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject CallCentreApiService CallCentreService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Call Centre Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -68,4 +72,73 @@
         </div>
     </div>
 
+    <DataPreviewTable Title="Call Centre Incident Preview"
+                      SearchPlaceholder="Search incident type, caller, driver, GG number..."
+                      EmptyMessage="No call centre incidents match the current search or filter."
+                      EmptyIcon="bx bx-phone-call"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
+
+@code {
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("callDate", "Call Date"),
+        new("ggNumber", "GG Number"),
+        new("incidentType", "Incident Type"),
+        new("caller", "Caller"),
+        new("driver", "Driver"),
+        new("site", "Site")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Vehicle-linked incidents", "vehicleStatus", "Vehicle Linked"),
+        new("Driver-linked incidents", "driverStatus", "Driver Linked"),
+        new("Caller captured", "callerStatus", "Caller Captured")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var incidents = await CallCentreService.GetAllAsync<CallCentreDto>();
+            _rows = incidents
+                .OrderByDescending(item => item.Call_date ?? item.date_created)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["callDate"] = FormatDate(item.Call_date),
+                    ["ggNumber"] = item.GG_number ?? item.vmf_code?.ToString(),
+                    ["incidentType"] = item.Incident_type,
+                    ["caller"] = item.Caller_name,
+                    ["driver"] = item.Driver_name,
+                    ["site"] = item.Driver_Site?.ToString(),
+                    ["vehicleStatus"] = item.vmf_code.HasValue || !string.IsNullOrWhiteSpace(item.GG_number) ? "Vehicle Linked" : "No Vehicle",
+                    ["driverStatus"] = string.IsNullOrWhiteSpace(item.Driver_name) ? "No Driver" : "Driver Linked",
+                    ["callerStatus"] = string.IsNullOrWhiteSpace(item.Caller_name) ? "No Caller" : "Caller Captured"
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading call centre preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
+}

@@ -1,5 +1,9 @@
 @page "/private-hire"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject PrivateHireApiService PrivateHireService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Private Hire Menu - Fleet Information System</PageTitle>
 
@@ -33,13 +37,83 @@
             }
         </div>
     </div>
+
+    <DataPreviewTable Title="Private Hire Vehicle Preview"
+                      SearchPlaceholder="Search registration, contractor, department, status..."
+                      EmptyMessage="No private hire vehicles match the current search or filter."
+                      EmptyIcon="bx bx-car"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
 
 @code {
     private bool _showMaintenance = true;
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("registration", "Registration"),
+        new("makeModel", "Make / Model"),
+        new("contractor", "Contractor"),
+        new("department", "Department"),
+        new("startDate", "Start Date"),
+        new("endDate", "End Date"),
+        new("status", "Status")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Active hires", "statusGroup", "Active"),
+        new("Retired hires", "statusGroup", "Retired"),
+        new("Open-ended hires", "endDateStatus", "Open Ended"),
+        new("Department-linked hires", "departmentStatus", "Department Linked")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
 
     private void ToggleMaintenance()
     {
         _showMaintenance = !_showMaintenance;
     }
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var vehicles = await PrivateHireService.GetVehiclesAsync();
+            _rows = vehicles
+                .OrderBy(item => item.registration_number)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["registration"] = item.registration_number,
+                    ["makeModel"] = item.make_model,
+                    ["contractor"] = item.contractor_name,
+                    ["department"] = item.department_name,
+                    ["startDate"] = FormatDate(item.hire_start_date),
+                    ["endDate"] = FormatDate(item.hire_end_date),
+                    ["status"] = item.hire_status,
+                    ["statusGroup"] = item.hire_end_date.HasValue || item.hire_status.Contains("retire", StringComparison.OrdinalIgnoreCase) ? "Retired" : "Active",
+                    ["endDateStatus"] = item.hire_end_date.HasValue ? "End Date Set" : "Open Ended",
+                    ["departmentStatus"] = item.department_code > 0 ? "Department Linked" : "No Department"
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading private hire preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
 }

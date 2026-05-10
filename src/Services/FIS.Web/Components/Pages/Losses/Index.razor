@@ -1,5 +1,9 @@
 @page "/losses"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LossApiService LossService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Losses - Fleet Information System</PageTitle>
 
@@ -44,12 +48,97 @@
             }
         </div>
     </div>
+
+    <DataPreviewTable Title="Vehicle Loss Preview"
+                      SearchPlaceholder="Search loss reference, vehicle, case, status, driver..."
+                      EmptyMessage="No vehicle losses match the current search or filter."
+                      EmptyIcon="bx bx-x-circle"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
 
 @code {
     private bool _showHelp = true;
     private bool _showMaintenance = true;
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("reference", "Reference"),
+        new("vehicle", "Vehicle"),
+        new("lossDate", "Loss Date"),
+        new("type", "Type"),
+        new("status", "Status"),
+        new("amount", "Amount"),
+        new("caseNumber", "Case No.")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Open losses", "statusGroup", "Open"),
+        new("Recovered vehicles", "statusGroup", "Recovered"),
+        new("Closed losses", "statusGroup", "Closed"),
+        new("Losses with SAPD case", "caseStatus", "Case Captured")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
 
     private void ToggleHelp() => _showHelp = !_showHelp;
     private void ToggleMaintenance() => _showMaintenance = !_showMaintenance;
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var losses = await LossService.GetAllAsync<LossDto>();
+            _rows = losses
+                .OrderByDescending(item => item.loss_date ?? DateTime.MinValue)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["reference"] = item.loss_reference,
+                    ["vehicle"] = item.vehicle_identifier ?? item.vmf_code?.ToString(),
+                    ["lossDate"] = FormatDate(item.loss_date),
+                    ["type"] = item.loss_type_description ?? item.loss_type_code?.ToString(),
+                    ["status"] = item.loss_status,
+                    ["amount"] = item.loss_amount?.ToString("C0"),
+                    ["caseNumber"] = item.case_number,
+                    ["statusGroup"] = GetLossStatusGroup(item.loss_status),
+                    ["caseStatus"] = string.IsNullOrWhiteSpace(item.case_number) ? "No Case" : "Case Captured"
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading losses preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetLossStatusGroup(string? status)
+    {
+        if (status?.Contains("recover", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Recovered";
+        }
+
+        if (status?.Contains("closed", StringComparison.OrdinalIgnoreCase) == true ||
+            status?.Contains("final", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Closed";
+        }
+
+        return "Open";
+    }
+
+    private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
 }

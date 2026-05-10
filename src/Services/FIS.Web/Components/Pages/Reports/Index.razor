@@ -172,4 +172,74 @@
         </div>
     </div>
 
+    <DataPreviewTable Title="Report Catalog Preview"
+                      SearchPlaceholder="Search report name, category, route..."
+                      EmptyMessage="No reports match the current search or filter."
+                      EmptyIcon="bx bx-file-find"
+                      IsLoading="false"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
+
+@code {
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("category", "Category"),
+        new("name", "Report"),
+        new("route", "Route"),
+        new("type", "Type")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Vehicle reports", "category", "Vehicle"),
+        new("Contract reports", "category", "Contract"),
+        new("Audit reports", "category", "Audit"),
+        new("Tariff reports", "category", "Tariff"),
+        new("Trip reports", "category", "Trip")
+    ];
+
+    private readonly IReadOnlyList<Dictionary<string, string?>> _rows =
+    [
+        Row("Trip", "Trip Authority Reports", "/reports/trip-authority", "Menu"),
+        Row("FIS", "FIS Reports", "/reports/fis-report", "Menu"),
+        Row("Audit", "System Audit Trail", "/reports/system-audit-trail", "Audit"),
+        Row("Vehicle", "General Vehicle Information Report", "/reports/vehicle-info", "Menu"),
+        Row("Contract", "Contract Reports", "/reports/contracts", "Menu"),
+        Row("Contract", "Contract History", "/reports/contract-history", "Menu"),
+        Row("Department", "Department & Site Reports", "/reports/departments-sites", "Menu"),
+        Row("Vehicle", "Un-allocated vehicles", "/reports/unallocated-vehicles", "Menu"),
+        Row("Vehicle", "Vehicles with high distances in department", "/reports/high-distance-dept", "Menu"),
+        Row("Vehicle", "Vehicles with high distances in all departments", "/reports/high-distance-all", "Menu"),
+        Row("Trip", "Trips open for over 31 days", "/reports/trips-open-31", "Menu"),
+        Row("Vehicle", "Vehicle contracts, ELS and manual logs", "/reports/vehicle-logs-report", "Menu"),
+        Row("Vehicle", "Asset List", "/reports/asset-list", "Menu"),
+        Row("Vehicle", "Vehicle Status Date Range", "/reports/vehicle-status-range", "Menu"),
+        Row("Vehicle", "All Vehicle Status", "/reports/vehicle-status-all", "Menu"),
+        Row("Vehicle", "Incorrect calculated quantities", "/reports/incorrect-quantities", "Menu"),
+        Row("Vehicle", "VIP Self-Drive Rental Utilization", "/reports/vip-self-drive-utilization", "Menu"),
+        Row("Vehicle", "VIP and Pool Utilization Current Month", "/reports/vip-pool-utilization-current", "Menu"),
+        Row("Vehicle", "VIP and Pool Utilization Previous Months", "/reports/vip-pool-utilization-previous", "Menu"),
+        Row("Vehicle", "Vehicles with Expired or No Tariff Loaded", "/reports/vehicles-no-tariff", "Menu"),
+        Row("Finance", "Previous financial year transactions", "/reports/previous-fin-year", "Menu"),
+        Row("Vehicle", "Vehicle Additions", "/reports/vehicle-additions", "Menu"),
+        Row("Vehicle", "Vehicle Disposals", "/reports/vehicle-disposals", "Menu"),
+        Row("Vehicle", "Vehicle List Date Range", "/reports/vehicle-list-date-range", "Menu"),
+        Row("Audit", "Capture Activity Report", "/reports/capture-activity", "Menu"),
+        Row("Tariff", "Published Tariffs by Financial Year", "/reports/tariffs-fin-year", "Menu"),
+        Row("Tariff", "Tariffs by Class Groupings", "/reports/tariffs-class-2007", "Menu"),
+        Row("Tariff", "Tariffs per Vehicle", "/reports/tariffs-per-vehicle", "Menu")
+    ];
+
+    private static Dictionary<string, string?> Row(string category, string name, string route, string type)
+    {
+        return new Dictionary<string, string?>
+        {
+            ["category"] = category,
+            ["name"] = name,
+            ["route"] = route,
+            ["type"] = type
+        };
+    }
+}

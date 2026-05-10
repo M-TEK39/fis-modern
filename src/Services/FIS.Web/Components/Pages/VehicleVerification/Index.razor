@@ -1,10 +1,13 @@
 @page "/vehicle-verification"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Services
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Security.Claims
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserAccessContextService UserAccessContextService
+@inject AssetVerificationApiService AssetVerificationService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Vehicle Asset Verification - Fleet Information System</PageTitle>
 
@@ -69,6 +72,15 @@
                 }
             </div>
         </div>
+
+        <DataPreviewTable Title="Asset Verification Preview"
+                          SearchPlaceholder="Search registration, department, site, status, manager..."
+                          EmptyMessage="No asset verification records match the current search or filter."
+                          EmptyIcon="bx bx-clipboard"
+                          IsLoading="_loading"
+                          Columns="_columns"
+                          Rows="_rows"
+                          Filters="_filters" />
     }
 </div>
 
@@ -77,10 +89,39 @@
     private bool _hasVehicleAccess;
     private bool _showVerificationInfo = true;
     private bool _showVerificationMaintenance = true;
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("registration", "Registration"),
+        new("vmfCode", "GG Code"),
+        new("department", "Department"),
+        new("site", "Site"),
+        new("verificationDate", "Verified"),
+        new("status", "Status"),
+        new("manager", "Manager")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Verified vehicles", "verificationGroup", "Verified"),
+        new("Pending verification", "verificationGroup", "Pending"),
+        new("Vehicles with barcode", "barcodeStatus", "Barcode Captured"),
+        new("Vehicles with petrol card", "petrolCardStatus", "Petrol Card")
+    ];
 
     protected override async Task OnInitializedAsync()
     {
         await ResolveAccessAsync();
+        if (_hasVehicleAccess)
+        {
+            await LoadPreviewAsync();
+        }
+        else
+        {
+            _loading = false;
+        }
     }
 
     private async Task ResolveAccessAsync()
@@ -121,4 +162,45 @@
 
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var records = await AssetVerificationService.GetAllAsync<AssetVerificationRecord>();
+            _rows = records
+                .OrderByDescending(item => item.verification_date ?? item.date_last_verified ?? DateTime.MinValue)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["registration"] = item.vehicle_reg_no,
+                    ["vmfCode"] = item.vmf_code?.ToString(),
+                    ["department"] = item.department_name,
+                    ["site"] = item.site_name ?? item.site_code?.ToString(),
+                    ["verificationDate"] = FormatDate(item.verification_date ?? item.date_last_verified),
+                    ["status"] = item.verification_status,
+                    ["manager"] = item.responsible_manager,
+                    ["verificationGroup"] = IsVerified(item.verification_status) ? "Verified" : "Pending",
+                    ["barcodeStatus"] = string.IsNullOrWhiteSpace(item.barcode_number ?? item.barcode) ? "No Barcode" : "Barcode Captured",
+                    ["petrolCardStatus"] = string.IsNullOrWhiteSpace(item.petrol_card) ? "No Petrol Card" : "Petrol Card"
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading asset verification preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static bool IsVerified(string? status)
+    {
+        return status?.Contains("verified", StringComparison.OrdinalIgnoreCase) == true ||
+            status?.Contains("complete", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
 }

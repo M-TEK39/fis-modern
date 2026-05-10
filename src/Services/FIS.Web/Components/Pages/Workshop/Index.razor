@@ -58,12 +58,35 @@
 
     <div class="table-container">
         <div class="table-header">
-            <span class="table-title">All Workshop Entries Snapshot</span>
+            <span class="table-title">All Workshop Entries Snapshot (@FilteredEntries.Count)</span>
             <div class="table-controls">
+                <select class="form-select" @bind="_statusFilter" @bind:after="ResetPaging">
+                    <option value="">All entries</option>
+                    <option value="open">Open entries</option>
+                    <option value="closed">Closed entries</option>
+                    <option value="vehicle">Vehicle-linked entries</option>
+                </select>
                 <button class="btn btn-secondary btn-sm" @onclick="RefreshOverviewAsync" disabled="@_loading">
                     <i class="bx bx-refresh"></i>
                     Refresh
                 </button>
+            </div>
+        </div>
+        <div class="search-bar">
+            <div class="search-input-wrapper">
+                <i class="bx bx-search"></i>
+                <input class="search-input"
+                       type="search"
+                       placeholder="Search entry ID, vehicle, status..."
+                       @bind="_searchTerm"
+                       @bind:event="oninput"
+                       @bind:after="ResetPaging" />
+                @if (!string.IsNullOrWhiteSpace(_searchTerm))
+                {
+                    <button type="button" class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                        <i class="bx bx-x"></i>
+                    </button>
+                }
             </div>
         </div>
 
@@ -79,7 +102,7 @@
                 <p>Loading workshop entries...</p>
             </div>
         }
-        else if (_entries.Count == 0)
+        else if (FilteredEntries.Count == 0)
         {
             <div class="empty-state">
                 <i class="bx bx-info-circle"></i>
@@ -117,9 +140,8 @@
             <div class="pagination">
                 <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
                 <div class="pagination-info">Page @_page of @TotalPages</div>
-                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
             </div>
-            <div class="pagination-meta">Total records: @_entries.Count | Page size: @_pageSize</div>
+            <div class="pagination-meta">Total records: @FilteredEntries.Count | Page size: @_pageSize</div>
         }
     </div>
 </div>
@@ -132,13 +154,20 @@
     private string _message = string.Empty;
     private List<WorkshopOverviewRow> _entries = new();
     private Dictionary<int, string> _vehicleLabelByVmf = new();
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = string.Empty;
     private int _page = 1;
     private readonly int _pageSize = 12;
 
-    private IEnumerable<WorkshopOverviewRow> PagedEntries
-        => _entries.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private List<WorkshopOverviewRow> FilteredEntries => _entries
+        .Where(MatchesSearch)
+        .Where(MatchesFilter)
+        .ToList();
 
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_entries.Count / (double)_pageSize));
+    private IEnumerable<WorkshopOverviewRow> PagedEntries
+        => FilteredEntries.Skip((_page - 1) * _pageSize).Take(_pageSize);
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredEntries.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -195,6 +224,41 @@
         await LoadOverviewAsync();
     }
 
+    private void ResetPaging()
+    {
+        _page = 1;
+    }
+
+    private void ClearSearch()
+    {
+        _searchTerm = string.Empty;
+        _page = 1;
+    }
+
+    private bool MatchesSearch(WorkshopOverviewRow row)
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return true;
+        }
+
+        var search = _searchTerm.Trim();
+        return Contains(row.ww_code.ToString(), search) ||
+            Contains(GetVehicleLabel(row.vmf_code), search) ||
+            Contains(row.complete_time.HasValue ? "Closed" : "Open", search);
+    }
+
+    private bool MatchesFilter(WorkshopOverviewRow row)
+    {
+        return _statusFilter switch
+        {
+            "open" => !row.complete_time.HasValue,
+            "closed" => row.complete_time.HasValue,
+            "vehicle" => row.vmf_code.HasValue,
+            _ => true
+        };
+    }
+
     private void PrevPage()
     {
         if (_page > 1)
@@ -231,6 +295,9 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
+
+    private static bool Contains(string? value, string search)
+        => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 
     private sealed class WorkshopOverviewRow
     {

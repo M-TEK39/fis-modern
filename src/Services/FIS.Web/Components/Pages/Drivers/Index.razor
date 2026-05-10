@@ -5,7 +5,9 @@
 @using FIS.Web.Services
 @inject DepartmentApiService DepartmentService
 @inject SiteApiService SiteService
+@inject DriverApiService DriverService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Driver &amp; Authoriser Management - Fleet Information System</PageTitle>
 
@@ -84,6 +86,15 @@
             <span>@_errorMessage</span>
         </div>
     }
+
+    <DataPreviewTable Title="Driver Preview"
+                      SearchPlaceholder="Search driver name, licence, Persal, contract, site..."
+                      EmptyMessage="No drivers match the current search or filter."
+                      EmptyIcon="bx bx-id-card"
+                      IsLoading="_previewLoading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
 
 @code {
@@ -94,9 +105,11 @@
     public string? SiteCodeQuery { get; set; }
 
     private bool _loading = true;
+    private bool _previewLoading = true;
     private string? _errorMessage;
     private List<DepartmentDto> _departments = new();
     private List<SiteResponseDto> _sites = new();
+    private List<Dictionary<string, string?>> _rows = new();
     private short? _selectedDepartmentCode;
     private short? _selectedSiteCode;
     private short? DepartmentCode => DriverManagementNavigation.ParseNullableShort(DepartmentCodeQuery);
@@ -105,6 +118,24 @@
     private IEnumerable<SiteResponseDto> AvailableSites => _sites
         .Where(site => !_selectedDepartmentCode.HasValue || site.DepartmentCode == _selectedDepartmentCode.Value)
         .OrderBy(site => site.Description);
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("name", "Driver"),
+        new("site", "Site"),
+        new("licence", "Licence No."),
+        new("licenceExpiry", "Licence Expiry"),
+        new("pdp", "PDP"),
+        new("status", "Status")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Active drivers", "status", "Active"),
+        new("Inactive drivers", "status", "Inactive"),
+        new("Drivers with PDP", "pdpStatus", "PDP"),
+        new("Licence expiry captured", "licenceStatus", "Expiry Captured")
+    ];
 
     private string SelectionSummary
     {
@@ -123,6 +154,7 @@
             _departments = await DepartmentService.GetDepartmentsAsync();
             _sites = await SiteService.GetAllAsync();
             ApplyIncomingSelection();
+            await LoadPreviewAsync();
         }
         catch (Exception ex)
         {
@@ -132,6 +164,7 @@
         finally
         {
             _loading = false;
+            _previewLoading = false;
         }
     }
 
@@ -182,4 +215,27 @@
     {
         Navigation.NavigateTo(DriverManagementNavigation.SiteDrivers(_selectedDepartmentCode, _selectedSiteCode));
     }
+
+    private async Task LoadPreviewAsync()
+    {
+        _previewLoading = true;
+        var drivers = await DriverService.GetDriversAsync();
+        _rows = drivers
+            .OrderBy(item => item.driver_surname)
+            .ThenBy(item => item.driver_firstname)
+            .Select(item => new Dictionary<string, string?>
+            {
+                ["name"] = $"{item.driver_surname}, {item.driver_firstname}".Trim(' ', ','),
+                ["site"] = item.site_code.ToString(),
+                ["licence"] = item.driver_licence_number,
+                ["licenceExpiry"] = FormatDate(item.driver_licence_ExpiryDate),
+                ["pdp"] = item.driver_hasPDP ? "Yes" : "No",
+                ["status"] = item.driver_active ? "Active" : "Inactive",
+                ["pdpStatus"] = item.driver_hasPDP ? "PDP" : "No PDP",
+                ["licenceStatus"] = item.driver_licence_ExpiryDate.HasValue ? "Expiry Captured" : "No Expiry"
+            })
+            .ToList();
+    }
+
+    private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
 }

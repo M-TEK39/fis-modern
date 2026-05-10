@@ -1,5 +1,9 @@
 @page "/fuel-cards"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FleetManagementApiService FleetService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Fuelcard Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -103,6 +107,14 @@
         </div>
     </div>
 
+    <DataPreviewTable Title="Fuelcard Activity Preview"
+                      SearchPlaceholder="Search card number, GG code, action, receiver..."
+                      EmptyMessage="No fuelcard activity matches the current search or filter."
+                      EmptyIcon="bx bx-credit-card"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
 
 @code {
@@ -111,10 +123,77 @@
     private bool _showReports = true;
     private bool _showPrivateHireMaintenance = true;
     private bool _showPrivateHireReports = true;
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("cardNumber", "Card No."),
+        new("vmfCode", "GG Code"),
+        new("action", "Action"),
+        new("date", "Date"),
+        new("receiver", "Receiver")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Issued cards", "actionGroup", "Issued"),
+        new("Returned cards", "actionGroup", "Returned"),
+        new("Other activity", "actionGroup", "Other")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
 
     private void ToggleHelp() => _showHelp = !_showHelp;
     private void ToggleMaintenance() => _showMaintenance = !_showMaintenance;
     private void ToggleReports() => _showReports = !_showReports;
     private void TogglePrivateHireMaintenance() => _showPrivateHireMaintenance = !_showPrivateHireMaintenance;
     private void TogglePrivateHireReports() => _showPrivateHireReports = !_showPrivateHireReports;
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var response = await FleetService.GetFuelCardAllocationAsync();
+            _rows = response?.Report?.RecentActivity
+                .OrderByDescending(item => item.Date)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["cardNumber"] = item.CardNumber,
+                    ["vmfCode"] = item.VmfCode.ToString(),
+                    ["action"] = item.Action,
+                    ["date"] = item.Date.ToString("yyyy-MM-dd"),
+                    ["receiver"] = item.Receiver,
+                    ["actionGroup"] = GetActionGroup(item.Action)
+                })
+                .ToList() ?? new();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading fuelcard preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string GetActionGroup(string? action)
+    {
+        if (action?.Contains("issue", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Issued";
+        }
+
+        if (action?.Contains("return", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return "Returned";
+        }
+
+        return "Other";
+    }
 }

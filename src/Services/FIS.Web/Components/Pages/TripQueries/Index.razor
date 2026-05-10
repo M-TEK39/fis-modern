@@ -43,7 +43,33 @@
     {
         <div class="table-container">
             <div class="table-header">
-                <span class="table-title">@_queries.Count Query record(s)</span>
+                <span class="table-title">@FilteredQueries.Count Query record(s)</span>
+                <div class="table-controls">
+                    <select class="form-select" @bind="_statusFilter" @bind:after="ResetPaging">
+                        <option value="">All trip queries</option>
+                        <option value="open">Open trips</option>
+                        <option value="closed">Closed trips</option>
+                        <option value="vehicle">Vehicle-linked trips</option>
+                        <option value="notes">Trips with notes</option>
+                    </select>
+                </div>
+            </div>
+            <div class="search-bar">
+                <div class="search-input-wrapper">
+                    <i class="bx bx-search"></i>
+                    <input class="search-input"
+                           type="search"
+                           placeholder="Search trip number, vehicle, status, notes..."
+                           @bind="_searchTerm"
+                           @bind:event="oninput"
+                           @bind:after="ResetPaging" />
+                    @if (!string.IsNullOrWhiteSpace(_searchTerm))
+                    {
+                        <button type="button" class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                            <i class="bx bx-x"></i>
+                        </button>
+                    }
+                </div>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
@@ -82,10 +108,16 @@
 @code {
     private bool _loading = true;
     private List<TripQueryItem> _queries = new();
+    private string _searchTerm = string.Empty;
+    private string _statusFilter = string.Empty;
     private int _page = 1;
     private const int _pageSize = 12;
-    private IEnumerable<TripQueryItem> PagedQueries => _queries.Skip((_page - 1) * _pageSize).Take(_pageSize);
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_queries.Count / (double)_pageSize));
+    private List<TripQueryItem> FilteredQueries => _queries
+        .Where(MatchesSearch)
+        .Where(MatchesFilter)
+        .ToList();
+    private IEnumerable<TripQueryItem> PagedQueries => FilteredQueries.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredQueries.Count / (double)_pageSize));
 
     protected override async Task OnInitializedAsync()
     {
@@ -136,6 +168,46 @@
             _page++;
         }
     }
+
+    private void ResetPaging()
+    {
+        _page = 1;
+    }
+
+    private void ClearSearch()
+    {
+        _searchTerm = string.Empty;
+        _page = 1;
+    }
+
+    private bool MatchesSearch(TripQueryItem item)
+    {
+        if (string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            return true;
+        }
+
+        var search = _searchTerm.Trim();
+        return Contains(item.Number, search) ||
+            Contains(item.Vehicle, search) ||
+            Contains(item.Status, search) ||
+            Contains(item.Notes, search);
+    }
+
+    private bool MatchesFilter(TripQueryItem item)
+    {
+        return _statusFilter switch
+        {
+            "open" => Contains(item.Status, "open"),
+            "closed" => Contains(item.Status, "closed") || Contains(item.Status, "complete"),
+            "vehicle" => !string.IsNullOrWhiteSpace(item.Vehicle) && !string.Equals(item.Vehicle, "Unknown", StringComparison.OrdinalIgnoreCase),
+            "notes" => !string.IsNullOrWhiteSpace(item.Notes),
+            _ => true
+        };
+    }
+
+    private static bool Contains(string? value, string search)
+        => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 
     private sealed record TripQueryItem(string Number, string Vehicle, string Status, DateTime Created, string Notes);
 }

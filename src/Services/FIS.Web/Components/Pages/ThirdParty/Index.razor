@@ -525,6 +525,15 @@
             </div>
         }
     </div>
+
+    <DataPreviewTable Title="Third Party Supplier Preview"
+                      SearchPlaceholder="Search supplier, service, contact, email, telephone..."
+                      EmptyMessage="No third party suppliers match the current search or filter."
+                      EmptyIcon="bx bx-building-house"
+                      IsLoading="false"
+                      Columns="_previewColumns"
+                      Rows="SupplierPreviewRows"
+                      Filters="_previewFilters" />
 </div>
 
 @code {
@@ -558,6 +567,38 @@
     private List<ThirdPartyVehicleDto> _supplierVehicles = new();
     private List<ThirdPartyClassRequirementDto> _classRequirements = new();
     private ThirdPartyVehicleDto? _selectedVehicle;
+    private List<Dictionary<string, string?>> SupplierPreviewRows => _suppliers
+        .OrderBy(item => item.name)
+        .Select(item => new Dictionary<string, string?>
+        {
+            ["name"] = item.name,
+            ["service"] = item.service_code,
+            ["contact"] = item.contact_person,
+            ["email"] = item.email,
+            ["telephone"] = item.tel ?? item.cell,
+            ["status"] = item.active.GetValueOrDefault(true) ? "Active" : "Inactive",
+            ["emailStatus"] = string.IsNullOrWhiteSpace(item.email) ? "No Email" : "Email Captured",
+            ["contactStatus"] = string.IsNullOrWhiteSpace(item.contact_person) ? "No Contact" : "Contact Captured"
+        })
+        .ToList();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _previewColumns =
+    [
+        new("name", "Supplier"),
+        new("service", "Service"),
+        new("contact", "Contact"),
+        new("email", "Email"),
+        new("telephone", "Telephone"),
+        new("status", "Status")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _previewFilters =
+    [
+        new("Active suppliers", "status", "Active"),
+        new("Inactive suppliers", "status", "Inactive"),
+        new("Suppliers with email", "emailStatus", "Email Captured"),
+        new("Suppliers with contact", "contactStatus", "Contact Captured")
+    ];
     private int _page = 1;
     private const int _pageSize = 12;
     private IEnumerable<ThirdPartyVehicleDto> PagedSupplierVehicles => _supplierVehicles.Skip((_page - 1) * _pageSize).Take(_pageSize);

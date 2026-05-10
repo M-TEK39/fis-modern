@@ -1,5 +1,9 @@
 @page "/log-sheets"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject LogsheetApiService LogsheetService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Logsheet Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -55,4 +59,73 @@
             </div>
         </div>
     </div>
+
+    <DataPreviewTable Title="Logsheet Preview"
+                      SearchPlaceholder="Search GG code, requisition, bundle, site..."
+                      EmptyMessage="No logsheets match the current search or filter."
+                      EmptyIcon="bx bx-table"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
+
+@code {
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("month", "Month"),
+        new("vmfCode", "GG Code"),
+        new("startOdo", "Start Odo"),
+        new("endOdo", "End Odo"),
+        new("daysUsed", "Days Used"),
+        new("site", "Site"),
+        new("requisition", "Requisition")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("With requisition", "requisitionStatus", "Requisition Captured"),
+        new("Without requisition", "requisitionStatus", "No Requisition"),
+        new("Usage days captured", "usageStatus", "Usage Captured")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var logsheets = await LogsheetService.GetAllAsync<LogsheetDto>();
+            _rows = logsheets
+                .OrderByDescending(item => item.month)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["month"] = item.month.ToString("yyyy-MM"),
+                    ["vmfCode"] = item.vmf_code.ToString(),
+                    ["startOdo"] = item.start_odo.ToString("0"),
+                    ["endOdo"] = item.end_odo.ToString("0"),
+                    ["daysUsed"] = item.days_used?.ToString(),
+                    ["site"] = item.site_code.ToString(),
+                    ["requisition"] = item.rek_num,
+                    ["requisitionStatus"] = string.IsNullOrWhiteSpace(item.rek_num) ? "No Requisition" : "Requisition Captured",
+                    ["usageStatus"] = item.days_used.HasValue ? "Usage Captured" : "No Usage"
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading logsheet preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

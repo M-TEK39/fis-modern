@@ -1,5 +1,9 @@
 @page "/tracking"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TrackingApiService TrackingService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Tracking - MobiTrax - Maintenance Menu - Fleet Information System</PageTitle>
 
@@ -28,4 +32,74 @@
         </div>
     </div>
 
+    <DataPreviewTable Title="Tracking Device Preview"
+                      SearchPlaceholder="Search tracker number, GG code, status, notes..."
+                      EmptyMessage="No tracking records match the current search or filter."
+                      EmptyIcon="bx bx-radar"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
+
+@code {
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("trackNumber", "Tracker No."),
+        new("vmfCode", "GG Code"),
+        new("installDate", "Installed"),
+        new("removeDate", "Removed"),
+        new("status", "Status"),
+        new("type", "Type"),
+        new("note", "Note")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Active tracking devices", "lifecycle", "Active"),
+        new("Removed tracking devices", "lifecycle", "Removed"),
+        new("Vehicles with previous GG", "historyStatus", "Previous GG")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var tracking = await TrackingService.GetAllAsync<TrackingDto>();
+            _rows = tracking
+                .OrderByDescending(item => item.install_date ?? DateTime.MinValue)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["trackNumber"] = item.track_num,
+                    ["vmfCode"] = item.vmf_code?.ToString(),
+                    ["installDate"] = FormatDate(item.install_date),
+                    ["removeDate"] = FormatDate(item.remove_date),
+                    ["status"] = item.track_status,
+                    ["type"] = item.track_type,
+                    ["note"] = item.track_note,
+                    ["lifecycle"] = item.remove_date.HasValue ? "Removed" : "Active",
+                    ["historyStatus"] = string.IsNullOrWhiteSpace(item.gg_previous) ? "No Previous GG" : "Previous GG"
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading tracking preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
+}

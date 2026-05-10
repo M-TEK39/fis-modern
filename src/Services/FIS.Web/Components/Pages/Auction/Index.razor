@@ -1,5 +1,9 @@
 @page "/auction"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject AuctionApiService AuctionService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Auction - Fleet Information System</PageTitle>
 
@@ -55,4 +59,72 @@
         </div>
     </div>
 
+    <DataPreviewTable Title="Auction Vehicle Preview"
+                      SearchPlaceholder="Search auction number, GG code, garage owner, reason..."
+                      EmptyMessage="No auction vehicles match the current search or filter."
+                      EmptyIcon="bx bx-dollar"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
+
+@code {
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("auctionNumber", "Auction No."),
+        new("vmfCode", "GG Code"),
+        new("garage", "Garage"),
+        new("lot", "Lot"),
+        new("estimate", "Estimate"),
+        new("status", "Status"),
+        new("reason", "Reason")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Open auction vehicles", "status", "Open"),
+        new("Sold auction vehicles", "status", "Sold"),
+        new("Vehicles with reserve", "reserveStatus", "Reserve Set")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var auctions = await AuctionService.GetAllAsync<AuctionDto>();
+            _rows = auctions
+                .OrderByDescending(item => item.auth_date ?? DateTime.MinValue)
+                .ThenBy(item => item.auction_number)
+                .Select(item => new Dictionary<string, string?>
+                {
+                    ["auctionNumber"] = item.auction_number,
+                    ["vmfCode"] = item.vmf_code.ToString(),
+                    ["garage"] = item.garage_owner ?? item.auction_garage?.ToString(),
+                    ["lot"] = item.lot?.ToString("0.##"),
+                    ["estimate"] = item.estimate_amount?.ToString("C0"),
+                    ["status"] = string.IsNullOrWhiteSpace(item.sold_id) ? "Open" : "Sold",
+                    ["reserveStatus"] = item.reserve_amount.HasValue ? "Reserve Set" : "No Reserve",
+                    ["reason"] = item.reason_sold
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading auction preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

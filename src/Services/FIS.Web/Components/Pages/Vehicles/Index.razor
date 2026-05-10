@@ -169,10 +169,35 @@
             <div class="table-header">
                 <span class="table-title">All Vehicles Snapshot</span>
                 <div class="table-controls">
+                    <select class="form-select" @bind="_overviewStatusFilter" @bind:after="ResetOverviewFilters">
+                        <option value="">All vehicles</option>
+                        <option value="inService">In-service vehicles</option>
+                        <option value="new">New vehicles</option>
+                        <option value="recovered">Recovered vehicles</option>
+                        <option value="renumbered">Renumbered vehicles</option>
+                        <option value="withContract">Vehicles with contracts</option>
+                    </select>
                     <button class="btn btn-secondary btn-sm" @onclick="RefreshVehicleOverviewAsync" disabled="@_loadingOverview">
                         <i class="bx bx-refresh"></i>
                         Refresh
                     </button>
+                </div>
+            </div>
+            <div class="search-bar">
+                <div class="search-input-wrapper">
+                    <i class="bx bx-search"></i>
+                    <input class="search-input"
+                           type="search"
+                           placeholder="Search GG number, registration, invoice, model, status..."
+                           @bind="_overviewSearchTerm"
+                           @bind:event="oninput"
+                           @bind:after="ResetOverviewFilters" />
+                    @if (!string.IsNullOrWhiteSpace(_overviewSearchTerm))
+                    {
+                        <button type="button" class="search-clear" @onclick="ClearOverviewSearch" aria-label="Clear search">
+                            <i class="bx bx-x"></i>
+                        </button>
+                    }
                 </div>
             </div>
 
@@ -188,7 +213,7 @@
                     <p>Loading vehicles...</p>
                 </div>
             }
-            else if (_vehicleOverview.Count == 0)
+            else if (FilteredVehicleOverview.Count == 0)
             {
                 <div class="empty-state">
                     <i class="bx bx-info-circle"></i>
@@ -212,7 +237,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var vehicle in _vehicleOverview)
+                            @foreach (var vehicle in FilteredVehicleOverview)
                             {
                                 <tr>
                                     <td>@ValueOrDash(vehicle.fleet_number)</td>
@@ -235,7 +260,7 @@
                     <div class="pagination-info">Page @_overviewPage of @_overviewTotalPages</div>
                     <button class="pagination-btn" @onclick="NextOverviewPageAsync" disabled="@(_overviewPage >= _overviewTotalPages || _loadingOverview)">Next</button>
                 </div>
-                <div class="pagination-meta">Total records: @_overviewTotalRecords | Page size: @_overviewPageSize</div>
+                <div class="pagination-meta">Total records: @FilteredVehicleOverview.Count on this page | Page size: @_overviewPageSize</div>
             }
         </div>
     }
@@ -256,6 +281,8 @@
     private bool _loadingOverview;
     private bool _overviewError;
     private string _overviewMessage = string.Empty;
+    private string _overviewSearchTerm = string.Empty;
+    private string _overviewStatusFilter = string.Empty;
     private int _overviewPage = 1;
     private readonly int _overviewPageSize = 12;
     private int _overviewTotalPages = 1;
@@ -266,6 +293,10 @@
     private readonly Dictionary<int, string> _contractStateByVmf = new();
     private readonly Dictionary<int, short?> _contractStatusCodeByVmf = new();
     private readonly Dictionary<int, DateTime?> _contractReturnByVmf = new();
+    private List<FIS.Web.Models.VehicleDto> FilteredVehicleOverview => _vehicleOverview
+        .Where(MatchesOverviewSearch)
+        .Where(MatchesOverviewFilter)
+        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -336,6 +367,43 @@
     private void ToggleVehicleSource() => _showVehicleSource = !_showVehicleSource;
     private void ToggleDemoVehicles() => _showDemoVehicles = !_showDemoVehicles;
     private void ToggleRecoveredVehicles() => _showRecoveredVehicles = !_showRecoveredVehicles;
+
+    private void ResetOverviewFilters()
+    {
+    }
+
+    private void ClearOverviewSearch()
+    {
+        _overviewSearchTerm = string.Empty;
+    }
+
+    private bool MatchesOverviewSearch(FIS.Web.Models.VehicleDto vehicle)
+    {
+        if (string.IsNullOrWhiteSpace(_overviewSearchTerm))
+        {
+            return true;
+        }
+
+        var search = _overviewSearchTerm.Trim();
+        return Contains(vehicle.fleet_number, search) ||
+            Contains(vehicle.registration_number, search) ||
+            Contains(vehicle.invoice_number, search) ||
+            Contains(vehicle.model_name, search) ||
+            Contains(vehicle.status_description, search);
+    }
+
+    private bool MatchesOverviewFilter(FIS.Web.Models.VehicleDto vehicle)
+    {
+        return _overviewStatusFilter switch
+        {
+            "inService" => Contains(vehicle.status_description, "service"),
+            "new" => Contains(vehicle.status_description, "new"),
+            "recovered" => !string.IsNullOrWhiteSpace(vehicle.recovered_gg_number),
+            "renumbered" => !string.IsNullOrWhiteSpace(vehicle.renumbered_to),
+            "withContract" => _contractStateByVmf.ContainsKey(vehicle.vmf_code),
+            _ => true
+        };
+    }
 
     private async Task LoadVehicleOverviewAsync()
     {
@@ -531,4 +599,7 @@
 
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
+
+    private static bool Contains(string? value, string search)
+        => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
 }

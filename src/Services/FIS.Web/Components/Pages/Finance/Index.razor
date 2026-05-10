@@ -1,5 +1,9 @@
 @page "/finance"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject FinanceApiService FinanceService
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Finance Menu - Fleet Information System</PageTitle>
 
@@ -288,6 +292,15 @@
             }
         </div>
     </div>
+
+    <DataPreviewTable Title="Finance Reference Preview"
+                      SearchPlaceholder="Search departments, sites, financial years, batch dates..."
+                      EmptyMessage="No finance reference records match the current search or filter."
+                      EmptyIcon="bx bx-wallet"
+                      IsLoading="_loading"
+                      Columns="_columns"
+                      Rows="_rows"
+                      Filters="_filters" />
 </div>
 
 @code {
@@ -303,6 +316,28 @@
     private bool _showProfitability = true;
     private bool _showStandardBankImport = true;
     private bool _showBatchManagement = true;
+    private bool _loading = true;
+    private List<Dictionary<string, string?>> _rows = new();
+
+    private readonly IReadOnlyList<DataPreviewColumn> _columns =
+    [
+        new("type", "Type"),
+        new("code", "Code"),
+        new("description", "Description")
+    ];
+
+    private readonly IReadOnlyList<DataPreviewFilter> _filters =
+    [
+        new("Departments", "type", "Department"),
+        new("Sites", "type", "Site"),
+        new("Financial years", "type", "Financial Year"),
+        new("Batch dates", "type", "Batch Date")
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPreviewAsync();
+    }
 
     private void ToggleFinancialAllocation() => _showFinancialAllocation = !_showFinancialAllocation;
     private void ToggleFinancialReports() => _showFinancialReports = !_showFinancialReports;
@@ -316,4 +351,41 @@
     private void ToggleProfitability() => _showProfitability = !_showProfitability;
     private void ToggleStandardBankImport() => _showStandardBankImport = !_showStandardBankImport;
     private void ToggleBatchManagement() => _showBatchManagement = !_showBatchManagement;
+
+    private async Task LoadPreviewAsync()
+    {
+        _loading = true;
+        try
+        {
+            var departmentsTask = FinanceService.GetDepartmentsAsync();
+            var sitesTask = FinanceService.GetSitesAsync();
+            var yearsTask = FinanceService.GetFinancialYearsAsync();
+            var batchesTask = FinanceService.GetBatchDatesAsync();
+            await Task.WhenAll(departmentsTask, sitesTask, yearsTask, batchesTask);
+
+            _rows = BuildRows("Department", departmentsTask.Result)
+                .Concat(BuildRows("Site", sitesTask.Result))
+                .Concat(BuildRows("Financial Year", yearsTask.Result))
+                .Concat(BuildRows("Batch Date", batchesTask.Result))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading finance preview: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static IEnumerable<Dictionary<string, string?>> BuildRows(string type, IEnumerable<FinanceOptionDto> items)
+    {
+        return items.Select(item => new Dictionary<string, string?>
+        {
+            ["type"] = type,
+            ["code"] = item.Value,
+            ["description"] = item.Label
+        });
+    }
 }
