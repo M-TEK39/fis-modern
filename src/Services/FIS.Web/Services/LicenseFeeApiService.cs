@@ -5,9 +5,9 @@ namespace FIS.Web.Services;
 
 internal class ApiLicenseFeeResponse
 {
-    public short licence_fee_code { get; set; }
-    public string licence_description { get; set; } = string.Empty;
-    public decimal? licence_fee { get; set; }
+    public short LicenceFeeCode { get; set; }
+    public string? Description { get; set; }
+    public decimal? Fee { get; set; }
 }
 
 public class LicenseFeeApiService
@@ -30,9 +30,9 @@ public class LicenseFeeApiService
 
             return apiResponse.Select(item => new LicenseFeeDto
             {
-                licence_fee_code = item.licence_fee_code,
-                licence_description = item.licence_description,
-                licence_fee = item.licence_fee
+                licence_fee_code = item.LicenceFeeCode,
+                licence_description = item.Description,
+                licence_fee = item.Fee
             }).ToList();
         }
         catch (Exception ex)
