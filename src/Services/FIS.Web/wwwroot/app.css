@@ -2412,6 +2412,8 @@ textarea.form-input:focus,
     min-height: 100dvh;
     height: 100vh;
     height: 100dvh;
+    position: fixed;
+    inset: 0;
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     background: var(--fis-app-bg);
@@ -3615,9 +3617,10 @@ body:not(.sidebar-collapsed) .legacy-shell .sidebar-user {
     min-height: 100dvh;
     height: 100vh;
     height: 100dvh;
+    min-width: 0;
+    min-height: 0;
     position: relative;
     z-index: 1;
-    min-width: 0;
     overflow-x: hidden;
     overflow-y: auto;
     max-width: 100%;

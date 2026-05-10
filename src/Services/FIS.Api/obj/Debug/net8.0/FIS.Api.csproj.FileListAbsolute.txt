@@ -1,7 +1,6 @@
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/appsettings.Development.json
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/appsettings.json
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/appsettings.Production.json
-/home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/FIS.Api
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/FIS.Api.deps.json
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/FIS.Api.runtimeconfig.json
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/FIS.Api.dll
