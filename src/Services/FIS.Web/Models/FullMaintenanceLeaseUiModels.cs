@@ -4,13 +4,16 @@ public sealed record FullMaintenanceLeaseTermDto
 {
     public int VehicleContractTermID { get; set; }
     public int leasecontract_code { get; set; }
-    public int? vmf_Code { get; set; }
     public int? vmf_code { get; set; }
     public int? AgreedTerms { get; set; }
     public long? AgreedKilos { get; set; }
     public decimal? AppliedInterest { get; set; }
     public decimal? FixedMonthlyAmount { get; set; }
     public int? AuthorityStatus { get; set; }
+    public int? CreatedBy { get; set; }
+    public DateTime? CreatedDate { get; set; }
+    public int? ModifiedBy { get; set; }
+    public DateTime? ModifiedDate { get; set; }
     public int? created_by_user_code { get; set; }
     public int? modified_by_user_code { get; set; }
     public string? authority_comment { get; set; }
@@ -21,9 +24,12 @@ public sealed record FullMaintenanceLeaseTermDto
     public DateTime? EndDate { get; set; }
     public DateTime? lease_startdate { get; set; }
     public DateTime? lease_enddate { get; set; }
+    public DateTime date_created { get; set; }
+    public DateTime? date_updated { get; set; }
+    public bool is_deleted { get; set; }
 
     public int TermId => VehicleContractTermID != 0 ? VehicleContractTermID : leasecontract_code;
-    public int VmfCode => vmf_Code ?? vmf_code ?? 0;
+    public int VmfCode => vmf_code ?? 0;
     public DateTime? EffectiveStartDate => StartDate ?? lease_startdate;
     public DateTime? EffectiveEndDate => EndDate ?? lease_enddate;
 }
