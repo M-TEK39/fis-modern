@@ -208,12 +208,12 @@
                 {
                     if (!vehicleToModel.TryGetValue(l.vmf_code, out var modelCode))
                     {
-                        return (classCode: 0, distance: 0d);
+                        return (classCode: (short)0, distance: 0d);
                     }
 
                     if (!modelToClass.TryGetValue(modelCode, out var classCode))
                     {
-                        return (classCode: 0, distance: 0d);
+                        return (classCode: (short)0, distance: 0d);
                     }
 
                     var distance = l.end_odo - l.start_odo;
