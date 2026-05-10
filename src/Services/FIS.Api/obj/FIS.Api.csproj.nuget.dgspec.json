@@ -15,12 +15,13 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/home/dev/.nuget/NuGet/NuGet.Config"
+          "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -111,12 +112,13 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/home/dev/.nuget/NuGet/NuGet.Config"
+          "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -184,12 +186,13 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/home/dev/.nuget/NuGet/NuGet.Config"
+          "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -271,12 +274,13 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/home/dev/.nuget/NuGet/NuGet.Config"
+          "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -364,12 +368,13 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/home/dev/.nuget/NuGet/NuGet.Config"
+          "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -455,12 +460,13 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/home/dev/.nuget/NuGet/NuGet.Config"
+          "/root/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {

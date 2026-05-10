@@ -53,7 +53,7 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Vehicle Match</label>
-                    <select class="form-select" @bind="_item.vmf_code" disabled="@(_vehicleMatches.Count == 0)">
+                    <select class="form-select" @bind="_item.vmf_Code" disabled="@(_vehicleMatches.Count == 0)">
                         <option value="">Select vehicle</option>
                         @foreach (var vehicle in _vehicleMatches)
                         {
@@ -69,7 +69,7 @@
         </div>
     </div>
 
-    @if (_item.vmf_code > 0)
+    @if (_item.VmfCode > 0)
     {
         <div class="alert alert-info fis-alert-tight">
             <i class="bx bx-car"></i>
@@ -139,13 +139,13 @@
     private List<VehicleDto> _vehicleMatches = new();
     private FullMaintenanceLeaseTermDto _item = NewItem();
     private string SelectedVehicleLabel
-        => _vehicleMatches.FirstOrDefault(vehicle => vehicle.vmf_code == _item.vmf_code) is { } vehicle
+        => _vehicleMatches.FirstOrDefault(vehicle => vehicle.vmf_code == _item.vmf_Code) is { } vehicle
             ? GetVehicleLabel(vehicle)
-            : _item.vmf_code > 0 ? _item.vmf_code.GetValueOrDefault().ToString() : "-";
+            : _item.VmfCode > 0 ? _item.VmfCode.ToString() : "-";
 
     private async Task CreateAsync()
     {
-        if (_item.vmf_code <= 0)
+        if (_item.VmfCode <= 0)
         {
             _error = true;
             _message = "Select a vehicle before submitting the tariff.";
@@ -209,7 +209,7 @@
         if (string.IsNullOrWhiteSpace(_vehicleSearchTerm))
         {
             _vehicleMatches = new();
-            _item.vmf_code = 0;
+            _item.vmf_Code = null;
             return;
         }
 
@@ -219,9 +219,9 @@
             var matches = await VehicleService.SearchVehiclesAsync(keyword);
             _vehicleMatches = FullMaintenanceLeaseUi.FilterVehicleMatches(matches, keyword, _searchMode);
 
-            if (_vehicleMatches.All(v => v.vmf_code != _item.vmf_code))
+            if (_vehicleMatches.All(v => v.vmf_code != _item.vmf_Code))
             {
-                _item.vmf_code = 0;
+                _item.vmf_Code = null;
             }
         }
         catch (Exception ex)
@@ -241,6 +241,6 @@
     {
         _searchMode = mode;
         _vehicleMatches = new();
-        _item.vmf_code = 0;
+        _item.vmf_Code = null;
     }
 }

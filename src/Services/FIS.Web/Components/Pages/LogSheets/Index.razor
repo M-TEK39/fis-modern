@@ -115,7 +115,8 @@
                     ["site"] = item.site_code.ToString(),
                     ["requisition"] = item.rek_num,
                     ["requisitionStatus"] = string.IsNullOrWhiteSpace(item.rek_num) ? "No Requisition" : "Requisition Captured",
-                    ["usageStatus"] = item.days_used.HasValue ? "Usage Captured" : "No Usage"
+                    ["usageStatus"] = item.days_used.HasValue ? "Usage Captured" : "No Usage",
+                    ["_href"] = $"/log-sheets/edit?logCode={item.log_code}&vmfCode={item.vmf_code}&requisition={Uri.EscapeDataString(item.rek_num ?? string.Empty)}"
                 })
                 .ToList();
         }

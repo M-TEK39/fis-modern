@@ -101,7 +101,8 @@
                     ["lastLogin"] = item.LastLoginDate,
                     ["emailStatus"] = string.IsNullOrWhiteSpace(item.Email) ? "No Email" : "Email Captured",
                     ["telephoneStatus"] = string.IsNullOrWhiteSpace(item.Telephone) ? "No Telephone" : "Telephone Captured",
-                    ["loginStatus"] = string.IsNullOrWhiteSpace(item.LastLoginDate) ? "No Login" : "Login Captured"
+                    ["loginStatus"] = string.IsNullOrWhiteSpace(item.LastLoginDate) ? "No Login" : "Login Captured",
+                    ["_href"] = $"/users?settings=users/edit&userAccessCode={item.UserAccessCode}"
                 })
                 .ToList();
         }

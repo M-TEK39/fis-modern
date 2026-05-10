@@ -110,7 +110,8 @@
                     ["amount"] = item.loss_amount?.ToString("C0"),
                     ["caseNumber"] = item.case_number,
                     ["statusGroup"] = GetLossStatusGroup(item.loss_status),
-                    ["caseStatus"] = string.IsNullOrWhiteSpace(item.case_number) ? "No Case" : "Case Captured"
+                    ["caseStatus"] = string.IsNullOrWhiteSpace(item.case_number) ? "No Case" : "Case Captured",
+                    ["_href"] = $"/losses/edit?lossCode={item.loss_code}"
                 })
                 .ToList();
         }

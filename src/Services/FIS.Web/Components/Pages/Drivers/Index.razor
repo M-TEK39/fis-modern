@@ -232,7 +232,8 @@
                 ["pdp"] = item.driver_hasPDP ? "Yes" : "No",
                 ["status"] = item.driver_active ? "Active" : "Inactive",
                 ["pdpStatus"] = item.driver_hasPDP ? "PDP" : "No PDP",
-                ["licenceStatus"] = item.driver_licence_ExpiryDate.HasValue ? "Expiry Captured" : "No Expiry"
+                ["licenceStatus"] = item.driver_licence_ExpiryDate.HasValue ? "Expiry Captured" : "No Expiry",
+                ["_href"] = $"/drivers/site-drivers/edit?siteCode={item.site_code}&driverCode={item.site_driver_code}"
             })
             .ToList();
     }

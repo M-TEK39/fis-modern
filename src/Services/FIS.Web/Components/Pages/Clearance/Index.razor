@@ -108,7 +108,8 @@
                     ["kilometres"] = item.clearance_kilo?.ToString(),
                     ["comment"] = item.clearance_comment,
                     ["merchantStatus"] = item.Merchant_code.HasValue ? "Merchant Linked" : "No Merchant",
-                    ["amountStatus"] = item.Clearance_amount.HasValue ? "Amount Captured" : "No Amount"
+                    ["amountStatus"] = item.Clearance_amount.HasValue ? "Amount Captured" : "No Amount",
+                    ["_href"] = $"/clearance/entry?clearanceCode={item.clearance_code}&vmfCode={item.vmf_code}"
                 })
                 .ToList();
         }

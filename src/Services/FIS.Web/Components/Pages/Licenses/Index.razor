@@ -95,7 +95,8 @@
                     ["code"] = item.licence_code.ToString(),
                     ["description"] = item.licence_description,
                     ["category"] = item.licence_category,
-                    ["categoryStatus"] = string.IsNullOrWhiteSpace(item.licence_category) ? "No Category" : "Category Captured"
+                    ["categoryStatus"] = string.IsNullOrWhiteSpace(item.licence_category) ? "No Category" : "Category Captured",
+                    ["_href"] = "/reference-data?tab=licenses"
                 })
                 .ToList();
         }

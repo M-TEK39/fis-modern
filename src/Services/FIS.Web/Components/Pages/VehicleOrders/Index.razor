@@ -201,7 +201,8 @@
                     ["capturedDate"] = FormatDate(item.captured_date ?? item.take_on_date),
                     ["captureStatus"] = item.captured_date.HasValue || item.take_on_date.HasValue ? "Captured" : "Pending Capture",
                     ["recoveredStatus"] = string.IsNullOrWhiteSpace(item.recovered_gg_number) ? "Not Recovered" : "Recovered",
-                    ["renumberedStatus"] = string.IsNullOrWhiteSpace(item.renumbered_to) ? "Not Renumbered" : "Renumbered"
+                    ["renumberedStatus"] = string.IsNullOrWhiteSpace(item.renumbered_to) ? "Not Renumbered" : "Renumbered",
+                    ["_href"] = $"/vehicles/{item.vmf_code}/edit"
                 })
                 .ToList();
         }

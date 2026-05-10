@@ -126,7 +126,8 @@
                     ["site"] = item.Driver_Site?.ToString(),
                     ["vehicleStatus"] = item.vmf_code.HasValue || !string.IsNullOrWhiteSpace(item.GG_number) ? "Vehicle Linked" : "No Vehicle",
                     ["driverStatus"] = string.IsNullOrWhiteSpace(item.Driver_name) ? "No Driver" : "Driver Linked",
-                    ["callerStatus"] = string.IsNullOrWhiteSpace(item.Caller_name) ? "No Caller" : "Caller Captured"
+                    ["callerStatus"] = string.IsNullOrWhiteSpace(item.Caller_name) ? "No Caller" : "Caller Captured",
+                    ["_href"] = $"/call-centre/incident/edit?referenceNumber={item.Call_centre_code}"
                 })
                 .ToList();
         }

@@ -96,7 +96,8 @@
                     ["issuer"] = item.Offence_issuer,
                     ["amount"] = item.Fine_amount?.ToString("C0"),
                     ["status"] = GetFineStatus(item),
-                    ["appearanceStatus"] = item.Appear_date.HasValue ? "Appearance Set" : "No Appearance"
+                    ["appearanceStatus"] = item.Appear_date.HasValue ? "Appearance Set" : "No Appearance",
+                    ["_href"] = $"/fines/maintenance/detail?fineId={item.Fine_code}"
                 })
                 .ToList();
         }

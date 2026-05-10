@@ -87,7 +87,8 @@
                     ["type"] = item.track_type,
                     ["note"] = item.track_note,
                     ["lifecycle"] = item.remove_date.HasValue ? "Removed" : "Active",
-                    ["historyStatus"] = string.IsNullOrWhiteSpace(item.gg_previous) ? "No Previous GG" : "Previous GG"
+                    ["historyStatus"] = string.IsNullOrWhiteSpace(item.gg_previous) ? "No Previous GG" : "Previous GG",
+                    ["_href"] = $"/tracking/maintenance?vmfCode={item.vmf_code}&trackCode={item.track_code}"
                 })
                 .ToList();
         }

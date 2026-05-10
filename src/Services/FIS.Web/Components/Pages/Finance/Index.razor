@@ -385,7 +385,18 @@
         {
             ["type"] = type,
             ["code"] = item.Value,
-            ["description"] = item.Label
+            ["description"] = item.Label,
+            ["_href"] = FinancePreviewHref(type)
         });
     }
+
+    private static string FinancePreviewHref(string type) =>
+        type switch
+        {
+            "Department" => "/finance/reports/department",
+            "Site" => "/finance/reports/site",
+            "Financial Year" => "/finance/tariff-parameters",
+            "Batch Date" => "/finance/batch-management",
+            _ => "/finance"
+        };
 }

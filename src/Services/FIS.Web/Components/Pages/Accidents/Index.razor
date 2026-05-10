@@ -153,7 +153,8 @@
                     ["status"] = item.status,
                     ["vehicleAvailability"] = GetVehicleAvailability(item),
                     ["thirdPartyStatus"] = item.third_party_involved ? "Third Party" : "No Third Party",
-                    ["injuryStatus"] = item.injuries_reported ? "Injuries" : "No Injuries"
+                    ["injuryStatus"] = item.injuries_reported ? "Injuries" : "No Injuries",
+                    ["_href"] = $"/accidents/hq/edit?accidentId={item.accident_code}"
                 })
                 .ToList();
         }

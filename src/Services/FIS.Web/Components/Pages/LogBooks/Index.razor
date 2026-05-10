@@ -108,7 +108,8 @@
                     ["comment"] = item.lb_comment,
                     ["siteStatus"] = item.site_code.HasValue ? "Site Linked" : "No Site",
                     ["receiverStatus"] = string.IsNullOrWhiteSpace(item.lb_receiver_name) ? "No Receiver" : "Receiver Captured",
-                    ["dateStatus"] = item.handout_date.HasValue ? "Date Captured" : "No Date"
+                    ["dateStatus"] = item.handout_date.HasValue ? "Date Captured" : "No Date",
+                    ["_href"] = $"/log-books/maintenance?vmfCode={item.vmf_code}&logbookCode={item.logbookcode}"
                 })
                 .ToList();
         }

@@ -105,7 +105,7 @@
 
                 var payload = new FullMaintenanceLeaseTermDto
                 {
-                    vmf_code = vmfCode,
+                    vmf_Code = vmfCode,
                     StartDate = ParseDate(GetColumnValue(cols, headers, "start_date")),
                     EndDate = ParseDate(GetColumnValue(cols, headers, "end_date")),
                     FixedMonthlyAmount = ParseDecimal(GetColumnValue(cols, headers, "fixed_tariff")),

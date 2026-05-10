@@ -93,7 +93,8 @@
                     ["site"] = item.Driver_Site?.ToString(),
                     ["description"] = item.Inquiry_Desc,
                     ["vehicleStatus"] = item.vmf_code.HasValue ? "Vehicle Linked" : "No Vehicle",
-                    ["driverStatus"] = string.IsNullOrWhiteSpace(item.Driver_name) ? "No Driver" : "Driver Linked"
+                    ["driverStatus"] = string.IsNullOrWhiteSpace(item.Driver_name) ? "No Driver" : "Driver Linked",
+                    ["_href"] = $"/monitor/edit?referenceNumber={item.monitor_code}"
                 })
                 .ToList();
         }

@@ -1,4 +1,5 @@
 @namespace FIS.Web.Components.Shared
+@inject NavigationManager NavigationManager
 
 <div class="table-container">
     <div class="table-header">
@@ -64,7 +65,11 @@
                 <tbody>
                     @foreach (var row in PagedRows)
                     {
-                        <tr>
+                        <tr class="@GetRowClass(row)"
+                            role="@GetRowRole(row)"
+                            tabindex="@GetRowTabIndex(row)"
+                            @onclick="() => NavigateToRow(row)"
+                            @onkeydown="args => NavigateToRowFromKeyboard(args, row)">
                             @foreach (var column in Columns)
                             {
                                 <td>@GetValue(row, column.Key)</td>
@@ -133,6 +138,45 @@
         .Take(PageSize);
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredRows.Count / (double)PageSize));
+
+    private static string? GetRowHref(Dictionary<string, string?> row)
+    {
+        return row.TryGetValue("_href", out var href) && !string.IsNullOrWhiteSpace(href)
+            ? href
+            : null;
+    }
+
+    private static string GetRowClass(Dictionary<string, string?> row)
+    {
+        return GetRowHref(row) is null ? "" : "clickable-row";
+    }
+
+    private static string? GetRowRole(Dictionary<string, string?> row)
+    {
+        return GetRowHref(row) is null ? null : "link";
+    }
+
+    private static int? GetRowTabIndex(Dictionary<string, string?> row)
+    {
+        return GetRowHref(row) is null ? null : 0;
+    }
+
+    private void NavigateToRow(Dictionary<string, string?> row)
+    {
+        var href = GetRowHref(row);
+        if (!string.IsNullOrWhiteSpace(href))
+        {
+            NavigationManager.NavigateTo(href);
+        }
+    }
+
+    private void NavigateToRowFromKeyboard(KeyboardEventArgs args, Dictionary<string, string?> row)
+    {
+        if (args.Key is "Enter" or " ")
+        {
+            NavigateToRow(row);
+        }
+    }
 
     private static string GetValue(Dictionary<string, string?> row, string key)
     {

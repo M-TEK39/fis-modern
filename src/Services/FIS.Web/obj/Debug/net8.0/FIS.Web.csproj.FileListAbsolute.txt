@@ -2,7 +2,6 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/appsettings.json
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/appsettings.Production.json
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/FIS.Web.staticwebassets.runtime.json
-/home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/FIS.Web
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/FIS.Web.deps.json
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/FIS.Web.runtimeconfig.json
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/FIS.Web.dll
@@ -94,3 +93,4 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Reports/CaptureActivity.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/DotNetEnv.dll
 /home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/Sprache.dll
+/home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/FIS.Web

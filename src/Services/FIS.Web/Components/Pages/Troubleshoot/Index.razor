@@ -112,7 +112,8 @@
                     ["site"] = item.SiteDescription,
                     ["status"] = string.IsNullOrWhiteSpace(item.SiteDescription) ? "No Site" : "Site Linked",
                     ["siteStatus"] = string.IsNullOrWhiteSpace(item.SiteDescription) ? "No Site" : "Site Linked",
-                    ["nameStatus"] = string.IsNullOrWhiteSpace(item.Name) ? "No Name" : "Name Captured"
+                    ["nameStatus"] = string.IsNullOrWhiteSpace(item.Name) ? "No Name" : "Name Captured",
+                    ["_href"] = $"/troubleshoot/log?userAccessCode={item.UserAccessCode}"
                 })
                 .ToList();
         }

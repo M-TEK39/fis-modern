@@ -21,6 +21,7 @@
           "net8.0"
         ],
         "sources": {
+          "/home/dev/work/fis-modern/local-nuget-flat": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {

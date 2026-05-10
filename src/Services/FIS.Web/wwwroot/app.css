@@ -1439,6 +1439,15 @@ textarea.form-input:focus,
     background: var(--fis-hover);
 }
 
+.data-table tbody tr.clickable-row {
+    cursor: pointer;
+}
+
+.data-table tbody tr.clickable-row:focus-visible {
+    outline: 2px solid var(--fis-ring);
+    outline-offset: -2px;
+}
+
 .data-table tbody tr:last-child td {
     border-bottom: none;
 }
@@ -2401,6 +2410,8 @@ textarea.form-input:focus,
 .legacy-shell {
     min-height: 100vh;
     min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     background: var(--fis-app-bg);
@@ -2408,6 +2419,7 @@ textarea.form-input:focus,
     max-width: 100%;
     min-width: 0;
     overflow-x: hidden;
+    overflow-y: hidden;
 }
 
 .legacy-shell.sidebar-collapsed,
@@ -3601,10 +3613,13 @@ body:not(.sidebar-collapsed) .legacy-shell .sidebar-user {
     background: var(--fis-app-bg);
     min-height: 100vh;
     min-height: 100dvh;
+    height: 100vh;
+    height: 100dvh;
     position: relative;
     z-index: 1;
     min-width: 0;
     overflow-x: hidden;
+    overflow-y: auto;
     max-width: 100%;
 }
 

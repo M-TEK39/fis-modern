@@ -775,6 +775,7 @@
     private bool _loadingReferenceData = true;
     private bool _quickSearchLoading = false;
     private string? _errorMessage;
+    private int? _loadedVmfCode;
 
     private List<MakeDto> _makes = new();
     private List<ModelDto> _models = new();
@@ -816,6 +817,36 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadReferenceData();
+        await LoadVehicleForCurrentRouteAsync();
+        InitializeColorSelection();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadingReferenceData)
+        {
+            return;
+        }
+
+        if (_isEditMode && VmfCode != _loadedVmfCode)
+        {
+            await LoadVehicleForCurrentRouteAsync();
+            InitializeColorSelection();
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (!_isEditMode && _loadedVmfCode.HasValue)
+        {
+            InitializeNewVehicle();
+            InitializeColorSelection();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadVehicleForCurrentRouteAsync()
+    {
+        _errorMessage = null;
 
         if (_isEditMode && VmfCode.HasValue)
         {
@@ -823,6 +854,7 @@
             if (vehicle != null)
             {
                 _vehicle = vehicle;
+                _loadedVmfCode = VmfCode.Value;
                 _siteCode = _vehicle.site_code ?? 0;
                 _extendedService = string.Equals(_vehicle.extended_service, "1", StringComparison.OrdinalIgnoreCase);
                 _statusText = _vehicle.status_description ?? string.Empty;
@@ -840,14 +872,27 @@
             {
                 _errorMessage = "Vehicle not found";
             }
-        }
-        else
-        {
-            _vehicle.take_on_date = DateTime.Today;
-            _statusText = "Awaiting Authorization";
+            return;
         }
 
-        InitializeColorSelection();
+        InitializeNewVehicle();
+    }
+
+    private void InitializeNewVehicle()
+    {
+        _errorMessage = null;
+        _loadedVmfCode = null;
+        _vehicle = new VehicleDto
+        {
+            take_on_date = DateTime.Today
+        };
+        _statusText = "Awaiting Authorization";
+        _siteCode = 0;
+        _extendedService = false;
+        _hiredFrom = string.Empty;
+        _hireType = string.Empty;
+        _selectedMakeCode = 0;
+        _models = new List<ModelDto>();
     }
 
     private async Task LoadReferenceData()

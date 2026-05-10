@@ -578,7 +578,8 @@
             ["telephone"] = item.tel ?? item.cell,
             ["status"] = item.active.GetValueOrDefault(true) ? "Active" : "Inactive",
             ["emailStatus"] = string.IsNullOrWhiteSpace(item.email) ? "No Email" : "Email Captured",
-            ["contactStatus"] = string.IsNullOrWhiteSpace(item.contact_person) ? "No Contact" : "Contact Captured"
+            ["contactStatus"] = string.IsNullOrWhiteSpace(item.contact_person) ? "No Contact" : "Contact Captured",
+            ["_href"] = $"/third-party?tab=suppliers&supplierId={item.supplier_id}"
         })
         .ToList();
 

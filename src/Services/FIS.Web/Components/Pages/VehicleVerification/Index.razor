@@ -182,7 +182,8 @@
                     ["manager"] = item.responsible_manager,
                     ["verificationGroup"] = IsVerified(item.verification_status) ? "Verified" : "Pending",
                     ["barcodeStatus"] = string.IsNullOrWhiteSpace(item.barcode_number ?? item.barcode) ? "No Barcode" : "Barcode Captured",
-                    ["petrolCardStatus"] = string.IsNullOrWhiteSpace(item.petrol_card) ? "No Petrol Card" : "Petrol Card"
+                    ["petrolCardStatus"] = string.IsNullOrWhiteSpace(item.petrol_card) ? "No Petrol Card" : "Petrol Card",
+                    ["_href"] = $"/vehicle-verification/edit/details?gg={Uri.EscapeDataString(item.vehicle_reg_no ?? item.vmf_code?.ToString() ?? string.Empty)}"
                 })
                 .ToList();
         }

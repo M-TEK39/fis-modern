@@ -168,7 +168,8 @@
                     ["action"] = item.Action,
                     ["date"] = item.Date.ToString("yyyy-MM-dd"),
                     ["receiver"] = item.Receiver,
-                    ["actionGroup"] = GetActionGroup(item.Action)
+                    ["actionGroup"] = GetActionGroup(item.Action),
+                    ["_href"] = $"/fuel-cards/vehicle?vmfCode={item.VmfCode}&cardNumber={Uri.EscapeDataString(item.CardNumber ?? string.Empty)}"
                 })
                 .ToList() ?? new();
         }

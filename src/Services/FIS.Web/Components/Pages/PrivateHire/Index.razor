@@ -101,7 +101,8 @@
                     ["status"] = item.hire_status,
                     ["statusGroup"] = item.hire_end_date.HasValue || item.hire_status.Contains("retire", StringComparison.OrdinalIgnoreCase) ? "Retired" : "Active",
                     ["endDateStatus"] = item.hire_end_date.HasValue ? "End Date Set" : "Open Ended",
-                    ["departmentStatus"] = item.department_code > 0 ? "Department Linked" : "No Department"
+                    ["departmentStatus"] = item.department_code > 0 ? "Department Linked" : "No Department",
+                    ["_href"] = $"/private-hire/maintenance-menu?registration={Uri.EscapeDataString(item.registration_number ?? string.Empty)}"
                 })
                 .ToList();
         }

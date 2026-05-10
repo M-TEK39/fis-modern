@@ -114,7 +114,8 @@
                     ["estimate"] = item.estimate_amount?.ToString("C0"),
                     ["status"] = string.IsNullOrWhiteSpace(item.sold_id) ? "Open" : "Sold",
                     ["reserveStatus"] = item.reserve_amount.HasValue ? "Reserve Set" : "No Reserve",
-                    ["reason"] = item.reason_sold
+                    ["reason"] = item.reason_sold,
+                    ["_href"] = $"/auction/maintenance?vmfCode={item.vmf_code}&auctionCode={item.auction_code}"
                 })
                 .ToList();
         }

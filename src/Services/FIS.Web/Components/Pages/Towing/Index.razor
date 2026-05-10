@@ -109,7 +109,8 @@
                     ["problem"] = item.Vehicle_problem,
                     ["keys"] = item.Keys,
                     ["keyStatus"] = string.IsNullOrWhiteSpace(item.Keys) ? "No Keys" : "Keys Available",
-                    ["siteStatus"] = item.Site_code.HasValue ? "Site Linked" : "No Site"
+                    ["siteStatus"] = item.Site_code.HasValue ? "Site Linked" : "No Site",
+                    ["_href"] = $"/towing/request?towingCode={item.Towing_code}&vmfCode={item.vmf_code}"
                 })
                 .ToList();
         }
