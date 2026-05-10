@@ -68,7 +68,7 @@
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_message))
                 {
-                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">@_message</div>
+                    <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                 }
             </div>
         </div>
@@ -89,7 +89,7 @@
     }
     else
     {
-        <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card fis-mb-15">
             <div class="form-card-header">
                 <h2>@(_isEditMode ? "Edit Taxi Log" : "Enter Taxi Log")</h2>
                 <p>Enter the requisition number to continue.</p>
@@ -110,7 +110,7 @@
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_message))
                 {
-                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">@_message</div>
+                    <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                 }
             </div>
         </div>

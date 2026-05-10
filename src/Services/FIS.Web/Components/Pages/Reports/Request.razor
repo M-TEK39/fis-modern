@@ -60,7 +60,7 @@
                     <label class="form-label">Module</label>
                     <input class="form-input" @bind="_request.Module" placeholder="Reports / Contracts / Vehicles / etc" />
                 </div>
-                <div class="form-field" style="grid-column: 1 / -1;">
+                <div class="form-field fis-grid-full">
                     <label class="form-label">Detailed Request</label>
                     <textarea class="form-textarea" rows="6" @bind="_request.Details"></textarea>
                 </div>
@@ -73,7 +73,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top: 1rem;">
+                <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
                     @_statusMessage
                 </div>
             }

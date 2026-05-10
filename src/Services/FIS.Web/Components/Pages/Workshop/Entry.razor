@@ -25,7 +25,7 @@
                 <div class="form-field">
                     <label class="form-label">@(_lookupType == "GP" ? "GP Number" : "GG Number")</label>
                     <InputText class="form-input" @bind-Value="_vehicleNumber" />
-                    <div class="form-actions" style="margin-top: 0.5rem;">
+                    <div class="form-actions fis-mt-05">
                         <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync">Search vehicle</button>
                     </div>
                 </div>
@@ -41,12 +41,12 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Lookup Type</label>
-                    <div class="form-grid">
-                        <label class="form-label">
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
                             <input type="radio" name="lookup" checked="@(_lookupType == "GG")" @onchange='() => SetLookupType("GG")' />
                             GG
                         </label>
-                        <label class="form-label">
+                        <label class="form-radio-label">
                             <input type="radio" name="lookup" checked="@(_lookupType == "GP")" @onchange='() => SetLookupType("GP")' />
                             GP
                         </label>

@@ -103,11 +103,11 @@
                             <span class="contract-search-label">Select the vehicle to manage:</span>
                             <div class="contract-search-inputs">
                                 <div class="contract-search-radio">
-                                    <label class="form-label">
+                                    <label class="form-radio-label">
                                         <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
                                         GG
                                     </label>
-                                    <label class="form-label">
+                                    <label class="form-radio-label">
                                         <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
                                         GP Number
                                     </label>
@@ -131,7 +131,7 @@
                                 <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
                             </div>
                             <div class="contract-search-inputs fis-mt-05">
-                                <select class="form-select" style="min-width: 22rem;" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChanged" disabled="@(_vehicleSearchMatches.Count == 0)">
+                                <select class="form-select minw-select-lg" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChanged" disabled="@(_vehicleSearchMatches.Count == 0)">
                                     <option value="">Select vehicle...</option>
                                     @foreach (var vehicle in _vehicleSearchMatches)
                                     {
@@ -163,7 +163,7 @@
             <div class="table-header">
                 <span class="table-title">Contracts</span>
                 <div class="table-controls">
-                    <select class="form-select" style="min-width: 10rem;" @bind="_statusFilter">
+                    <select class="form-select minw-select-md" @bind="_statusFilter">
                         <option value="">All Statuses</option>
                         <option value="0">Draft</option>
                         <option value="1">Pending Review</option>
@@ -174,14 +174,14 @@
                         <option value="6">Cancelled</option>
                         <option value="7">Closed</option>
                     </select>
-                    <select class="form-select" style="min-width: 10rem;" @bind="_siteFilter">
+                    <select class="form-select minw-select-md" @bind="_siteFilter">
                         <option value="">All Sites</option>
                         @foreach (var site in _sites)
                         {
                             <option value="@site.SiteCode.ToString()">@($"{site.Description} ({site.SiteCode})")</option>
                         }
                     </select>
-                    <select class="form-select" style="min-width: 9rem;" @bind="_stillCurrentFilter">
+                    <select class="form-select minw-select-sm" @bind="_stillCurrentFilter">
                         <option value="">All</option>
                         <option value="Y">Still Current</option>
                         <option value="N">Not Current</option>
@@ -195,7 +195,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_actionMessage))
             {
-                <div class="alert @(_actionError ? "alert-error" : "alert-success")" style="margin:0.75rem 0;">@_actionMessage</div>
+                <div class="alert @(_actionError ? "alert-error" : "alert-success") fis-my-075">@_actionMessage</div>
             }
 
             @if (_loadingContracts)
@@ -328,10 +328,10 @@
 
             @if (!string.IsNullOrWhiteSpace(_editValidationMessage))
             {
-                <div class="alert alert-error" style="margin-top:0.75rem;">@_editValidationMessage</div>
+                <div class="alert alert-error fis-mt-075">@_editValidationMessage</div>
             }
 
-            <div class="form-actions" style="margin-top:1rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+            <div class="form-actions fis-mt-1 fis-flex-gap-05 fis-justify-end">
                 <button class="btn btn-secondary" type="button" @onclick="CloseEditModalAsync" disabled="@_editSaving">Cancel</button>
                 <button class="btn btn-primary" type="button" @onclick="SaveEditedContractAsync" disabled="@_editSaving">
                     @if (_editSaving)

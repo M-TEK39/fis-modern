@@ -43,36 +43,36 @@
     line-height: 1.5;
 }
 
-hr {
+.legacy-home hr {
     border: none;
     border-top: 1px solid var(--fis-border);
     margin: 1.5rem 0;
     opacity: 0.6;
 }
 
-ol {
+.legacy-home ol {
     padding-left: 1.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
 }
 
-ol li {
+.legacy-home ol li {
     transition: transform 0.15s ease;
 }
 
-ol li:hover {
+.legacy-home ol li:hover {
     transform: translateX(2px);
 }
 
-ol li a {
+.legacy-home ol li a {
     color: var(--fis-text);
     text-decoration: none;
     transition: color 0.15s ease;
     font-weight: 500;
 }
 
-ol li a:hover {
+.legacy-home ol li a:hover {
     color: var(--fis-muted-text);
     text-decoration: underline;
 }

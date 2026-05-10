@@ -16,10 +16,12 @@
     display: flex;
     gap: 0.75rem;
     align-items: center;
+    flex-wrap: wrap;
 }
 
 .status-search-row .form-input {
     max-width: 360px;
+    min-width: 0;
 }
 
 .status-message {
@@ -61,11 +63,12 @@
     border-radius: 0.75rem;
     box-shadow: var(--fis-shadow);
     overflow: hidden;
+    min-width: 0;
 }
 
 .status-legacy-header {
     background: linear-gradient(135deg, var(--fis-accent), color-mix(in srgb, var(--fis-accent) 65%, #0b1d3b 35%));
-    color: #fff;
+    color: var(--fis-surface);
     text-align: center;
     font-weight: 700;
     padding: 0.7rem;
@@ -83,6 +86,8 @@
     border-bottom: 1px solid var(--fis-border);
     font-size: 0.9rem;
     color: var(--fis-text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .status-legacy-table th {
@@ -126,6 +131,10 @@
     padding: 0.25rem 0.5rem;
 }
 
+.status-field-row .form-select {
+    max-width: 100%;
+}
+
 .status-field-row .form-label {
     margin: 0;
     color: var(--fis-muted-text);
@@ -149,6 +158,7 @@
     gap: 0.75rem;
     justify-content: flex-end;
     padding-top: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .status-history-table th,
@@ -177,8 +187,22 @@
         max-width: none;
     }
 
+    .status-search-row .btn {
+        width: 100%;
+    }
+
     .status-field-row {
         grid-template-columns: 1fr;
+    }
+
+    .status-legacy-table th {
+        width: auto;
+        white-space: normal;
+    }
+
+    .status-date-input {
+        max-width: none;
+        width: 100%;
     }
 
     .status-actions {

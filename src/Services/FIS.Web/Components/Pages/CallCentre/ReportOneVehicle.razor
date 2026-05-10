@@ -30,14 +30,16 @@
                     <th>Vehicle Number</th>
                     <td>
                         <div class="contract-search-inputs">
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' /> GP</label>
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' /> GG</label>
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' /> Engine</label>
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' /> VIN / Chassis</label>
-                            <label class="form-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' /> Invoice</label>
-                            <input class="form-input" style="max-width: 12rem;" @bind="_searchTerm" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GP")" @onchange='() => SetSearchMode("GP")' /> GP</label>
+                                <label class="form-radio-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "GG")" @onchange='() => SetSearchMode("GG")' /> GG</label>
+                                <label class="form-radio-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "ENGINE")" @onchange='() => SetSearchMode("ENGINE")' /> Engine</label>
+                                <label class="form-radio-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "VIN")" @onchange='() => SetSearchMode("VIN")' /> VIN / Chassis</label>
+                                <label class="form-radio-label"><input type="radio" name="vehicleType" checked="@(_searchMode == "INVOICE")" @onchange='() => SetSearchMode("INVOICE")' /> Invoice</label>
+                            </div>
+                            <input class="form-input maxw-input-lg" @bind="_searchTerm" placeholder="@VehicleSearchHelper.GetSearchPlaceholder(_searchMode)" />
                             <button class="btn btn-secondary btn-sm" @onclick="SearchVehicleAsync" disabled="@_loading">Find</button>
-                            <select class="form-select" style="max-width: 20rem;" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
+                            <select class="form-select maxw-select-lg" @bind="_selectedVmfCode" disabled="@(_vehicleMatches.Count == 0)">
                                 <option value="">Select vehicle...</option>
                                 @foreach (var vehicle in _vehicleMatches)
                                 {

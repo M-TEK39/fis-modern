@@ -1,5 +1,6 @@
 using System.Text;
 using AspNetCoreRateLimit;
+using DotNetEnv;
 using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
@@ -21,6 +22,31 @@ using Hangfire;
 using Hangfire.SqlServer;
 
 var builder = WebApplication.CreateBuilder(args);
+var dotEnvRawValues = Env.NoEnvVars().TraversePath().Load();
+var dotEnvValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+var dotEnvConfig = new Dictionary<string, string?>();
+
+foreach (var pair in dotEnvRawValues)
+{
+    dotEnvValues[pair.Key] = pair.Value;
+}
+
+if (dotEnvValues.TryGetValue("ConnectionStrings__Default", out var connectionStringFromEnv))
+{
+    dotEnvConfig["ConnectionStrings:Default"] = connectionStringFromEnv;
+}
+
+if (dotEnvValues.TryGetValue("ApiSettings__BaseUrl", out var apiBaseUrlFromEnv))
+{
+    dotEnvConfig["ApiSettings:BaseUrl"] = apiBaseUrlFromEnv;
+}
+
+if (dotEnvValues.TryGetValue("ApiSettings__WebBaseUrl", out var webBaseUrlFromEnv))
+{
+    dotEnvConfig["ApiSettings:WebBaseUrl"] = webBaseUrlFromEnv;
+}
+
+builder.Configuration.AddInMemoryCollection(dotEnvConfig);
 
 // Add services to the container.
 builder.Services.AddControllers();

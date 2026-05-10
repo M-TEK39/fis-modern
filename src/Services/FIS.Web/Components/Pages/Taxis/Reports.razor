@@ -32,26 +32,24 @@
             <div class="form-card-body">
                 <div class="form-grid">
                     <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "GP")" @onchange='() => SetLookupType("GP")' />
-                            GP
-                        </label>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "GG")" @onchange='() => SetLookupType("GG")' />
-                            GG
-                        </label>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "PRIVATE")" @onchange='() => SetLookupType("PRIVATE")' />
-                            Private Number
-                        </label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "GP")" @onchange='() => SetLookupType("GP")' />
+                                GP
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "GG")" @onchange='() => SetLookupType("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="TaxiNumberType" checked="@(_oneTaxiLookupType == "PRIVATE")" @onchange='() => SetLookupType("PRIVATE")' />
+                                Private Number
+                            </label>
+                        </div>
                     </div>
                     <div class="form-field">
                         <label class="form-label">Registration Number</label>
-                        <input class="form-input" maxlength="20" style="text-transform: uppercase" @bind="_oneTaxiSearch" />
+                        <input class="form-input fis-text-upper" maxlength="20" @bind="_oneTaxiSearch" />
                     </div>
                 </div>
                 <div class="form-actions">
@@ -60,9 +58,9 @@
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_message))
                 {
-                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">@_message</div>
+                    <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                 }
-                <div class="table-container" style="margin-top:1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -103,7 +101,7 @@
     }
     else if (_isLogsPerUser)
     {
-        <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card fis-mb-15">
             <div class="form-card-header">
                 <h2>Report: Taxi Requisitions/Logs Captured</h2>
                 <p>Select a date range and user.</p>
@@ -232,7 +230,7 @@
     }
     else if (_isOldRequisitions)
     {
-        <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card fis-mb-15">
             <div class="form-card-header">
                 <h2>Old Requisitions For Period</h2>
                 <p>Select a period to view older taxi requisitions.</p>
@@ -303,7 +301,7 @@
     }
     else if (_isTaxisPerCompany)
     {
-        <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card fis-mb-15">
             <div class="form-card-header">
                 <h2>Taxis Per Hire Company</h2>
                 <p>Select a hire company from the drop down list below.</p>
@@ -409,7 +407,7 @@
                         </table>
                     </div>
                 </div>
-                <div class="form-hint" style="margin-top: 1rem;">Page End</div>
+                <div class="form-hint fis-mt-1">Page End</div>
                 <div class="form-actions">
                     <a class="btn btn-secondary" href="#page-top">Page Top</a>
                 </div>
@@ -457,7 +455,7 @@
                         </table>
                     </div>
                 </div>
-                <div class="form-hint" style="margin-top: 1rem;">Page End</div>
+                <div class="form-hint fis-mt-1">Page End</div>
                 <div class="form-actions">
                     <a class="btn btn-secondary" href="#page-top">Page Top</a>
                 </div>
@@ -467,7 +465,7 @@
     }
     else if (_isLogsRequisitionsStatus)
     {
-        <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card fis-mb-15">
             <div class="form-card-header">
                 <h2>Taxi Logs and Requisitions Statuses Reports Menu</h2>
                 <p>Select a report type, then choose date range or financial year.</p>
@@ -505,7 +503,7 @@
                             <input type="radio" name="statusRange" checked />
                             Date Range
                         </label>
-                        <div class="form-grid" style="margin-top: 0.75rem;">
+                        <div class="form-grid fis-mt-075">
                             <div class="form-field">
                                 <label class="form-label">Start Date</label>
                                 <input class="form-input" @bind="_statusStartDateText" placeholder="YYYY-MM-DD" />
@@ -521,7 +519,7 @@
                             <input type="radio" name="statusRange" />
                             Financial Year
                         </label>
-                        <select class="form-select" style="margin-top: 0.75rem;">
+                        <select class="form-select fis-mt-075">
                             <option value="">Select financial year</option>
                         </select>
                     </div>
@@ -530,7 +528,7 @@
                     <button class="btn btn-secondary">Back</button>
                     <button class="btn btn-primary" @onclick="ApplyStatusFilterAsync">Submit</button>
                 </div>
-                <div class="table-container" style="margin-top:1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>

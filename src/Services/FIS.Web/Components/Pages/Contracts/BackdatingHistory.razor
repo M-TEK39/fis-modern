@@ -43,11 +43,11 @@
                     <td>
                         <div class="contract-search-inputs">
                             <div class="contract-search-radio">
-                                <label class="form-label">
+                                <label class="form-radio-label">
                                     <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
                                     GG
                                 </label>
-                                <label class="form-label">
+                                <label class="form-radio-label">
                                     <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
                                     GP Number
                                 </label>
@@ -71,7 +71,7 @@
                             <button class="btn btn-secondary btn-sm" type="button" @onclick="ClearSearch" disabled="@_searching">Clear</button>
                         </div>
                         <div class="contract-search-inputs fis-mt-05">
-                            <select class="form-select" style="min-width: 22rem;" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChangedAsync" disabled="@(_vehicleSearchMatches.Count == 0)">
+                            <select class="form-select minw-select-lg" @bind="_selectedVehicleVmfCode" @bind:after="OnSelectedVehicleChangedAsync" disabled="@(_vehicleSearchMatches.Count == 0)">
                                 <option value="">Select vehicle...</option>
                                 @foreach (var vehicle in _vehicleSearchMatches)
                                 {
@@ -208,7 +208,7 @@
                     <td>End Odometer:</td>
                     <td>
                         <input type="number" class="form-input" @bind="_editEndOdometer" disabled="@(_selectedHistoryContract == null)" />
-                        <span class="contract-muted" style="margin-left: 0.5rem;">@(_selectedHistoryContract == null ? "Select a contract row to edit" : $"Selected Contract: {_selectedHistoryContract.contract_id}")</span>
+                        <span class="contract-muted fis-ml-05">@(_selectedHistoryContract == null ? "Select a contract row to edit" : $"Selected Contract: {_selectedHistoryContract.contract_id}")</span>
                     </td>
                 </tr>
                 <tr>

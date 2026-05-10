@@ -24,7 +24,7 @@
 
 <div class="page-content">
 
-    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap;">
+    <div class="fis-flex-wrap-gap-05 fis-mb-1">
         <button class="btn @(_tab=="changes"  ? "btn-primary":"btn-secondary") btn-sm" @onclick='()=>_tab="changes"'>Entity Changes</button>
         <button class="btn @(_tab=="users"    ? "btn-primary":"btn-secondary") btn-sm" @onclick='()=>_tab="users"'>User Status History</button>
         <button class="btn @(_tab=="password" ? "btn-primary":"btn-secondary") btn-sm" @onclick='()=>_tab="password"'>Password Expiry</button>
@@ -99,7 +99,7 @@
                             @foreach (var r in _changes)
                             {
                                 <tr>
-                                    <td style="white-space:nowrap;">@r.ChangedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                    <td class="timestamp-nowrap">@r.ChangedAt.ToString("yyyy-MM-dd HH:mm:ss")</td>
                                     <td><span class="status-badge @ActionClass(r.Action)">@r.Action</span></td>
                                     <td>@r.TableName</td>
                                     <td>@r.PrimaryKey</td>
@@ -107,8 +107,8 @@
                                     <td>@(r.created_by_user_code?.ToString() ?? "-")</td>
                                     <td>
                                         <details>
-                                            <summary style="cursor:pointer;font-size:0.8rem;color:var(--color-primary,#3b82f6);">View diff</summary>
-                                            <pre style="font-size:0.72rem;max-width:420px;white-space:pre-wrap;word-break:break-all;background:#f8f8f8;padding:0.5rem;border-radius:4px;margin-top:0.25rem;">@r.Changes</pre>
+                                            <summary class="audit-summary">View diff</summary>
+                                            <pre class="audit-diff-pre">@r.Changes</pre>
                                         </details>
                                     </td>
                                 </tr>

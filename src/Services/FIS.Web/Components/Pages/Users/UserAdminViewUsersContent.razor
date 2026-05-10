@@ -18,7 +18,7 @@
            @onclick:preventDefault="true">Back to Menu</a>
     </div>
     <div class="card-body">
-        <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+        <div class="fis-flex-wrap-gap-04">
             @foreach (var letter in _alphabet)
             {
                 <button class="btn btn-secondary btn-sm" type="button" @onclick="() => SetAlphabet(letter)">@letter</button>
@@ -83,7 +83,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="pagination-controls" style="margin-top: 1rem;">
+        <div class="pagination-controls fis-mt-1">
             <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
             <div class="pagination-info">Page @_page of @TotalPages</div>
             <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>

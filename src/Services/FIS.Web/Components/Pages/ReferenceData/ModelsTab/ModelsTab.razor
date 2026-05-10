@@ -71,7 +71,7 @@ else
                 </tbody>
             </table>
         </div>
-        <div class="pagination-controls" style="margin-top: 1rem;">
+        <div class="pagination-controls fis-mt-1">
             <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
             <div class="pagination-info">Page @_page of @TotalPages</div>
             <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
@@ -88,7 +88,7 @@ else
        Model="_currentModel">
     @if (_modelPrereqsMissing)
     {
-        <div class="warning-text" style="margin-bottom: 1rem;">
+        <div class="warning-text fis-mb-1">
             Add at least one Make, Type, Fuel Type, Class, Unit of Measure, License Fee, and Driver License before creating a model.
         </div>
     }

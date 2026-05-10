@@ -3,6 +3,8 @@
 @using FIS.Web.Services
 @inject NavigationManager Navigation
 @inject TokenService TokenService
+@inject SidebarStateService SidebarState
+@inject IJSRuntime JSRuntime
 
 <div class="legacy-shell">
     <aside class="legacy-sidebar" aria-label="Primary navigation">
@@ -15,9 +17,9 @@
             </NavLink>
             <button class="sidebar-toggle sidebar-toggle-inline"
                     type="button"
-                    onclick="window.fisLayout.toggleSidebar(); return false;"
+                    @onclick="ToggleSidebar"
                     aria-label="Toggle sidebar">
-                <i class="bx bx-menu" aria-hidden="true"></i>
+                <i class="@(SidebarState.IsCollapsed ? "bx bx-menu-alt-right" : "bx bx-menu-alt-left")" aria-hidden="true"></i>
             </button>
         </div>
 
@@ -40,7 +42,7 @@
 </div>
 <button class="sidebar-mobile-scrim"
     type="button"
-    onclick="window.fisLayout.closeSidebar(); return false;"
+    @onclick="CloseSidebar"
     aria-label="Close sidebar"></button>
 
 <div id="blazor-error-ui">
@@ -57,6 +59,7 @@
     protected override void OnInitialized()
     {
         UpdateBodyVisibility();
+        SidebarState.Changed += HandleSidebarStateChanged;
         Navigation.LocationChanged += OnLocationChanged;
     }
 
@@ -73,7 +76,16 @@
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
     {
         UpdateBodyVisibility();
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            var isMobileViewport = await JSRuntime.InvokeAsync<bool>("fisLayout.isMobileViewport");
+            if (isMobileViewport)
+            {
+                SidebarState.SetCollapsed(true);
+            }
+
+            StateHasChanged();
+        });
     }
 
     private void UpdateBodyVisibility()
@@ -92,8 +104,24 @@
             || path == "/change-password-question";
     }
 
+    private void ToggleSidebar()
+    {
+        SidebarState.Toggle();
+    }
+
+    private void CloseSidebar()
+    {
+        SidebarState.SetCollapsed(true);
+    }
+
+    private void HandleSidebarStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     public void Dispose()
     {
+        SidebarState.Changed -= HandleSidebarStateChanged;
         Navigation.LocationChanged -= OnLocationChanged;
     }
 }

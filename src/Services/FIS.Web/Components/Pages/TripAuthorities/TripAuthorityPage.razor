@@ -115,7 +115,7 @@
                                 </label>
                             </div>
                             <div class="contract-search-radio">
-                                <input class="form-input" placeholder="@(_searchMode == "GG" ? "Search by GG number" : "Search by GP number")" style="max-width: 260px;" @bind="_ggSearch" @bind:event="oninput" />
+                                <input class="form-input compact-search-input" placeholder="@(_searchMode == "GG" ? "Search by GG number" : "Search by GP number")" @bind="_ggSearch" @bind:event="oninput" />
                                 <button class="btn btn-secondary btn-sm" @onclick="SearchByVehicle">Go</button>
                             </div>
                         </div>
@@ -154,7 +154,7 @@
                         <div class="form-field">
                             <label class="form-label">Trip Authority Number</label>
                         <div class="contract-search-radio">
-                            <input class="form-input" placeholder="Numbers only" style="max-width: 220px;" @bind="_authoritySearch" @bind:event="oninput" />
+                            <input class="form-input compact-search-input-sm" placeholder="Numbers only" @bind="_authoritySearch" @bind:event="oninput" />
                             <button class="btn btn-secondary btn-sm" @onclick="SearchByAuthority">Go</button>
                         </div>
                         </div>

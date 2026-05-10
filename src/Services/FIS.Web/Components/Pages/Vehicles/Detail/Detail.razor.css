@@ -13,6 +13,7 @@
 .detail-actions {
     display: flex;
     gap: 0.75rem;
+    flex-wrap: wrap;
 }
 
 .detail-content {
@@ -147,5 +148,17 @@
 
     .vehicle-reg {
         font-size: 1.5rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .invoice-display-row {
+        flex-wrap: wrap;
+    }
+
+    .invoice-edit-row .form-input {
+        min-width: 0;
+        max-width: none;
+        width: 100%;
     }
 }

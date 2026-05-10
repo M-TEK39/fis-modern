@@ -12,8 +12,8 @@
 }
 
 .contract-approval-summary {
-    background: #eff3c8;
-    color: #3f4d30;
+    background: var(--fis-warning-bg);
+    color: var(--fis-warning);
     font-weight: 600;
     text-transform: uppercase;
     padding: 0.9rem 0.8rem;

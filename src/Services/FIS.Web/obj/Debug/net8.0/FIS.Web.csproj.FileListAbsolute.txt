@@ -92,3 +92,5 @@
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/PrivateHire/Maintenance.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Vehicles/StatusMaintenance.razor.rz.scp.css
 /home/dev/work/fis-modern/src/Services/FIS.Web/obj/Debug/net8.0/scopedcss/Components/Pages/Reports/CaptureActivity.razor.rz.scp.css
+/home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/DotNetEnv.dll
+/home/dev/work/fis-modern/src/Services/FIS.Web/bin/Debug/net8.0/Sprache.dll

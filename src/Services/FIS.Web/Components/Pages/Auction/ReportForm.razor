@@ -33,16 +33,16 @@
                     <div class="form-field form-group-full">
                         <label class="form-label">Number Type</label>
                         <div class="contract-search-radio">
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionNumberType" checked="@(_numberType == "GP")" @onchange='() => SetNumberType("GP")' />
                                 GP
                             </label>
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionNumberType" checked="@(_numberType == "GG")" @onchange='() => SetNumberType("GG")' />
                                 GG
                             </label>
                             <div class="fis-input-group-compact">
-                                <input class="form-input" @bind="_vehicleSearchTerm" placeholder="@(_numberType == "GG" ? "Enter GG number" : "Enter GP number")" style="max-width: 180px;" />
+                                <input class="form-input compact-search-input-sm" @bind="_vehicleSearchTerm" placeholder="@(_numberType == "GG" ? "Enter GG number" : "Enter GP number")" />
                                 <button type="button" class="btn btn-secondary btn-sm" @onclick="SearchVehiclesAsync" disabled="@_running">Find</button>
                             </div>
                             <select class="form-select fis-mt-05" @bind="_selectedVehicleVmfCode" disabled="@(_vehicleMatches.Count == 0)">
@@ -66,15 +66,15 @@
                     <div class="form-field form-group-full">
                         <label class="form-label">Garage</label>
                         <div class="contract-search-radio">
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionGarage" checked />
                                 JHB
                             </label>
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionGarage" />
                                 PTA
                             </label>
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionGarage" />
                                 ALL
                             </label>
@@ -109,15 +109,15 @@
                     <div class="form-field form-group-full">
                         <label class="form-label">Garage</label>
                         <div class="contract-search-radio">
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionGarage" checked />
                                 JHB
                             </label>
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionGarage" />
                                 PTA
                             </label>
-                            <label class="form-label form-checkbox">
+                            <label class="form-radio-label">
                                 <input type="radio" name="auctionGarage" />
                                 ALL
                             </label>
@@ -140,7 +140,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top: 1rem;">
+                <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
                     @_statusMessage
                 </div>
             }

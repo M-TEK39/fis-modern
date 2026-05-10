@@ -50,33 +50,33 @@
 }
 
 .status-success {
-    background-color: #d4edda;
-    color: #155724;
-    border: 1px solid #c3e6cb;
+    background-color: var(--fis-success-bg);
+    color: var(--fis-success);
+    border: 1px solid color-mix(in srgb, var(--fis-success) 35%, transparent);
 }
 
 .status-warning {
-    background-color: #fff3cd;
-    color: #856404;
-    border: 1px solid #ffeaa7;
+    background-color: var(--fis-warning-bg);
+    color: var(--fis-warning);
+    border: 1px solid color-mix(in srgb, var(--fis-warning) 35%, transparent);
 }
 
 .status-info {
-    background-color: #d1ecf1;
-    color: #0c5460;
-    border: 1px solid #bee5eb;
+    background-color: var(--fis-info-bg);
+    color: var(--fis-info);
+    border: 1px solid color-mix(in srgb, var(--fis-info) 35%, transparent);
 }
 
 .status-danger {
-    background-color: #f8d7da;
-    color: #721c24;
-    border: 1px solid #f5c6cb;
+    background-color: var(--fis-error-bg);
+    color: var(--fis-error);
+    border: 1px solid color-mix(in srgb, var(--fis-error) 35%, transparent);
 }
 
 .status-default {
-    background-color: #e9ecef;
-    color: #495057;
-    border: 1px solid #dee2e6;
+    background-color: var(--fis-muted);
+    color: var(--fis-muted-text);
+    border: 1px solid var(--fis-border);
 }
 
 .distance {
@@ -86,12 +86,12 @@
 }
 
 .btn-icon-view {
-    background-color: #3b82f6;
-    color: white;
+    background-color: var(--fis-info);
+    color: var(--fis-surface);
 }
 
 .btn-icon-view:hover {
-    background-color: #2563eb;
+    background-color: color-mix(in srgb, var(--fis-info) 78%, black);
     transform: translateY(-1px);
 }
 

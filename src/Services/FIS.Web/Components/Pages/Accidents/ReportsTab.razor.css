@@ -25,6 +25,7 @@
 .reports-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .reports-grid {
@@ -73,6 +74,7 @@
     font-size: 1rem;
     font-weight: 600;
     color: var(--fis-text);
+    overflow-wrap: anywhere;
 }
 
 .report-content p {
@@ -80,6 +82,7 @@
     font-size: 0.875rem;
     color: var(--fis-muted-text);
     line-height: 1.5;
+    overflow-wrap: anywhere;
 }
 
 .report-meta {
@@ -103,6 +106,7 @@
 .report-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .btn-report {
@@ -186,17 +190,20 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    min-width: 0;
 }
 
 .report-name {
     font-weight: 500;
     color: var(--fis-text);
     font-size: 0.875rem;
+    overflow-wrap: anywhere;
 }
 
 .report-details {
     font-size: 0.75rem;
     color: var(--fis-muted-text);
+    overflow-wrap: anywhere;
 }
 
 .report-size {
@@ -239,7 +246,11 @@
     }
 
     .reports-actions {
-        justify-content: center;
+        justify-content: stretch;
+    }
+
+    .reports-actions .btn {
+        width: 100%;
     }
 
     .reports-grid {
@@ -254,6 +265,7 @@
         flex-direction: column;
     }
 
+    .btn-report-primary,
     .btn-report-secondary {
         width: 100%;
     }
@@ -271,5 +283,23 @@
     .report-size {
         margin-right: 0;
         text-align: center;
+    }
+}
+
+@media (max-width: 640px) {
+    .reports-tab {
+        gap: 1.25rem;
+    }
+
+    .report-meta {
+        gap: 0.35rem;
+    }
+
+    .meta-item {
+        align-items: flex-start;
+    }
+
+    .recent-reports-section {
+        padding: 1rem;
     }
 }

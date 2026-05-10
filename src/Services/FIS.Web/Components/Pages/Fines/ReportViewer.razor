@@ -29,17 +29,17 @@
                 <div class="form-section">
                     <h2 class="form-section-title">Vehicle Number</h2>
                     <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gp")" @onchange='() => SetOneVehicleSearchMode("gp")' />
-                                GP
-                            </label>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gg")" @onchange='() => SetOneVehicleSearchMode("gg")' />
-                                GG
-                            </label>
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gp")" @onchange='() => SetOneVehicleSearchMode("gp")' />
+                                    GP
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gg")" @onchange='() => SetOneVehicleSearchMode("gg")' />
+                                    GG
+                                </label>
+                            </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">@(_oneVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
@@ -197,17 +197,17 @@
                 <div class="form-section">
                     <h2 class="form-section-title">Submission to Re-Issue a Traffic Fine</h2>
                     <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="letterType" checked="@(_letterSearchMode == "gg")" @onchange='() => SetLetterSearchMode("gg")' />
-                                GG
-                            </label>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="letterType" checked="@(_letterSearchMode == "gp")" @onchange='() => SetLetterSearchMode("gp")' />
-                                GP
-                            </label>
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="letterType" checked="@(_letterSearchMode == "gg")" @onchange='() => SetLetterSearchMode("gg")' />
+                                    GG
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="letterType" checked="@(_letterSearchMode == "gp")" @onchange='() => SetLetterSearchMode("gp")' />
+                                    GP
+                                </label>
+                            </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">@(_letterSearchMode == "gg" ? "GG Number" : "GP Number")</label>
@@ -256,7 +256,7 @@
                 </div>
                 <div class="form-section">
                     <h2 class="form-section-title">Letter Preview</h2>
-                    <div class="form-card" style="padding: 1rem;">
+                    <div class="form-card form-card-compact">
                         <p><strong>Traffic Dept:</strong> Johannesburg Metro Police</p>
                         <p><strong>Transport Manager:</strong> N.L. Matlala (011) 372 9020</p>
                         <p><strong>Re-issue the traffic fine/summons with the following information:</strong></p>
@@ -375,15 +375,17 @@
                 <div class="form-section">
                     <h2 class="form-section-title">Fines per Vehicle</h2>
                     <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="vehicleType" checked="@(_vehicleSearchMode == "gg")" @onchange='() => SetVehicleSearchMode("gg")' />
-                                GG
-                            </label>
-                            <label class="form-label">
-                                <input type="radio" name="vehicleType" checked="@(_vehicleSearchMode == "gp")" @onchange='() => SetVehicleSearchMode("gp")' />
-                                GP
-                            </label>
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="vehicleType" checked="@(_vehicleSearchMode == "gg")" @onchange='() => SetVehicleSearchMode("gg")' />
+                                    GG
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="vehicleType" checked="@(_vehicleSearchMode == "gp")" @onchange='() => SetVehicleSearchMode("gp")' />
+                                    GP
+                                </label>
+                            </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">@(_vehicleSearchMode == "gg" ? "GG Number" : "Registration Number")</label>

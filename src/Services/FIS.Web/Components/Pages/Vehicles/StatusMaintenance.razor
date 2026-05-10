@@ -113,7 +113,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="pagination-controls" style="margin-top: 1rem;">
+            <div class="pagination-controls fis-mt-1">
                 <button class="pagination-btn" @onclick="PreviousSearchPage" disabled="@(_searchPage <= 1)">Previous</button>
                 <div class="pagination-info">Page @_searchPage of @SearchTotalPages</div>
                 <button class="pagination-btn" @onclick="NextSearchPage" disabled="@(_searchPage >= SearchTotalPages)">Next</button>
@@ -182,7 +182,7 @@
                             </tbody>
                         </table>
                     </div>
-                    <div class="pagination-controls" style="margin-top: 1rem;">
+                    <div class="pagination-controls fis-mt-1">
                         <button class="pagination-btn" @onclick="PreviousHistoryPage" disabled="@(_historyPage <= 1)">Previous</button>
                         <div class="pagination-info">Page @_historyPage of @HistoryTotalPages</div>
                         <button class="pagination-btn" @onclick="NextHistoryPage" disabled="@(_historyPage >= HistoryTotalPages)">Next</button>

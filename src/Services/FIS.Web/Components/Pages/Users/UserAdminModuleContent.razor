@@ -8,7 +8,7 @@
 
 @if (_activeView == ViewMenu)
 {
-    <div class="menu-tiles" style="margin-top: 1rem;">
+    <div class="menu-tiles fis-mt-1">
         <div class="menu-tile">
             <div class="menu-tile-header">
                 <span>User Admin Menu</span>
@@ -41,7 +41,7 @@
 }
 else if (_activeView == ViewAdd)
 {
-    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+    <div class="fis-flex-col-gap-125">
         <div class="card">
             <div class="card-header">
                 <div>
@@ -179,7 +179,7 @@ else if (_activeView == ViewAdd)
 }
 else if (_activeView == ViewEdit)
 {
-    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+    <div class="fis-flex-col-gap-125">
         <div class="card">
             <div class="card-header">
                 <div>
@@ -196,7 +196,7 @@ else if (_activeView == ViewEdit)
                                @bind="_selectedUsername" />
                     </div>
                 </div>
-                <div style="margin-top: 0.75rem;">
+                <div class="fis-mt-075">
                     <button class="btn btn-primary btn-sm" type="button" @onclick="ShowEditProfile">Edit</button>
                 </div>
             </div>
@@ -327,7 +327,7 @@ else if (_activeView == ViewResetLogin)
                            @bind="_selectedUsername" />
                 </div>
             </div>
-            <div style="margin-top: 0.75rem;">
+            <div class="fis-mt-075">
                 <button class="btn btn-primary" type="button">Reset Login</button>
             </div>
         </div>
@@ -351,7 +351,7 @@ else if (_activeView == ViewDeactivate)
                            @bind="_selectedUsername" />
                 </div>
             </div>
-            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <div class="fis-mt-075 fis-flex-wrap-gap-05">
                 <button class="btn btn-secondary" type="button">De-Activate User</button>
                 <button class="btn btn-secondary" type="button">De-ActivateUser Expired Password</button>
                 <button class="btn btn-secondary" type="button">Activate User</button>
@@ -370,7 +370,7 @@ else if (_activeView == ViewViewUsers)
             <button class="btn btn-secondary btn-sm" type="button" @onclick="() => GoTo(ViewMenu)">Back to Menu</button>
         </div>
         <div class="card-body">
-            <div class="legacy-letter-list" style="margin-bottom: 0.75rem;">
+            <div class="legacy-letter-list fis-mb-075">
                 @foreach (var letter in _alphabet)
                 {
                     <button class="btn btn-secondary btn-sm" type="button" @onclick="() => SetAlphabet(letter)">@letter</button>
@@ -435,7 +435,7 @@ else if (_activeView == ViewViewUsers)
                     </tbody>
                 </table>
             </div>
-            <div class="pagination-controls" style="margin-top: 1rem;">
+            <div class="pagination-controls fis-mt-1">
                 <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                 <div class="pagination-info">Page @_page of @TotalPages</div>
                 <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
@@ -461,9 +461,9 @@ else if (_activeView == ViewChangeV1)
         <div class="card-body">
             <p class="text-muted">A new security methodology has been implemented, therefore you are required to reset your password, question and answer to accommodate the new security methodology.</p>
             <p class="text-muted">You have the option to change your password whenever you have the need but the password must be changed at least every month.</p>
-            <div class="card" style="background: var(--fis-accent-soft); border-color: var(--fis-border); box-shadow: none;">
+            <div class="card fis-card-muted">
                 <strong>Passwords have the following requirements:</strong>
-                <ol style="margin-top: 0.5rem; padding-left: 1.2rem;">
+                <ol class="fis-list-top-05-pad12">
                     <li>It should never be shared with anyone!</li>
                     <li>The length must be at least 8 characters</li>
                     <li>It must contain at least 1 number</li>
@@ -613,7 +613,7 @@ else if (_activeView == ViewForgotPassword)
                         <span class="text-muted">Please contact your CallCenter and Check your login details.</span>
                     </div>
                 </div>
-                <div style="margin-top: 0.75rem;">
+                <div class="fis-mt-075">
                     <button class="btn btn-primary" type="button" @onclick="HandleForgotPasswordStart" disabled="@_forgotSubmitting">
                         @(_forgotSubmitting ? "Loading..." : "Next")
                     </button>
@@ -637,7 +637,7 @@ else if (_activeView == ViewForgotPassword)
                         <input class="form-input" type="text" @bind="_forgotAnswer" />
                     </div>
                 </div>
-                <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+                <div class="fis-mt-075 fis-flex-gap-05">
                     <button class="btn btn-primary" type="button" @onclick="HandleForgotPasswordConfirm" disabled="@_forgotSubmitting">
                         @(_forgotSubmitting ? "Submitting..." : "Submit")
                     </button>
@@ -651,7 +651,7 @@ else if (_activeView == ViewForgotPassword)
                 {
                     <div class="alert alert-info">@_forgotMessage</div>
                 }
-                <div style="display: flex; gap: 0.5rem;">
+                <div class="fis-flex-gap-05">
                     <button class="btn btn-secondary" type="button" @onclick="() => SetForgotStep(2)">Try Again</button>
                     <button class="btn btn-primary" type="button" @onclick="() => GoTo(ViewMenu)">Return to Main Menu</button>
                 </div>

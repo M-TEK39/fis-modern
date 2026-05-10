@@ -23,7 +23,7 @@
                 <input class="search-input" type="text" placeholder="Start typing for a list of valid users" @bind="_username" />
             </div>
         </div>
-        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <div class="fis-mt-075 fis-flex-wrap-gap-05">
             <button class="btn btn-secondary" type="button" @onclick="HandleDeactivate" disabled="@_submitting">De-Activate User</button>
             <button class="btn btn-secondary" type="button" @onclick="HandleDeactivateExpired" disabled="@_submitting">De-ActivateUser Expired Password</button>
             <button class="btn btn-secondary" type="button" @onclick="HandleActivate" disabled="@_submitting">Activate User</button>

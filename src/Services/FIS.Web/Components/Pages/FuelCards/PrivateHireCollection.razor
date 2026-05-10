@@ -28,11 +28,11 @@
                     <label class="form-label">GG / GP Number</label>
                     <div class="contract-search-inputs">
                         <div class="contract-search-radio">
-                            <label class="form-label">
+                            <label class="form-radio-label">
                                 <input type="radio" name="searchType" value="GG" checked="@(_searchType == "GG")" @onchange='@(() => SetSearchType("GG"))' />
                                 GG
                             </label>
-                            <label class="form-label">
+                            <label class="form-radio-label">
                                 <input type="radio" name="searchType" value="GP" checked="@(_searchType == "GP")" @onchange='@(() => SetSearchType("GP"))' />
                                 GP Number
                             </label>
@@ -47,9 +47,9 @@
             </div>
             @if (!string.IsNullOrWhiteSpace(_message))
             {
-                <div class="alert alert-info" style="margin-top: 1rem;">@_message</div>
+                <div class="alert alert-info fis-mt-1">@_message</div>
             }
-            <div class="table-container" style="margin-top: 1rem;">
+            <div class="table-container fis-mt-1">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -93,13 +93,13 @@
             </div>
             @if (_results.Count > 0)
             {
-                <div class="pagination-controls" style="margin-top: 1rem;">
+                <div class="pagination-controls fis-mt-1">
                     <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                     <div class="pagination-info">Page @_page of @TotalPages</div>
                     <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
                 </div>
             }
-            <div style="margin-top: 1rem;">
+            <div class="fis-mt-1">
                 <button class="btn btn-primary btn-sm" disabled="@(_selectedVehicle is null)">Add</button>
             </div>
         </div>

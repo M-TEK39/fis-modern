@@ -29,12 +29,12 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Lookup Type</label>
-                    <div class="form-grid">
-                        <label class="form-label">
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
                             <input type="radio" name="lookupType" checked="@(_lookupType == "GG")" @onchange='() => SetLookupType("GG")' />
                             GG
                         </label>
-                        <label class="form-label">
+                        <label class="form-radio-label">
                             <input type="radio" name="lookupType" checked="@(_lookupType == "GP")" @onchange='() => SetLookupType("GP")' />
                             Reg Number
                         </label>

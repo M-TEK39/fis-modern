@@ -34,7 +34,7 @@
                     <h2>Suppliers Maintenance</h2>
                 </div>
                 <div class="form-card-body">
-                    <div class="form-actions" style="justify-content: flex-start;">
+                    <div class="form-actions fis-justify-start">
                         <button class="btn btn-secondary" @onclick='() => SetSupplierMode("add")'>Add New Supplier</button>
                         <button class="btn btn-secondary" @onclick='() => SetSupplierMode("edit")'>Edit Supplier</button>
                     </div>
@@ -212,7 +212,7 @@
                     <h2>Project Maintenance</h2>
                 </div>
                 <div class="form-card-body">
-                    <div class="form-actions" style="justify-content: flex-start;">
+                    <div class="form-actions fis-justify-start">
                         <button class="btn btn-secondary" @onclick='() => SetProjectMode("add")'>Add New Project</button>
                         <button class="btn btn-secondary" @onclick='() => SetProjectMode("edit")'>Edit Project</button>
                     </div>
@@ -425,7 +425,7 @@
                         </div>
                     </div>
 
-                    <div class="tabs" style="margin-top: 1rem;">
+                    <div class="tabs fis-mt-1">
                         @foreach (var requirement in _classRequirements)
                         {
                             <button class="tab @(requirement.class_id.ToString() == _allocationTab ? "active" : "")"
@@ -435,7 +435,7 @@
                         }
                     </div>
 
-                    <div class="table-container" style="margin-top: 1rem;">
+                    <div class="table-container fis-mt-1">
                         <div class="table-wrapper">
                             <table class="data-table">
                                 <thead>
@@ -474,7 +474,7 @@
                                 </tbody>
                             </table>
                         </div>
-                        <div class="pagination-controls" style="margin-top: 1rem;">
+                        <div class="pagination-controls fis-mt-1">
                             <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                             <div class="pagination-info">Page @_page of @TotalPages</div>
                             <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>

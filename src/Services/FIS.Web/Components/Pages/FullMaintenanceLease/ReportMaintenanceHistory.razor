@@ -61,10 +61,10 @@
                     </tbody>
                 </table>
             </div>
-            <div style="text-align: right; margin-top: 0.75rem;">
+            <div class="fis-text-right fis-mt-075">
                 <strong>Grand Total:</strong> @FormatCurrency(_grandTotal)
             </div>
-            <div class="pagination-controls" style="margin-top: 1rem;">
+            <div class="pagination-controls fis-mt-1">
                 <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                 <div class="pagination-info">Page @_page of @TotalPages</div>
                 <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>

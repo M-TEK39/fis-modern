@@ -20,7 +20,7 @@
 </div>
 
 <div class="page-content">
-    <div class="form-card" style="margin-bottom: 1.5rem;">
+    <div class="form-card fis-mb-15">
         <div class="form-card-header">
             <h2>Fuel Card Allocation Summary</h2>
         </div>
@@ -44,7 +44,7 @@
             </div>
             @if (!string.IsNullOrWhiteSpace(_errorMessage))
             {
-                <div class="alert alert-error" style="margin-top: 1rem;">@_errorMessage</div>
+                <div class="alert alert-error fis-mt-1">@_errorMessage</div>
             }
         </div>
     </div>
@@ -90,7 +90,7 @@
             </div>
         </div>
 
-        <div class="table-container" style="margin-top: 1.5rem;">
+        <div class="table-container fis-mt-15">
             <div class="table-header">
                 <span class="table-title">Recent Activity</span>
                 <div class="table-controls">
@@ -100,7 +100,7 @@
             </div>
             @if (_showFieldSelector)
             {
-                <div class="form-card" style="margin:0 0 0.75rem 0;">
+                <div class="form-card fis-mb-075">
                     <div class="form-card-body">
                         <div class="form-grid">
                             @foreach (var field in _exportFields)
@@ -150,7 +150,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="pagination-controls" style="margin-top: 1rem;">
+            <div class="pagination-controls fis-mt-1">
                 <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                 <div class="pagination-info">Page @_page of @TotalPages</div>
                 <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>

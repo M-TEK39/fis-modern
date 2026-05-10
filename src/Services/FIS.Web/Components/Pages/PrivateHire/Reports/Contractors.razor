@@ -40,7 +40,7 @@
                 <button class="btn btn-primary btn-sm" @onclick="ApplyScope">Submit</button>
                 <a class="btn btn-secondary btn-sm" href="/private-hire/maintenance?tab=reports">Menu</a>
             </div>
-            <div class="table-container" style="margin-top: 1.5rem;">
+            <div class="table-container fis-mt-15">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -96,7 +96,7 @@
                     </table>
                 </div>
             </div>
-            <div class="pagination-controls" style="margin-top: 1rem;">
+            <div class="pagination-controls fis-mt-1">
                 <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                 <div class="pagination-info">Page @_page of @TotalPages</div>
                 <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>

@@ -72,16 +72,16 @@
                 <h2 class="form-section-title">Vehicle Number</h2>
                 <div class="form-grid">
                     <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="multiVehicleType" value="GG" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GG")" />
-                            GG
-                        </label>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="multiVehicleType" value="GP" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GP")" />
-                            GP
-                        </label>
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="multiVehicleType" value="GG" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GG")" />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="multiVehicleType" value="GP" @onchange="OnNumberTypeChanged" checked="@(_numberType == "GP")" />
+                                GP
+                            </label>
+                        </div>
                     </div>
                     <div class="form-field">
                         <label class="form-label">@(_numberType == "GG" ? "GG Number" : "GP Number")</label>

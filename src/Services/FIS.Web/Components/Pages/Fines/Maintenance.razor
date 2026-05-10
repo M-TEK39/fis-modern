@@ -27,17 +27,17 @@
             <div class="form-section">
                 <h2 class="form-section-title">Vehicle Number</h2>
                 <div class="form-grid">
-                    <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="fineNumberType" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
-                            GG
-                        </label>
-                    </div>
-                    <div class="form-field">
-                        <label class="form-label">
-                            <input type="radio" name="fineNumberType" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
-                            GP
-                        </label>
+                    <div class="form-field form-group-full">
+                        <div class="contract-search-radio">
+                            <label class="form-radio-label">
+                                <input type="radio" name="fineNumberType" checked="@(_searchType == "GG")" @onchange='() => SetSearchType("GG")' />
+                                GG
+                            </label>
+                            <label class="form-radio-label">
+                                <input type="radio" name="fineNumberType" checked="@(_searchType == "GP")" @onchange='() => SetSearchType("GP")' />
+                                GP
+                            </label>
+                        </div>
                     </div>
                     <div class="form-field">
                         <label class="form-label">@(_searchType == "GG" ? "GG Number" : "GP Number")</label>
@@ -50,10 +50,10 @@
                 </div>
                 @if (SearchResolutionLines.Count > 0)
                 {
-                    <div class="form-card" style="margin-top: 1rem;">
+                    <div class="form-card fis-mt-1">
                         <div class="form-card-body">
                             <h3 class="form-section-title">Vehicle resolution</h3>
-                            <ul class="form-hint" style="margin: 0; padding-left: 1.25rem;">
+                            <ul class="form-hint fis-list-pad">
                                 @foreach (var line in SearchResolutionLines)
                                 {
                                     <li>@line</li>

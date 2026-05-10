@@ -44,6 +44,133 @@ window.fisLayout.ensureSidebarMediaSync = function () {
 
 window.fisLayout.ensureSidebarMediaSync();
 
+window.fisLayout._mobileOverflowGuardRegistered =
+  window.fisLayout._mobileOverflowGuardRegistered || false;
+
+window.fisLayout.applyMobileOverflowGuard = function () {
+  if (!document || !document.body || !window.matchMedia) {
+    return;
+  }
+
+  const isMobile = window.matchMedia("(max-width: 960px)").matches;
+  if (!isMobile) {
+    return;
+  }
+
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  if (!viewportWidth) {
+    return;
+  }
+
+  const whitelistSelectors = [
+    ".notification-list",
+    ".tabs"
+  ];
+
+  const nodes = document.body.querySelectorAll("*");
+  for (const node of nodes) {
+    if (!(node instanceof HTMLElement)) {
+      continue;
+    }
+
+    if (whitelistSelectors.some((selector) => node.closest(selector))) {
+      continue;
+    }
+
+    // Keep table wrappers within viewport while preserving internal horizontal scroll.
+    if (node.classList.contains("table-wrapper")) {
+      node.style.width = "100%";
+      node.style.maxWidth = "100%";
+      node.style.minWidth = "0";
+      node.style.boxSizing = "border-box";
+      node.style.overflowX = "auto";
+      node.style.overflowY = "hidden";
+      continue;
+    }
+
+    const rect = node.getBoundingClientRect();
+    if (rect.width <= 0) {
+      continue;
+    }
+
+    const exceedsViewport = rect.right > viewportWidth + 1 || rect.left < -1 || rect.width > viewportWidth + 1;
+    if (!exceedsViewport) {
+      continue;
+    }
+
+    node.style.maxWidth = "100%";
+    node.style.minWidth = "0";
+    node.style.overflowX = "hidden";
+    node.style.boxSizing = "border-box";
+  }
+
+  document.documentElement.style.overflowX = "hidden";
+  document.body.style.overflowX = "hidden";
+  document.documentElement.style.width = "100%";
+  document.documentElement.style.maxWidth = "100%";
+  document.body.style.width = "100%";
+  document.body.style.maxWidth = "100%";
+
+  const rootContainers = document.querySelectorAll(".legacy-shell, .legacy-main, .page-surface, .page-container");
+  for (const container of rootContainers) {
+    if (!(container instanceof HTMLElement)) {
+      continue;
+    }
+
+    container.style.width = "100%";
+    container.style.maxWidth = "100%";
+    container.style.minWidth = "0";
+    container.style.overflowX = "hidden";
+    container.style.boxSizing = "border-box";
+  }
+
+  // Keep overlay panels within viewport bounds on mobile.
+  const overlayPanels = document.querySelectorAll(".notification-sheet, .sidebar-user-menu, .settings-dialog");
+  for (const panel of overlayPanels) {
+    if (!(panel instanceof HTMLElement)) {
+      continue;
+    }
+
+    panel.style.maxWidth = "100%";
+    panel.style.minWidth = "0";
+    panel.style.boxSizing = "border-box";
+    panel.style.overflowX = "hidden";
+
+    if (panel.classList.contains("notification-sheet")) {
+      panel.style.left = "0.25rem";
+      panel.style.right = "0.25rem";
+      panel.style.width = "auto";
+    }
+  }
+};
+
+window.fisLayout.ensureMobileOverflowGuard = function () {
+  if (window.fisLayout._mobileOverflowGuardRegistered) {
+    return;
+  }
+
+  window.fisLayout._mobileOverflowGuardRegistered = true;
+
+  const apply = () => window.fisLayout.applyMobileOverflowGuard();
+  window.addEventListener("resize", apply, { passive: true });
+  window.addEventListener("orientationchange", apply, { passive: true });
+  window.setTimeout(apply, 0);
+  window.setTimeout(apply, 250);
+  window.setTimeout(apply, 750);
+
+  if (window.MutationObserver) {
+    const observer = new MutationObserver(() => apply());
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style"]
+    });
+  }
+};
+
+window.fisLayout.ensureMobileOverflowGuard();
+
 window.fisLayout.enableCalendarOnlyDates = function () {
   const isDateInput = (element) =>
     element instanceof HTMLInputElement && element.type === "date";
@@ -121,6 +248,10 @@ window.fisLayout.getInitialSidebarCollapsed = function () {
   }
 
   return document.body.classList.contains("sidebar-collapsed");
+};
+
+window.fisLayout.isMobileViewport = function () {
+  return !!(window.matchMedia && window.matchMedia("(max-width: 960px)").matches);
 };
 
 window.fisDownload.downloadText = function (filename, content, mimeType) {

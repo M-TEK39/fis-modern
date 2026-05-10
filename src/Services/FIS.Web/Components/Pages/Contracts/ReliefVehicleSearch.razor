@@ -28,28 +28,30 @@
         <div class="form-card-body">
             <div class="form-grid">
                 <div class="form-field">
-                    <label class="form-label">
-                        <input type="radio" name="reliefSearchType" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
-                        GG
-                    </label>
-                    <label class="form-label">
-                        <input type="radio" name="reliefSearchType" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
-                        GP
-                    </label>
+                    <div class="contract-search-radio">
+                        <label class="form-radio-label">
+                            <input type="radio" name="reliefSearchType" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
+                            GG
+                        </label>
+                        <label class="form-radio-label">
+                            <input type="radio" name="reliefSearchType" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
+                            GP
+                        </label>
+                    </div>
                 </div>
                 <div class="form-field">
                     <label class="form-label">@(_searchMode == "gg" ? "GG Number" : "Registration Number")</label>
                     <input class="form-input" placeholder="@(_searchMode == "gg" ? "Enter GG number" : "Enter registration number")" @bind="_searchQuery" @bind:event="oninput" />
                 </div>
             </div>
-            <div style="margin-top: 1rem;">
+            <div class="fis-mt-1">
                 <button class="btn btn-primary btn-sm" @onclick="SearchVehicles" disabled="@_loading">Search</button>
                 <button class="btn btn-secondary btn-sm" @onclick="ClearSearch" disabled="@_loading">Clear</button>
             </div>
         </div>
     </div>
 
-    <div class="form-card" style="margin-top: 1rem;">
+    <div class="form-card fis-mt-1">
         <div class="form-card-header">
             <h2>Search Results</h2>
         </div>

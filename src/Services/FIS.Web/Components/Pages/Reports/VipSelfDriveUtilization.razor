@@ -98,7 +98,7 @@
                                     <td>
                                         @if (row.ReturnDate == null)
                                         {
-                                            <span style="color: var(--color-warning, #e6a817); font-weight: 600;">Not Yet Returned</span>
+                                            <span class="fis-warning-text fis-fw-600">Not Yet Returned</span>
                                         }
                                         else
                                         {
@@ -108,11 +108,11 @@
                                     <td>@row.DaysHiredInMonth</td>
                                     <td>@row.DaysInMonth</td>
                                     <td>
-                                        <span style="font-weight: 600;">@row.UtilizationPercent.ToString("0.00")%</span>
+                                        <span class="fis-fw-600">@row.UtilizationPercent.ToString("0.00")%</span>
                                     </td>
                                 </tr>
                             }
-                            <tr style="font-weight: 700; border-top: 2px solid var(--color-border, #ddd);">
+                            <tr class="fis-fw-700 fis-border-top-2">
                                 <td colspan="4">Summary (Avg. across @_rows.Count vehicle(s))</td>
                                 <td>@_rows.Sum(r => r.DaysHiredInMonth)</td>
                                 <td>@_daysInMonth</td>
@@ -133,7 +133,7 @@
             }
         </div>
 
-        <div class="form-card fis-mt-15" style="border-left: 4px solid var(--color-info, #3b82f6);">
+        <div class="form-card fis-mt-15 fis-border-left-info">
             <div class="form-card-body">
                 <strong>Audit Note:</strong> Days hired are calculated from the actual <em>return date</em> recorded on the
                 check-out/check-in form, not from the scheduled booking end date.

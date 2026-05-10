@@ -4,13 +4,13 @@ namespace FIS.Data.SqlServer;
 
 public static class SqlServerConnectionStringHelper
 {
-    public const string LegacyLocalFallbackConnectionString =
-        "Server=10.245.1.36,1433;Database=GG;User Id=23525100;Password=Moretegi@2001;Encrypt=True;TrustServerCertificate=True;";
+    public const string SafeFallbackConnectionString =
+        "Server=localhost,1433;Database=legacy;Integrated Security=True;TrustServerCertificate=True;";
 
     public static string Resolve(string? connectionString, bool isDevelopment)
     {
         var effectiveConnectionString = string.IsNullOrWhiteSpace(connectionString)
-            ? LegacyLocalFallbackConnectionString
+            ? SafeFallbackConnectionString
             : connectionString;
 
         if (!isDevelopment)

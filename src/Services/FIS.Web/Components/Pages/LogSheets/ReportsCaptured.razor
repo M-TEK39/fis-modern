@@ -32,11 +32,11 @@
                     <td>
                         <div class="contract-search-inputs">
                             <label class="form-label">Date</label>
-                            <input class="form-input" style="max-width: 10rem;" placeholder="yyyy/MM/dd" @bind="_dateTimeDateText" />
+                            <input class="form-input maxw-input-md" placeholder="yyyy/MM/dd" @bind="_dateTimeDateText" />
                             <label class="form-label">from</label>
-                            <input class="form-input" style="max-width: 10rem;" placeholder="00:00:00 AM" @bind="_fromTimeText" />
+                            <input class="form-input maxw-input-md" placeholder="00:00:00 AM" @bind="_fromTimeText" />
                             <label class="form-label">to</label>
-                            <input class="form-input" style="max-width: 10rem;" placeholder="11:59:59 PM" @bind="_endTimeText" />
+                            <input class="form-input maxw-input-md" placeholder="11:59:59 PM" @bind="_endTimeText" />
                             <button class="btn btn-primary btn-sm" type="button" @onclick="RunDateTimeReport" disabled="@_loading">Submit</button>
                         </div>
                     </td>
@@ -57,9 +57,9 @@
                     <td>
                         <div class="contract-search-inputs">
                             <label class="form-label">User Name</label>
-                            <input class="form-input" style="max-width: 12rem;" @bind="_userNameText" />
+                            <input class="form-input maxw-input-lg" @bind="_userNameText" />
                             <label class="form-label">last</label>
-                            <select class="form-select" style="max-width: 8rem;" @bind="_userInterval">
+                            <select class="form-select maxw-select-sm" @bind="_userInterval">
                                 <option value="week">Week</option>
                                 <option value="month">Month</option>
                             </select>
@@ -83,9 +83,9 @@
                     <td>
                         <div class="contract-search-inputs">
                             <label class="form-label">Begin Date</label>
-                            <input class="form-input" style="max-width: 10rem;" placeholder="yyyy/MM/dd" @bind="_fromDateText" />
+                            <input class="form-input maxw-input-md" placeholder="yyyy/MM/dd" @bind="_fromDateText" />
                             <label class="form-label">End Date</label>
-                            <input class="form-input" style="max-width: 10rem;" placeholder="yyyy/MM/dd" @bind="_toDateText" />
+                            <input class="form-input maxw-input-md" placeholder="yyyy/MM/dd" @bind="_toDateText" />
                             <button class="btn btn-primary btn-sm" type="button" @onclick="RunDateReport" disabled="@_loading">Submit</button>
                         </div>
                     </td>

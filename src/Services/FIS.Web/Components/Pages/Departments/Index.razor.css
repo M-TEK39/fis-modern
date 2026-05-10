@@ -29,6 +29,7 @@
     margin-bottom: 1rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid var(--fis-border);
+    gap: 0.75rem;
 }
 
 .dept-code {
@@ -47,6 +48,7 @@
 .dept-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .dept-card-body {
@@ -61,6 +63,7 @@
     color: var(--fis-text);
     margin: 0 0 0.5rem 0;
     line-height: 1.4;
+    overflow-wrap: anywhere;
 }
 
 .dept-info {
@@ -69,6 +72,12 @@
     gap: 0.5rem;
     font-size: 0.875rem;
     color: var(--fis-muted-text);
+    min-width: 0;
+}
+
+.dept-info span {
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .dept-info i {
@@ -79,5 +88,30 @@
 @media (max-width: 768px) {
     .dept-grid {
         grid-template-columns: 1fr;
+    }
+
+    .dept-card {
+        padding: 1rem;
+    }
+
+    .dept-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .dept-actions {
+        width: 100%;
+    }
+}
+
+@media (max-width: 640px) {
+    .dept-grid {
+        gap: 1rem;
+    }
+
+    .dept-code {
+        min-width: 2.5rem;
+        height: 2.5rem;
+        font-size: 1rem;
     }
 }

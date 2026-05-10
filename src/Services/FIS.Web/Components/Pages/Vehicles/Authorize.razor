@@ -96,7 +96,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="pagination-controls" style="margin-top: 1rem;">
+                <div class="pagination-controls fis-mt-1">
                     <button class="pagination-btn" @onclick="PreviousRejectedPage" disabled="@(_rejectedPage <= 1)">Previous</button>
                     <div class="pagination-info">Page @_rejectedPage of @RejectedTotalPages</div>
                     <button class="pagination-btn" @onclick="NextRejectedPage" disabled="@(_rejectedPage >= RejectedTotalPages)">Next</button>
@@ -157,7 +157,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="pagination-controls" style="margin-top: 1rem;">
+                <div class="pagination-controls fis-mt-1">
                     <button class="pagination-btn" @onclick="PreviousAwaitingPage" disabled="@(_awaitingPage <= 1)">Previous</button>
                     <div class="pagination-info">Page @_awaitingPage of @AwaitingTotalPages</div>
                     <button class="pagination-btn" @onclick="NextAwaitingPage" disabled="@(_awaitingPage >= AwaitingTotalPages)">Next</button>
@@ -212,7 +212,7 @@
                         </tbody>
                     </table>
                 </div>
-                <div class="pagination-controls" style="margin-top: 1rem;">
+                <div class="pagination-controls fis-mt-1">
                     <button class="pagination-btn" @onclick="PreviousAuthorizedPage" disabled="@(_authorizedPage <= 1)">Previous</button>
                     <div class="pagination-info">Page @_authorizedPage of @AuthorizedTotalPages</div>
                     <button class="pagination-btn" @onclick="NextAuthorizedPage" disabled="@(_authorizedPage >= AuthorizedTotalPages)">Next</button>

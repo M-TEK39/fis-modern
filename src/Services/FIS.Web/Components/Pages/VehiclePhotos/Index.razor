@@ -22,17 +22,19 @@
     <form class="search-bar" @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
         <div class="form-grid fis-mb-05">
             <div class="form-field">
-                <label class="form-label">
-                    <input type="radio" name="photoSearchType" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
-                    GG
-                </label>
-                <label class="form-label">
-                    <input type="radio" name="photoSearchType" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
-                    GP
-                </label>
+                <div class="contract-search-radio">
+                    <label class="form-radio-label">
+                        <input type="radio" name="photoSearchType" checked="@(_searchMode == "gg")" @onchange='() => SetSearchMode("gg")' />
+                        GG
+                    </label>
+                    <label class="form-radio-label">
+                        <input type="radio" name="photoSearchType" checked="@(_searchMode == "gp")" @onchange='() => SetSearchMode("gp")' />
+                        GP
+                    </label>
+                </div>
             </div>
         </div>
-        <div class="search-input-wrapper fis-input-group-spaced">
+        <div class="search-input-wrapper vehicle-photo-search">
             <i class="bx bx-search"></i>
             <input
                 id="keyword"
@@ -41,14 +43,25 @@
                 placeholder="@(_searchMode == "gg" ? "GG number" : "Registration number")"
                 @bind="_searchQuery"
                 @bind:event="oninput"
-                list="vehicle-keywords"
-                autocomplete="off" />
-            <datalist id="vehicle-keywords">
-                @foreach (var keyword in _keywords)
-                {
-                    <option value="@keyword"></option>
-                }
-            </datalist>
+                autocomplete="off"
+                @onfocus="OnSearchFocus"
+                @onblur="OnSearchBlur" />
+            @if (_showSuggestions && FilteredKeywords.Count > 0)
+            {
+                <div class="search-suggestions" role="listbox" aria-label="Vehicle suggestions">
+                    @foreach (var keyword in FilteredKeywords)
+                    {
+                        <button type="button"
+                                class="search-suggestion-item"
+                                @onmousedown:preventDefault="true"
+                                @onclick="() => SelectSuggestion(keyword)">
+                            @keyword
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+        <div class="fis-mt-075">
             <button class="btn btn-primary btn-sm" type="submit" disabled="@(!_isLoaded || _searching)">
                 @if (_searching)
                 {
@@ -118,7 +131,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="pagination-controls" style="margin-top: 1rem;">
+            <div class="pagination-controls fis-mt-1">
                 <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                 <div class="pagination-info">Page @_page of @TotalPages</div>
                 <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
@@ -134,15 +147,22 @@
     private bool _isLoaded;
     private string _searchQuery = "";
     private bool _searching;
+    private bool _showSuggestions;
     private string? _searchError;
     private List<string> _keywords = new();
     private List<VehicleLookupDto> _searchResults = new();
     private string _searchMode = "gg";
     private int _page = 1;
     private const int _pageSize = 12;
+    private const int SuggestionLimit = 20;
 
     private IEnumerable<VehicleLookupDto> PagedSearchResults => _searchResults.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_searchResults.Count / (double)_pageSize));
+    private List<string> FilteredKeywords => _keywords
+        .Where(keyword => MatchesKeyword(keyword))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Take(SuggestionLimit)
+        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -188,6 +208,7 @@
             return;
         }
 
+        _showSuggestions = false;
         _searching = true;
         try
         {
@@ -217,7 +238,43 @@
         _searchQuery = string.Empty;
         _searchResults = new();
         _searchError = null;
+        _showSuggestions = false;
         _page = 1;
+    }
+
+    private bool MatchesKeyword(string keyword)
+    {
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            return false;
+        }
+
+        var query = _searchQuery?.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return true;
+        }
+
+        return keyword.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OnSearchFocus(FocusEventArgs _)
+    {
+        _showSuggestions = true;
+    }
+
+    private async Task OnSearchBlur(FocusEventArgs _)
+    {
+        // Allow suggestion click to run before closing menu.
+        await Task.Delay(120);
+        _showSuggestions = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SelectSuggestion(string keyword)
+    {
+        _searchQuery = keyword;
+        _showSuggestions = false;
     }
 
     private static List<VehicleLookupDto> RankVehicleMatches(List<VehicleLookupDto> matches, string query, bool preferGg)

@@ -9,7 +9,7 @@
 @inject UserApiService UserApiService
 @inject SiteApiService SiteApiService
 
-<div style="display: flex; flex-direction: column; gap: 1.25rem;">
+<div class="fis-flex-col-gap-125">
     <div class="card">
         <div class="card-header">
             <div>
@@ -27,16 +27,26 @@
                     <i class="bx bx-search"></i>
                     <input class="search-input" type="text" placeholder="Start typing for a list of valid users"
                            @bind="_selectedUsername"
-                           list="user-admin-user-list" />
+                           autocomplete="off"
+                           @onfocus="OnUserSearchFocus"
+                           @onblur="OnUserSearchBlur" />
+                    @if (_showUserSuggestions && FilteredUsernames.Count > 0)
+                    {
+                        <div class="search-suggestions" role="listbox" aria-label="User suggestions">
+                            @foreach (var username in FilteredUsernames)
+                            {
+                                <button type="button"
+                                        class="search-suggestion-item"
+                                        @onmousedown:preventDefault="true"
+                                        @onclick="() => SelectUsername(username)">
+                                    @username
+                                </button>
+                            }
+                        </div>
+                    }
                 </div>
             </div>
-            <datalist id="user-admin-user-list">
-                @foreach (var user in _userSummaries)
-                {
-                    <option value="@user.UserName">@user.Email</option>
-                }
-            </datalist>
-            <div style="margin-top: 0.75rem;">
+            <div class="fis-mt-075">
                 <button class="btn btn-primary btn-sm" type="button" @onclick="ShowEditProfile" disabled="@_loadingUser">
                     @(_loadingUser ? "Loading..." : "Edit")
                 </button>
@@ -189,6 +199,7 @@
     private int _selectedUserAccessCode;
     private bool _loadingUser;
     private bool _saving;
+    private bool _showUserSuggestions;
     private string? _errorMessage;
     private string? _successMessage;
     private List<UserSummaryDto> _userSummaries = new();
@@ -197,6 +208,13 @@
     private List<UserProfileDto> _profiles = new();
     private List<UserProfileDto> _siteApprovers = new();
     private short? _selectedApproverUserAccessCode;
+    private List<string> FilteredUsernames => _userSummaries
+        .Select(user => user.UserName ?? string.Empty)
+        .Where(name => name.Length > 0)
+        .Where(name => string.IsNullOrWhiteSpace(_selectedUsername) || name.Contains(_selectedUsername, StringComparison.OrdinalIgnoreCase))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Take(20)
+        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -227,6 +245,7 @@
     {
         _errorMessage = null;
         _successMessage = null;
+        _showUserSuggestions = false;
         if (string.IsNullOrWhiteSpace(_selectedUsername))
         {
             _errorMessage = "Username is required.";
@@ -273,6 +292,24 @@
     private void NavigateToMenu()
     {
         Navigation.NavigateTo(UserAdminNavigation.GetMenuLink(Navigation));
+    }
+
+    private void OnUserSearchFocus(FocusEventArgs _)
+    {
+        _showUserSuggestions = true;
+    }
+
+    private async Task OnUserSearchBlur(FocusEventArgs _)
+    {
+        await Task.Delay(120);
+        _showUserSuggestions = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void SelectUsername(string username)
+    {
+        _selectedUsername = username;
+        _showUserSuggestions = false;
     }
 
     private async Task HandleSubmitChanges()

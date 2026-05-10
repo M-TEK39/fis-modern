@@ -1,11 +1,37 @@
 using FIS.Web.Components;
 using FIS.Web.Services;
+using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 
 var builder = WebApplication.CreateBuilder(args);
+var dotEnvRawValues = Env.NoEnvVars().TraversePath().Load();
+var dotEnvValues = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+var dotEnvConfig = new Dictionary<string, string?>();
+
+foreach (var pair in dotEnvRawValues)
+{
+    dotEnvValues[pair.Key] = pair.Value;
+}
+
+if (dotEnvValues.TryGetValue("ConnectionStrings__Default", out var connectionStringFromEnv))
+{
+    dotEnvConfig["ConnectionStrings:Default"] = connectionStringFromEnv;
+}
+
+if (dotEnvValues.TryGetValue("ApiSettings__BaseUrl", out var apiBaseUrlFromEnv))
+{
+    dotEnvConfig["ApiSettings:BaseUrl"] = apiBaseUrlFromEnv;
+}
+
+if (dotEnvValues.TryGetValue("ApiSettings__WebBaseUrl", out var webBaseUrlFromEnv))
+{
+    dotEnvConfig["ApiSettings:WebBaseUrl"] = webBaseUrlFromEnv;
+}
+
+builder.Configuration.AddInMemoryCollection(dotEnvConfig);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

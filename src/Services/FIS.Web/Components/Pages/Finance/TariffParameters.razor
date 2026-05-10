@@ -44,8 +44,8 @@
                 <button class="btn btn-primary btn-sm" @onclick="ApproveYearAsync" disabled="@_submitting">Approve Year</button>
                 <button class="btn btn-secondary btn-sm" @onclick="RejectYearAsync" disabled="@_submitting">Reject Year</button>
             </div>
-            <h3 style="margin-top: 1.5rem;">Global Parameters</h3>
-            <div class="table-container" style="margin-top: 0.75rem;">
+            <h3 class="fis-mt-15">Global Parameters</h3>
+            <div class="table-container fis-mt-075">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -78,8 +78,8 @@
                 </div>
             </div>
 
-            <h3 style="margin-top: 1.5rem;">Fixed Tariffs</h3>
-            <div class="table-container" style="margin-top: 0.75rem;">
+            <h3 class="fis-mt-15">Fixed Tariffs</h3>
+            <div class="table-container fis-mt-075">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -116,8 +116,8 @@
                 </div>
             </div>
 
-            <h3 style="margin-top: 1.5rem;">Kilometre Tariffs</h3>
-            <div class="table-container" style="margin-top: 0.75rem;">
+            <h3 class="fis-mt-15">Kilometre Tariffs</h3>
+            <div class="table-container fis-mt-075">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -153,7 +153,7 @@
                     </table>
                 </div>
             </div>
-            <h3 style="margin-top: 1.5rem;">Maintenance Values</h3>
+            <h3 class="fis-mt-15">Maintenance Values</h3>
             <div class="table-container">
                 <div class="table-wrapper">
                     <table class="data-table">
@@ -191,7 +191,7 @@
 
             @if (_tariffParameters is not null)
             {
-                <div class="alert alert-success" style="margin-top:0.75rem;">
+                <div class="alert alert-success fis-mt-075">
                     Approval status: @(_tariffParameters.IsApproved ? "Approved" : "Pending")
                     | Approved by: @(string.IsNullOrWhiteSpace(_tariffParameters.ApprovedBy) ? "-" : _tariffParameters.ApprovedBy)
                     | Effective date: @FormatDate(_tariffParameters.EffectiveDate)
@@ -200,7 +200,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
                     @_statusMessage
                 </div>
             }

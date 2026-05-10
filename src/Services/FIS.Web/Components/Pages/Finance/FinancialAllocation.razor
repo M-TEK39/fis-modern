@@ -72,7 +72,7 @@
                     </div>
                 </div>
                 <button class="btn btn-secondary btn-sm" @onclick="LoadSegmentsAsync" disabled="@_submitting">Load Segments</button>
-                <div class="table-container" style="margin-top: 1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -152,7 +152,7 @@
                     </div>
                 </div>
                 <button class="btn btn-secondary btn-sm" @onclick="LoadInvalidJournalsAsync" disabled="@_submitting">Load Invalid Journals</button>
-                <div class="table-container" style="margin-top: 1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -205,7 +205,7 @@
                     </div>
                 </div>
                 <button class="btn btn-secondary btn-sm" @onclick="LoadFundAllocationJournalsAsync" disabled="@_submitting">Load Journals</button>
-                <div class="table-container" style="margin-top: 1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -252,7 +252,7 @@
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
                     @_statusMessage
                 </div>
             }

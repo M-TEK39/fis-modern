@@ -6,15 +6,15 @@
         <Authorized>
             <div class="user-info">
                 <span class="user-name">@context.User.Identity?.Name</span>
-                <form method="post" action="/Account/Logout" style="display: inline;">
-                    <button type="submit" class="btn-logout" style="border: 1px solid #dee2e6; background: #f8f9fa; color: #666; padding: 0.5rem 1rem; border-radius: 4px; font-size: 0.875rem; cursor: pointer; transition: all 0.2s;">
+                <form method="post" action="/Account/Logout" class="user-profile-form">
+                    <button type="submit" class="btn btn-secondary btn-sm">
                         Sign out
                     </button>
                 </form>
             </div>
         </Authorized>
         <NotAuthorized>
-            <a href="/login" class="btn-login">Sign in</a>
+            <a href="/login" class="btn btn-primary btn-sm">Sign in</a>
         </NotAuthorized>
     </AuthorizeView>
 </div>
@@ -35,35 +35,10 @@
 
     .user-name {
         font-weight: 500;
-        color: #333;
+        color: var(--fis-text);
     }
 
-    .btn-login,
-    .btn-logout {
-        padding: 0.5rem 1rem;
-        border-radius: 4px;
-        text-decoration: none;
-        font-size: 0.875rem;
-        transition: all 0.2s;
-    }
-
-    .btn-login {
-        background: #667eea;
-        color: white;
-    }
-
-    .btn-login:hover {
-        background: #5568d3;
-    }
-
-    .btn-logout {
-        background: #f8f9fa;
-        color: #666;
-        border: 1px solid #dee2e6;
-    }
-
-    .btn-logout:hover {
-        background: #e9ecef;
-        color: #333;
+    .user-profile-form {
+        display: inline;
     }
 </style>

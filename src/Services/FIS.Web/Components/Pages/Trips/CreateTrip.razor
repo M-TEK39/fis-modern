@@ -53,7 +53,7 @@
                     <div class="form-hint">* BOLD fields are REQUIRED</div>
                     @if (_vehicle is null)
                     {
-                        <div class="form-grid" style="margin-top: 0.75rem;">
+                        <div class="form-grid fis-mt-075">
                             <div class="form-field">
                                 <label class="form-label"><strong>Vehicle Search:</strong></label>
                                 <div class="contract-search-radio">
@@ -81,7 +81,7 @@
                             </div>
                         </div>
                     }
-                    <div class="form-grid" style="margin-top: 0.75rem;">
+                    <div class="form-grid fis-mt-075">
                         <div class="form-field">
                             <label class="form-label"><strong>Start ODO Meter Reading:</strong></label>
                             <input class="form-input" type="number" @bind="_startOdometer" />
@@ -137,7 +137,7 @@
 
                 <div class="form-section">
                     <h3 class="form-section-title">Trip Driver(s) Information</h3>
-                    <div class="form-grid" style="margin-bottom: 0.75rem;">
+                    <div class="form-grid fis-mb-075">
                         <div class="form-field">
                             <label class="form-label">Select Driver</label>
                             <select class="form-select" @bind="_selectedTripDriverCode">
@@ -156,7 +156,7 @@
                             </label>
                         </div>
                     </div>
-                    <div class="contract-action-group" style="margin-bottom:0.75rem;">
+                    <div class="contract-action-group fis-mb-075">
                         <button class="btn btn-secondary btn-sm" @onclick="AddTripDriverAsync" disabled="@(_createdTrip is null || !_selectedTripDriverCode.HasValue)">Add Driver to Trip</button>
                     </div>
                     @if (_createdTrip is null)

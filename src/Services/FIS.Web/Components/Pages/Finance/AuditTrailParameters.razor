@@ -63,7 +63,7 @@
                         <input class="form-input" @bind="_vehicleSearch" @oninput="OnVehicleSearchChanged" />
                         @if (_vehicleMatches.Count > 0)
                         {
-                            <select class="form-select" style="margin-top:0.5rem;" @bind="_selectedVehicle">
+                            <select class="form-select fis-mt-05" @bind="_selectedVehicle">
                                 <option value="">Select Vehicle</option>
                                 @foreach (var vehicle in _vehicleMatches)
                                 {
@@ -110,14 +110,14 @@
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
                     @_statusMessage
                 </div>
             }
 
             @if (_reportRows.Count > 0)
             {
-                <div class="table-container" style="margin-top:1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-header">
                         <span class="table-title">Audit Trail Results (@_reportRows.Count row(s))</span>
                     </div>

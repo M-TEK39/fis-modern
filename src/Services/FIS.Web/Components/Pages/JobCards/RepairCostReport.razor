@@ -39,7 +39,7 @@
                         </label>
                     </div>
                     <input class="form-input" type="text" @bind="_vehicleSearchTerm" placeholder="@(_searchMode == "GG" ? "GG number" : "GP number")" />
-                    <div class="form-actions" style="margin-top: 0.5rem;">
+                    <div class="form-actions fis-mt-05">
                         <button class="btn btn-secondary btn-sm" type="button" disabled="@_loading" @onclick="LoadVehicleMatchesAsync">Search vehicle</button>
                     </div>
                 </div>

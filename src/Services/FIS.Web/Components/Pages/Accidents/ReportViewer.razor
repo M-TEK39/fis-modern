@@ -31,17 +31,17 @@
                 <div class="form-section">
                     <h2 class="form-section-title">Search Parameters</h2>
                     <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gp")" @onchange='() => SetOneVehicleSearchMode("gp")' />
-                                GP
-                            </label>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gg")" @onchange='() => SetOneVehicleSearchMode("gg")' />
-                                GG
-                            </label>
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gp")" @onchange='() => SetOneVehicleSearchMode("gp")' />
+                                    GP
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="oneVehicleType" checked="@(_oneVehicleSearchMode == "gg")" @onchange='() => SetOneVehicleSearchMode("gg")' />
+                                    GG
+                                </label>
+                            </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">@(_oneVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
@@ -890,17 +890,17 @@
                 <div class="form-section">
                     <h2 class="form-section-title">Vehicle Search</h2>
                     <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gp")" @onchange='() => SetLetterVehicleSearchMode("gp")' />
-                                GP
-                            </label>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gg")" @onchange='() => SetLetterVehicleSearchMode("gg")' />
-                                GG
-                            </label>
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gp")" @onchange='() => SetLetterVehicleSearchMode("gp")' />
+                                    GP
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gg")" @onchange='() => SetLetterVehicleSearchMode("gg")' />
+                                    GG
+                                </label>
+                            </div>
                         </div>
                         <div class="form-field">
                             <label class="form-label">@(_letterVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>

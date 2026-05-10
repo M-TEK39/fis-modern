@@ -26,6 +26,11 @@
     display: flex;
     gap: 1rem;
     align-items: center;
+    flex-wrap: wrap;
+}
+
+.filter-controls .form-select {
+    min-width: min(100%, 240px);
 }
 
 .summary-grid {
@@ -162,6 +167,7 @@
     align-items: center;
     min-width: 140px;
     font-size: 0.875rem;
+    gap: 0.75rem;
 }
 
 .breakdown-label {
@@ -260,6 +266,7 @@
 
 .claim-info {
     flex: 1;
+    min-width: 0;
 }
 
 .claim-header {
@@ -293,6 +300,8 @@
 
 .claim-location {
     color: var(--fis-muted-text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .claim-costs {
@@ -318,6 +327,7 @@
 .cost-value {
     font-weight: 600;
     color: var(--fis-text);
+    overflow-wrap: anywhere;
 }
 
 .empty-claims {
@@ -339,7 +349,12 @@
     }
 
     .filter-controls {
-        justify-content: space-between;
+        justify-content: stretch;
+    }
+
+    .filter-controls .form-select,
+    .filter-controls .btn {
+        width: 100%;
     }
 
     .summary-grid {
@@ -381,5 +396,34 @@
 
     .claim-costs {
         justify-content: space-between;
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 640px) {
+    .claims-tab {
+        gap: 1.25rem;
+    }
+
+    .summary-card {
+        padding: 1rem;
+        gap: 0.75rem;
+    }
+
+    .card-value {
+        font-size: 1.35rem;
+    }
+
+    .breakdown-section,
+    .recent-claims {
+        padding: 1rem;
+    }
+
+    .claim-item {
+        padding: 0.75rem;
+    }
+
+    .claim-header {
+        gap: 0.5rem;
     }
 }

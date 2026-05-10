@@ -26,11 +26,11 @@
                 <div class="alert alert-info">
                     Auto update in 11 minute(s). Use the Print button to open the print view.
                 </div>
-                <div class="form-actions" style="justify-content: space-between;">
+                <div class="form-actions fis-justify-between">
                     <button class="btn btn-secondary btn-sm" @onclick="PrintPendingAsync">Print</button>
                     <button class="btn btn-secondary btn-sm" @onclick="LoadTaxiRequestsAsync">Refresh</button>
                 </div>
-                <div class="table-container" style="margin-top: 1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-wrapper">
                         <table class="data-table">
                             <thead>
@@ -97,11 +97,11 @@
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_message))
                 {
-                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                    <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                 }
                 @if (_lookupResult != null)
                 {
-                    <div class="table-container" style="margin-top: 1rem;">
+                    <div class="table-container fis-mt-1">
                         <div class="table-wrapper">
                             <table class="data-table">
                                 <tbody>
@@ -120,7 +120,7 @@
     }
     else if (_isCancel)
     {
-        <div class="form-card" style="margin-bottom: 1.5rem;">
+        <div class="form-card fis-mb-15">
             <div class="form-card-header">
                 <h2>Cancel Taxi Requisition</h2>
                 <p>Enter the requisition number to continue.</p>
@@ -137,7 +137,7 @@
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_message))
                 {
-                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                    <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                 }
             </div>
         </div>
@@ -238,7 +238,7 @@
     {
         if (_isEdit || _isEditPrevBas)
         {
-            <div class="form-card" style="margin-bottom: 1.5rem;">
+            <div class="form-card fis-mb-15">
                 <div class="form-card-header">
                     <h2>Edit Taxi Requisition</h2>
                     <p>Enter the requisition number to load the details.</p>
@@ -255,7 +255,7 @@
                     </div>
                     @if (!string.IsNullOrWhiteSpace(_message))
                     {
-                        <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                        <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                     }
                 </div>
             </div>
@@ -472,10 +472,10 @@
 
                     @if (_showPrevBasBanner)
                     {
-                        <div class="form-hint" style="margin-top: 1rem;">
+                        <div class="form-hint fis-mt-1">
                             BAS ID list: name (uses a pick-list table).
                         </div>
-                        <div class="table-container" style="margin-top: 1rem;">
+                        <div class="table-container fis-mt-1">
                             <div class="table-wrapper">
                                 <table class="data-table">
                                     <thead>
@@ -564,7 +564,7 @@
                 </div>
                 @if (!string.IsNullOrWhiteSpace(_message))
                 {
-                    <div class="alert @(_error ? "alert-error" : "alert-success")" style="margin-top: 0.75rem;">@_message</div>
+                    <div class="alert @(_error ? "alert-error" : "alert-success") fis-mt-075">@_message</div>
                 }
             </div>
         </div>

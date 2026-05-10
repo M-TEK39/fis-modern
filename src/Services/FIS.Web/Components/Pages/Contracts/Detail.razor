@@ -149,7 +149,7 @@
                         }
                         @if (!string.IsNullOrWhiteSpace(_actionStatusMessage))
                         {
-                            <div class="alert @(_actionStatusError ? "alert-error" : "alert-success")" style="margin-top:0.75rem;">
+                            <div class="alert @(_actionStatusError ? "alert-error" : "alert-success") fis-mt-075">
                                 @_actionStatusMessage
                             </div>
                         }
@@ -213,7 +213,7 @@
                     <tr>
                         <td>
                             <textarea class="form-input contract-notes" rows="4" placeholder="Approval notes..." @bind="_approvalNotes"></textarea>
-                            <input class="form-input" style="margin-top:0.5rem;" placeholder="Decline reason (required for decline actions)" @bind="_declineReason" />
+                            <input class="form-input fis-mt-05" placeholder="Decline reason (required for decline actions)" @bind="_declineReason" />
                         </td>
                     </tr>
                 </tbody>

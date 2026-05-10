@@ -57,14 +57,14 @@
 
             @if (!string.IsNullOrWhiteSpace(_statusMessage))
             {
-                <div class="alert @(_statusError ? "alert-error" : "alert-success")" style="margin-top:1rem;">
+                <div class="alert @(_statusError ? "alert-error" : "alert-success") fis-mt-1">
                     @_statusMessage
                 </div>
             }
 
             @if (_reportRows.Count > 0)
             {
-                <div class="table-container" style="margin-top:1rem;">
+                <div class="table-container fis-mt-1">
                     <div class="table-header">
                         <span class="table-title">Wesbank Report (@_reportRows.Count row(s))</span>
                     </div>

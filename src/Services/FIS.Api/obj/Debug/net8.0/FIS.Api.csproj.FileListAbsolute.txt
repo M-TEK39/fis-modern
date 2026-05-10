@@ -141,3 +141,5 @@
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/tr-TR/Hangfire.Core.resources.dll
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/zh-TW/Hangfire.Core.resources.dll
 /home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/zh/Hangfire.Core.resources.dll
+/home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/DotNetEnv.dll
+/home/dev/work/fis-modern/src/Services/FIS.Api/bin/Debug/net8.0/Sprache.dll

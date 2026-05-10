@@ -28,9 +28,9 @@
             </button>
             @if (!string.IsNullOrWhiteSpace(_message))
             {
-                <div class="alert alert-info" style="margin-top: 1rem;">@_message</div>
+                <div class="alert alert-info fis-mt-1">@_message</div>
             }
-            <div class="table-container" style="margin-top: 1rem;">
+            <div class="table-container fis-mt-1">
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -68,7 +68,7 @@
             </div>
             @if (_activity.Count > 0)
             {
-                <div class="pagination-controls" style="margin-top: 1rem;">
+                <div class="pagination-controls fis-mt-1">
                     <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
                     <div class="pagination-info">Page @_page of @TotalPages</div>
                     <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
