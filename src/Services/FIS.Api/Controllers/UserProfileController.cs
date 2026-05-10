@@ -167,7 +167,7 @@ public class UserProfileController : BaseApiController
                 passport_number = dto.PassportNumber,
                 Cellphone_Number = dto.CellphoneNumber,
                 Fax_Number = dto.FaxNumber,
-                password = dto.Password, // TODO: Hash password
+                password = string.IsNullOrWhiteSpace(dto.Password) ? null : BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 user_status = "Active",
                 AccessLevel = dto.AccessLevel ?? 1
             };

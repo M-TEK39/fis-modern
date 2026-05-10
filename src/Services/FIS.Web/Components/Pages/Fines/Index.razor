@@ -2,7 +2,10 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject FineApiService FineService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Fines - Fleet Information System</PageTitle>
@@ -18,42 +21,52 @@
 </div>
 
 <div class="page-content">
-    <div class="menu-tiles">
-        <div class="menu-tile">
-            <button class="menu-tile-header">
-                <span>Fines Maintenance</span>
-                <i class="bx bx-wrench"></i>
-            </button>
-            <div class="menu-tile-body">
-                <div class="menu-item"><span class="menu-item-link">Fines Maintenance Information / Help</span></div>
-                <div class="menu-item"><a class="menu-item-link" href="/fines/maintenance">1) Fine Maintenance</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/fines/delete">2) Delete a Fine</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/fines/traffic-dept">3) Add / Update &amp; Delete Traffic Dept</a></div>
+    @if (!_hasReportsRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Reports</strong> role.
+        </div>
+    }
+    else
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <button class="menu-tile-header">
+                    <span>Fines Maintenance</span>
+                    <i class="bx bx-wrench"></i>
+                </button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><span class="menu-item-link">Fines Maintenance Information / Help</span></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/maintenance">1) Fine Maintenance</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/delete">2) Delete a Fine</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/traffic-dept">3) Add / Update &amp; Delete Traffic Dept</a></div>
+                </div>
+            </div>
+
+            <div class="menu-tile">
+                <button class="menu-tile-header">
+                    <span>Fines Reports</span>
+                    <i class="bx bx-file"></i>
+                </button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/reports">Fines Reports Menu</a></div>
+                </div>
             </div>
         </div>
 
-        <div class="menu-tile">
-            <button class="menu-tile-header">
-                <span>Fines Reports</span>
-                <i class="bx bx-file"></i>
-            </button>
-            <div class="menu-tile-body">
-                <div class="menu-item"><a class="menu-item-link" href="/fines/reports">Fines Reports Menu</a></div>
-            </div>
-        </div>
-    </div>
-
-    <DataPreviewTable Title="Fine Preview"
-                      SearchPlaceholder="Search fine reference, issuer, offence, GG code..."
-                      EmptyMessage="No fines match the current search or filter."
-                      EmptyIcon="bx bx-receipt"
-                      IsLoading="_loading"
-                      Columns="_columns"
-                      Rows="_rows"
-                      Filters="_filters" />
+        <DataPreviewTable Title="Fine Preview"
+                          SearchPlaceholder="Search fine reference, issuer, offence, GG code..."
+                          EmptyMessage="No fines match the current search or filter."
+                          EmptyIcon="bx bx-receipt"
+                          IsLoading="_loading"
+                          Columns="_columns"
+                          Rows="_rows"
+                          Filters="_filters" />
+    }
 </div>
 
 @code {
+    private bool _hasReportsRole;
     private bool _loading = true;
     private List<Dictionary<string, string?>> _rows = new();
 
@@ -77,6 +90,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasReportsRole = HasRole(authState.User, "Reports");
+        if (!_hasReportsRole)
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadPreviewAsync();
     }
 
@@ -122,4 +143,20 @@
     }
 
     private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
 }

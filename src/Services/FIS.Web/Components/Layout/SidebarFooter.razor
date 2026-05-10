@@ -592,11 +592,6 @@
             _ => $"{UnreadNotificationCount} items require attention"
         };
 
-        if (!string.IsNullOrWhiteSpace(_notificationError))
-        {
-            return $"{summary} · Some sources are unavailable.";
-        }
-
         return summary;
     }
 

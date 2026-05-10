@@ -17,6 +17,27 @@ public sealed record IssueFuelCardRequest
     public int SiteCode { get; set; }
 }
 
+public sealed record FuelCardCreateRequest
+{
+    public int? vmf_code { get; set; }
+    public short? Counter { get; set; }
+    public string? card_number { get; set; }
+    public string? PAN_number { get; set; }
+    public string? ExpReason { get; set; }
+    public DateTime? Status_date { get; set; }
+    public DateTime? PetTaken { get; set; }
+    public DateTime? PetExpire { get; set; }
+    public string? LinkGGNum { get; set; }
+}
+
+public sealed record PrivateHireFuelCardCreateRequest
+{
+    public string RegistrationNumber { get; set; } = string.Empty;
+    public short? Counter { get; set; }
+    public string? CardNumber { get; set; }
+    public string? PanNumber { get; set; }
+}
+
 public sealed record ReturnFuelCardRequest
 {
     [JsonPropertyName("reason")]

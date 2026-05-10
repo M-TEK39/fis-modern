@@ -8,8 +8,7 @@ using System.Text;
 namespace FIS.Api.Controllers;
 
 /// <summary>
-/// TEMPORARY: Test endpoint to generate JWT tokens for Swagger testing
-/// DELETE THIS CONTROLLER IN PRODUCTION
+/// Development-only endpoint to generate JWT tokens for Swagger testing.
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
@@ -17,11 +16,13 @@ namespace FIS.Api.Controllers;
 public class AuthTestController : ControllerBase
 {
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
     private readonly ILogger<AuthTestController> _logger;
 
-    public AuthTestController(IConfiguration configuration, ILogger<AuthTestController> logger)
+    public AuthTestController(IConfiguration configuration, IWebHostEnvironment environment, ILogger<AuthTestController> logger)
     {
         _configuration = configuration;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -33,6 +34,11 @@ public class AuthTestController : ControllerBase
     [HttpGet("generate-test-token")]
     public ActionResult<object> GenerateTestToken([FromQuery] int userAccessCode = 1)
     {
+        if (!_environment.IsDevelopment())
+        {
+            return NotFound();
+        }
+
         var jwtSettings = _configuration.GetSection("JwtSettings");
         var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
         var issuer = jwtSettings["Issuer"];

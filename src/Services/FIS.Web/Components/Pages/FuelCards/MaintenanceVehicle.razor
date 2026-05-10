@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject FleetManagementApiService FleetService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Fuelcard Maintenance for a Vehicle</PageTitle>
@@ -100,7 +101,26 @@
                 </div>
             }
             <div class="fis-mt-1">
-                <button class="btn btn-primary btn-sm" disabled="@(_selectedVehicle is null)">Add</button>
+                @if (_selectedVehicle is not null)
+                {
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Counter</label>
+                            <input class="form-input" @bind="_newCounterText" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Card Number</label>
+                            <input class="form-input" @bind="_newCardNumber" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">PAN Number</label>
+                            <input class="form-input" @bind="_newPanNumber" />
+                        </div>
+                    </div>
+                }
+                <button class="btn btn-primary btn-sm" disabled="@(_selectedVehicle is null || _loading)" @onclick="AddFuelCardAsync">
+                    @(_loading ? "Processing..." : "Add")
+                </button>
             </div>
         </div>
     </div>
@@ -115,6 +135,9 @@
     private bool _loading;
     private int _page = 1;
     private const int _pageSize = 12;
+    private string _newCounterText = "1";
+    private string _newCardNumber = string.Empty;
+    private string _newPanNumber = string.Empty;
 
     private IEnumerable<VehicleDto> PagedResults => _results.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_results.Count / (double)_pageSize));
@@ -162,7 +185,62 @@
     private void SelectVehicle(VehicleDto vehicle)
     {
         _selectedVehicle = vehicle;
+        _newCounterText = "1";
+        _newCardNumber = string.Empty;
+        _newPanNumber = string.Empty;
         _message = $"Selected vehicle {GetVehicleLabel(vehicle)}.";
+    }
+
+    private async Task AddFuelCardAsync()
+    {
+        if (_selectedVehicle is null)
+        {
+            return;
+        }
+
+        if (!short.TryParse(_newCounterText, out var counter) || counter < 0)
+        {
+            _message = "Counter must be a number greater than or equal to zero.";
+            return;
+        }
+
+        _loading = true;
+        _message = string.Empty;
+        try
+        {
+            var created = await FleetService.CreateFuelCardAsync(new FuelCardCreateRequest
+            {
+                vmf_code = _selectedVehicle.vmf_code,
+                Counter = counter,
+                card_number = string.IsNullOrWhiteSpace(_newCardNumber) ? null : _newCardNumber.Trim(),
+                PAN_number = string.IsNullOrWhiteSpace(_newPanNumber) ? null : _newPanNumber.Trim(),
+                ExpReason = "In Service",
+                Status_date = DateTime.UtcNow,
+                PetTaken = DateTime.UtcNow,
+                PetExpire = DateTime.UtcNow.AddYears(1),
+                LinkGGNum = _selectedVehicle.fleet_number
+            });
+
+            if (!created)
+            {
+                _message = "Unable to add fuelcard. Check if card number already exists or required data is missing.";
+                return;
+            }
+
+            _message = $"Fuelcard added for {GetVehicleLabel(_selectedVehicle)}.";
+            _newCounterText = "1";
+            _newCardNumber = string.Empty;
+            _newPanNumber = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _message = "Failed to add fuelcard.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private string GetRowClass(VehicleDto vehicle)

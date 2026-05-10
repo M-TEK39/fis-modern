@@ -61,12 +61,18 @@
                     <div class="menu-item">
                         <a class="menu-item-link" href="/contracts">1) Vehicle Contract Maintenance</a>
                     </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/contracts/backdating-approval">2) Vehicle Contract Back Date Requests - Approval</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/contracts/backdating-history">3) Vehicle Contract History Backdating</a>
-                    </div>
+                    @if (_hasContractApproverRole)
+                    {
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/contracts/backdating-approval">2) Vehicle Contract Back Date Requests - Approval</a>
+                        </div>
+                    }
+                    @if (_hasContractHistoryBackdatingRole)
+                    {
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/contracts/backdating-history">3) Vehicle Contract History Backdating</a>
+                        </div>
+                    }
                     <div class="menu-item">
                         <a class="menu-item-link" href="/contracts/print-menu">4) Contract Print Out Menu</a>
                     </div>
@@ -82,7 +88,7 @@
             {
                 <div class="menu-tile-body">
                     <div class="menu-item">
-                        <a class="menu-item-link" href="/call-centre">1) Vehicle Bookings</a>
+                        <a class="menu-item-link" href="/call-centre#booking-section">1) Vehicle Bookings</a>
                     </div>
                 </div>
             }
@@ -390,6 +396,7 @@
     private int? _currentUserAccessCode;
     private long _currentAccessLevel;
     private bool _hasContractApproverRole;
+    private bool _hasContractHistoryBackdatingRole;
     private bool _isAdminUser;
 
     private string _actionMessage = string.Empty;
@@ -856,6 +863,7 @@
 
         _currentUserAccessCode = TryParseInt(user.FindFirst("user_access_code")?.Value);
         _hasContractApproverRole = HasAnyRole(user, "contracts approver", "contracts_approver", "back dating contract (approver)");
+        _hasContractHistoryBackdatingRole = HasAnyRole(user, "contract history back dating");
 
         var accessLevelClaim = user.FindFirst("access_level")?.Value;
         if (!long.TryParse(accessLevelClaim, out _currentAccessLevel))

@@ -1,7 +1,10 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Contracts;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -14,13 +17,16 @@ namespace FIS.Api.Controllers;
 public class PrivateHireController : BaseApiController
 {
     private readonly IPrivateHireRepository _privateHireRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<PrivateHireController> _logger;
 
     public PrivateHireController(
         IPrivateHireRepository privateHireRepository,
+        FisDbContext context,
         ILogger<PrivateHireController> logger)
     {
         _privateHireRepository = privateHireRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -233,4 +239,124 @@ public class PrivateHireController : BaseApiController
             return StatusCode(500, "An error occurred while deleting the private hire vehicle");
         }
     }
+
+    [HttpGet("contractors")]
+    public async Task<ActionResult<IEnumerable<PrivateHireContractorDto>>> GetContractors()
+    {
+        var contractors = await _context.Contractors
+            .AsNoTracking()
+            .Where(x => !x.is_deleted)
+            .OrderBy(x => x.contractor_name)
+            .Select(x => ToContractorDto(x))
+            .ToListAsync();
+
+        return Ok(contractors);
+    }
+
+    [HttpGet("contractors/{contractorId:int}")]
+    public async Task<ActionResult<PrivateHireContractorDto>> GetContractor(int contractorId)
+    {
+        var contractor = await _context.Contractors
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.contractor_id == contractorId && !x.is_deleted);
+        if (contractor == null)
+        {
+            return NotFound(new { message = $"Contractor with ID {contractorId} not found" });
+        }
+
+        return Ok(ToContractorDto(contractor));
+    }
+
+    [HttpPost("contractors")]
+    public async Task<ActionResult<PrivateHireContractorDto>> CreateContractor([FromBody] PrivateHireContractorDto request)
+    {
+        var now = DateTime.UtcNow;
+        var userId = GetCurrentUserId();
+        var entity = new Contractor
+        {
+            contractor_name = request.company_name?.Trim(),
+            physical_address = request.address?.Trim(),
+            postal_address = request.email?.Trim(),
+            tel_number = request.phone?.Trim(),
+            fax_number = request.business_registration?.Trim(),
+            date_created = now,
+            created_by_user_code = userId,
+            is_deleted = false
+        };
+
+        _context.Contractors.Add(entity);
+        await _context.SaveChangesAsync();
+
+        return Ok(ToContractorDto(entity));
+    }
+
+    [HttpPut("contractors/{contractorId:int}")]
+    public async Task<ActionResult<PrivateHireContractorDto>> UpdateContractor(int contractorId, [FromBody] PrivateHireContractorDto request)
+    {
+        if (contractorId != request.contractor_id)
+        {
+            return BadRequest("Contractor ID mismatch");
+        }
+
+        var entity = await _context.Contractors.FirstOrDefaultAsync(x => x.contractor_id == contractorId && !x.is_deleted);
+        if (entity == null)
+        {
+            return NotFound(new { message = $"Contractor with ID {contractorId} not found" });
+        }
+
+        entity.contractor_name = request.company_name?.Trim();
+        entity.physical_address = request.address?.Trim();
+        entity.postal_address = request.email?.Trim();
+        entity.tel_number = request.phone?.Trim();
+        entity.fax_number = request.business_registration?.Trim();
+        entity.date_updated = DateTime.UtcNow;
+        entity.modified_by_user_code = GetCurrentUserId();
+
+        await _context.SaveChangesAsync();
+        return Ok(ToContractorDto(entity));
+    }
+
+    [HttpDelete("contractors/{contractorId:int}")]
+    public async Task<ActionResult> DeleteContractor(int contractorId)
+    {
+        var entity = await _context.Contractors.FirstOrDefaultAsync(x => x.contractor_id == contractorId && !x.is_deleted);
+        if (entity == null)
+        {
+            return NotFound(new { message = $"Contractor with ID {contractorId} not found" });
+        }
+
+        entity.is_deleted = true;
+        entity.date_updated = DateTime.UtcNow;
+        entity.modified_by_user_code = GetCurrentUserId();
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    private static PrivateHireContractorDto ToContractorDto(Contractor contractor)
+    {
+        return new PrivateHireContractorDto
+        {
+            contractor_id = contractor.contractor_id,
+            company_name = contractor.contractor_name ?? string.Empty,
+            contact_person = contractor.contractor_name ?? string.Empty,
+            phone = contractor.tel_number ?? string.Empty,
+            email = contractor.postal_address ?? string.Empty,
+            business_registration = contractor.fax_number ?? string.Empty,
+            address = contractor.physical_address ?? string.Empty,
+            status = "Active"
+        };
+    }
+}
+
+public class PrivateHireContractorDto
+{
+    public int contractor_id { get; set; }
+    public string company_name { get; set; } = string.Empty;
+    public string contact_person { get; set; } = string.Empty;
+    public string phone { get; set; } = string.Empty;
+    public string email { get; set; } = string.Empty;
+    public string business_registration { get; set; } = string.Empty;
+    public string address { get; set; } = string.Empty;
+    public string status { get; set; } = "Active";
 }

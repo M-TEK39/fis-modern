@@ -18,6 +18,9 @@ public class NotificationService : INotificationService
     private readonly IWorkflowRepository _workflowRepository;
     private readonly IStepRepository _stepRepository;
     private readonly IEmailService _emailService;
+    private readonly IUserRepository _userRepository;
+    private readonly IUserProfileRepository _userProfileRepository;
+    private readonly IAccessLevelRepository _accessLevelRepository;
     private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
@@ -27,6 +30,9 @@ public class NotificationService : INotificationService
         IWorkflowRepository workflowRepository,
         IStepRepository stepRepository,
         IEmailService emailService,
+        IUserRepository userRepository,
+        IUserProfileRepository userProfileRepository,
+        IAccessLevelRepository accessLevelRepository,
         ILogger<NotificationService> logger)
     {
         _notificationRepository = notificationRepository;
@@ -35,6 +41,9 @@ public class NotificationService : INotificationService
         _workflowRepository = workflowRepository;
         _stepRepository = stepRepository;
         _emailService = emailService;
+        _userRepository = userRepository;
+        _userProfileRepository = userProfileRepository;
+        _accessLevelRepository = accessLevelRepository;
         _logger = logger;
     }
 
@@ -132,8 +141,8 @@ public class NotificationService : INotificationService
         try
         {
             // Resolve recipient email
-            var recipientEmail = await ResolveRecipientEmailAsync(notification.RecipientType, notification.RecipientIdentifier);
-            if (string.IsNullOrEmpty(recipientEmail))
+            var recipientEmails = await ResolveRecipientEmailsAsync(notification.RecipientType, notification.RecipientIdentifier);
+            if (recipientEmails.Count == 0)
             {
                 log.DeliveryStatus = "Failed";
                 log.ErrorMessage = $"Could not resolve recipient: {notification.RecipientType}:{notification.RecipientIdentifier}";
@@ -141,7 +150,7 @@ public class NotificationService : INotificationService
                 return;
             }
 
-            log.RecipientEmail = recipientEmail;
+            log.RecipientEmail = string.Join(";", recipientEmails);
 
             // Get subject and body
             string subject;
@@ -173,21 +182,23 @@ public class NotificationService : INotificationService
             log.Body = body;
 
             // Send email
-            var emailResult = await _emailService.SendEmailAsync(recipientEmail, subject, body, isHtml: true);
+            var emailResult = recipientEmails.Count == 1
+                ? await _emailService.SendEmailAsync(recipientEmails[0], subject, body, isHtml: true)
+                : await _emailService.SendEmailAsync(recipientEmails, subject, body, isHtml: true);
 
             if (emailResult.Success)
             {
                 log.DeliveryStatus = "Sent";
                 log.SentAt = DateTime.UtcNow;
                 log.ExternalMessageId = emailResult.MessageId;
-                _logger.LogInformation("Notification sent successfully to {Recipient}", recipientEmail);
+                _logger.LogInformation("Notification sent successfully to {RecipientCount} recipient(s)", recipientEmails.Count);
             }
             else
             {
                 log.DeliveryStatus = "Failed";
                 log.ErrorMessage = emailResult.ErrorMessage;
-                _logger.LogWarning("Failed to send notification to {Recipient}: {Error}", 
-                    recipientEmail, emailResult.ErrorMessage);
+                _logger.LogWarning("Failed to send notification to {Recipient}: {Error}",
+                    log.RecipientEmail, emailResult.ErrorMessage);
             }
         }
         catch (Exception ex)
@@ -217,42 +228,115 @@ public class NotificationService : INotificationService
         return result;
     }
 
-    private async Task<string?> ResolveRecipientEmailAsync(string recipientType, string recipientIdentifier)
+    private async Task<List<string>> ResolveRecipientEmailsAsync(string recipientType, string recipientIdentifier)
     {
         try
         {
-            return recipientType.ToLower() switch
+            var resolved = recipientType.ToLower() switch
             {
-                "email" => recipientIdentifier,
-                "user" => await GetUserEmailAsync(recipientIdentifier),
+                "email" => ResolveDirectEmails(recipientIdentifier),
+                "user" => await GetUserEmailsAsync(recipientIdentifier),
                 "role" => await GetRoleEmailsAsync(recipientIdentifier),
-                _ => null
+                _ => new List<string>()
             };
+
+            return resolved
+                .Where(email => !string.IsNullOrWhiteSpace(email))
+                .Select(email => email.Trim())
+                .Where(IsLikelyEmail)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error resolving recipient email for type: {Type}, identifier: {Identifier}",
                 recipientType, recipientIdentifier);
-            return null;
+            return new List<string>();
         }
     }
 
-    private Task<string?> GetUserEmailAsync(string userIdentifier)
+    private async Task<List<string>> GetUserEmailsAsync(string userIdentifier)
     {
-        // TODO: Implement user email lookup
-        // For now, return the identifier if it looks like an email
-        if (userIdentifier.Contains("@"))
-            return Task.FromResult<string?>(userIdentifier);
+        var emails = ResolveDirectEmails(userIdentifier);
+        if (emails.Count > 0)
+        {
+            return emails;
+        }
 
-        _logger.LogWarning("User email lookup not implemented for identifier: {Identifier}", userIdentifier);
-        return Task.FromResult<string?>(null);
+        if (int.TryParse(userIdentifier, out var userCode))
+        {
+            var userByCode = await _userRepository.GetByIdAsync(userCode);
+            if (!string.IsNullOrWhiteSpace(userByCode?.email))
+            {
+                return new List<string> { userByCode.email! };
+            }
+
+            if (userCode <= short.MaxValue)
+            {
+                var legacyUserByCode = await _userProfileRepository.GetByIdAsync((short)userCode);
+                if (!string.IsNullOrWhiteSpace(legacyUserByCode?.E_Mail))
+                {
+                    return new List<string> { legacyUserByCode.E_Mail! };
+                }
+            }
+        }
+
+        var userByEmail = await _userRepository.GetByEmailAsync(userIdentifier);
+        if (!string.IsNullOrWhiteSpace(userByEmail?.email))
+        {
+            return new List<string> { userByEmail.email! };
+        }
+
+        var legacyUserByEmail = await _userProfileRepository.GetByEmailAsync(userIdentifier);
+        if (!string.IsNullOrWhiteSpace(legacyUserByEmail?.E_Mail))
+        {
+            return new List<string> { legacyUserByEmail.E_Mail! };
+        }
+
+        _logger.LogWarning("No user email could be resolved for identifier: {Identifier}", userIdentifier);
+        return new List<string>();
     }
 
-    private Task<string?> GetRoleEmailsAsync(string roleName)
+    private async Task<List<string>> GetRoleEmailsAsync(string roleName)
     {
-        // TODO: Implement role-based email lookup (could return multiple emails)
-        _logger.LogWarning("Role-based email lookup not implemented for role: {Role}", roleName);
-        return Task.FromResult<string?>(null);
+        var role = await _accessLevelRepository.GetByNameAsync(roleName);
+        if (role == null)
+        {
+            _logger.LogWarning("Role/access level not found for notification recipient role: {Role}", roleName);
+            return new List<string>();
+        }
+
+        var users = await _userProfileRepository.GetAllActiveAsync();
+        return users
+            .Where(user => !string.IsNullOrWhiteSpace(user.E_Mail))
+            .Where(user => (user.AccessLevel & role.AccessLevelValue) == role.AccessLevelValue)
+            .Select(user => user.E_Mail!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static List<string> ResolveDirectEmails(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return new List<string>();
+        }
+
+        return value
+            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(IsLikelyEmail)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static bool IsLikelyEmail(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return Regex.IsMatch(value.Trim(), @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
     }
 
     public async Task ProcessPendingNotificationsAsync()

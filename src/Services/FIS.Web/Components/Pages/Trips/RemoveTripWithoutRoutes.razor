@@ -1,5 +1,9 @@
 @page "/trips/remove-without-routes"
 @rendermode InteractiveServer
+@using FIS.Web.Models
+@using FIS.Web.Services
+@inject TroubleshootApiService TroubleshootService
+@inject IJSRuntime JSRuntime
 <PageTitle>Remove Trips Without Routes - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -38,9 +42,48 @@
                 </div>
             </div>
             <div class="contract-action-group fis-mt-1">
-                <button class="btn btn-danger">DELETE all Trips without routes</button>
+                <button class="btn btn-danger" @onclick="RemoveTripsAsync" disabled="@_submitting">
+                    @(_submitting ? "Deleting..." : "DELETE all Trips without routes")
+                </button>
                 <a class="btn btn-secondary" href="/trips">Back</a>
             </div>
+
+            @if (!string.IsNullOrWhiteSpace(_statusMessage))
+            {
+                <div class="alert alert-success fis-mt-1">@_statusMessage</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_errorMessage))
+            {
+                <div class="alert alert-error fis-mt-1">@_errorMessage</div>
+            }
         </div>
     </div>
 </div>
+
+@code {
+    private bool _submitting;
+    private string? _statusMessage;
+    private string? _errorMessage;
+
+    private async Task RemoveTripsAsync()
+    {
+        _submitting = true;
+        _statusMessage = null;
+        _errorMessage = null;
+
+        try
+        {
+            await TroubleshootService.RemoveTripsWithoutRoutesAsync(new RemoveTripsRequest());
+            _statusMessage = "Remove trips request submitted.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Failed to submit remove trips request.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+}

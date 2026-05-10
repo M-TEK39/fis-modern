@@ -378,7 +378,7 @@
         }
         else
         {
-            if (TryGetDedicatedReportConfig(reportAction, out var dedicatedConfig) && IsDedicatedFinanceMode)
+            if (TryGetDedicatedReportConfig(reportAction, out var dedicatedConfig))
             {
                 suppressEmptyTableNotice = dedicatedConfig!.Format != "json";
                 result = await RunDedicatedFinanceReportAsync(dedicatedConfig!);
@@ -391,19 +391,6 @@
             if (result.Success)
             {
                 ParseReportResult(result.ResponseBody, reportAction);
-
-                if (!TryGetDedicatedReportConfig(reportAction, out _)
-                    && IsDetailedAction(reportAction)
-                    && _reportRows.Count == 0)
-                {
-                    // Backend detailed mode is not fully implemented yet; fallback keeps the UI usable.
-                    var fallback = await RunUniversalReportAsync(reportAction, "summary");
-                    if (fallback.Success)
-                    {
-                        ParseReportResult(fallback.ResponseBody, reportAction);
-                        _statusMessage = "Detailed report output is not available yet. Showing summary data fallback.";
-                    }
-                }
 
                 if (result.Success && !IsDedicatedFinanceMode && IsExcelAction(reportAction) && _reportRows.Count > 0)
                 {
@@ -440,12 +427,18 @@
     {
         if (!TryResolvePostingMonthCode(out var postingMonthCode))
         {
-            SetValidationError("Posting month codes are currently unavailable from the API, so this HTML/PDF invoice can\'t be generated accurately right now.");
-            return new FinanceApiResult
+            _batchDates = await FinanceService.GetFinanceReportPostingMonthsAsync(Action == "site" ? "Site" : "Department");
+            EnsurePostingMonthSelected();
+
+            if (!TryResolvePostingMonthCode(out postingMonthCode))
             {
-                Success = false,
-                Message = "Posting month code lookup failed. This report requires the exact posting_month_code from api/finance/reports/posting-months."
-            };
+                SetValidationError("Select a posting month before running this report.");
+                return new FinanceApiResult
+                {
+                    Success = false,
+                    Message = "Posting month is required."
+                };
+            }
         }
 
         var filterBy = Action == "site" ? "Site" : "Department";

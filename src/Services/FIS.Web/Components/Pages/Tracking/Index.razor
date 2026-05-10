@@ -2,7 +2,10 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject TrackingApiService TrackingService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Tracking - MobiTrax - Maintenance Menu - Fleet Information System</PageTitle>
@@ -18,7 +21,27 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasTrackingRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Tracking</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles">
+        <div class="menu-tile">
+            <div class="menu-tile-header">
+                <span>Tracking - MobiTrax - Maintenance Menu:</span>
+            </div>
+            <div class="menu-tile-body">
+                <div class="menu-item">
+                    <a class="menu-item-link" href="/under_constr.aspx">Tracking Maintenance Information / Help</a>
+                    <span class="menu-item-badge">Menu</span>
+                </div>
+            </div>
+        </div>
+
         <div class="menu-tile">
             <div class="menu-tile-header">
                 <span>Tracking - MobiTrax - Maintenance Menu:</span>
@@ -40,9 +63,11 @@
                       Columns="_columns"
                       Rows="_rows"
                       Filters="_filters" />
+    }
 </div>
 
 @code {
+    private bool _hasTrackingRole;
     private bool _loading = true;
     private List<Dictionary<string, string?>> _rows = new();
 
@@ -66,6 +91,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasTrackingRole = HasRole(authState.User, "Tracking");
+        if (!_hasTrackingRole)
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadPreviewAsync();
     }
 
@@ -103,4 +136,20 @@
     }
 
     private static string? FormatDate(DateTime? value) => value?.ToString("yyyy-MM-dd");
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
 }

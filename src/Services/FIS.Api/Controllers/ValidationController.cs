@@ -15,6 +15,12 @@ public class ValidationController : BaseApiController
         _logger = logger;
     }
 
+    [HttpGet]
+    public ActionResult<ValidationMenuDto> GetRoot()
+    {
+        return GetMenu();
+    }
+
     /// <summary>
     /// Get validation/reference data menu options
     /// </summary>

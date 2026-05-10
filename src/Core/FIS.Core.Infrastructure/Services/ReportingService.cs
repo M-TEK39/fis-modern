@@ -1,5 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Net;
+using System.IO.Compression;
+using System.Security;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -315,6 +319,73 @@ public class ReportingService : IReportingService
         Dictionary<short, ModelInfo> Models,
         Dictionary<int, string> VehicleRegistrations);
 
+    private static DateTime? ResolveNextServiceDate(IEnumerable<MaintenanceRecord> maintenance)
+    {
+        var rows = maintenance as IList<MaintenanceRecord> ?? maintenance.ToList();
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var explicitNext = rows
+            .Where(m => m.NextServiceDate.HasValue)
+            .Select(m => m.NextServiceDate!.Value)
+            .OrderBy(d => d)
+            .FirstOrDefault();
+
+        if (explicitNext != default)
+        {
+            return explicitNext;
+        }
+
+        var latest = rows
+            .OrderByDescending(m => m.MaintenanceDate)
+            .First();
+
+        var intervalDays = latest.ServiceIntervalDays.GetValueOrDefault(90);
+        return latest.MaintenanceDate.AddDays(intervalDays);
+    }
+
+    private static List<string> BuildVehicleAlerts(
+        Vehicle vehicle,
+        DateTime? nextServiceDate,
+        IEnumerable<MaintenanceRecord> maintenance)
+    {
+        var rows = maintenance as IList<MaintenanceRecord> ?? maintenance.ToList();
+        var alerts = new List<string>();
+        var today = DateTime.UtcNow.Date;
+
+        if (vehicle.licence_due_date.HasValue && vehicle.licence_due_date.Value.Date <= today.AddDays(30))
+        {
+            alerts.Add("Licence expiring within 30 days");
+        }
+
+        if (nextServiceDate.HasValue && nextServiceDate.Value.Date <= today.AddDays(30))
+        {
+            alerts.Add("Service due within 30 days");
+        }
+
+        if (vehicle.cof_last_done.HasValue && vehicle.cof_last_done.Value.Date <= today.AddDays(30))
+        {
+            alerts.Add("COF due within 30 days");
+        }
+        else
+        {
+            var roadworthyExpiry = rows
+                .Where(m => m.RoadworthyExpiryDate.HasValue)
+                .Select(m => m.RoadworthyExpiryDate!.Value)
+                .OrderBy(d => d)
+                .FirstOrDefault();
+
+            if (roadworthyExpiry != default && roadworthyExpiry.Date <= today.AddDays(30))
+            {
+                alerts.Add("Roadworthy/COF expiry within 30 days");
+            }
+        }
+
+        return alerts;
+    }
+
     #region Vehicle Reports
 
     public async Task<VehicleReport> GenerateVehicleReportAsync(int vmfCode)
@@ -332,17 +403,8 @@ public class ReportingService : IReportingService
         var maintenance = await _maintenanceRepository.GetByVehicleAsync(vmfCode);
 
         var totalCosts = maintenance.Sum(m => m.TotalCost);
-        var alerts = new List<string>();
-
-        // Check for alerts
-        if (
-            vehicle.licence_due_date.HasValue
-            && vehicle.licence_due_date < DateTime.Now.AddDays(30)
-        )
-            alerts.Add("Licence expiring within 30 days");
-
-        // TODO: Add maintenance due checking
-        // TODO: Add COF due checking
+        var nextServiceDate = ResolveNextServiceDate(maintenance);
+        var alerts = BuildVehicleAlerts(vehicle, nextServiceDate, maintenance);
 
         // Resolve reference lookups for this single vehicle
         var lookups = await LoadLookupsAsync();
@@ -367,7 +429,7 @@ public class ReportingService : IReportingService
             CurrentOdometer = vehicle.current_odo,
             TotalCosts = totalCosts,
             MonthlyOverhead = vehicle.monthly_overhead ?? 0,
-            NextServiceDate = null, // TODO: Calculate from service interval + last service date
+            NextServiceDate = nextServiceDate,
             LicenceDueDate = vehicle.licence_due_date,
             CofDueDate = vehicle.cof_last_done,
             Alerts = alerts,
@@ -420,9 +482,8 @@ public class ReportingService : IReportingService
         {
             var maintenance = await _maintenanceRepository.GetByVehicleAsync(vehicle.vmf_code);
             var totalCosts = maintenance.Sum(m => m.TotalCost);
-            var alerts = new List<string>();
-            if (vehicle.licence_due_date.HasValue && vehicle.licence_due_date < DateTime.Now.AddDays(30))
-                alerts.Add("Licence expiring within 30 days");
+            var nextServiceDate = ResolveNextServiceDate(maintenance);
+            var alerts = BuildVehicleAlerts(vehicle, nextServiceDate, maintenance);
 
             lookups.Models.TryGetValue(vehicle.model_code, out var modelInfo);
             lookups.Statuses.TryGetValue(vehicle.vehicle_status_code, out var statusDesc);
@@ -445,7 +506,7 @@ public class ReportingService : IReportingService
                 CurrentOdometer = vehicle.current_odo,
                 TotalCosts = totalCosts,
                 MonthlyOverhead = vehicle.monthly_overhead ?? 0,
-                NextServiceDate = null,
+                NextServiceDate = nextServiceDate,
                 LicenceDueDate = vehicle.licence_due_date,
                 CofDueDate = vehicle.cof_last_done,
                 Alerts = alerts,
@@ -1003,15 +1064,54 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Vehicle with VMF Code {vmfCode} not found");
         }
 
-        var maintenanceRecords = await _maintenanceRepository.GetByVehicleAsync(vmfCode);
+        var maintenanceRecords = (await _maintenanceRepository.GetByVehicleAsync(vmfCode))
+            .OrderBy(m => m.MaintenanceDate)
+            .ThenBy(m => m.MaintenanceId)
+            .ToList();
+
         var totalCost = maintenanceRecords.Sum((MaintenanceRecord m) => m.TotalCost);
-        var serviceCount = maintenanceRecords.Count();
+        var serviceCount = maintenanceRecords.Count;
+        var serviceRecords = maintenanceRecords
+            .Select(m => new ServiceRecord
+            {
+                ServiceDate = m.MaintenanceDate,
+                ServiceType = m.MaintenanceType,
+                Odometer = m.OdometerReading,
+                Cost = m.TotalCost,
+                Provider = m.ServiceProvider ?? string.Empty
+            })
+            .ToList();
+
+        var dayIntervals = maintenanceRecords
+            .Zip(maintenanceRecords.Skip(1), (a, b) => (int)(b.MaintenanceDate.Date - a.MaintenanceDate.Date).TotalDays)
+            .Where(days => days > 0)
+            .ToList();
+
+        var kmIntervals = maintenanceRecords
+            .Zip(maintenanceRecords.Skip(1), (a, b) => b.OdometerReading - a.OdometerReading)
+            .Where(km => km > 0)
+            .ToList();
+
+        var latestRecord = maintenanceRecords.LastOrDefault();
+        var serviceIntervalDays = dayIntervals.Count > 0
+            ? (int)Math.Round(dayIntervals.Average())
+            : latestRecord?.ServiceIntervalDays.GetValueOrDefault(90) ?? 90;
+        var serviceIntervalKm = kmIntervals.Count > 0
+            ? (int)Math.Round(kmIntervals.Average())
+            : latestRecord?.ServiceIntervalKm.GetValueOrDefault(10000) ?? 10000;
+
+        var preferredProvider = maintenanceRecords
+            .Where(m => !string.IsNullOrWhiteSpace(m.ServiceProvider))
+            .GroupBy(m => m.ServiceProvider!)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault()
+            ?.Key ?? string.Empty;
 
         return new ServiceHistoryReport
         {
             VehicleCode = vmfCode,
             RegistrationNumber = vehicle.registration_number ?? string.Empty,
-            MaintenanceRecords = maintenanceRecords.ToList(),
+            MaintenanceRecords = maintenanceRecords,
             TotalCost = totalCost,
             AverageCostPerService = serviceCount > 0 ? totalCost / serviceCount : 0,
             TotalServices = serviceCount,
@@ -1021,15 +1121,14 @@ public class ReportingService : IReportingService
             LastServiceDate = maintenanceRecords.Any()
                 ? maintenanceRecords.Max(m => m.MaintenanceDate)
                 : (DateTime?)null,
-            ServiceIntervalDays = 90, // TODO: Calculate from service history
-            ServiceIntervalKm = 10000, // TODO: Calculate from service history
-            PreferredServiceProvider =
-                maintenanceRecords
-                    .GroupBy(m => m.ServiceProvider)
-                    .OrderByDescending(g => g.Count())
-                    .FirstOrDefault()
-                    ?.Key
-                ?? string.Empty,
+            ServiceIntervalDays = serviceIntervalDays,
+            ServiceIntervalKm = serviceIntervalKm,
+            PreferredServiceProvider = preferredProvider,
+            GeneratedDate = DateTime.UtcNow,
+            ServiceRecords = serviceRecords,
+            Summary = serviceCount == 0
+                ? "No maintenance records found."
+                : $"{serviceCount} services recorded. Avg interval {serviceIntervalDays} days / {serviceIntervalKm} km.",
         };
     }
 
@@ -1044,17 +1143,69 @@ public class ReportingService : IReportingService
             endDate
         );
 
-        // TODO: Implement maintenance scheduling logic
-        // This would calculate due dates based on service intervals and odometer readings
+        var vehicles = (await _vehicleRepository.GetAllAsync())
+            .Where(v => !v.is_deleted)
+            .ToList();
+        var maintenance = (await _maintenanceRepository.GetAllAsync())
+            .Where(m => !m.is_deleted)
+            .GroupBy(m => m.VmfCode)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.MaintenanceDate).ToList());
 
-        await Task.CompletedTask; // Make method properly async
+        var scheduledItems = new List<ScheduledMaintenanceItem>();
+        var overdueItems = new List<OverdueMaintenanceItem>();
+        var today = DateTime.UtcNow.Date;
+
+        foreach (var vehicle in vehicles)
+        {
+            maintenance.TryGetValue(vehicle.vmf_code, out var history);
+            var latest = history?.FirstOrDefault();
+
+            DateTime dueDate;
+            string maintenanceType;
+
+            if (latest is not null)
+            {
+                var intervalDays = latest.ServiceIntervalDays.GetValueOrDefault(90);
+                dueDate = latest.NextServiceDate?.Date ?? latest.MaintenanceDate.Date.AddDays(intervalDays);
+                maintenanceType = string.IsNullOrWhiteSpace(latest.MaintenanceType) ? "Service" : latest.MaintenanceType;
+            }
+            else
+            {
+                dueDate = vehicle.take_on_date.Date.AddDays(90);
+                maintenanceType = "Service";
+            }
+
+            if (dueDate >= startDate.Date && dueDate <= endDate.Date)
+            {
+                scheduledItems.Add(new ScheduledMaintenanceItem
+                {
+                    VmfCode = vehicle.vmf_code,
+                    DueDate = dueDate,
+                    MaintenanceType = maintenanceType,
+                    Status = dueDate < today ? "Overdue" : "Scheduled"
+                });
+            }
+
+            if (dueDate < today)
+            {
+                overdueItems.Add(new OverdueMaintenanceItem
+                {
+                    VmfCode = vehicle.vmf_code,
+                    DueDate = dueDate,
+                    MaintenanceType = maintenanceType,
+                    DaysOverdue = (today - dueDate).Days
+                });
+            }
+        }
 
         return new MaintenanceScheduleReport
         {
             StartDate = startDate,
             EndDate = endDate,
-            ScheduledItems = new List<ScheduledMaintenanceItem>(),
-            OverdueItems = new List<OverdueMaintenanceItem>(),
+            GeneratedDate = DateTime.UtcNow,
+            ScheduledItems = scheduledItems.OrderBy(x => x.DueDate).ThenBy(x => x.VmfCode).ToList(),
+            OverdueItems = overdueItems.OrderByDescending(x => x.DaysOverdue).ThenBy(x => x.VmfCode).ToList(),
+            Summary = $"{scheduledItems.Count} scheduled items in range; {overdueItems.Count} overdue items.",
         };
     }
 
@@ -1197,6 +1348,91 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Trip with ID {tripId} not found");
         }
 
+        var tripSequence = await _context.Trips
+            .Where(t => !t.is_deleted
+                        && t.contract_code == trip.contract_code
+                        && t.end_odo_meter.HasValue
+                        && t.issue_date <= trip.issue_date)
+            .OrderBy(t => t.issue_date)
+            .ThenBy(t => t.trip_authority_code)
+            .Select(t => new { t.trip_authority_code, EndOdo = t.end_odo_meter!.Value })
+            .ToListAsync();
+
+        var contract = await _contractRepository.GetByIdAsync(trip.contract_code);
+        var baseOdo = contract?.start_odometer ?? 0;
+        var previousEnd = baseOdo;
+        var tripKilometers = 0;
+
+        foreach (var point in tripSequence)
+        {
+            var delta = Math.Max(0, point.EndOdo - previousEnd);
+            if (point.trip_authority_code == trip.trip_authority_code)
+            {
+                tripKilometers = delta;
+                break;
+            }
+
+            previousEnd = point.EndOdo;
+        }
+
+        var vmfCode = contract?.vmf_code ?? 0;
+        var registrationNumber = vmfCode > 0
+            ? await _context.Vehicles
+                .Where(v => !v.is_deleted && v.vmf_code == vmfCode)
+                .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
+                .FirstOrDefaultAsync() ?? vmfCode.ToString()
+            : string.Empty;
+
+        var tripMonthCosts = await _context.InvoiceItems
+            .Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .Join(_context.Invoices.Where(i => !i.is_deleted),
+                ii => ii.invoice_code,
+                i => i.invoice_code,
+                (ii, i) => new { ii, i })
+            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                x => x.i.posting_month_code,
+                pm => pm.posting_month_code,
+                (x, pm) => new { x.ii, pm })
+            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                x => x.pm.posting_year_code,
+                py => py.posting_year_code,
+                (x, py) => new
+                {
+                    x.ii.fixed_tariff_amount,
+                    x.ii.odo_tariff_amount,
+                    Month = (int)x.pm.month_number,
+                    Year = py.year_start_date.Year
+                })
+            .Where(x => x.Year == trip.issue_date.Year && x.Month == trip.issue_date.Month)
+            .ToListAsync();
+
+        var fixedCost = tripMonthCosts.Sum(x => x.fixed_tariff_amount);
+        var odoCost = tripMonthCosts.Sum(x => x.odo_tariff_amount);
+        var tripRevenue = fixedCost + odoCost;
+
+        var expenses = new List<TripExpense>();
+        if (fixedCost > 0)
+        {
+            expenses.Add(new TripExpense
+            {
+                Description = "Monthly fixed tariff",
+                Amount = fixedCost,
+                Category = "Tariff",
+                Date = trip.issue_date
+            });
+        }
+
+        if (odoCost > 0)
+        {
+            expenses.Add(new TripExpense
+            {
+                Description = "Odometer tariff",
+                Amount = odoCost,
+                Category = "Tariff",
+                Date = trip.issue_date
+            });
+        }
+
         return new TripDetailReport
         {
             TripId = trip.trip_authority_code, // Use correct property name
@@ -1207,11 +1443,26 @@ public class ReportingService : IReportingService
             TripReason = trip.trip_reason ?? string.Empty,
             ExpiryDate = trip.expiry_date,
             EndOdometer = trip.end_odo_meter ?? 0,
-            TripKilometers = 0, // TODO: Calculate from odometer readings
-            TripRevenue = 0, // TODO: Calculate revenue
+            TripKilometers = tripKilometers,
+            TripRevenue = tripRevenue,
             Purpose = trip.trip_reason ?? string.Empty, // Use available property
             AuthorityNumber = trip.trip_request_number ?? string.Empty, // Use available property
-            Expenses = new List<TripExpense>(), // TODO: Implement trip expenses
+            Expenses = expenses,
+            GeneratedDate = DateTime.UtcNow,
+            TripDetails = new TripDetailInfo
+            {
+                TripId = trip.trip_authority_code,
+                VmfCode = vmfCode,
+                TripDate = trip.issue_date,
+                Driver = contract?.Driver_name ?? string.Empty,
+                Destination = registrationNumber,
+                StartOdometer = previousEnd,
+                EndOdometer = trip.end_odo_meter ?? previousEnd,
+                Distance = tripKilometers,
+                Purpose = trip.trip_reason ?? string.Empty,
+                AuthorityNumber = trip.trip_request_number ?? string.Empty
+            },
+            Summary = $"Trip {trip.trip_authority_code}: {tripKilometers} km, revenue estimate R{tripRevenue:N2}."
         };
     }
 
@@ -1228,10 +1479,39 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Contract with ID {contractId} not found");
         }
 
-        // TODO: Get related trips for this contract
-        var relatedTrips = new List<Trip>();
+        var relatedTrips = await _context.Trips
+            .Where(t => !t.is_deleted && t.contract_code == contract.contract_code)
+            .OrderBy(t => t.issue_date)
+            .ThenBy(t => t.trip_authority_code)
+            .ToListAsync();
 
         var lookups = await LoadLookupsAsync();
+        var vehicleRegistration = lookups.VehicleRegistrations.GetValueOrDefault(contract.vmf_code, string.Empty);
+
+        var lastEnd = contract.start_odometer;
+        var tripLines = new List<TripSummaryLine>();
+        foreach (var t in relatedTrips)
+        {
+            var endOdo = t.end_odo_meter ?? lastEnd;
+            var distance = Math.Max(0, endOdo - lastEnd);
+
+            tripLines.Add(new TripSummaryLine
+            {
+                TripId = t.trip_authority_code,
+                Date = t.issue_date,
+                StartOdometer = lastEnd,
+                EndOdometer = endOdo,
+                Distance = distance,
+                DriverName = contract.Driver_name ?? string.Empty,
+                VehicleRegistration = vehicleRegistration,
+                Purpose = t.trip_reason ?? string.Empty,
+            });
+
+            lastEnd = Math.Max(lastEnd, endOdo);
+        }
+
+        var usedKilometers = tripLines.Sum(x => x.Distance);
+        var authorizedKilometers = contract.monthly_km ?? 0;
 
         return new AuthorityReport
         {
@@ -1243,25 +1523,13 @@ public class ReportingService : IReportingService
             Purpose = contract.Notes ?? string.Empty,
             VmfCode = contract.vmf_code,
             DriverName = contract.Driver_name ?? string.Empty,
-            RegistrationNumber = lookups.VehicleRegistrations.GetValueOrDefault(contract.vmf_code, string.Empty),
+            RegistrationNumber = vehicleRegistration,
             Department = lookups.Sites.GetValueOrDefault(contract.site_code, string.Empty),
-            AuthorizedKilometers = contract.monthly_km ?? 0, // Using monthly_km instead of allocated_km
-            UsedKilometers = 0, // TODO: Calculate from trips
-            RemainingKilometers = (contract.monthly_km ?? 0) - 0,
-            Status = "Active", // Default status as schema doesn't contain status field
-            RelatedTrips = relatedTrips
-                .Select(t => new TripSummaryLine
-                {
-                    TripId = t.trip_authority_code, // Using trip_authority_code as ID
-                    Date = t.issue_date,
-                    StartOdometer = 0, // Trip entity doesn't have start_odo_meter
-                    EndOdometer = t.end_odo_meter ?? 0,
-                    Distance = t.end_odo_meter ?? 0, // Can't calculate distance without start odometer
-                    DriverName = string.Empty, // TODO: Join with driver
-                    VehicleRegistration = string.Empty, // TODO: Join with vehicle
-                    Purpose = t.trip_reason ?? string.Empty,
-                })
-                .ToList(),
+            AuthorizedKilometers = authorizedKilometers,
+            UsedKilometers = usedKilometers,
+            RemainingKilometers = authorizedKilometers - usedKilometers,
+            Status = contract.still_current == "Y" ? "Active" : "Inactive",
+            RelatedTrips = tripLines,
         };
     }
 
@@ -1342,8 +1610,73 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Contract with ID {contractId} not found");
         }
 
-        // TODO: Implement billing line retrieval based on trips and rates
-        var billingLines = new List<ContractBillingLine>();
+        var vmfCode = contract.vmf_code;
+        var registration = await _context.Vehicles
+            .Where(v => !v.is_deleted && v.vmf_code == vmfCode)
+            .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
+            .FirstOrDefaultAsync() ?? vmfCode.ToString();
+
+        var rawRows = await _context.InvoiceItems
+            .Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .Join(_context.Invoices.Where(i => !i.is_deleted),
+                ii => ii.invoice_code,
+                i => i.invoice_code,
+                (ii, i) => new { ii, i })
+            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                x => x.i.posting_month_code,
+                pm => pm.posting_month_code,
+                (x, pm) => new { x.ii, x.i, pm })
+            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                x => x.pm.posting_year_code,
+                py => py.posting_year_code,
+                (x, py) => new
+                {
+                    x.ii.fixed_tariff_amount,
+                    x.ii.odo_tariff_amount,
+                    x.ii.start_odometer,
+                    x.ii.end_odometer,
+                    x.ii.contract_type,
+                    x.pm.month_name,
+                    x.pm.month_number,
+                    Year = py.year_start_date.Year
+                })
+            .ToListAsync();
+
+        var billingLines = rawRows
+            .Select(row =>
+            {
+                var monthDate = new DateTime(row.Year, row.month_number, 1);
+                return new
+                {
+                    BillingDate = monthDate,
+                    Amount = row.fixed_tariff_amount + row.odo_tariff_amount,
+                    Kilometers = Math.Max(0, row.end_odometer - row.start_odometer),
+                    Description = $"{row.month_name} {row.Year}: fixed R{row.fixed_tariff_amount:N2} + odo R{row.odo_tariff_amount:N2} ({row.start_odometer} -> {row.end_odometer} km)"
+                };
+            })
+            .Where(row => row.BillingDate.Date >= startDate.Date && row.BillingDate.Date <= endDate.Date)
+            .OrderBy(row => row.BillingDate)
+            .Select(row => new ContractBillingLine
+            {
+                ContractId = contractId,
+                ContractNumber = contract.Authorisation ?? string.Empty,
+                BillingDate = row.BillingDate,
+                Amount = row.Amount,
+                Kilometers = row.Kilometers,
+                VehicleRegistration = registration,
+                Description = row.Description
+            })
+            .ToList();
+
+        var billingItems = billingLines
+            .Select(line => new ContractBillingItem
+            {
+                Date = line.BillingDate,
+                Description = line.Description,
+                Amount = line.Amount,
+                Kilometers = line.Kilometers
+            })
+            .ToList();
 
         return new ContractBillingReport
         {
@@ -1351,11 +1684,17 @@ public class ReportingService : IReportingService
             ContractNumber = contract.Authorisation ?? string.Empty, // Using Authorisation as contract number
             StartDate = startDate,
             EndDate = endDate,
+            GeneratedDate = DateTime.UtcNow,
+            BillingItems = billingItems,
             BillingLines = billingLines,
             TotalBilling = billingLines.Sum(b => b.Amount),
             BillingByVehicle = billingLines
                 .GroupBy(b => b.VehicleRegistration)
                 .ToDictionary(g => g.Key, g => g.Sum(b => b.Amount)),
+            TotalBilled = billingLines.Sum(b => b.Amount),
+            Summary = !billingLines.Any()
+                ? "No billing lines found for the selected period."
+                : $"{billingLines.Count()} billing lines for contract {contract.Authorisation ?? contractId.ToString()}."
         };
     }
 
@@ -1463,18 +1802,101 @@ public class ReportingService : IReportingService
 
     private async Task<byte[]> ConvertHtmlToPdfAsync(string htmlContent)
     {
-        // TODO: Implement HTML to PDF conversion
-        // Example using PuppeteerSharp:
-        // await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
-        // await using var page = await browser.NewPageAsync();
-        // await page.SetContentAsync(htmlContent);
-        // return await page.PdfDataAsync();
+        await Task.CompletedTask;
 
-        await Task.CompletedTask; // Make method properly async
-
-        // For now, return HTML as bytes (placeholder)
-        return Encoding.UTF8.GetBytes(htmlContent);
+        var plainText = ExtractPlainTextFromHtml(htmlContent);
+        return BuildSimplePdf(plainText);
     }
+
+    private static string ExtractPlainTextFromHtml(string htmlContent)
+    {
+        if (string.IsNullOrWhiteSpace(htmlContent))
+        {
+            return "Report output is empty.";
+        }
+
+        var withLineBreaks = Regex.Replace(
+            htmlContent,
+            @"</(h\d|p|div|tr|li|br|section|article|header|footer)>",
+            "\n",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        var withoutTags = Regex.Replace(withLineBreaks, "<[^>]+>", " ", RegexOptions.Compiled);
+        var decoded = WebUtility.HtmlDecode(withoutTags);
+        var normalized = Regex.Replace(decoded, @"[ \t]+", " ", RegexOptions.Compiled);
+        var collapsedLines = Regex.Replace(normalized, @"\n{2,}", "\n", RegexOptions.Compiled);
+
+        return collapsedLines.Trim();
+    }
+
+    private static byte[] BuildSimplePdf(string reportText)
+    {
+        var lines = reportText
+            .Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Take(60)
+            .ToList();
+
+        if (lines.Count == 0)
+        {
+            lines.Add("Report output is empty.");
+        }
+
+        var textStreamBuilder = new StringBuilder();
+        textStreamBuilder.AppendLine("BT");
+        textStreamBuilder.AppendLine("/F1 10 Tf");
+        textStreamBuilder.AppendLine("50 780 Td");
+
+        foreach (var line in lines)
+        {
+            var safe = EscapePdfText(line.Length > 120 ? line[..120] : line);
+            textStreamBuilder.AppendLine($"({safe}) Tj");
+            textStreamBuilder.AppendLine("0 -14 Td");
+        }
+
+        textStreamBuilder.AppendLine("ET");
+
+        var contentStream = textStreamBuilder.ToString();
+
+        var objects = new List<string>
+        {
+            "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
+            "2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n",
+            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
+            "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
+            $"5 0 obj\n<< /Length {Encoding.ASCII.GetByteCount(contentStream)} >>\nstream\n{contentStream}endstream\nendobj\n"
+        };
+
+        var pdf = new StringBuilder();
+        pdf.Append("%PDF-1.4\n");
+        pdf.Append("%FIS\n");
+
+        var offsets = new List<int>();
+        foreach (var obj in objects)
+        {
+            offsets.Add(Encoding.ASCII.GetByteCount(pdf.ToString()));
+            pdf.Append(obj);
+        }
+
+        var xrefOffset = Encoding.ASCII.GetByteCount(pdf.ToString());
+        pdf.Append("xref\n");
+        pdf.Append($"0 {objects.Count + 1}\n");
+        pdf.Append("0000000000 65535 f \n");
+
+        foreach (var offset in offsets)
+        {
+            pdf.Append($"{offset:D10} 00000 n \n");
+        }
+
+        pdf.Append("trailer\n");
+        pdf.Append($"<< /Size {objects.Count + 1} /Root 1 0 R >>\n");
+        pdf.Append("startxref\n");
+        pdf.Append($"{xrefOffset}\n");
+        pdf.Append("%%EOF");
+
+        return Encoding.ASCII.GetBytes(pdf.ToString());
+    }
+
+    private static string EscapePdfText(string value)
+        => value.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
 
     #endregion
 
@@ -1488,30 +1910,13 @@ public class ReportingService : IReportingService
             filename
         );
 
-        await Task.CompletedTask; // Make method properly async
+        await Task.CompletedTask;
         var csv = new StringBuilder();
-
-        if (data.Any())
+        var (headers, rows) = NormalizeExportRows(data.Cast<object>());
+        csv.AppendLine(string.Join(",", headers.Select(EscapeCsvValue)));
+        foreach (var row in rows)
         {
-            // Get properties for header
-            var properties = typeof(T).GetProperties();
-            csv.AppendLine(string.Join(",", properties.Select(p => p.Name)));
-
-            // Add data rows
-            foreach (var item in data)
-            {
-                var values = properties.Select(p =>
-                {
-                    var value = p.GetValue(item)?.ToString() ?? string.Empty;
-                    // Escape CSV values that contain commas, quotes, or newlines
-                    if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
-                    {
-                        value = "\"" + value.Replace("\"", "\"\"") + "\"";
-                    }
-                    return value;
-                });
-                csv.AppendLine(string.Join(",", values));
-            }
+            csv.AppendLine(string.Join(",", headers.Select(h => EscapeCsvValue(row.GetValueOrDefault(h, string.Empty)))));
         }
 
         return Encoding.UTF8.GetBytes(csv.ToString());
@@ -1525,9 +1930,228 @@ public class ReportingService : IReportingService
             filename
         );
 
-        // TODO: Implement Excel export using EPPlus or similar library
-        // For now, export as CSV
-        return await ExportToCsvAsync(data, filename.Replace(".xlsx", ".csv"));
+        await Task.CompletedTask;
+        var (headers, rows) = NormalizeExportRows(data.Cast<object>());
+        return BuildXlsx(headers, rows);
+    }
+
+    private static (List<string> Headers, List<Dictionary<string, string>> Rows) NormalizeExportRows(IEnumerable<object> source)
+    {
+        var headers = new List<string>();
+        var rows = new List<Dictionary<string, string>>();
+
+        foreach (var item in source)
+        {
+            var row = ToRowDictionary(item);
+            foreach (var key in row.Keys)
+            {
+                if (!headers.Contains(key))
+                {
+                    headers.Add(key);
+                }
+            }
+            rows.Add(row);
+        }
+
+        if (headers.Count == 0)
+        {
+            headers.Add("Value");
+        }
+
+        return (headers, rows);
+    }
+
+    private static Dictionary<string, string> ToRowDictionary(object? item)
+    {
+        var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (item is null)
+        {
+            return row;
+        }
+
+        if (item is JsonElement json)
+        {
+            if (json.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in json.EnumerateObject())
+                {
+                    row[prop.Name] = JsonElementToString(prop.Value);
+                }
+                return row;
+            }
+
+            row["Value"] = JsonElementToString(json);
+            return row;
+        }
+
+        if (item is IDictionary<string, object> objectDictionary)
+        {
+            foreach (var kv in objectDictionary)
+            {
+                row[kv.Key] = kv.Value?.ToString() ?? string.Empty;
+            }
+            return row;
+        }
+
+        if (item is IDictionary<string, string> stringDictionary)
+        {
+            foreach (var kv in stringDictionary)
+            {
+                row[kv.Key] = kv.Value ?? string.Empty;
+            }
+            return row;
+        }
+
+        var type = item.GetType();
+        if (type == typeof(string) || type.IsPrimitive || item is decimal || item is DateTime || item is DateTimeOffset || item is Guid)
+        {
+            row["Value"] = item.ToString() ?? string.Empty;
+            return row;
+        }
+
+        foreach (var prop in type.GetProperties())
+        {
+            row[prop.Name] = prop.GetValue(item)?.ToString() ?? string.Empty;
+        }
+
+        return row;
+    }
+
+    private static string JsonElementToString(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => bool.TrueString,
+            JsonValueKind.False => bool.FalseString,
+            JsonValueKind.Null => string.Empty,
+            JsonValueKind.Undefined => string.Empty,
+            _ => value.GetRawText()
+        };
+    }
+
+    private static string EscapeCsvValue(string value)
+    {
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+        {
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        return value;
+    }
+
+    private static byte[] BuildXlsx(IReadOnlyList<string> headers, IReadOnlyList<Dictionary<string, string>> rows)
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteZipEntry(archive, "[Content_Types].xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+                "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
+                "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
+                "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>" +
+                "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>" +
+                "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>" +
+                "<Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/>" +
+                "</Types>");
+
+            WriteZipEntry(archive, "_rels/.rels",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>" +
+                "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/>" +
+                "<Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/>" +
+                "</Relationships>");
+
+            WriteZipEntry(archive, "docProps/core.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">" +
+                "<dc:title>FIS Export</dc:title>" +
+                "<dc:creator>FIS API</dc:creator>" +
+                $"<dcterms:created xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}</dcterms:created>" +
+                "</cp:coreProperties>");
+
+            WriteZipEntry(archive, "docProps/app.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">" +
+                "<Application>FIS API</Application>" +
+                "</Properties>");
+
+            WriteZipEntry(archive, "xl/workbook.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+                "<sheets><sheet name=\"Export\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
+                "</workbook>");
+
+            WriteZipEntry(archive, "xl/_rels/workbook.xml.rels",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>" +
+                "</Relationships>");
+
+            WriteZipEntry(archive, "xl/worksheets/sheet1.xml", BuildWorksheetXml(headers, rows));
+        }
+
+        return stream.ToArray();
+    }
+
+    private static string BuildWorksheetXml(IReadOnlyList<string> headers, IReadOnlyList<Dictionary<string, string>> rows)
+    {
+        var sb = new StringBuilder();
+        sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        sb.Append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>");
+
+        var rowIndex = 1;
+        sb.Append($"<row r=\"{rowIndex}\">");
+        for (var i = 0; i < headers.Count; i++)
+        {
+            sb.Append(BuildInlineStringCell(GetCellReference(i, rowIndex), headers[i]));
+        }
+        sb.Append("</row>");
+
+        foreach (var row in rows)
+        {
+            rowIndex++;
+            sb.Append($"<row r=\"{rowIndex}\">");
+            for (var i = 0; i < headers.Count; i++)
+            {
+                var value = row.GetValueOrDefault(headers[i], string.Empty);
+                sb.Append(BuildInlineStringCell(GetCellReference(i, rowIndex), value));
+            }
+            sb.Append("</row>");
+        }
+
+        sb.Append("</sheetData></worksheet>");
+        return sb.ToString();
+    }
+
+    private static string BuildInlineStringCell(string cellRef, string value)
+        => $"<c r=\"{cellRef}\" t=\"inlineStr\"><is><t>{XmlEscape(value)}</t></is></c>";
+
+    private static string GetCellReference(int columnIndex, int rowIndex)
+    {
+        var dividend = columnIndex + 1;
+        var col = string.Empty;
+        while (dividend > 0)
+        {
+            var modulo = (dividend - 1) % 26;
+            col = Convert.ToChar(65 + modulo) + col;
+            dividend = (dividend - modulo) / 26;
+        }
+
+        return $"{col}{rowIndex}";
+    }
+
+    private static string XmlEscape(string input)
+        => SecurityElement.Escape(input) ?? string.Empty;
+
+    private static void WriteZipEntry(ZipArchive archive, string path, string content)
+    {
+        var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(content);
     }
 
     #endregion

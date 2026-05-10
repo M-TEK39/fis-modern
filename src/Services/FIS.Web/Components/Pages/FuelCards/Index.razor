@@ -2,7 +2,10 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject FleetManagementApiService FleetService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Fuelcard Maintenance Menu - Fleet Information System</PageTitle>
@@ -18,6 +21,14 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasFuelcardsRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Fuelcards</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleHelp">
@@ -115,9 +126,11 @@
                       Columns="_columns"
                       Rows="_rows"
                       Filters="_filters" />
+    }
 </div>
 
 @code {
+    private bool _hasFuelcardsRole;
     private bool _showHelp = true;
     private bool _showMaintenance = true;
     private bool _showReports = true;
@@ -144,6 +157,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasFuelcardsRole = HasRole(authState.User, "Fuelcards");
+        if (!_hasFuelcardsRole)
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadPreviewAsync();
     }
 
@@ -196,5 +217,21 @@
         }
 
         return "Other";
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
     }
 }

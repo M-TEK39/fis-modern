@@ -67,9 +67,9 @@
                                         <tr>
                                             <td>@ValueOrDash(dept.Name)</td>
                                             <td>
-                                                <a href="@($"/fines/traffic-dept/detail?trafficDeptId={dept.TrafficDeptId}")">Mod</a>
+                                                <a href="@($"/fines/traffic-dept/detail?trafficDeptId={dept.TrafficDeptId}&action=edit")">Mod</a>
                                                 &nbsp;|&nbsp;
-                                                <a href="@($"/fines/traffic-dept/detail?trafficDeptId={dept.TrafficDeptId}")">Del</a>
+                                                <a href="@($"/fines/traffic-dept/detail?trafficDeptId={dept.TrafficDeptId}&action=delete")">Del</a>
                                             </td>
                                         </tr>
                                     }

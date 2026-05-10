@@ -120,6 +120,12 @@ public class AuthApiService
         return await HandleUserAdminResponse(response);
     }
 
+    public async Task<UserAdminResponse> DeactivateUserAsync(DeactivateExpiredPasswordRequest request)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/auth/deactivate-user", request);
+        return await HandleUserAdminResponse(response);
+    }
+
     public async Task<UserAdminResponse> DeactivateExpiredPasswordAsync(DeactivateExpiredPasswordRequest request)
     {
         var response = await _httpClient.PostAsJsonAsync("api/auth/deactivate-expired", request);

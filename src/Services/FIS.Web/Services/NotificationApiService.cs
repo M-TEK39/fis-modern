@@ -52,13 +52,14 @@ public class NotificationApiService
 
         await Task.WhenAll(workflowTask, bookingTask, callCentreTask);
 
-        var errors = new[]
+        var sourceErrors = new[]
         {
             workflowTask.Result.ErrorMessage,
             bookingTask.Result.ErrorMessage,
             callCentreTask.Result.ErrorMessage
         }
         .Where(message => !string.IsNullOrWhiteSpace(message))
+        .Distinct(StringComparer.Ordinal)
         .ToList();
 
         var notifications = workflowTask.Result.Notifications
@@ -71,7 +72,7 @@ public class NotificationApiService
         return new NotificationFeedDto(
             notifications,
             notifications.Count(item => item.IsUnread),
-            errors.Count == 0 ? null : "Some notification sources are currently unavailable.");
+            sourceErrors.Count == 0 ? null : string.Join(" ", sourceErrors));
     }
 
     private async Task<NotificationSourceFeedDto> GetWorkflowNotificationsAsync()
@@ -146,10 +147,11 @@ public class NotificationApiService
         {
             using var response = await _httpClient.GetAsync(path);
 
-            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.Forbidden)
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                or HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)
             {
                 _logger.LogInformation(
-                    "Notification source {Path} is unavailable due to auth status {StatusCode}; returning empty source.",
+                    "Notification source {Path} is unavailable (status {StatusCode}); returning empty source.",
                     path,
                     (int)response.StatusCode);
                 return new NotificationApiResult<T>(default, null);
@@ -163,7 +165,7 @@ public class NotificationApiService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching notifications from {Path}", path);
-            return new NotificationApiResult<T>(default, $"Failed to load {path}.");
+            return new NotificationApiResult<T>(default, "Unable to refresh all notification sources right now.");
         }
     }
 

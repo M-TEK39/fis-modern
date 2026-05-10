@@ -7,6 +7,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Route("api/accidents")]
 [Authorize]
 public class AccidentController : BaseApiController
 {

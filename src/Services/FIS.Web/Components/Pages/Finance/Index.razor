@@ -2,7 +2,13 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject FinanceApiService FinanceService
+@inject UserProfileApiService UserProfileApiService
+@inject SiteApiService SiteApiService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserAccessContextService UserAccessContextService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Finance Menu - Fleet Information System</PageTitle>
@@ -18,8 +24,18 @@
 </div>
 
 <div class="page-content">
+    @if (_isBatchRunning)
+    {
+        <div class="alert alert-warning fis-mb-1">
+            Batch is currently running. Legacy parity: finance functions are restricted while batch is active.
+            <a class="btn btn-secondary btn-sm fis-ml-1" href="/finance/batch-management">Back to batch management screen</a>
+        </div>
+    }
+
     <div class="menu-tiles">
-        <div class="menu-tile">
+        @if (_canViewFinancialAllocation)
+        {
+            <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleFinancialAllocation">
                 <span>1) Financial Allocation Codes</span>
                 <i class="bx @(_showFinancialAllocation ? "bx-chevron-up" : "bx-chevron-down")"></i>
@@ -48,12 +64,16 @@
                     <div class="menu-item">
                         <a class="menu-item-link" href="/finance/financial-allocation/departments-no-bas">g) Departments with No BAS Codes</a>
                     </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/financial-allocation/departments-missing-financial-system">h) Departments with Missing Financial System</a>
-                    </div>
+                    @if (_isDept147OrCois)
+                    {
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/financial-allocation/departments-missing-financial-system">h) Departments with Missing Financial System</a>
+                        </div>
+                    }
                 </div>
             }
-        </div>
+            </div>
+        }
 
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleFinancialReports">
@@ -78,32 +98,37 @@
                     <div class="menu-item">
                         <a class="menu-item-link" href="/finance/reports/reversals-tree">d) Reversals Tree Report</a>
                     </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/income-department">e) Income Report by Department (date range)</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/income-split-summary">f) Summary Income Split Report</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/income-split-detailed">g) Detailed Income Split Report</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/income-department-site">h) Income Report by Department & Site</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/download-income-department">i) Download Income Report by Department</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/download-income-department-site">j) Download Income Report by Department & Site</a>
-                    </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/reports/download-income-department-site-vehicle">k) Download Income Report by Department, Site & Vehicle</a>
-                    </div>
+                    @if (_isFinanceHeadOfficeOrCois && !_isBatchRunning)
+                    {
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/income-department">e) Income Report by Department (date range)</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/income-split-summary">f) Summary Income Split Report</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/income-split-detailed">g) Detailed Income Split Report</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/income-department-site">h) Income Report by Department & Site</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/download-income-department">i) Download Income Report by Department</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/download-income-department-site">j) Download Income Report by Department & Site</a>
+                        </div>
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/reports/download-income-department-site-vehicle">k) Download Income Report by Department, Site & Vehicle</a>
+                        </div>
+                    }
                 </div>
             }
         </div>
 
-        <div class="menu-tile">
+        @if (_isFinanceHeadOfficeOrCois && !_isBatchRunning)
+        {
+            <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleInterface">
                 <span>2.1) Interface with GPG-SAP System</span>
                 <i class="bx @(_showInterface ? "bx-chevron-up" : "bx-chevron-down")"></i>
@@ -119,9 +144,12 @@
                     </div>
                 </div>
             }
-        </div>
+            </div>
+        }
 
-        <div class="menu-tile">
+        @if (_hasFinancialReportsRole)
+        {
+            <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleOutstandingReports">
                 <span>2.2) Outstanding Amounts Reports</span>
                 <i class="bx @(_showOutstandingReports ? "bx-chevron-up" : "bx-chevron-down")"></i>
@@ -146,9 +174,12 @@
                     </div>
                 </div>
             }
-        </div>
+            </div>
+        }
 
-        <div class="menu-tile">
+        @if (_hasFinancialReportsRole && _isDept147OrCois)
+        {
+            <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleMissingKilometres">
                 <span>3) Missing Kilometres</span>
                 <i class="bx @(_showMissingKilometres ? "bx-chevron-up" : "bx-chevron-down")"></i>
@@ -168,12 +199,16 @@
                     <div class="menu-item">
                         <a class="menu-item-link" href="/finance/missing-kilometres/kilo-gaps-xls">b.2) Missing Kilometres Report (Excel)</a>
                     </div>
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/finance/missing-kilometres/close-gaps">c) Automatically Capture Missing Kilos</a>
-                    </div>
+                    @if (_isCois && !_isBatchRunning)
+                    {
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/finance/missing-kilometres/close-gaps">c) Automatically Capture Missing Kilos</a>
+                        </div>
+                    }
                 </div>
             }
-        </div>
+            </div>
+        }
 
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleAuditTrail">
@@ -262,7 +297,9 @@
             }
         </div>
 
-        <div class="menu-tile">
+        @if (_isFinanceHeadOfficeOrCois && !_isBatchRunning)
+        {
+            <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleStandardBankImport">
                 <span>10) Import Standard Bank Transactions</span>
                 <i class="bx @(_showStandardBankImport ? "bx-chevron-up" : "bx-chevron-down")"></i>
@@ -275,9 +312,12 @@
                     </div>
                 </div>
             }
-        </div>
+            </div>
+        }
 
-        <div class="menu-tile">
+        @if (!_isBatchRunning)
+        {
+            <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleBatchManagement">
                 <span>11) Batch Management</span>
                 <i class="bx @(_showBatchManagement ? "bx-chevron-up" : "bx-chevron-down")"></i>
@@ -290,7 +330,8 @@
                     </div>
                 </div>
             }
-        </div>
+            </div>
+        }
     </div>
 
     <DataPreviewTable Title="Finance Reference Preview"
@@ -317,6 +358,12 @@
     private bool _showStandardBankImport = true;
     private bool _showBatchManagement = true;
     private bool _loading = true;
+    private bool _isBatchRunning;
+    private bool _hasFinancialDataOwnDepartmentRole;
+    private bool _hasFinancialReportsRole;
+    private bool _isFinanceHeadOfficeOrCois;
+    private bool _isDept147OrCois;
+    private bool _isCois;
     private List<Dictionary<string, string?>> _rows = new();
 
     private readonly IReadOnlyList<DataPreviewColumn> _columns =
@@ -336,6 +383,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await ResolveCurrentUserContextAsync();
         await LoadPreviewAsync();
     }
 
@@ -399,4 +447,75 @@
             "Batch Date" => "/finance/batch-management",
             _ => "/finance"
         };
+
+    private bool _canViewFinancialAllocation => _hasFinancialDataOwnDepartmentRole && !_isBatchRunning;
+
+    private async Task ResolveCurrentUserContextAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var username = ResolveUsername(user);
+        _isCois = string.Equals(username, "cois", StringComparison.OrdinalIgnoreCase);
+
+        _hasFinancialDataOwnDepartmentRole = HasRole(user, "Financial Data (Own Department)");
+        _hasFinancialReportsRole = HasRole(user, "Financial Reports");
+
+        var userAccessCodeClaim = user.FindFirst("user_access_code")?.Value;
+        int.TryParse(userAccessCodeClaim, out var userAccessCode);
+
+        var firstName = user.FindFirst(ClaimTypes.GivenName)?.Value;
+        var accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(userAccessCode > 0 ? userAccessCode : null, firstName);
+        if (!_hasFinancialDataOwnDepartmentRole && (accessLevel & LegacyPermissionBits.Financial) == LegacyPermissionBits.Financial)
+        {
+            _hasFinancialDataOwnDepartmentRole = true;
+        }
+
+        if (!_hasFinancialReportsRole && (accessLevel & LegacyPermissionBits.Financial) == LegacyPermissionBits.Financial)
+        {
+            _hasFinancialReportsRole = true;
+        }
+
+        var profile = userAccessCode > 0
+            ? await UserProfileApiService.GetByUserAccessCodeAsync(userAccessCode)
+            : await UserProfileApiService.GetByFirstNameAsync(firstName ?? string.Empty);
+
+        if (profile?.SiteCode is > 0)
+        {
+            _isFinanceHeadOfficeOrCois = profile.SiteCode.Value == 1598 || _isCois;
+            var site = await SiteApiService.GetByIdAsync(profile.SiteCode.Value);
+            _isDept147OrCois = site?.DepartmentCode == 147 || _isCois;
+        }
+        else
+        {
+            _isFinanceHeadOfficeOrCois = _isCois;
+            _isDept147OrCois = _isCois;
+        }
+
+        var batchStatus = await FinanceService.GetBatchStatusAsync();
+        _isBatchRunning = batchStatus?.BatchIsRunning == true;
+    }
+
+    private static string ResolveUsername(ClaimsPrincipal user)
+    {
+        return user.Identity?.Name
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? user.FindFirst("preferred_username")?.Value
+            ?? string.Empty;
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
 }

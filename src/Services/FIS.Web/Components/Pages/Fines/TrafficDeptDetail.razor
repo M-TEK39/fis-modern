@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject TrafficDeptApiService TrafficDeptService
+@inject NavigationManager Navigation
 
 <PageTitle>Traffic Dept Detail - Fleet Information System</PageTitle>
 
@@ -12,7 +13,7 @@
             <i class="bx bx-building"></i>
             Traffic Dept Detail
         </h1>
-        <p class="page-description">Add or update traffic department information.</p>
+        <p class="page-description">Add, update, or delete traffic department information.</p>
     </div>
     <div class="page-actions">
         <a class="btn btn-secondary btn-sm" href="/fines/traffic-dept">Back to Traffic Dept</a>
@@ -25,43 +26,45 @@
             <div class="form-grid">
                 <div class="form-field">
                     <label class="form-label">Traffic Dept Name</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_name" />
+                    <input class="form-input" @bind="_trafficDept.Traf_name" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Responsible Person</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_res_person" />
+                    <input class="form-input" @bind="_trafficDept.Traf_res_person" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Postal Address1</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_post_address1" />
+                    <input class="form-input" @bind="_trafficDept.Traf_post_address1" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Postal Address2</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_post_address2" />
+                    <input class="form-input" @bind="_trafficDept.Traf_post_address2" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Postal / ZIP</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_post_code" />
+                    <input class="form-input" @bind="_trafficDept.Traf_post_code" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Tel</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_telephone" />
+                    <input class="form-input" @bind="_trafficDept.Traf_telephone" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Fax</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_fax" />
+                    <input class="form-input" @bind="_trafficDept.Traf_fax" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">Cell</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_telephone" />
+                    <input class="form-input" @bind="_trafficDept.Traf_telephone" disabled="@IsDeleteMode" />
                 </div>
                 <div class="form-field">
                     <label class="form-label">eMail</label>
-                    <input class="form-input" @bind="_trafficDept.Traf_email" />
+                    <input class="form-input" @bind="_trafficDept.Traf_email" disabled="@IsDeleteMode" />
                 </div>
             </div>
             <div class="form-actions">
-                <button class="btn btn-primary btn-sm" @onclick="SaveTrafficDept">Submit</button>
+                <button class="btn @(IsDeleteMode ? "btn-danger" : "btn-primary") btn-sm" @onclick="SaveTrafficDept">
+                    @(IsDeleteMode ? "Delete" : "Submit")
+                </button>
                 <a class="btn btn-secondary btn-sm" href="/fines/traffic-dept">Menu</a>
             </div>
         </div>
@@ -72,7 +75,12 @@
     [SupplyParameterFromQuery(Name = "trafficDeptId")]
     public int? TrafficDeptId { get; set; }
 
+    [SupplyParameterFromQuery(Name = "action")]
+    public string? Action { get; set; }
+
     private TrafficDeptDto _trafficDept = new();
+    private bool IsDeleteMode => string.Equals(Action, "delete", StringComparison.OrdinalIgnoreCase);
+    private bool IsEditMode => !IsDeleteMode;
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,6 +96,12 @@
 
     private async Task SaveTrafficDept()
     {
+        if (IsDeleteMode)
+        {
+            await DeleteTrafficDept();
+            return;
+        }
+
         if (TrafficDeptId.HasValue)
         {
             await TrafficDeptService.UpdateAsync(TrafficDeptId.Value, _trafficDept);
@@ -96,5 +110,18 @@
         {
             await TrafficDeptService.CreateAsync(_trafficDept);
         }
+
+        Navigation.NavigateTo("/fines/traffic-dept");
+    }
+
+    private async Task DeleteTrafficDept()
+    {
+        if (!TrafficDeptId.HasValue)
+        {
+            return;
+        }
+
+        await TrafficDeptService.DeleteAsync(TrafficDeptId.Value);
+        Navigation.NavigateTo("/fines/traffic-dept");
     }
 }

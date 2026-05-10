@@ -13,7 +13,6 @@ public abstract class BaseApiController : ControllerBase
 {
     /// <summary>
     /// Get current user's access code from JWT claims
-    /// Returns 1 as fallback if claim not found (for backward compatibility during transition)
     /// </summary>
     protected int GetCurrentUserId()
     {
@@ -23,8 +22,7 @@ public abstract class BaseApiController : ControllerBase
         {
             return userId;
         }
-        
-        // Fallback to 1 if claim not found (should only happen during development/testing)
-        return 1;
+
+        throw new UnauthorizedAccessException("Authenticated user does not include a valid user_access_code claim.");
     }
 }

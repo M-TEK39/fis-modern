@@ -17,6 +17,14 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasReportsRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Reports</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles">
         <div class="menu-tile">
             <div class="menu-tile-header">
@@ -174,9 +182,11 @@
             </div>
         </div>
     </div>
+    }
 </div>
 
 @code {
+    private bool _hasReportsRole;
     private bool _hasManagementReportsRole;
     private bool _hasFinancialDataAllDepartmentsRole;
     private bool _hasFinancialDataOwnDepartmentRole;
@@ -187,6 +197,7 @@
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
+        _hasReportsRole = HasRole(user, "Reports");
         _hasManagementReportsRole = HasRole(user, "Management Reports");
         _hasFinancialDataAllDepartmentsRole = HasRole(user, "Financial Data (All Departments)");
         _hasFinancialDataOwnDepartmentRole = HasRole(user, "Financial Data (Own Department)");

@@ -1,5 +1,8 @@
 @page "/fines/reports"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
 <PageTitle>Fines Reports - Fleet Information System</PageTitle>
 
 <div class="page-header">
@@ -16,29 +19,64 @@
 </div>
 
 <div class="page-content">
-    <div class="menu-tiles">
-        <div class="menu-tile">
-            <button class="menu-tile-header">
-                <span>One Vehicle Fines Reports</span>
-                <i class="bx bx-list-ul"></i>
-            </button>
-            <div class="menu-tile-body">
-                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/one-vehicle">1) Fines Report on ONE Vehicle</a></div>
-            </div>
+    @if (!_hasReportsRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Reports</strong> role.
         </div>
+    }
+    else
+    {
+        <div class="menu-tiles">
+            <div class="menu-tile">
+                <button class="menu-tile-header">
+                    <span>One Vehicle Fines Reports</span>
+                    <i class="bx bx-list-ul"></i>
+                </button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/reports/one-vehicle">1) Fines Report on ONE Vehicle</a></div>
+                </div>
+            </div>
 
-        <div class="menu-tile">
-            <button class="menu-tile-header">
-                <span>Other Fines Reports</span>
-                <i class="bx bx-list-ul"></i>
-            </button>
-            <div class="menu-tile-body">
-                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/select">2) Fines Report, for a Dept / Site, for a period</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/appear-date">3) Fines Report on Appear Date</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/letter">4) Submission to Re-Issue Fine in Transport Officer's Name</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/fines/reports/traffic-dept">5) Traffic Dept Detail</a></div>
-                <div class="menu-item"><a class="menu-item-link" href="/reports">Return To Main Page</a></div>
+            <div class="menu-tile">
+                <button class="menu-tile-header">
+                    <span>Other Fines Reports</span>
+                    <i class="bx bx-list-ul"></i>
+                </button>
+                <div class="menu-tile-body">
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/reports/select">2) Fines Report, for a Dept / Site, for a period</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/reports/appear-date">3) Fines Report on Appear Date</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/reports/letter">4) Submission to Re-Issue Fine in Transport Officer's Name</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/fines/reports/traffic-dept">5) Traffic Dept Detail</a></div>
+                    <div class="menu-item"><a class="menu-item-link" href="/reports">Return To Main Page</a></div>
+                </div>
             </div>
         </div>
-    </div>
+    }
 </div>
+
+@code {
+    private bool _hasReportsRole;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasReportsRole = HasRole(authState.User, "Reports");
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+}

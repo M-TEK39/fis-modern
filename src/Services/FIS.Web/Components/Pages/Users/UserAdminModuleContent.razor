@@ -1067,7 +1067,7 @@ else if (_activeView == ViewForgotPassword)
 
     private async Task HandleDeactivateUser()
     {
-        await RunAdminUserAction(async username => await AuthApiService.DeactivateExpiredPasswordAsync(new DeactivateExpiredPasswordRequest
+        await RunAdminUserAction(async username => await AuthApiService.DeactivateUserAsync(new DeactivateExpiredPasswordRequest
         {
             Username = username
         }));

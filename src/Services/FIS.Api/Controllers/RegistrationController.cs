@@ -26,6 +26,21 @@ public class RegistrationController : BaseApiController
         _logger = logger;
     }
 
+    [HttpGet]
+    public ActionResult GetRoot()
+    {
+        return Ok(new
+        {
+            module = "Registration History",
+            endpoints = new[]
+            {
+                "search?q={value}",
+                "vehicle/{vmfCode}",
+                "vehicle/{vmfCode} [POST]"
+            }
+        });
+    }
+
     /// <summary>
     /// Get all historical registration numbers for a vehicle.
     /// Returns both the current registration and all previous ones with timestamps.

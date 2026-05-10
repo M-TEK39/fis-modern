@@ -45,6 +45,25 @@ public class ThirdPartyController : BaseApiController
         _logger = logger;
     }
 
+    [HttpGet]
+    public ActionResult GetRoot()
+    {
+        return Ok(new
+        {
+            module = "Third Party Rentals",
+            endpoints = new[]
+            {
+                "suppliers",
+                "projects",
+                "allocations",
+                "departments",
+                "sites/{departmentCode}",
+                "vehicles/{supplierId}",
+                "classes"
+            }
+        });
+    }
+
     #region Supplier Endpoints
 
     [HttpGet("suppliers")]

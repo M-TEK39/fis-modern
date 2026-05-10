@@ -1,8 +1,13 @@
 using FIS.Api.DTOs;
+using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Core.Infrastructure.Interfaces;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -16,12 +21,166 @@ namespace FIS.Api.Controllers;
 public class LicenseController : BaseApiController
 {
     private readonly ILicenseRepository _licenseRepository;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<LicenseController> _logger;
 
-    public LicenseController(ILicenseRepository licenseRepository, ILogger<LicenseController> logger)
+    public LicenseController(
+        ILicenseRepository licenseRepository,
+        IVehicleRepository vehicleRepository,
+        FisDbContext context,
+        ILogger<LicenseController> logger)
     {
         _licenseRepository = licenseRepository;
+        _vehicleRepository = vehicleRepository;
+        _context = context;
         _logger = logger;
+    }
+
+    [HttpPost("one-vehicle/password")]
+    public ActionResult SubmitOneVehiclePassword([FromBody] LicenseOneVehiclePasswordRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { success = false, message = "Password payload is required." });
+        }
+
+        var valid = string.Equals(request.password?.Trim(), "passop", StringComparison.Ordinal);
+        if (!valid)
+        {
+            return Unauthorized(new { success = false, message = "Invalid password." });
+        }
+
+        return Ok(new { success = true, message = "Password accepted." });
+    }
+
+    [HttpPost("one-vehicle/lookup")]
+    public async Task<ActionResult<LicenseOneVehicleLookupResponse>> LookupOneVehicle([FromBody] LicenseOneVehicleLookupRequest request)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.number_type) || string.IsNullOrWhiteSpace(request.number))
+        {
+            return BadRequest(new { success = false, message = "number_type and number are required." });
+        }
+
+        var numberType = request.number_type.Trim().ToUpperInvariant();
+        var number = request.number.Trim();
+
+        Vehicle? vehicle = numberType switch
+        {
+            "GG" => await _vehicleRepository.GetByFleetNumberAsync(number),
+            "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(number),
+            _ => null
+        };
+
+        if (vehicle is null)
+        {
+            return NotFound(new { success = false, message = $"Vehicle not found for {numberType} number {number}." });
+        }
+
+        return Ok(new LicenseOneVehicleLookupResponse
+        {
+            vmfCode = vehicle.vmf_code,
+            numberType = numberType,
+            number = number,
+            expDate = vehicle.licence_due_date,
+            registerNumber = vehicle.lic_register_number,
+            regDoc = vehicle.lic_registration_doc,
+            tare = vehicle.tare?.ToString(),
+            receiver = vehicle.Licence_receiver,
+            receiverId = vehicle.Licence_receiver_id,
+            receiverTel = vehicle.Licence_receiver_tel,
+            receiverSiteCode = vehicle.Licence_receiver_site,
+            dateCollected = vehicle.Licence_date_taken,
+            cofRequired = vehicle.cof_required,
+            cofExpDate = vehicle.cof_last_done,
+            comments = vehicle.licence_comments
+        });
+    }
+
+    [HttpPost("one-vehicle/save")]
+    public async Task<ActionResult> SaveOneVehicle([FromBody] LicenseOneVehicleSaveRequest request)
+    {
+        if (request is null)
+        {
+            return BadRequest(new { success = false, message = "Save payload is required." });
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var vmfCode = request.vmfCode;
+
+        if (!vmfCode.HasValue || vmfCode.Value <= 0)
+        {
+            if (string.IsNullOrWhiteSpace(request.numberType) || string.IsNullOrWhiteSpace(request.number))
+            {
+                return BadRequest(new { success = false, message = "vmfCode or numberType/number is required." });
+            }
+
+            var fallbackNumberType = request.numberType.Trim().ToUpperInvariant();
+            var fallbackNumber = request.number.Trim();
+            var fallbackVehicle = fallbackNumberType switch
+            {
+                "GG" => await _vehicleRepository.GetByFleetNumberAsync(fallbackNumber),
+                "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(fallbackNumber),
+                _ => null
+            };
+
+            if (fallbackVehicle is null)
+            {
+                return NotFound(new { success = false, message = "Vehicle could not be resolved for save." });
+            }
+
+            vmfCode = fallbackVehicle.vmf_code;
+        }
+
+        var vehicle = await _context.Vehicles
+            .FirstOrDefaultAsync(v => v.vmf_code == vmfCode.Value && !v.is_deleted);
+        if (vehicle is null)
+        {
+            return NotFound(new { success = false, message = $"Vehicle {vmfCode.Value} not found." });
+        }
+
+        var oldDue = vehicle.licence_due_date?.Date;
+        var newDue = request.expDate?.Date;
+
+        vehicle.licence_due_date = request.expDate;
+        vehicle.lic_register_number = request.registerNumber;
+        vehicle.lic_registration_doc = request.regDoc;
+        vehicle.Licence_receiver = request.receiver;
+        vehicle.Licence_receiver_id = request.receiverId;
+        vehicle.Licence_receiver_tel = request.receiverTel;
+        vehicle.Licence_receiver_site = request.receiverSiteCode;
+        vehicle.Licence_date_taken = request.dateCollected;
+        vehicle.cof_required = request.cofRequired;
+        vehicle.cof_last_done = string.Equals(request.cofRequired, "N", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : request.cofExpDate;
+        vehicle.licence_comments = request.comments;
+        vehicle.tare = ParseNullableInt(request.tare);
+        vehicle.date_updated = DateTime.UtcNow;
+        vehicle.modified_by_user_code = currentUserId;
+
+        if (oldDue != newDue)
+        {
+            _context.FleetNotes.Add(new FleetNote
+            {
+                vmf_code = vehicle.vmf_code,
+                note_text = $"Licence Receive: {ResolveCurrentUsername()}",
+                date_created = DateTime.UtcNow,
+                created_by_user_code = currentUserId,
+                is_deleted = false
+            });
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            vmfCode = vehicle.vmf_code,
+            fleetNumber = vehicle.fleet_number,
+            registrationNumber = vehicle.registration_number,
+            message = "Licence details saved successfully."
+        });
     }
 
     /// <summary>
@@ -201,5 +360,72 @@ public class LicenseController : BaseApiController
             _logger.LogError(ex, "Error deleting license with code {LicenceCode}", licenceCode);
             return StatusCode(500, "Internal server error");
         }
+    }
+
+    private string ResolveCurrentUsername()
+    {
+        return User.Identity?.Name
+            ?? User.FindFirst(ClaimTypes.Name)?.Value
+            ?? User.FindFirst("preferred_username")?.Value
+            ?? "unknown";
+    }
+
+    private static int? ParseNullableInt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return int.TryParse(value.Trim(), out var parsed) ? parsed : null;
+    }
+
+    public sealed class LicenseOneVehiclePasswordRequest
+    {
+        public string? password { get; set; }
+    }
+
+    public sealed class LicenseOneVehicleLookupRequest
+    {
+        public string? number_type { get; set; }
+        public string? number { get; set; }
+    }
+
+    public class LicenseOneVehicleLookupResponse
+    {
+        public int vmfCode { get; set; }
+        public string? numberType { get; set; }
+        public string? number { get; set; }
+        public DateTime? expDate { get; set; }
+        public string? registerNumber { get; set; }
+        public string? regDoc { get; set; }
+        public string? tare { get; set; }
+        public string? receiver { get; set; }
+        public string? receiverId { get; set; }
+        public string? receiverTel { get; set; }
+        public short? receiverSiteCode { get; set; }
+        public DateTime? dateCollected { get; set; }
+        public string? cofRequired { get; set; }
+        public DateTime? cofExpDate { get; set; }
+        public string? comments { get; set; }
+    }
+
+    public sealed class LicenseOneVehicleSaveRequest
+    {
+        public int? vmfCode { get; set; }
+        public string? numberType { get; set; }
+        public string? number { get; set; }
+        public DateTime? expDate { get; set; }
+        public string? registerNumber { get; set; }
+        public string? regDoc { get; set; }
+        public string? tare { get; set; }
+        public string? receiver { get; set; }
+        public string? receiverId { get; set; }
+        public string? receiverTel { get; set; }
+        public short? receiverSiteCode { get; set; }
+        public DateTime? dateCollected { get; set; }
+        public string? cofRequired { get; set; }
+        public DateTime? cofExpDate { get; set; }
+        public string? comments { get; set; }
     }
 }

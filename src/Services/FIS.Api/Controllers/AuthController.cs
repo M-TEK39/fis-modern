@@ -6,7 +6,10 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
 
 namespace FIS.Api.Controllers;
@@ -54,35 +57,7 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "Username and password are required" });
         }
 
-        // TEMPORARY: For development/testing, accept any credentials
-        // PRODUCTION: Replace with actual credential validation
-        var isDevelopment = _configuration.GetValue<bool>("AuthenticationSettings:RequireAuthentication") == false;
-
-        if (isDevelopment)
-        {
-            _logger.LogWarning("Development mode: Accepting any credentials for user {Username}", request.Username);
-
-            // Try to parse username as user_access_code, or default to 1
-            int userAccessCode = int.TryParse(request.Username, out var code) ? code : 1;
-
-            // Check if user exists in database
-            var devUser = await _userRepository.GetByIdAsync(userAccessCode);
-            if (devUser == null)
-                _logger.LogInformation("Creating test token for non-existent user_access_code: {UserAccessCode}", userAccessCode);
-
-            var devToken = GenerateJwtToken(userAccessCode, devUser?.email ?? $"user{userAccessCode}@test.com");
-
-            return Ok(new LoginResponse
-            {
-                Token = devToken.TokenString,
-                ExpiresAt = devToken.ExpiresAt,
-                UserAccessCode = userAccessCode,
-                Email = devUser?.email,
-                Message = "Development mode: Authentication bypassed"
-            });
-        }
-
-        // Production: validate against LegacyUserCredential table
+        // Validate against LegacyUserCredential table
         var user = await _userRepository.GetByEmailAsync(request.Username);
         if (user == null)
         {
@@ -339,12 +314,8 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
                 return NotFound(new ChangePasswordResponse
                 {
@@ -353,8 +324,81 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Implement actual password and security question update
-            _logger.LogInformation("Password and security question change requested for user {Username}", request.Username);
+            if (string.IsNullOrWhiteSpace(request.SecurityQuestion) ||
+                request.SecurityQuestion.Equals("Select Question...", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "Security question is required"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(request.SecurityAnswer))
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "Security answer is required"
+                });
+            }
+
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode && c.is_active);
+            if (credential == null)
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "No credential record found for this user"
+                });
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, credential.password_hash))
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "Current password is incorrect"
+                });
+            }
+
+            var actorUserCode = GetActorUserCode();
+            var now = DateTime.UtcNow;
+
+            credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            credential.last_password_change = now;
+            credential.password_expiry_date = now.AddDays(90);
+            credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+            credential.modified_date = now;
+            credential.failed_login_attempts = 0;
+            credential.account_locked_until = null;
+            credential.password_reset_token = SerializeSecurityQuestionPayload(
+                request.SecurityQuestion.Trim(),
+                HashSecurityAnswer(request.SecurityAnswer));
+            credential.password_reset_token_expiry = null;
+
+            if (!string.IsNullOrWhiteSpace(request.Email))
+            {
+                if (profile.User != null)
+                {
+                    profile.User.email = request.Email.Trim();
+                    profile.User.date_updated = now;
+                    profile.User.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                    _context.Users.Update(profile.User);
+                }
+
+                if (profile.UserAccessOld != null)
+                {
+                    profile.UserAccessOld.E_Mail = request.Email.Trim();
+                    profile.UserAccessOld.date_updated = now;
+                    profile.UserAccessOld.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                    _context.UserAccessOlds.Update(profile.UserAccessOld);
+                }
+            }
+
+            _context.LegacyUserCredentials.Update(credential);
+            await _context.SaveChangesAsync();
 
             return Ok(new ChangePasswordResponse
             {
@@ -382,12 +426,8 @@ public class AuthController : ControllerBase
     {
         try
         {
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
                 return NotFound(new UserAdminResponse
                 {
@@ -396,8 +436,30 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Implement actual login reset logic (reset failed attempts counter)
-            _logger.LogInformation("Login reset requested for user {Username}", request.Username);
+            var now = DateTime.UtcNow;
+            var actorUserCode = GetActorUserCode();
+
+            if (profile.UserAccessOld != null)
+            {
+                profile.UserAccessOld.user_active = true;
+                profile.UserAccessOld.last_log_on = now;
+                profile.UserAccessOld.date_updated = now;
+                profile.UserAccessOld.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            if (credential != null)
+            {
+                credential.failed_login_attempts = 0;
+                credential.account_locked_until = null;
+                credential.is_active = true;
+                credential.modified_date = now;
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            await _context.SaveChangesAsync();
 
             return Ok(new UserAdminResponse
             {
@@ -425,12 +487,8 @@ public class AuthController : ControllerBase
     {
         try
         {
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
                 return NotFound(new UserAdminResponse
                 {
@@ -439,8 +497,70 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Implement actual password update with hashing
-            _logger.LogInformation("Force password change requested for user {Username}", request.Username);
+            if (string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                return BadRequest(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "New password is required"
+                });
+            }
+
+            var now = DateTime.UtcNow;
+            var actorUserCode = GetActorUserCode();
+
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            if (credential == null)
+            {
+                credential = new Core.Domain.Entities.Auth.LegacyUserCredential
+                {
+                    user_access_code = profile.UserAccessCode,
+                    password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword),
+                    password_salt = string.Empty,
+                    last_password_change = now,
+                    password_expiry_date = now.AddDays(90),
+                    changed_by_user_code = actorUserCode > 0 ? actorUserCode : null,
+                    created_date = now,
+                    modified_date = now,
+                    is_active = true,
+                    failed_login_attempts = 0
+                };
+                _context.LegacyUserCredentials.Add(credential);
+            }
+            else
+            {
+                credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                credential.last_password_change = now;
+                credential.password_expiry_date = now.AddDays(90);
+                credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                credential.failed_login_attempts = 0;
+                credential.account_locked_until = null;
+                credential.is_active = true;
+                credential.modified_date = now;
+
+                var existingPayload = DeserializeSecurityQuestionPayload(credential.password_reset_token);
+                if (existingPayload is null)
+                {
+                    credential.password_reset_token = SerializeSecurityQuestionPayload(
+                        DefaultSecurityQuestion,
+                        HashSecurityAnswer(profile.ResolvedUsername));
+                    credential.password_reset_token_expiry = null;
+                }
+
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            if (profile.UserAccessOld != null)
+            {
+                profile.UserAccessOld.user_active = true;
+                profile.UserAccessOld.PWD_Expires = now.AddDays(90);
+                profile.UserAccessOld.date_updated = now;
+                profile.UserAccessOld.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
+            await _context.SaveChangesAsync();
 
             return Ok(new UserAdminResponse
             {
@@ -468,29 +588,42 @@ public class AuthController : ControllerBase
     {
         try
         {
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
-                // Don't reveal if user exists
                 return Ok(new UserAdminResponse
                 {
                     Success = false,
-                    Message = "If the username exists, a security question will be displayed"
+                    Message = $"A user for username {request.Username} could not be found."
                 });
             }
 
-            // TODO: Get actual security question from user record
-            _logger.LogInformation("Forgot password flow started for user {Username}", request.Username);
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode && c.is_active);
+            if (credential == null)
+            {
+                return Ok(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "No active credential record found for this user."
+                });
+            }
+
+            var securityPayload = DeserializeSecurityQuestionPayload(credential.password_reset_token);
+            if (securityPayload == null || string.IsNullOrWhiteSpace(securityPayload.Question))
+            {
+                return Ok(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "Security question is not configured for this user."
+                });
+            }
 
             return Ok(new UserAdminResponse
             {
                 Success = true,
                 Message = "Security question retrieved",
-                Question = "What is your favorite color?" // TODO: Get from user record
+                Question = securityPayload.Question
             });
         }
         catch (Exception ex)
@@ -513,12 +646,8 @@ public class AuthController : ControllerBase
     {
         try
         {
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
                 return NotFound(new UserAdminResponse
                 {
@@ -527,9 +656,56 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Verify security answer and generate new password
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode && c.is_active);
+            if (credential == null)
+            {
+                return BadRequest(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "No active credential record found for this user."
+                });
+            }
+
+            var securityPayload = DeserializeSecurityQuestionPayload(credential.password_reset_token);
+            if (securityPayload == null || string.IsNullOrWhiteSpace(securityPayload.AnswerHash))
+            {
+                return BadRequest(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "Security question/answer is not configured for this user."
+                });
+            }
+
+            var providedAnswerHash = HashSecurityAnswer(request.Answer);
+            if (!string.Equals(securityPayload.AnswerHash, providedAnswerHash, StringComparison.Ordinal))
+            {
+                return BadRequest(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "Did you type the incorrect answer? Re-type a correct answer and try again."
+                });
+            }
+
             var newPassword = GenerateTemporaryPassword();
-            _logger.LogInformation("Forgot password confirmed for user {Username}", request.Username);
+            var now = DateTime.UtcNow;
+            credential.password_hash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+            credential.last_password_change = now;
+            credential.password_expiry_date = now.AddDays(90);
+            credential.failed_login_attempts = 0;
+            credential.account_locked_until = null;
+            credential.modified_date = now;
+            _context.LegacyUserCredentials.Update(credential);
+
+            if (profile.UserAccessOld != null)
+            {
+                profile.UserAccessOld.user_active = true;
+                profile.UserAccessOld.PWD_Expires = now.AddDays(90);
+                profile.UserAccessOld.date_updated = now;
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
+            await _context.SaveChangesAsync();
 
             return Ok(new UserAdminResponse
             {
@@ -558,12 +734,8 @@ public class AuthController : ControllerBase
     {
         try
         {
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
                 return NotFound(new UserAdminResponse
                 {
@@ -572,8 +744,30 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Implement actual user activation logic
-            _logger.LogInformation("User activation requested for {Username}", request.Username);
+            var now = DateTime.UtcNow;
+            var actorUserCode = GetActorUserCode();
+
+            if (profile.UserAccessOld != null)
+            {
+                profile.UserAccessOld.user_active = true;
+                profile.UserAccessOld.last_log_on = now;
+                profile.UserAccessOld.date_updated = now;
+                profile.UserAccessOld.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            if (credential != null)
+            {
+                credential.is_active = true;
+                credential.failed_login_attempts = 0;
+                credential.account_locked_until = null;
+                credential.modified_date = now;
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            await _context.SaveChangesAsync();
 
             return Ok(new UserAdminResponse
             {
@@ -595,18 +789,14 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Deactivate user with expired password
     /// </summary>
-    [HttpPost("deactivate-expired")]
+    [HttpPost("deactivate-user")]
     [Authorize]
-    public async Task<ActionResult<UserAdminResponse>> DeactivateExpiredPassword([FromBody] DeactivateExpiredPasswordRequest request)
+    public async Task<ActionResult<UserAdminResponse>> DeactivateUser([FromBody] DeactivateExpiredPasswordRequest request)
     {
         try
         {
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
             {
                 return NotFound(new UserAdminResponse
                 {
@@ -615,8 +805,98 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // TODO: Implement actual user deactivation logic
-            _logger.LogInformation("User deactivation requested for {Username}", request.Username);
+            var now = DateTime.UtcNow;
+            var actorUserCode = GetActorUserCode();
+
+            if (profile.UserAccessOld != null)
+            {
+                profile.UserAccessOld.user_active = false;
+                profile.UserAccessOld.date_updated = now;
+                profile.UserAccessOld.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            if (credential != null)
+            {
+                credential.is_active = false;
+                credential.modified_date = now;
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new UserAdminResponse
+            {
+                Success = true,
+                Message = $"User {request.Username} deactivated successfully"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deactivating user {Username}", request.Username);
+            return StatusCode(500, new UserAdminResponse
+            {
+                Success = false,
+                Message = "Error deactivating user"
+            });
+        }
+    }
+
+    /// <summary>
+    /// Deactivate user with expired password
+    /// </summary>
+    [HttpPost("deactivate-expired")]
+    [Authorize]
+    public async Task<ActionResult<UserAdminResponse>> DeactivateExpiredPassword([FromBody] DeactivateExpiredPasswordRequest request)
+    {
+        try
+        {
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile is null)
+            {
+                return NotFound(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = "User not found"
+                });
+            }
+
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            var baselineDate = profile.UserAccessOld?.last_log_on
+                ?? credential?.last_password_change
+                ?? DateTime.UtcNow;
+
+            if (baselineDate.AddDays(30) >= DateTime.UtcNow)
+            {
+                return BadRequest(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = $"The user account for {request.Username} cannot be deactivated. The password is still valid."
+                });
+            }
+
+            var now = DateTime.UtcNow;
+            var actorUserCode = GetActorUserCode();
+
+            if (profile.UserAccessOld != null)
+            {
+                profile.UserAccessOld.user_active = false;
+                profile.UserAccessOld.date_updated = now;
+                profile.UserAccessOld.modified_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
+            if (credential != null)
+            {
+                credential.is_active = false;
+                credential.modified_date = now;
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            await _context.SaveChangesAsync();
 
             return Ok(new UserAdminResponse
             {
@@ -636,6 +916,104 @@ public class AuthController : ControllerBase
     }
 
     #region Private Methods
+
+    private const string DefaultSecurityQuestion = "What is your username?";
+
+    private async Task<ResolvedUserProfile?> ResolveUserProfileAsync(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return null;
+        }
+
+        username = username.Trim();
+        var normalized = username.ToLower();
+
+        UserAccessOld? userAccessOld = null;
+        User? user = null;
+
+        if (short.TryParse(username, out var code) && code > 0)
+        {
+            userAccessOld = await _context.UserAccessOlds
+                .FirstOrDefaultAsync(u => u.user_access_code == code && !u.is_deleted);
+            user = await _context.Users
+                .FirstOrDefaultAsync(u => u.user_access_code == code && !u.is_deleted);
+        }
+        else
+        {
+            userAccessOld = await _context.UserAccessOlds
+                .FirstOrDefaultAsync(u => !u.is_deleted && (
+                    (u.name != null && u.name.ToLower() == normalized) ||
+                    (u.E_Mail != null && u.E_Mail.ToLower() == normalized)));
+
+            if (userAccessOld != null)
+            {
+                user = await _context.Users
+                    .FirstOrDefaultAsync(u => u.user_access_code == userAccessOld.user_access_code && !u.is_deleted);
+            }
+            else
+            {
+                user = await _context.Users
+                    .FirstOrDefaultAsync(u => !u.is_deleted && u.email != null && u.email.ToLower() == normalized);
+
+                if (user != null)
+                {
+                    userAccessOld = await _context.UserAccessOlds
+                        .FirstOrDefaultAsync(u => u.user_access_code == user.user_access_code && !u.is_deleted);
+                }
+            }
+        }
+
+        if (userAccessOld == null && user == null)
+        {
+            return null;
+        }
+
+        var userAccessCode = userAccessOld?.user_access_code ?? (short)(user!.user_access_code);
+        var resolvedUsername = userAccessOld?.name
+            ?? user?.email
+            ?? username;
+
+        return new ResolvedUserProfile((int)userAccessCode, resolvedUsername, userAccessOld, user);
+    }
+
+    private int GetActorUserCode()
+    {
+        var actorRaw = User.FindFirst("user_access_code")?.Value;
+        return int.TryParse(actorRaw, out var actorUserCode) ? actorUserCode : 0;
+    }
+
+    private static string HashSecurityAnswer(string answer)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(answer ?? string.Empty));
+        return Convert.ToHexString(bytes);
+    }
+
+    private static string SerializeSecurityQuestionPayload(string question, string answerHash)
+    {
+        return JsonSerializer.Serialize(new SecurityQuestionPayload
+        {
+            Question = question,
+            AnswerHash = answerHash
+        });
+    }
+
+    private static SecurityQuestionPayload? DeserializeSecurityQuestionPayload(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<SecurityQuestionPayload>(raw);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 
     private (string TokenString, DateTime ExpiresAt) GenerateJwtToken(int userAccessCode, string email, bool passwordExpired = false)
     {
@@ -680,6 +1058,13 @@ public class AuthController : ControllerBase
         var random = new Random();
         return new string(Enumerable.Repeat(chars, 8)
             .Select(s => s[random.Next(s.Length)]).ToArray());
+    }
+
+    private sealed record ResolvedUserProfile(int UserAccessCode, string ResolvedUsername, UserAccessOld? UserAccessOld, User? User);
+    private sealed class SecurityQuestionPayload
+    {
+        public string Question { get; set; } = string.Empty;
+        public string AnswerHash { get; set; } = string.Empty;
     }
 
     #endregion

@@ -279,7 +279,24 @@
         {
             if (_editingId > 0 && hasPendingUpload)
             {
-                _editorError = "Replacing file on an existing record is not supported yet. Add a new photo, then delete the old one.";
+                await using var fileStream = new MemoryStream(_pendingUpload!.Content);
+                var created = await VehiclePhotoService.UploadAsync<VehiclePhotoDto>(
+                    VmfCode,
+                    fileStream,
+                    _pendingUpload.FileName,
+                    _pendingUpload.ContentType,
+                    _editor.Description?.Trim(),
+                    _editor.Orientation > 0 ? _editor.Orientation : null);
+
+                if (created is null)
+                {
+                    _editorError = "Unable to replace photo.";
+                    return;
+                }
+
+                await VehiclePhotoService.DeleteAsync(_editingId);
+                await LoadPhotos();
+                ClearEditor();
                 return;
             }
 

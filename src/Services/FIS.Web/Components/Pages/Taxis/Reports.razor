@@ -500,7 +500,7 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label form-checkbox">
-                            <input type="radio" name="statusRange" checked />
+                            <input type="radio" name="statusRange" checked="@(_statusRangeMode == "date")" @onchange='() => SetStatusRangeMode("date")' />
                             Date Range
                         </label>
                         <div class="form-grid fis-mt-075">
@@ -516,16 +516,20 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label form-checkbox">
-                            <input type="radio" name="statusRange" />
+                            <input type="radio" name="statusRange" checked="@(_statusRangeMode == "fy")" @onchange='() => SetStatusRangeMode("fy")' />
                             Financial Year
                         </label>
-                        <select class="form-select fis-mt-075">
+                        <select class="form-select fis-mt-075" @bind="_selectedFinancialYear" disabled="@(_statusRangeMode != "fy")">
                             <option value="">Select financial year</option>
+                            @foreach (var fy in FinancialYearOptions)
+                            {
+                                <option value="@fy">@fy</option>
+                            }
                         </select>
                     </div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-secondary">Back</button>
+                    <button class="btn btn-secondary" @onclick='() => Navigation.NavigateTo("/taxis")'>Back</button>
                     <button class="btn btn-primary" @onclick="ApplyStatusFilterAsync">Submit</button>
                 </div>
                 <div class="table-container fis-mt-1">
@@ -597,6 +601,8 @@
     private string _statusEndDateText = string.Empty;
     private string _selectedUserFilter = string.Empty;
     private string _selectedContractorFilter = string.Empty;
+    private string _statusRangeMode = "date";
+    private string _selectedFinancialYear = string.Empty;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -775,8 +781,17 @@
 
     private Task ApplyStatusFilterAsync()
     {
-        var from = ParseDate(_statusStartDateText);
-        var to = ParseDate(_statusEndDateText);
+        DateTime? from;
+        DateTime? to;
+        if (_statusRangeMode == "fy")
+        {
+            (from, to) = ParseFinancialYearRange(_selectedFinancialYear);
+        }
+        else
+        {
+            from = ParseDate(_statusStartDateText);
+            to = ParseDate(_statusEndDateText);
+        }
 
         var statusType = GetStatusType();
         _statusRows = _requests
@@ -787,6 +802,32 @@
             .ToList();
 
         return Task.CompletedTask;
+    }
+
+    private void SetStatusRangeMode(string mode)
+    {
+        _statusRangeMode = mode;
+    }
+
+    private IEnumerable<string> FinancialYearOptions
+        => Enumerable.Range(DateTime.Today.Year - 10, 16)
+            .Select(startYear => $"{startYear}/{startYear + 1}")
+            .OrderByDescending(v => v);
+
+    private static (DateTime? from, DateTime? to) ParseFinancialYearRange(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return (null, null);
+        }
+
+        var parts = value.Split('/', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || !int.TryParse(parts[0], out var startYear) || !int.TryParse(parts[1], out var endYear))
+        {
+            return (null, null);
+        }
+
+        return (new DateTime(startYear, 4, 1), new DateTime(endYear, 3, 31));
     }
 
     private string GetStatusType()

@@ -1,7 +1,10 @@
 @page "/taxis"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject TaxiApiService TaxiService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
 
 <PageTitle>Taxi Menu - Fleet Information System</PageTitle>
@@ -23,6 +26,14 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasPrivateHireVehiclesRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Private Hire Vehicles</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleHelp">
@@ -99,20 +110,23 @@
             }
         </div>
 
-        <div class="menu-tile">
-            <button class="menu-tile-header" @onclick="ToggleMaintenance">
-                <span>Maintenance</span>
-                <i class="bx @(_showMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
-            </button>
-            @if (_showMaintenance)
-            {
-                <div class="menu-tile-body">
-                    <div class="menu-item">
-                        <a class="menu-item-link" href="/taxis/maintenance/info">1) Taxi Information Maintenance</a>
+        @if (_hasTaxiInformationMaintenanceRole)
+        {
+            <div class="menu-tile">
+                <button class="menu-tile-header" @onclick="ToggleMaintenance">
+                    <span>Maintenance</span>
+                    <i class="bx @(_showMaintenance ? "bx-chevron-up" : "bx-chevron-down")"></i>
+                </button>
+                @if (_showMaintenance)
+                {
+                    <div class="menu-tile-body">
+                        <div class="menu-item">
+                            <a class="menu-item-link" href="/taxis/maintenance/info">1) Taxi Information Maintenance</a>
+                        </div>
                     </div>
-                </div>
-            }
-        </div>
+                }
+            </div>
+        }
 
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleReports">
@@ -252,9 +266,12 @@
             }
         </div>
     </div>
+    }
 </div>
 
 @code {
+    private bool _hasPrivateHireVehiclesRole;
+    private bool _hasTaxiInformationMaintenanceRole;
     private bool _loading = true;
     private int _page = 1;
     private const int _pageSize = 12;
@@ -277,6 +294,17 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _hasPrivateHireVehiclesRole = HasRole(user, "Private Hire Vehicles");
+        _hasTaxiInformationMaintenanceRole = HasRole(user, "Taxi Information Maintenance");
+
+        if (!_hasPrivateHireVehiclesRole)
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadTaxis();
     }
 
@@ -389,4 +417,20 @@
 
     private static bool Contains(string? value, string search)
         => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
 }

@@ -3,6 +3,7 @@
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject VehicleApiService VehicleService
+@inject FleetManagementApiService FleetService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Delete a Fuelcard</PageTitle>
@@ -100,7 +101,9 @@
                 </div>
             }
             <div class="fis-mt-1">
-                <button class="btn btn-danger btn-sm" disabled="@(_selectedVehicle is null)">Delete</button>
+                <button class="btn btn-danger btn-sm" disabled="@(_selectedVehicle is null || _loading)" @onclick="DeleteSelectedFuelCardAsync">
+                    @(_loading ? "Processing..." : "Delete")
+                </button>
             </div>
         </div>
     </div>
@@ -163,6 +166,49 @@
     {
         _selectedVehicle = vehicle;
         _message = $"Selected vehicle {GetVehicleLabel(vehicle)}.";
+    }
+
+    private async Task DeleteSelectedFuelCardAsync()
+    {
+        if (_selectedVehicle is null)
+        {
+            return;
+        }
+
+        _loading = true;
+        _message = string.Empty;
+        try
+        {
+            var cards = await FleetService.GetFuelCardsByVehicleAsync(_selectedVehicle.vmf_code);
+            var targetCard = cards
+                .OrderByDescending(c => c.Fuel_card_code)
+                .FirstOrDefault();
+
+            if (targetCard is null)
+            {
+                _message = "No fuelcard record found for the selected vehicle.";
+                return;
+            }
+
+            var deleted = await FleetService.DeleteFuelCardAsync(targetCard.Fuel_card_code);
+            if (!deleted)
+            {
+                _message = "Delete failed. Please try again.";
+                return;
+            }
+
+            _message = $"Fuelcard deleted for {GetVehicleLabel(_selectedVehicle)}.";
+            await LoadVehiclesAsync();
+        }
+        catch (Exception ex)
+        {
+            _message = "Delete failed.";
+            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private string GetRowClass(VehicleDto vehicle)

@@ -257,7 +257,9 @@
                 "api/license/one-vehicle/lookup",
                 payload);
             _details = response ?? new LicenseDetailsModel();
-            _selectedVmfCode = await ResolveVehicleVmfCodeAsync();
+            _details.NumberType = _numberType;
+            _details.Number = _vehicleNumber;
+            _selectedVmfCode = _details.VmfCode ?? await ResolveVehicleVmfCodeAsync();
             await LoadLicenceHistoryAsync();
         }
         catch (Exception ex)
@@ -275,6 +277,9 @@
         _saving = true;
         try
         {
+            _details.NumberType = _numberType;
+            _details.Number = _vehicleNumber;
+            _details.VmfCode = _selectedVmfCode;
             await LicenseMaintenanceService.SubmitAsync<object>("api/license/one-vehicle/save", _details);
             await LoadLicenceHistoryAsync();
         }
@@ -356,6 +361,9 @@
 
     private sealed class LicenseDetailsModel
     {
+        public int? VmfCode { get; set; }
+        public string? NumberType { get; set; }
+        public string? Number { get; set; }
         public DateTime? ExpDate { get; set; }
         public string? RegisterNumber { get; set; }
         public string? RegDoc { get; set; }

@@ -197,6 +197,21 @@ public interface IFuelCardRepository
 }
 
 /// <summary>
+/// Repository interface for private hire fuel card operations
+/// </summary>
+public interface IPrivateHireFuelCardRepository
+{
+    Task<PrivateHireFuelCard?> GetByIdAsync(int privateHireFuelCardId);
+    Task<PrivateHireFuelCard?> GetByCardNumberAsync(string cardNumber);
+    Task<IEnumerable<PrivateHireFuelCard>> GetByPrivateHireCodeAsync(int privateHireCode);
+    Task<IEnumerable<PrivateHireFuelCard>> GetByRegistrationNumberAsync(string registrationNumber);
+    Task<IEnumerable<PrivateHireFuelCard>> GetActiveFuelCardsAsync();
+    Task<PrivateHireFuelCard> CreateAsync(PrivateHireFuelCard fuelCard, int currentUserId);
+    Task UpdateAsync(PrivateHireFuelCard fuelCard, int currentUserId);
+    Task DeleteAsync(int privateHireFuelCardId, int currentUserId);
+}
+
+/// <summary>
 /// Repository interface for make operations
 /// </summary>
 public interface IMakeRepository

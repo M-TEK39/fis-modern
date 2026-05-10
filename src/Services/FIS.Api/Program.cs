@@ -4,6 +4,7 @@ using DotNetEnv;
 using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Auth;
+using FIS.Core.Application.Interfaces.Repositories;
 using FIS.Core.Application.Services;
 using FIS.Core.Application.Services.Auth;
 using FIS.Core.Application.Services.Billing;
@@ -330,6 +331,7 @@ builder.Services.AddScoped<ISupplierRepository, SupplierRepository>();
 
 // Phase 3 repositories (Administrative endpoints - Fuel Cards, Notice Management, Reference Data)
 builder.Services.AddScoped<IFuelCardRepository, FuelCardRepository>();
+builder.Services.AddScoped<IPrivateHireFuelCardRepository, PrivateHireFuelCardRepository>();
 
 // Workflow System repositories (Workflow Management & Execution)
 builder.Services.AddScoped<IWorkflowRepository, WorkflowRepository>();
@@ -390,17 +392,17 @@ builder.Services.AddScoped<ILegacyCredentialRepository, LegacyCredentialReposito
 // Authentication services
 builder.Services.AddScoped<IPasswordService, PasswordService>();
 
-// Financial system repositories - temporarily disabled for debugging
+// Financial system repositories
 builder.Services.AddScoped<ITariffRepository, TariffRepository>();
 builder.Services.AddScoped<IVehicleTariffRepository, VehicleTariffRepository>(); // ✅ Re-enabled for tariff recalculation
 builder.Services.AddScoped<ITariffManagementRepository, TariffManagementRepository>();
-//builder.Services.AddScoped<ILeaseTariffRepository, LeaseTariffRepository>();
-//builder.Services.AddScoped<ITariffParameterRepository, TariffParameterRepository>();
-//builder.Services.AddScoped<IMaintenanceValueRepository, MaintenanceValueRepository>();
-//builder.Services.AddScoped<IOverheadRepository, OverheadRepository>();
-//builder.Services.AddScoped<ITariffWeightCalculationRepository, TariffWeightCalculationRepository>();
-//builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>(); // TODO: Fix interface namespace issue
-//builder.Services.AddScoped<IInvoiceItemRepository, InvoiceItemRepository>(); // TODO: Fix interface namespace issue
+builder.Services.AddScoped<ILeaseTariffRepository, LeaseTariffRepository>();
+builder.Services.AddScoped<ITariffParameterRepository, TariffParameterRepository>();
+builder.Services.AddScoped<IMaintenanceValueRepository, MaintenanceValueRepository>();
+builder.Services.AddScoped<IOverheadRepository, OverheadRepository>();
+builder.Services.AddScoped<ITariffWeightCalculationRepository, TariffWeightCalculationRepository>();
+builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
+builder.Services.AddScoped<IInvoiceItemRepository, InvoiceItemRepository>();
 builder.Services.AddScoped<IJournalDetailRepository, JournalDetailRepository>();
 
 // Phase 3 complete: All missing API controllers implemented (Department, Driver, User, Trip)
