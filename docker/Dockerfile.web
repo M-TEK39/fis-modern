@@ -1,6 +1,7 @@
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
+ENV NUGET_PACKAGES=/root/.nuget/packages
 
 # Copy solution file
 COPY FIS.sln .
