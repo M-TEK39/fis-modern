@@ -156,10 +156,6 @@
         _saving = true;
         try
         {
-            if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
-            {
-                Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
-            }
 
             var payload = new
             {

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Json;
 using System.Net;
-using System.IdentityModel.Tokens.Jwt;
 
 namespace FIS.Web.Controllers;
 
@@ -25,7 +24,7 @@ public class AuthProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Proxy login request to API and capture JWT cookie
+    /// Proxy login request to API and capture HttpOnly access/refresh cookies
     /// </summary>
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LegacyLoginRequest request)
@@ -109,7 +108,7 @@ public class AuthProxyController : ControllerBase
             {
                 _logger.LogInformation("Cookie received from API: {Name} = {Value}", cookie.Name, cookie.Value?.Substring(0, Math.Min(20, cookie.Value?.Length ?? 0)));
 
-                if (cookie.Name == "FIS_JWT_Token" && !string.IsNullOrEmpty(cookie.Value))
+                if ((cookie.Name == "FIS_Access_Token" || cookie.Name == "FIS_Refresh_Token") && !string.IsNullOrEmpty(cookie.Value))
                 {
                     var cookieOptions = new CookieOptions
                     {
@@ -123,17 +122,15 @@ public class AuthProxyController : ControllerBase
 
                     Response.Cookies.Append(cookie.Name, cookie.Value, cookieOptions);
 
-                    _logger.LogInformation("✅ Forwarded JWT cookie '{CookieName}' to browser, Expires: {Expires}",
+                    _logger.LogInformation("✅ Forwarded auth cookie '{CookieName}' to browser, Expires: {Expires}",
                         cookie.Name, cookieOptions.Expires);
                 }
             }
 
-            // If no cookie was captured, log the token from response for debugging
+            // If no cookie was captured, set access cookie from response token fallback.
             if (cookies.Count == 0 && loginResponse != null && !string.IsNullOrEmpty(loginResponse.Token))
             {
-                _logger.LogWarning("⚠️ No cookies captured from API response, but login succeeded. Manually setting cookie from token.");
-
-                var tokenExpiry = TryReadJwtExpiry(loginResponse.Token) ?? DateTimeOffset.UtcNow.AddHours(8);
+                _logger.LogWarning("⚠️ No cookies captured from API response, but login succeeded. Manually setting access cookie from response token.");
 
                 // Manually create cookie from token in JSON response
                 var cookieOptions = new CookieOptions
@@ -141,14 +138,14 @@ public class AuthProxyController : ControllerBase
                     HttpOnly = true,
                     Secure = false,
                     SameSite = SameSiteMode.Lax,
-                    Expires = tokenExpiry,
+                    Expires = loginResponse.ExpiresAt,
                     Path = "/",
                     Domain = null
                 };
 
-                Response.Cookies.Append("FIS_JWT_Token", loginResponse.Token, cookieOptions);
+                Response.Cookies.Append("FIS_Access_Token", loginResponse.Token, cookieOptions);
 
-                _logger.LogInformation("✅ Manually set JWT cookie from response token, Expires: {Expires}", loginResponse.ExpiresAt);
+                _logger.LogInformation("✅ Manually set access cookie from response token, Expires: {Expires}", loginResponse.ExpiresAt);
             }
 
             return Ok(loginResponse);
@@ -161,7 +158,7 @@ public class AuthProxyController : ControllerBase
     }
 
     /// <summary>
-    /// Logout and clear JWT cookie
+    /// Logout and clear auth cookies
     /// </summary>
     [HttpPost("logout")]
     public async Task<IActionResult> Logout()
@@ -177,33 +174,14 @@ public class AuthProxyController : ControllerBase
             _logger.LogWarning(ex, "Failed to call API logout endpoint");
         }
 
-        // Clear JWT cookie from browser
-        Response.Cookies.Delete("FIS_JWT_Token");
+        Response.Cookies.Delete("FIS_Access_Token");
+        Response.Cookies.Delete("FIS_Refresh_Token");
 
-        _logger.LogInformation("User logged out - JWT cookie cleared");
+        _logger.LogInformation("User logged out - auth cookies cleared");
 
         return Ok(new { message = "Logged out successfully" });
     }
 
-    private static DateTimeOffset? TryReadJwtExpiry(string token)
-    {
-        try
-        {
-            var handler = new JwtSecurityTokenHandler();
-            var jwt = handler.ReadJwtToken(token);
-            var expValue = jwt.Claims.FirstOrDefault(c => c.Type == "exp")?.Value;
-            if (!long.TryParse(expValue, out var expEpoch))
-            {
-                return null;
-            }
-
-            return DateTimeOffset.FromUnixTimeSeconds(expEpoch);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }
 
 /// <summary>

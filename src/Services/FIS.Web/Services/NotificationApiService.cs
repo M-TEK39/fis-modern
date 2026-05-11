@@ -14,7 +14,7 @@ public class NotificationApiService
     {
         PropertyNameCaseInsensitive = true
     };
-    private const string JwtItemKey = "FIS_JWT_Token";
+    private const string AccessCookieName = "FIS_Access_Token";
 
     public NotificationApiService(
         HttpClient httpClient,
@@ -41,7 +41,7 @@ public class NotificationApiService
 
     public async Task<NotificationFeedDto> GetFeedAsync()
     {
-        if (!HasJwtToken())
+        if (!HasSessionCookie())
         {
             return new NotificationFeedDto(new List<NotificationListItemDto>(), 0, null);
         }
@@ -169,8 +169,8 @@ public class NotificationApiService
         }
     }
 
-    private bool HasJwtToken()
-        => !string.IsNullOrWhiteSpace(_httpContextAccessor.HttpContext?.Items[JwtItemKey] as string);
+    private bool HasSessionCookie()
+        => _httpContextAccessor.HttpContext?.Request.Cookies.ContainsKey(AccessCookieName) == true;
 
     private static string BuildWorkflowTitle(WorkflowNotificationLogDto item)
     {

@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using FIS.Web.Models;
 using System.Text.Json;
-using System.Net.Http.Headers;
 using System.Text;
 
 namespace FIS.Web.Services;
@@ -21,11 +20,7 @@ public class VehicleApiService
 
     private void AddAuthorizationHeader()
     {
-        if (_tokenService.IsTokenValid && !string.IsNullOrEmpty(_tokenService.Token))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = 
-                new AuthenticationHeaderValue("Bearer", _tokenService.Token);
-        }
+        // Session auth is cookie-based and forwarded by AuthorizationHeaderHandler.
     }
 
     public async Task<PagedResult<VehicleDto>> GetVehiclesAsync(

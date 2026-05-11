@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +9,7 @@ using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
+using FIS.Api.Services;
 
 namespace FIS.Api.Controllers;
 
@@ -27,17 +26,20 @@ public class AuthController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<AuthController> _logger;
+    private readonly ISessionTokenStore _sessionTokenStore;
 
     public AuthController(
         IConfiguration configuration,
         IUserRepository userRepository,
         FisDbContext context,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        ISessionTokenStore sessionTokenStore)
     {
         _configuration = configuration;
         _userRepository = userRepository;
         _context = context;
         _logger = logger;
+        _sessionTokenStore = sessionTokenStore;
     }
 
     /// <summary>
@@ -116,12 +118,15 @@ public class AuthController : ControllerBase
             daysRemaining = Math.Max(0, (int)(fallbackExpiryDays - passwordAge));
         }
 
-        var token = GenerateJwtToken(user.user_access_code, user.email ?? request.Username, passwordExpired);
+        var authClaims = BuildAuthClaims(user.user_access_code, user.email ?? request.Username, passwordExpired);
+        var tokens = _sessionTokenStore.IssueTokens(authClaims);
+
+        WriteAuthCookies(tokens.AccessToken, tokens.AccessExpiresAt, tokens.RefreshToken, tokens.RefreshExpiresAt);
 
         return Ok(new LoginResponse
         {
-            Token = token.TokenString,
-            ExpiresAt = token.ExpiresAt,
+            Token = tokens.AccessToken,
+            ExpiresAt = tokens.AccessExpiresAt.UtcDateTime,
             UserAccessCode = user.user_access_code,
             Email = user.email,
             PasswordExpired = passwordExpired,
@@ -135,55 +140,41 @@ public class AuthController : ControllerBase
     /// <summary>
     /// Refresh an existing JWT token
     /// </summary>
-    /// <param name="request">Current token to refresh</param>
     /// <returns>New JWT token</returns>
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public ActionResult<LoginResponse> RefreshToken([FromBody] RefreshTokenRequest request)
+    public ActionResult<LoginResponse> RefreshToken()
     {
-        try
+        if (!Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken) || string.IsNullOrWhiteSpace(refreshToken))
         {
-            var jwtSettings = _configuration.GetSection("JwtSettings");
-            var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
-            var tokenHandler = new JwtSecurityTokenHandler();
-
-            var validationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = false, // Don't validate expiration for refresh
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = jwtSettings["Issuer"],
-                ValidAudience = jwtSettings["Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
-            };
-
-            var principal = tokenHandler.ValidateToken(request.Token, validationParameters, out var validatedToken);
-            var userAccessCodeClaim = principal.FindFirst("user_access_code")?.Value;
-
-            if (string.IsNullOrEmpty(userAccessCodeClaim) || !int.TryParse(userAccessCodeClaim, out var userAccessCode))
-            {
-                return Unauthorized(new { error = "Invalid token claims" });
-            }
-
-            var emailClaim = principal.FindFirst(ClaimTypes.Email)?.Value ?? $"user{userAccessCode}@test.com";
-            var newToken = GenerateJwtToken(userAccessCode, emailClaim);
-
-            return Ok(new LoginResponse
-            {
-                Token = newToken.TokenString,
-                ExpiresAt = newToken.ExpiresAt,
-                UserAccessCode = userAccessCode,
-                Email = emailClaim,
-                Message = "Token refreshed successfully"
-            });
+            return Unauthorized(new { error = "Refresh token cookie is missing." });
         }
-        catch (Exception ex)
+
+        if (!_sessionTokenStore.TryRefresh(refreshToken, out var refreshedTokens, out var claims))
         {
-            _logger.LogError(ex, "Error refreshing token");
             return Unauthorized(new { error = "Invalid token" });
         }
+
+        WriteAuthCookies(
+            refreshedTokens.AccessToken,
+            refreshedTokens.AccessExpiresAt,
+            refreshedTokens.RefreshToken,
+            refreshedTokens.RefreshExpiresAt);
+
+        var userAccessCode = int.TryParse(claims.FirstOrDefault(c => c.Type == "user_access_code")?.Value, out var parsedUserCode)
+            ? parsedUserCode
+            : 0;
+        var emailClaim = claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+
+        return Ok(new LoginResponse
+        {
+            Token = refreshedTokens.AccessToken,
+            ExpiresAt = refreshedTokens.AccessExpiresAt.UtcDateTime,
+            UserAccessCode = userAccessCode,
+            Email = emailClaim,
+            Message = "Token refreshed successfully"
+        });
     }
 
     /// <summary>
@@ -196,7 +187,20 @@ public class AuthController : ControllerBase
         var userAccessCode = User.FindFirst("user_access_code")?.Value;
         _logger.LogInformation("User {UserAccessCode} logged out", userAccessCode);
 
-        return Ok(new { message = "Logged out successfully. Clear token from client storage." });
+        if (Request.Cookies.TryGetValue(SessionCookieAuthenticationHandler.AccessCookieName, out var accessToken))
+        {
+            _sessionTokenStore.RevokeByAccessToken(accessToken);
+        }
+
+        if (Request.Cookies.TryGetValue(RefreshTokenCookieName, out var refreshToken))
+        {
+            _sessionTokenStore.RevokeByRefreshToken(refreshToken);
+        }
+
+        Response.Cookies.Delete(SessionCookieAuthenticationHandler.AccessCookieName);
+        Response.Cookies.Delete(RefreshTokenCookieName);
+
+        return Ok(new { message = "Logged out successfully." });
     }
 
     /// <summary>
@@ -208,14 +212,15 @@ public class AuthController : ControllerBase
     {
         var userAccessCode = User.FindFirst("user_access_code")?.Value;
         var email = User.FindFirst(ClaimTypes.Email)?.Value;
-        var expiry = User.FindFirst(JwtRegisteredClaimNames.Exp)?.Value;
+        var expiryClaim = User.FindFirst(ClaimTypes.Expiration)?.Value;
+        var expiresAt = DateTimeOffset.TryParse(expiryClaim, out var parsedExpiry) ? parsedExpiry.UtcDateTime : (DateTime?)null;
 
         return Ok(new
         {
             valid = true,
             userAccessCode,
             email,
-            expiresAt = expiry != null ? (DateTime?)DateTimeOffset.FromUnixTimeSeconds(long.Parse(expiry)).DateTime : null,
+            expiresAt,
             authType = User.Identity?.AuthenticationType
         });
     }
@@ -1015,41 +1020,52 @@ public class AuthController : ControllerBase
         }
     }
 
-    private (string TokenString, DateTime ExpiresAt) GenerateJwtToken(int userAccessCode, string email, bool passwordExpired = false)
-    {
-        var jwtSettings = _configuration.GetSection("JwtSettings");
-        var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
-        var issuer = jwtSettings["Issuer"];
-        var audience = jwtSettings["Audience"];
-        var expirationMinutes = int.Parse(jwtSettings["ExpirationMinutes"] ?? "480");
+    private static readonly string RefreshTokenCookieName = "FIS_Refresh_Token";
 
-        var claims = new[]
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, userAccessCode.ToString()),
+    private static List<Claim> BuildAuthClaims(int userAccessCode, string email, bool passwordExpired = false)
+    {
+        return
+        [
             new Claim("user_access_code", userAccessCode.ToString()),
             new Claim(ClaimTypes.Email, email),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new Claim(ClaimTypes.Name, email),
-            new Claim("password_change_required", passwordExpired.ToString().ToLower())
-        };
+            new Claim("password_change_required", passwordExpired.ToString().ToLowerInvariant())
+        ];
+    }
 
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+    private void WriteAuthCookies(
+        string accessToken,
+        DateTimeOffset accessExpiresAt,
+        string refreshToken,
+        DateTimeOffset refreshExpiresAt)
+    {
+        var isHttps = Request.IsHttps;
 
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(expirationMinutes),
-            signingCredentials: credentials
-        );
+        Response.Cookies.Append(
+            SessionCookieAuthenticationHandler.AccessCookieName,
+            accessToken,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = isHttps,
+                SameSite = SameSiteMode.Lax,
+                Expires = accessExpiresAt,
+                Path = "/",
+                IsEssential = true
+            });
 
-        var tokenString = new JwtSecurityTokenHandler().WriteToken(token);
-
-        _logger.LogInformation("Generated JWT token for user_access_code: {UserAccessCode}", userAccessCode);
-
-        return (tokenString, token.ValidTo);
+        Response.Cookies.Append(
+            RefreshTokenCookieName,
+            refreshToken,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = isHttps,
+                SameSite = SameSiteMode.Lax,
+                Expires = refreshExpiresAt,
+                Path = "/",
+                IsEssential = true
+            });
     }
 
     private static string GenerateTemporaryPassword()

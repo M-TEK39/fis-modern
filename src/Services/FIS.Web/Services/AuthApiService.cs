@@ -43,8 +43,8 @@ public class AuthApiService
         var loginResponse = await response.Content.ReadFromJsonAsync<LegacyLoginResponse>()
             ?? throw new InvalidOperationException("Login response was empty.");
 
-        // Store the JWT token in ProtectedSessionStorage (persists across SignalR reconnections)
         await _tokenService.SetTokenAsync(loginResponse.Token, loginResponse.ExpiresAt);
+        await _tokenService.SetUserContextAsync(loginResponse.UserAccessCode, loginResponse.Email);
         await _userAccessContextService.PrimeFromLoginAsync(
             loginResponse.UserAccessCode,
             request.FirstName);

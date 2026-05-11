@@ -9,7 +9,7 @@ namespace FIS.Web.Services;
 
 /// <summary>
 /// Lightweight base class for simple CRUD-style API calls with case-insensitive JSON handling.
-/// Automatically adds JWT token to requests.
+/// Uses session cookies forwarded by AuthorizationHeaderHandler.
 /// </summary>
 public abstract class BaseApiService
 {
@@ -30,15 +30,10 @@ public abstract class BaseApiService
     protected ILogger Logger { get; }
 
     /// <summary>
-    /// Adds JWT token to request if available
+    /// Session auth is cookie-based and forwarded by AuthorizationHeaderHandler.
     /// </summary>
     private void AddAuthorizationHeader()
     {
-        if (TokenService.IsTokenValid && !string.IsNullOrEmpty(TokenService.Token))
-        {
-            HttpClient.DefaultRequestHeaders.Authorization = 
-                new AuthenticationHeaderValue("Bearer", TokenService.Token);
-        }
     }
 
     protected async Task<List<T>> GetListAsync<T>(string path)
@@ -387,11 +382,6 @@ public class VehiclePhotoApiService(HttpClient httpClient, TokenService tokenSer
     {
         try
         {
-            if (TokenService.IsTokenValid && !string.IsNullOrEmpty(TokenService.Token))
-            {
-                HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
-            }
-
             using var form = new MultipartFormDataContent();
             form.Add(new StringContent(vmfCode.ToString()), "vmfCode");
             if (!string.IsNullOrWhiteSpace(description))

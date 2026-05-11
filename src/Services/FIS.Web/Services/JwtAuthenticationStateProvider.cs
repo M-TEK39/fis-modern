@@ -1,90 +1,53 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using System.Security.Claims;
-using System.IdentityModel.Tokens.Jwt;
-using System.Linq;
 
 namespace FIS.Web.Services;
 
 /// <summary>
-/// Custom AuthenticationStateProvider for JWT token authentication in Blazor Server
-/// Uses circuit-scoped TokenService to provide authentication state
+/// Provides legacy auth state from circuit-scoped in-memory auth context.
 /// </summary>
 public class JwtAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly TokenService _tokenService;
-    private readonly UserAccessContextService _userAccessContextService;
     private readonly ILogger<JwtAuthenticationStateProvider> _logger;
 
     public JwtAuthenticationStateProvider(
         TokenService tokenService,
-        UserAccessContextService userAccessContextService,
         ILogger<JwtAuthenticationStateProvider> logger)
     {
         _tokenService = tokenService;
-        _userAccessContextService = userAccessContextService;
         _logger = logger;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        // Rehydrate token from ProtectedSessionStorage after full page refresh/new circuit.
         await _tokenService.InitializeAsync();
 
-        ClaimsIdentity identity;
-
-        if (_tokenService.IsTokenValid && !string.IsNullOrEmpty(_tokenService.Token))
+        if (_tokenService.IsTokenValid)
         {
-            try
-            {
-                // Parse JWT token to get claims
-                var handler = new JwtSecurityTokenHandler();
-                var token = handler.ReadJwtToken(_tokenService.Token);
-                var claims = token.Claims.ToList();
+            var claims = new List<Claim>();
 
-                // Backfill legacy access level claim from user profile API if token does not include it.
-                var hasAccessLevelClaim = claims.Any(c => c.Type == "access_level");
-                if (!hasAccessLevelClaim)
-                {
-                    var userAccessCodeClaim = claims.FirstOrDefault(c => c.Type == "user_access_code")?.Value;
-                    if (int.TryParse(userAccessCodeClaim, out var userAccessCode))
-                    {
-                        var accessLevel = await _userAccessContextService.EnsureAccessLevelAsync(userAccessCode);
-                        if (accessLevel > 0)
-                        {
-                            claims.Add(new Claim("access_level", accessLevel.ToString()));
-                        }
-                    }
-                }
-
-                // Create authenticated identity with claims from token
-                identity = new ClaimsIdentity(claims, "jwt");
-                
-                _logger.LogInformation("User authenticated with JWT token. User: {User}", 
-                    identity.FindFirst("user_access_code")?.Value ?? "unknown");
-            }
-            catch (Exception ex)
+            if (_tokenService.UserAccessCode > 0)
             {
-                _logger.LogWarning(ex, "Failed to parse JWT token - treating as anonymous");
-                // Invalid token - return anonymous
-                identity = new ClaimsIdentity();
+                claims.Add(new Claim("user_access_code", _tokenService.UserAccessCode.ToString()));
             }
-        }
-        else
-        {
-            _logger.LogDebug("No valid token - user is anonymous");
-            identity = new ClaimsIdentity();
+
+            if (!string.IsNullOrWhiteSpace(_tokenService.Email))
+            {
+                claims.Add(new Claim(ClaimTypes.Email, _tokenService.Email));
+                claims.Add(new Claim(ClaimTypes.Name, _tokenService.Email));
+            }
+
+            var identity = new ClaimsIdentity(claims, "legacy-session");
+            return new AuthenticationState(new ClaimsPrincipal(identity));
         }
 
-        var user = new ClaimsPrincipal(identity);
-        return new AuthenticationState(user);
+        _logger.LogDebug("No valid legacy session in circuit state.");
+        return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
     }
 
-    /// <summary>
-    /// Notify Blazor that authentication state has changed (after login/logout)
-    /// </summary>
     public void NotifyAuthenticationStateChanged()
     {
-        _logger.LogInformation("Authentication state changed - notifying Blazor");
         NotifyAuthenticationStateChanged(GetAuthenticationStateAsync());
     }
 }

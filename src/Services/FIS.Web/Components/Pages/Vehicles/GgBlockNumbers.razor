@@ -109,10 +109,6 @@
         _saving = true;
         try
         {
-            if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
-            {
-                Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
-            }
 
             var payload = new { startGgNumber = start, endGgNumber = end };
             var response = await Http.PostAsJsonAsync("api/vehicle-inception/gg-blocks", payload);

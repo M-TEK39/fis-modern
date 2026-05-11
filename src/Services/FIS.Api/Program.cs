@@ -1,4 +1,3 @@
-using System.Text;
 using AspNetCoreRateLimit;
 using DotNetEnv;
 using FIS.Api.Services;
@@ -14,10 +13,9 @@ using FIS.Core.Infrastructure.Repositories;
 using FIS.Core.Infrastructure.Services;
 using FIS.Data.SqlServer;
 using FIS.Data.SqlServer.Interceptors;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
-using Microsoft.IdentityModel.Tokens;
 using SendGrid;
 using Hangfire;
 using Hangfire.SqlServer;
@@ -120,14 +118,13 @@ builder.Services.AddSwaggerGen(options =>
         }
     );
 
-    // Add JWT Bearer authentication to Swagger
-    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    // Add cookie authentication note to Swagger
+    options.AddSecurityDefinition("CookieAuth", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below. Example: 'Bearer 12345abcdef'",
-        Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Description = "Session authentication uses HttpOnly cookies FIS_Access_Token and FIS_Refresh_Token.",
+        Name = "Cookie",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Cookie,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey
     });
 
     options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
@@ -138,7 +135,7 @@ builder.Services.AddSwaggerGen(options =>
                 Reference = new Microsoft.OpenApi.Models.OpenApiReference
                 {
                     Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    Id = "CookieAuth"
                 }
             },
             Array.Empty<string>()
@@ -146,75 +143,17 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Configure multi-scheme authentication (Entra ID + Legacy JWT)
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var jwtSecretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey not configured");
+builder.Services.AddSingleton<ISessionTokenStore, InMemorySessionTokenStore>();
 
-// Set LegacyJWT as default scheme (since most users will use legacy auth initially)
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = "LegacyJWT";
-    options.DefaultChallengeScheme = "LegacyJWT";
-})
-    .AddJwtBearer("LegacyJWT", options =>
-    {
-        // Legacy JWT validation
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
-            ClockSkew = TimeSpan.Zero
-        };
+    options.DefaultAuthenticateScheme = SessionCookieAuthenticationHandler.SchemeName;
+    options.DefaultChallengeScheme = SessionCookieAuthenticationHandler.SchemeName;
+}).AddScheme<AuthenticationSchemeOptions, SessionCookieAuthenticationHandler>(
+    SessionCookieAuthenticationHandler.SchemeName,
+    _ => { });
 
-        // Read JWT token from HttpOnly cookie (Blazor Server) OR Authorization header
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                // First, check Authorization header (API calls)
-                var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
-
-                // If no Authorization header, check HttpOnly cookie (Blazor Server pages)
-                if (string.IsNullOrEmpty(token) && context.Request.Cookies.ContainsKey("FIS_JWT_Token"))
-                {
-                    token = context.Request.Cookies["FIS_JWT_Token"];
-                }
-
-                if (!string.IsNullOrEmpty(token))
-                {
-                    context.Token = token;
-                }
-
-                return Task.CompletedTask;
-            }
-        };
-    })
-    .AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
-    {
-        // Microsoft Entra ID / Azure AD validation
-        options.Authority = $"{builder.Configuration["AzureAd:Instance"]}{builder.Configuration["AzureAd:TenantId"]}/v2.0";
-        options.Audience = builder.Configuration["AzureAd:ClientId"];
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true
-        };
-    });
-
-// Configure authorization to accept EITHER authentication scheme
-builder.Services.AddAuthorization(options =>
-{
-    options.DefaultPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder("LegacyJWT", JwtBearerDefaults.AuthenticationScheme)
-        .RequireAuthenticatedUser()
-        .Build();
-});
+builder.Services.AddAuthorization();
 
 // Register business services
 builder.Services.AddScoped<ICurrentUserContext, CurrentUserContextService>();

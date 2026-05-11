@@ -187,10 +187,6 @@
 
     private void AddAuthHeader()
     {
-        if (TokenService.IsTokenValid && !string.IsNullOrWhiteSpace(TokenService.Token))
-        {
-            Http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenService.Token);
-        }
     }
 
     private sealed class VehicleSourceRow

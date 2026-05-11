@@ -67,8 +67,7 @@
     {
         if (firstRender)
         {
-            // Restore JWT token from ProtectedSessionStorage into the circuit-scoped
-            // TokenService (and HttpContext.Items relay) after a page refresh.
+            // Ensure circuit-scoped auth context is initialized after first render.
             await TokenService.InitializeAsync();
         }
     }

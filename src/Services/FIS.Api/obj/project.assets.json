@@ -9506,7 +9506,6 @@
       "FIS.Data.SqlServer >= 1.0.0",
       "Hangfire.AspNetCore >= 1.8.23",
       "Hangfire.SqlServer >= 1.8.23",
-      "Microsoft.AspNetCore.Authentication.JwtBearer >= 8.0.0",
       "Microsoft.AspNetCore.OpenApi >= 8.0.21",
       "Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore >= 8.0.11",
       "Microsoft.Extensions.Logging.Abstractions >= 8.0.2",
@@ -9532,7 +9531,7 @@
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "/home/dev/work/fis-modern/nuget.config",
-        "/root/.nuget/NuGet/NuGet.Config"
+        "/home/dev/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net8.0"
@@ -9593,10 +9592,6 @@
           "Hangfire.SqlServer": {
             "target": "Package",
             "version": "[1.8.23, )"
-          },
-          "Microsoft.AspNetCore.Authentication.JwtBearer": {
-            "target": "Package",
-            "version": "[8.0.0, )"
           },
           "Microsoft.AspNetCore.OpenApi": {
             "target": "Package",
