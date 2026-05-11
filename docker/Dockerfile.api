@@ -16,17 +16,14 @@ COPY src/Data/FIS.Data.SqlServer/FIS.Data.SqlServer.csproj src/Data/FIS.Data.Sql
 COPY src/Data/FIS.Data/FIS.Data.csproj src/Data/FIS.Data/
 COPY src/Services/FIS.Api/FIS.Api.csproj src/Services/FIS.Api/
 
-# Restore packages
+# Restore packages (cached layer — only invalidated when .csproj files change)
 RUN dotnet restore src/Services/FIS.Api/FIS.Api.csproj
 
 # Copy source code
 COPY src/ src/
 
-# Build the application
-RUN dotnet build src/Services/FIS.Api/FIS.Api.csproj -c Release --no-restore
-
-# Publish the application
-RUN dotnet publish src/Services/FIS.Api/FIS.Api.csproj -c Release --no-build -o /app/publish
+# Build and publish
+RUN dotnet publish src/Services/FIS.Api/FIS.Api.csproj -c Release --no-restore -o /app/publish
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
