@@ -32,19 +32,10 @@ foreach (var pair in dotEnvRawValues)
     dotEnvValues[pair.Key] = pair.Value;
 }
 
-if (dotEnvValues.TryGetValue("ConnectionStrings__Default", out var connectionStringFromEnv))
+// Map every KEY__SUBKEY from .env into KEY:SUBKEY for ASP.NET Core configuration
+foreach (var pair in dotEnvValues)
 {
-    dotEnvConfig["ConnectionStrings:Default"] = connectionStringFromEnv;
-}
-
-if (dotEnvValues.TryGetValue("ApiSettings__BaseUrl", out var apiBaseUrlFromEnv))
-{
-    dotEnvConfig["ApiSettings:BaseUrl"] = apiBaseUrlFromEnv;
-}
-
-if (dotEnvValues.TryGetValue("ApiSettings__WebBaseUrl", out var webBaseUrlFromEnv))
-{
-    dotEnvConfig["ApiSettings:WebBaseUrl"] = webBaseUrlFromEnv;
+    dotEnvConfig[pair.Key.Replace("__", ":")] = pair.Value;
 }
 
 builder.Configuration.AddInMemoryCollection(dotEnvConfig);
