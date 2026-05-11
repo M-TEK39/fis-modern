@@ -29,30 +29,42 @@ builder.Configuration.AddInMemoryCollection(dotEnvConfig);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Configure Microsoft Entra ID authentication
-builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
-    .AddMicrosoftIdentityWebApp(options =>
-    {
-        builder.Configuration.Bind("AzureAd", options);
+var isMicrosoftIdentityConfigured = !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"]);
 
-        // Configure logout behavior
-        options.Events = new OpenIdConnectEvents
+// Configure Microsoft Entra ID authentication
+if (isMicrosoftIdentityConfigured)
+{
+    builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+        .AddMicrosoftIdentityWebApp(options =>
         {
-            OnSignedOutCallbackRedirect = context =>
+            builder.Configuration.Bind("AzureAd", options);
+
+            // Configure logout behavior
+            options.Events = new OpenIdConnectEvents
             {
-                // Redirect to signed out page after Microsoft completes logout
-                context.Response.Redirect("/signedout");
-                context.HandleResponse();
-                return Task.CompletedTask;
-            }
-        };
-    });
+                OnSignedOutCallbackRedirect = context =>
+                {
+                    // Redirect to signed out page after Microsoft completes logout
+                    context.Response.Redirect("/signedout");
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                }
+            };
+        });
+
+    // Add controllers with views for Microsoft Identity UI (login/logout pages)
+    builder.Services.AddControllersWithViews()
+        .AddMicrosoftIdentityUI();
+}
+else
+{
+    builder.Services.AddAuthentication();
+
+    // MVC controllers are still needed for legacy auth proxy endpoints.
+    builder.Services.AddControllersWithViews();
+}
 
 builder.Services.AddAuthorization();
-
-// Add controllers with views for Microsoft Identity UI (login/logout pages)
-builder.Services.AddControllersWithViews()
-    .AddMicrosoftIdentityUI();
 
 // Add session support (required for stable TokenService circuit identification)
 builder.Services.AddDistributedMemoryCache();
