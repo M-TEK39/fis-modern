@@ -45,18 +45,32 @@ internal class ApiDriverRequest
 public class DriverApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<DriverApiService> _logger;
 
-    public DriverApiService(HttpClient httpClient, ILogger<DriverApiService> logger)
+    public DriverApiService(HttpClient httpClient, TokenService tokenService, ILogger<DriverApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<DriverDto>> GetDriversAsync()
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<ApiDriverResponse>>("api/Driver");
             if (result == null) return new List<DriverDto>();
 
@@ -73,6 +87,7 @@ public class DriverApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<ApiDriverResponse>($"api/Driver/{driverCode}");
             return result == null ? null : MapToDto(result);
         }
@@ -87,6 +102,7 @@ public class DriverApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Driver", MapToRequest(driver));
             return response.IsSuccessStatusCode;
         }
@@ -101,6 +117,7 @@ public class DriverApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/Driver/{driverCode}", MapToRequest(driver));
             return response.IsSuccessStatusCode;
         }
@@ -115,6 +132,7 @@ public class DriverApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/Driver/{driverCode}");
             return response.IsSuccessStatusCode;
         }

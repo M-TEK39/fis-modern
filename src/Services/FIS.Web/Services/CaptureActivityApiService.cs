@@ -6,12 +6,21 @@ namespace FIS.Web.Services;
 public class CaptureActivityApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<CaptureActivityApiService> _logger;
 
-    public CaptureActivityApiService(HttpClient httpClient, ILogger<CaptureActivityApiService> logger)
+    public CaptureActivityApiService(HttpClient httpClient, TokenService tokenService, ILogger<CaptureActivityApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<CaptureActivityReportDto> GetReportAsync(
@@ -24,6 +33,7 @@ public class CaptureActivityApiService
     {
         try
         {
+            AddAuthHeader();
             var queryParts = new List<string>
             {
                 $"date_from={Uri.EscapeDataString(dateFrom.ToString("yyyy-MM-dd"))}"

@@ -20,7 +20,13 @@ public class VehicleApiService
 
     private void AddAuthorizationHeader()
     {
-        // Session auth is cookie-based and forwarded by AuthorizationHeaderHandler.
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<PagedResult<VehicleDto>> GetVehiclesAsync(

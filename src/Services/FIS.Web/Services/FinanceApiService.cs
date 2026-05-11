@@ -44,18 +44,28 @@ internal class FinanceLookupResponse
 public class FinanceApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<FinanceApiService> _logger;
 
-    public FinanceApiService(HttpClient httpClient, ILogger<FinanceApiService> logger)
+    public FinanceApiService(HttpClient httpClient, TokenService tokenService, ILogger<FinanceApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<FinanceOptionDto>> GetDepartmentsAsync()
     {
         try
         {
+            AddAuthHeader();
             var items = await _httpClient.GetFromJsonAsync<List<FinanceDepartmentResponse>>("api/department");
             return items?.Select(x => new FinanceOptionDto
             {
@@ -76,6 +86,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             var items = await _httpClient.GetFromJsonAsync<List<FinanceSiteResponse>>("api/site") ?? new List<FinanceSiteResponse>();
             if (!string.IsNullOrWhiteSpace(departmentCode) && short.TryParse(departmentCode, out var deptCode))
             {
@@ -101,6 +112,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             var items = await _httpClient.GetFromJsonAsync<List<FinanceProvinceResponse>>("api/province");
             return items?.Select(x => new FinanceOptionDto
             {
@@ -121,6 +133,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             var query = Uri.EscapeDataString(searchTerm ?? string.Empty);
             var items = await _httpClient.GetFromJsonAsync<List<FinanceVehicleResponse>>($"api/vehicles/search?searchTerm={query}");
             return items?.Select(x => new FinanceOptionDto
@@ -146,6 +159,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             var encodedFilterBy = Uri.EscapeDataString(filterBy);
             using var response = await _httpClient.GetAsync($"api/finance/reports/posting-months?filterBy={encodedFilterBy}");
             if (!response.IsSuccessStatusCode)
@@ -188,6 +202,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             var payload = await _httpClient.GetFromJsonAsync<JsonElement>($"api/finance/tariff-parameters/{Uri.EscapeDataString(year)}");
             return ParseTariffParameters(payload);
         }
@@ -202,6 +217,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<FinanceBatchStatusDto>("api/finance/batch/status");
         }
         catch (Exception ex)
@@ -370,6 +386,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             using var response = await _httpClient.GetAsync(endpoint);
             var fileBytes = await response.Content.ReadAsByteArrayAsync();
 
@@ -406,6 +423,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
@@ -464,6 +482,7 @@ public class FinanceApiService
 
         try
         {
+            AddAuthHeader();
             using var response = await _httpClient.PostAsync(endpoint, content);
             var body = await response.Content.ReadAsStringAsync();
 
@@ -496,6 +515,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             var payload = await _httpClient.GetFromJsonAsync<JsonElement>(endpoint);
             var options = ParseLookupOptions(payload);
 
@@ -746,6 +766,7 @@ public class FinanceApiService
     {
         try
         {
+            AddAuthHeader();
             using var request = new HttpRequestMessage(method, endpoint);
             if (payload != null)
             {

@@ -8,18 +8,28 @@ namespace FIS.Web.Services;
 public class ReportCatalogApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<ReportCatalogApiService> _logger;
 
-    public ReportCatalogApiService(HttpClient httpClient, ILogger<ReportCatalogApiService> logger)
+    public ReportCatalogApiService(HttpClient httpClient, TokenService tokenService, ILogger<ReportCatalogApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<ReportDto>> GetAvailableAsync()
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<ReportDto>>("api/Report/available");
             return result ?? new List<ReportDto>();
         }
@@ -34,6 +44,7 @@ public class ReportCatalogApiService
     {
         try
         {
+            AddAuthHeader();
             var startDate = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-90).ToString("o"));
             var endDate = Uri.EscapeDataString(DateTime.UtcNow.ToString("o"));
             var response = await _httpClient.GetAsync($"api/Report/trip/summary?startDate={startDate}&endDate={endDate}");
@@ -77,6 +88,7 @@ public class ReportCatalogApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/Report/trip/detail/{tripId}");
             response.EnsureSuccessStatusCode();
 

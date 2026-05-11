@@ -7,22 +7,36 @@ namespace FIS.Web.Services;
 public class FleetManagementApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<FleetManagementApiService> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
     {
         PropertyNameCaseInsensitive = true
     };
 
-    public FleetManagementApiService(HttpClient httpClient, ILogger<FleetManagementApiService> logger)
+    public FleetManagementApiService(HttpClient httpClient, TokenService tokenService, ILogger<FleetManagementApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<FuelCardIssueResponse?> IssueFuelCardAsync(IssueFuelCardRequest request)
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/fleetmanagement/fuelcards/issue", request);
             var payload = await response.Content.ReadFromJsonAsync<FuelCardIssueResponse>(_jsonOptions);
             if (response.IsSuccessStatusCode)
@@ -52,6 +66,7 @@ public class FleetManagementApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync(
                 $"api/fleetmanagement/fuelcards/{fuelCardCode}/return",
                 request);
@@ -83,6 +98,7 @@ public class FleetManagementApiService
     {
         try
         {
+            AddAuthHeader();
             var url = "api/fleetmanagement/reports/fuelcard-allocation";
             if (siteCode.HasValue)
             {
@@ -118,6 +134,7 @@ public class FleetManagementApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/FuelCard/vehicle/{vmfCode}");
             if (!response.IsSuccessStatusCode)
             {
@@ -138,6 +155,7 @@ public class FleetManagementApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/FuelCard", request);
             return response.IsSuccessStatusCode;
         }
@@ -152,6 +170,7 @@ public class FleetManagementApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/privatehirefuelcard", request);
             return response.IsSuccessStatusCode;
         }
@@ -166,6 +185,7 @@ public class FleetManagementApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/FuelCard/{fuelCardCode}");
             return response.IsSuccessStatusCode;
         }

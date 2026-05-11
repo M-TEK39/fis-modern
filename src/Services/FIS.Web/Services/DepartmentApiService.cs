@@ -42,18 +42,32 @@ internal class ApiDepartmentResponse
 public class DepartmentApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<DepartmentApiService> _logger;
 
-    public DepartmentApiService(HttpClient httpClient, ILogger<DepartmentApiService> logger)
+    public DepartmentApiService(HttpClient httpClient, TokenService tokenService, ILogger<DepartmentApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<DepartmentDto>> GetDepartmentsAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiDepartmentResponse>>("api/department");
             if (apiResponse == null) return new List<DepartmentDto>();
             
@@ -104,6 +118,7 @@ public class DepartmentApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<ApiDepartmentResponse>(
                 $"api/department/{departmentCode}"
             );
@@ -156,6 +171,7 @@ public class DepartmentApiService
     {
         try
         {
+            AddAuthHeader();
             // Map DepartmentDto to API expected format
             var createDepartmentDto = new
             {
@@ -204,6 +220,7 @@ public class DepartmentApiService
     {
         try
         {
+            AddAuthHeader();
             // Map DepartmentDto to Department entity for API
             var departmentEntity = new
             {
@@ -256,6 +273,7 @@ public class DepartmentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/department/{departmentCode}");
             return response.IsSuccessStatusCode;
         }

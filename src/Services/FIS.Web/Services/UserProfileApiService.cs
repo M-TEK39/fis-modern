@@ -5,18 +5,35 @@ namespace FIS.Web.Services;
 public class UserProfileApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<UserProfileApiService> _logger;
 
-    public UserProfileApiService(HttpClient httpClient, ILogger<UserProfileApiService> logger)
+    public UserProfileApiService(
+        HttpClient httpClient,
+        TokenService tokenService,
+        ILogger<UserProfileApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthorizationHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<UserProfileDto?> GetByUserAccessCodeAsync(int userAccessCode)
     {
         try
         {
+            AddAuthorizationHeader();
             return await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/{userAccessCode}");
         }
         catch (Exception ex)
@@ -35,6 +52,7 @@ public class UserProfileApiService
 
         try
         {
+            AddAuthorizationHeader();
             var encoded = Uri.EscapeDataString(firstName.Trim());
             return await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/by-name/{encoded}");
         }

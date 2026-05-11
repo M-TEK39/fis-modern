@@ -12,18 +12,28 @@ internal class ApiLossTypeResponse
 public class LossTypeApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<LossTypeApiService> _logger;
 
-    public LossTypeApiService(HttpClient httpClient, ILogger<LossTypeApiService> logger)
+    public LossTypeApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossTypeApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<LossTypeDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiLossTypeResponse>>("api/losstype");
             if (apiResponse == null) return new List<LossTypeDto>();
 
@@ -44,6 +54,7 @@ public class LossTypeApiService
     {
         try
         {
+            AddAuthHeader();
             var createDto = new
             {
                 loss_description = lossType.loss_description
@@ -63,6 +74,7 @@ public class LossTypeApiService
     {
         try
         {
+            AddAuthHeader();
             var updateDto = new
             {
                 loss_code = (short)lossCode,
@@ -83,6 +95,7 @@ public class LossTypeApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/losstype/{lossCode}");
             return response.IsSuccessStatusCode;
         }

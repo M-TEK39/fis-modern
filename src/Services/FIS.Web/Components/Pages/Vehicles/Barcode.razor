@@ -156,6 +156,7 @@
         _saving = true;
         try
         {
+            AddAuthHeader();
 
             var payload = new
             {
@@ -188,6 +189,17 @@
         _vehicleMatches = new();
         _selectedVmfCode = null;
         return Task.CompletedTask;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            return;
+        }
+
+        Http.DefaultRequestHeaders.Remove("Cookie");
+        Http.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={TokenService.Token}");
     }
 
     private static string ValueOrDash(string? value)

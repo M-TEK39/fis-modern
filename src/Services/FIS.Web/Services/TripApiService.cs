@@ -6,18 +6,32 @@ namespace FIS.Web.Services;
 public class TripApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<TripApiService> _logger;
 
-    public TripApiService(HttpClient httpClient, ILogger<TripApiService> logger)
+    public TripApiService(HttpClient httpClient, TokenService tokenService, ILogger<TripApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<TripDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var startDate = Uri.EscapeDataString(DateTime.UtcNow.AddDays(-90).ToString("o"));
             var endDate = Uri.EscapeDataString(DateTime.UtcNow.ToString("o"));
             var result = await _httpClient.GetFromJsonAsync<List<TripReportSummaryResponse>>(
@@ -35,6 +49,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDto>>($"api/Trip/vehicle/{vmfCode}");
             return result ?? new List<TripDto>();
         }
@@ -49,6 +64,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDto>>($"api/Trip/driver/{driverId}");
             return result ?? new List<TripDto>();
         }
@@ -63,6 +79,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDto>>("api/Trip/recent");
             return result ?? new List<TripDto>();
         }
@@ -77,6 +94,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDto>>(
                 $"api/Trip/daterange?startDate={Uri.EscapeDataString(start.ToString("o"))}&endDate={Uri.EscapeDataString(end.ToString("o"))}");
             return result ?? new List<TripDto>();
@@ -92,6 +110,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var apiTrip = await _httpClient.GetFromJsonAsync<TripControllerResponse>($"api/Trip/{id}");
             if (apiTrip != null)
             {
@@ -117,6 +136,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Trip", request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TripDto>();
@@ -132,6 +152,7 @@ public class TripApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/Trip/{tripId}", request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TripDto>();

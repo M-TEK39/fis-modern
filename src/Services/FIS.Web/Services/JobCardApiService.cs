@@ -350,6 +350,7 @@ public class JobCardDto
     public string? ServiceProvider { get; set; }
 
     public string? CapturedBy => CapturedByUserCode?.ToString();
+    [JsonIgnore]
     public bool? Reviewed => ReviewedFlag?.Equals("Y", StringComparison.OrdinalIgnoreCase);
 }
 

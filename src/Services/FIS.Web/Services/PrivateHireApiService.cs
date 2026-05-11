@@ -6,10 +6,23 @@ namespace FIS.Web.Services;
 public class PrivateHireApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
 
-    public PrivateHireApiService(HttpClient httpClient)
+    public PrivateHireApiService(HttpClient httpClient, TokenService tokenService)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     // Vehicle methods
@@ -17,6 +30,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/privatehire");
             response.EnsureSuccessStatusCode();
 
@@ -37,6 +51,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/privatehire/{vehicleId}");
             response.EnsureSuccessStatusCode();
 
@@ -57,6 +72,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/privatehire", ToApiVehicle(vehicle));
             response.EnsureSuccessStatusCode();
 
@@ -75,6 +91,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/privatehire/{vehicleId}", ToApiVehicle(vehicle));
             response.EnsureSuccessStatusCode();
 
@@ -93,6 +110,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/privatehire/{vehicleId}");
             response.EnsureSuccessStatusCode();
         }
@@ -107,6 +125,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/privatehire/contractors");
             response.EnsureSuccessStatusCode();
 
@@ -127,6 +146,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/privatehire/contractors/{contractorId}");
             response.EnsureSuccessStatusCode();
 
@@ -146,6 +166,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/privatehire/contractors", contractor);
             response.EnsureSuccessStatusCode();
 
@@ -162,6 +183,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/privatehire/contractors/{contractorId}", contractor);
             response.EnsureSuccessStatusCode();
 
@@ -178,6 +200,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/privatehire/contractors/{contractorId}");
             response.EnsureSuccessStatusCode();
         }
@@ -191,6 +214,7 @@ public class PrivateHireApiService
     {
         try
         {
+            AddAuthHeader();
             var url = $"api/privatehire/daterange?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}";
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();

@@ -6,12 +6,21 @@ namespace FIS.Web.Services;
 public class ReportApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<ReportApiService> _logger;
 
-    public ReportApiService(HttpClient httpClient, ILogger<ReportApiService> logger)
+    public ReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<ReportApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<NewInServiceReportDto> GetNewInServiceReportAsync(
@@ -25,6 +34,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var queryParts = new List<string>();
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -62,6 +72,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var queryParts = new List<string>();
             if (!string.IsNullOrWhiteSpace(mode)) queryParts.Add($"mode={Uri.EscapeDataString(mode)}");
             if (!string.IsNullOrWhiteSpace(search)) queryParts.Add($"search={Uri.EscapeDataString(search)}");
@@ -91,6 +102,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var queryParts = new List<string>();
             if (startDate.HasValue) queryParts.Add($"startDate={Uri.EscapeDataString(startDate.Value.ToString("o"))}");
             if (endDate.HasValue) queryParts.Add($"endDate={Uri.EscapeDataString(endDate.Value.ToString("o"))}");
@@ -116,6 +128,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<ReportHelpDto>("api/report/help");
             return result ?? new ReportHelpDto();
         }
@@ -136,6 +149,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var path = "api/report/fml/maintenance-history" + BuildFmlQuery(startDate, endDate, finYear, ggNum, mode, search);
             var result = await _httpClient.GetFromJsonAsync<FmlMaintenanceHistoryReportDto>(path);
             return result ?? new FmlMaintenanceHistoryReportDto();
@@ -151,6 +165,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<FmlContractsReportDto>("api/report/fml/contracts-expiring");
             return result ?? new FmlContractsReportDto();
         }
@@ -165,6 +180,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<FmlContractsReportDto>("api/report/fml/expired-open");
             return result ?? new FmlContractsReportDto();
         }
@@ -179,6 +195,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<FmlVehiclesNoContractsReportDto>("api/report/fml/vehicles-no-contracts");
             return result ?? new FmlVehiclesNoContractsReportDto();
         }
@@ -193,6 +210,7 @@ public class ReportApiService
     {
         try
         {
+            AddAuthHeader();
             var path = "api/report/fml/over-utilized" + BuildFmlQuery(startDate, endDate, null, null, null, null);
             var result = await _httpClient.GetFromJsonAsync<FmlOverUtilizedReportDto>(path);
             return result ?? new FmlOverUtilizedReportDto();
@@ -224,6 +242,7 @@ public class ReportApiService
 
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<LegacyDynamicReportDto>(path, cancellationToken);
             return result ?? new LegacyDynamicReportDto { ReportKey = reportKey };
         }

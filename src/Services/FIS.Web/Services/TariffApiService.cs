@@ -7,18 +7,32 @@ namespace FIS.Web.Services;
 public class TariffApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<TariffApiService> _logger;
 
-    public TariffApiService(HttpClient httpClient, ILogger<TariffApiService> logger)
+    public TariffApiService(HttpClient httpClient, TokenService tokenService, ILogger<TariffApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<TariffResultDto?> GetContractTariffAsync(int contractCode, DateTime? checkDate = null, string tariffType = "Fixed")
     {
         try
         {
+            AddAuthHeader();
             var dateParam = checkDate?.ToString("o");
             var url = $"api/Tariff/contract/{contractCode}";
             if (dateParam != null)
@@ -40,6 +54,7 @@ public class TariffApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Tariff/calculate", request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TariffResultDto>();
@@ -55,6 +70,7 @@ public class TariffApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<VehicleTariffPreviewResponseDto>($"api/Tariff/preview-for-vehicle/{vmfCode}");
         }
         catch (Exception ex)
@@ -68,6 +84,7 @@ public class TariffApiService
     {
         try
         {
+            AddAuthHeader();
             var queryParts = new List<string>();
             if (filter.class_code.HasValue)
             {

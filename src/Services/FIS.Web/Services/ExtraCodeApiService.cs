@@ -12,18 +12,28 @@ internal class ApiExtraCodeResponse
 public class ExtraCodeApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<ExtraCodeApiService> _logger;
 
-    public ExtraCodeApiService(HttpClient httpClient, ILogger<ExtraCodeApiService> logger)
+    public ExtraCodeApiService(HttpClient httpClient, TokenService tokenService, ILogger<ExtraCodeApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<ExtraCodeDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiExtraCodeResponse>>("api/extracode");
             if (apiResponse == null) return new List<ExtraCodeDto>();
 
@@ -44,6 +54,7 @@ public class ExtraCodeApiService
     {
         try
         {
+            AddAuthHeader();
             var createDto = new
             {
                 extra_description = extra.extra_description
@@ -63,6 +74,7 @@ public class ExtraCodeApiService
     {
         try
         {
+            AddAuthHeader();
             var updateDto = new
             {
                 extra_code = (short)extraCode,
@@ -83,6 +95,7 @@ public class ExtraCodeApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/extracode/{extraCode}");
             return response.IsSuccessStatusCode;
         }

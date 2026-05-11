@@ -9,19 +9,27 @@ namespace FIS.Web.Services;
 public class JwtAuthenticationStateProvider : AuthenticationStateProvider
 {
     private readonly TokenService _tokenService;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly AuthSessionTokenCache _sessionTokenCache;
     private readonly ILogger<JwtAuthenticationStateProvider> _logger;
+    private const string AccessCookie = "FIS_Access_Token";
 
     public JwtAuthenticationStateProvider(
         TokenService tokenService,
+        IHttpContextAccessor httpContextAccessor,
+        AuthSessionTokenCache sessionTokenCache,
         ILogger<JwtAuthenticationStateProvider> logger)
     {
         _tokenService = tokenService;
+        _httpContextAccessor = httpContextAccessor;
+        _sessionTokenCache = sessionTokenCache;
         _logger = logger;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         await _tokenService.InitializeAsync();
+        await TryRestoreTokenFromRequestContextAsync();
 
         if (_tokenService.IsTokenValid)
         {
@@ -44,6 +52,34 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
 
         _logger.LogDebug("No valid legacy session in circuit state.");
         return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
+    }
+
+    private async Task TryRestoreTokenFromRequestContextAsync()
+    {
+        if (_tokenService.IsTokenValid)
+        {
+            return;
+        }
+
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext == null)
+        {
+            return;
+        }
+
+        if (httpContext.Request.Cookies.TryGetValue(AccessCookie, out var cookieToken) &&
+            !string.IsNullOrWhiteSpace(cookieToken))
+        {
+            await _tokenService.SetTokenAsync(cookieToken, DateTime.UtcNow.AddHours(8));
+            return;
+        }
+
+        var sessionKey = httpContext.Session?.Id;
+        if (!string.IsNullOrWhiteSpace(sessionKey) &&
+            _sessionTokenCache.TryGetAccessToken(sessionKey, out var cachedToken))
+        {
+            await _tokenService.SetTokenAsync(cachedToken, DateTime.UtcNow.AddHours(8));
+        }
     }
 
     public void NotifyAuthenticationStateChanged()

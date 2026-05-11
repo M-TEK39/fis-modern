@@ -7,6 +7,7 @@
 @inject TaxiLogApiService TaxiLogService
 @inject VehicleApiService VehicleService
 @inject HttpClient Http
+@inject TokenService TokenService
 @inject IJSRuntime JS
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
@@ -593,6 +594,7 @@
                 driver = (_whiteLog.Driver ?? string.Empty).Trim()
             };
 
+            AddAuthHeader();
             var response = await Http.PostAsJsonAsync("api/taxi/white-log", payload);
             if (response.IsSuccessStatusCode)
             {
@@ -662,6 +664,17 @@
         }
 
         return null;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            return;
+        }
+
+        Http.DefaultRequestHeaders.Remove("Cookie");
+        Http.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={TokenService.Token}");
     }
 
     private void ResetWhiteLog()

@@ -8,6 +8,7 @@ namespace FIS.Web.Services;
 public class NotificationApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<NotificationApiService> _logger;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web)
@@ -18,12 +19,21 @@ public class NotificationApiService
 
     public NotificationApiService(
         HttpClient httpClient,
+        TokenService tokenService,
         ILogger<NotificationApiService> logger,
         IHttpContextAccessor httpContextAccessor)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
         _httpContextAccessor = httpContextAccessor;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<NotificationConfigStatusDto?> GetConfigStatusAsync()
@@ -145,6 +155,7 @@ public class NotificationApiService
     {
         try
         {
+            AddAuthHeader();
             using var response = await _httpClient.GetAsync(path);
 
             if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden

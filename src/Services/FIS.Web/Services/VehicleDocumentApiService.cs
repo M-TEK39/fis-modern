@@ -8,19 +8,33 @@ namespace FIS.Web.Services;
 public class VehicleDocumentApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<VehicleDocumentApiService> _logger;
     private const long MaxUploadBytes = 20 * 1024 * 1024;
 
-    public VehicleDocumentApiService(HttpClient httpClient, ILogger<VehicleDocumentApiService> logger)
+    public VehicleDocumentApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleDocumentApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<VehicleDocumentDto>> GetDocumentsAsync(int vmfCode, string? category = null)
     {
         try
         {
+            AddAuthHeader();
             var path = $"api/vehicles/{vmfCode}/documents";
             if (!string.IsNullOrWhiteSpace(category))
             {
@@ -41,6 +55,7 @@ public class VehicleDocumentApiService
     {
         try
         {
+            AddAuthHeader();
             var path = $"api/vehicles/{vmfCode}/documents/by-reference?type={Uri.EscapeDataString(referenceType)}&id={referenceId}";
             var result = await _httpClient.GetFromJsonAsync<List<VehicleDocumentDto>>(path);
             return result ?? new List<VehicleDocumentDto>();
@@ -61,6 +76,7 @@ public class VehicleDocumentApiService
     {
         try
         {
+            AddAuthHeader();
             using var content = new MultipartFormDataContent();
             await using var fileStream = file.OpenReadStream(MaxUploadBytes);
             using var streamContent = new StreamContent(fileStream);
@@ -108,6 +124,7 @@ public class VehicleDocumentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/vehicles/{vmfCode}/documents/{documentId}/download");
             if (!response.IsSuccessStatusCode)
             {
@@ -137,6 +154,7 @@ public class VehicleDocumentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/vehicles/{vmfCode}/documents/{documentId}");
             return response.IsSuccessStatusCode;
         }

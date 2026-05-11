@@ -12,18 +12,28 @@ internal class ApiClassResponse
 public class ClassApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<ClassApiService> _logger;
 
-    public ClassApiService(HttpClient httpClient, ILogger<ClassApiService> logger)
+    public ClassApiService(HttpClient httpClient, TokenService tokenService, ILogger<ClassApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<ClassDto>> GetClassesAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiClassResponse>>("api/class");
             if (apiResponse == null) return new List<ClassDto>();
 
@@ -44,6 +54,7 @@ public class ClassApiService
     {
         try
         {
+            AddAuthHeader();
             var createDto = new
             {
                 description = classDto.class_description
@@ -63,6 +74,7 @@ public class ClassApiService
     {
         try
         {
+            AddAuthHeader();
             var updateDto = new
             {
                 class_code = (short)classCode,
@@ -83,6 +95,7 @@ public class ClassApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/class/{classCode}");
             return response.IsSuccessStatusCode;
         }

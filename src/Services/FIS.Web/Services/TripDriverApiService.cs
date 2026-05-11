@@ -7,18 +7,32 @@ namespace FIS.Web.Services;
 public class TripDriverApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<TripDriverApiService> _logger;
 
-    public TripDriverApiService(HttpClient httpClient, ILogger<TripDriverApiService> logger)
+    public TripDriverApiService(HttpClient httpClient, TokenService tokenService, ILogger<TripDriverApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<TripDriverDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDriverDto>>("api/TripDriver");
             return result ?? new List<TripDriverDto>();
         }
@@ -33,6 +47,7 @@ public class TripDriverApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDriverDto>>($"api/TripDriver/site/{siteCode}");
             return result ?? new List<TripDriverDto>();
         }
@@ -47,6 +62,7 @@ public class TripDriverApiService
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<TripDriverDto>>("api/TripDriver/primary");
             return result ?? new List<TripDriverDto>();
         }
@@ -61,6 +77,7 @@ public class TripDriverApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/TripDriver", request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TripDriverDto>();
@@ -76,6 +93,7 @@ public class TripDriverApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/TripDriver/{tripDriverCode}");
             return response.IsSuccessStatusCode;
         }

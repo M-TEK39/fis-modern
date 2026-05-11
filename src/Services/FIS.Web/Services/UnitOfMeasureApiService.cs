@@ -14,18 +14,28 @@ internal class ApiUnitOfMeasureResponse
 public class UnitOfMeasureApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<UnitOfMeasureApiService> _logger;
 
-    public UnitOfMeasureApiService(HttpClient httpClient, ILogger<UnitOfMeasureApiService> logger)
+    public UnitOfMeasureApiService(HttpClient httpClient, TokenService tokenService, ILogger<UnitOfMeasureApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<UnitOfMeasureDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiUnitOfMeasureResponse>>("api/UnitOfMeasure");
             if (apiResponse == null) return new List<UnitOfMeasureDto>();
 
@@ -48,6 +58,7 @@ public class UnitOfMeasureApiService
     {
         try
         {
+            AddAuthHeader();
             var createDto = new
             {
                 unit_description = unit.unit_description,
@@ -69,6 +80,7 @@ public class UnitOfMeasureApiService
     {
         try
         {
+            AddAuthHeader();
             var updateDto = new
             {
                 unit_of_measure_code = (short)unitCode,
@@ -91,6 +103,7 @@ public class UnitOfMeasureApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/UnitOfMeasure/{unitCode}");
             return response.IsSuccessStatusCode;
         }

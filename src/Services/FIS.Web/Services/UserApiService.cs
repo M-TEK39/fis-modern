@@ -7,18 +7,32 @@ namespace FIS.Web.Services;
 public class UserApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<UserApiService> _logger;
 
-    public UserApiService(HttpClient httpClient, ILogger<UserApiService> logger)
+    public UserApiService(HttpClient httpClient, TokenService tokenService, ILogger<UserApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<UserSummaryDto>> GetAllSummariesAsync()
     {
         try
         {
+            AddAuthHeader();
             var profiles = await _httpClient.GetFromJsonAsync<List<UserProfileDto>>("api/userprofile")
                 ?? new List<UserProfileDto>();
 
@@ -35,6 +49,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<List<UserProfileDto>>("api/userprofile")
                 ?? new List<UserProfileDto>();
         }
@@ -49,6 +64,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<List<UserProfileDto>>($"api/userprofile/by-site/{siteCode}")
                 ?? new List<UserProfileDto>();
         }
@@ -66,6 +82,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/userprofile", request);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<UserProfileDto>();
@@ -103,6 +120,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/userprofile/{userAccessCode}", new UpdateUserProfileRequest
             {
                 Email = email,
@@ -123,6 +141,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/{userAccessCode}");
         }
         catch (Exception ex)
@@ -136,6 +155,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/userprofile/{userAccessCode}", request);
             response.EnsureSuccessStatusCode();
             return await _httpClient.GetFromJsonAsync<UserProfileDto>($"api/userprofile/{userAccessCode}");
@@ -151,6 +171,7 @@ public class UserApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/userprofile/{userAccessCode}");
             response.EnsureSuccessStatusCode();
         }

@@ -3,6 +3,7 @@ using FIS.Web.Services;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
 
@@ -65,14 +66,11 @@ builder.Services.AddSession(options =>
 
 // Register HttpContextAccessor for dual auth
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<AuthSessionTokenCache>();
 
 // Register TokenService (scoped to user circuit)
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<SidebarStateService>();
-
-// Register AuthorizationHeaderHandler (adds JWT to API requests)
-// Transient because it resolves TokenService dynamically from IServiceProvider
-builder.Services.AddTransient<AuthorizationHeaderHandler>();
 
 // Register JWT AuthenticationStateProvider for Blazor Server
 builder.Services.AddScoped<JwtAuthenticationStateProvider>();
@@ -87,208 +85,208 @@ var webBaseUrl = builder.Configuration["ApiSettings:WebBaseUrl"] ?? "http://loca
 var apiBaseUri = new Uri($"{apiBaseUrl.TrimEnd('/')}/");
 var webBaseUri = new Uri($"{webBaseUrl.TrimEnd('/')}/");
 
-// Register API services with AuthorizationHeaderHandler (automatically adds JWT to requests)
+// Register API services
 builder.Services.AddHttpClient<VehicleApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<VehicleDocumentApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<ReferenceDataApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<DepartmentApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<DriverApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<ContractApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<PrivateHireApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<PrivateHireFuelCardApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<AuditApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<AccidentApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<FleetManagementApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<LicenseApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LicenseMaintenanceApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LicenseFeeApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<DriverLicenceApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<ExtraCodeApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LossTypeApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<ProvinceApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<LocationApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<MaintenanceRecordApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<MaintenanceTriggerApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<NotificationApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<TroubleshootApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<NoticeApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<ReportCatalogApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<ReportApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<CaptureActivityApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<TariffApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<FinanceApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<TripApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<TripDriverApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<UnitOfMeasureApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 builder.Services.AddHttpClient<UserApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<UserProfileApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddScoped<UserAccessContextService>();
 builder.Services.AddHttpClient<AuthApiService>(client =>
 {
     // Point to local web server (AuthProxyController), NOT the API
-    // No AuthorizationHeaderHandler needed - this calls local proxy, not API
+    // Calls local proxy, not API
     client.BaseAddress = webBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
@@ -296,167 +294,167 @@ builder.Services.AddHttpClient<SiteApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<CallCentreApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<NotifyListApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<ClassApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<FineApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<RegistrationApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LogbookApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LogsheetApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<MonitorApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<TrackingApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<TowingApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<AuctionApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<ClearanceApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<MerchantApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LossApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LossReportApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LicenseReportApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<VehicleOrderApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<VehiclePhotoApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<VehicleLookupApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<WorkshopApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<TaxiApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<TaxiLogApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<AssetVerificationApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<VehicleAssessmentApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<VehicleDamageApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<SupplierApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<ThirdPartyApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<BookingApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<LeaseContractTermsApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<JobCardApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<TrafficDeptApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 builder.Services.AddHttpClient<ValidationApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+});
 
 var app = builder.Build();
 
@@ -471,10 +469,31 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
-app.UseAntiforgery();
+var sharedDocsPath = Path.Combine(app.Environment.ContentRootPath, "..", "..", "..", "Docs");
+if (Directory.Exists(sharedDocsPath))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(sharedDocsPath),
+        RequestPath = "/Docs"
+    });
+}
 
 // Session middleware (must come before authentication)
 app.UseSession();
+app.UseAntiforgery();
+
+// Prime circuit/request auth token state from cookie/session early in the pipeline.
+app.Use(async (context, next) =>
+{
+    var tokenService = context.RequestServices.GetService<TokenService>();
+    if (tokenService != null)
+    {
+        await tokenService.InitializeAsync();
+    }
+
+    await next();
+});
 
 // Authentication & Authorization middleware
 app.UseAuthentication();

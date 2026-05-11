@@ -44,18 +44,28 @@ internal class ApiLocationRequest
 public class LocationApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<LocationApiService> _logger;
 
-    public LocationApiService(HttpClient httpClient, ILogger<LocationApiService> logger)
+    public LocationApiService(HttpClient httpClient, TokenService tokenService, ILogger<LocationApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<LocationViewDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<ApiLocationResponse>>("api/Location");
             if (result == null) return new List<LocationViewDto>();
 
@@ -72,6 +82,7 @@ public class LocationApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Location", MapToRequest(location));
             response.EnsureSuccessStatusCode();
             var created = await response.Content.ReadFromJsonAsync<ApiLocationResponse>();
@@ -88,6 +99,7 @@ public class LocationApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/Location/{location.LocationId}", MapToRequest(location));
             response.EnsureSuccessStatusCode();
             var updated = await response.Content.ReadFromJsonAsync<ApiLocationResponse>();
@@ -104,6 +116,7 @@ public class LocationApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/Location/{locationId}");
             response.EnsureSuccessStatusCode();
         }

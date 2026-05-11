@@ -5,16 +5,30 @@ namespace FIS.Web.Services;
 public class AccidentApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
 
-    public AccidentApiService(HttpClient httpClient)
+    public AccidentApiService(HttpClient httpClient, TokenService tokenService)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<AccidentDto>> GetAccidentsAsync()
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/Accident");
             response.EnsureSuccessStatusCode();
             
@@ -35,6 +49,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/accidents/claims-summary");
             response.EnsureSuccessStatusCode();
             
@@ -50,6 +65,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/accidents/reports");
             response.EnsureSuccessStatusCode();
             
@@ -65,6 +81,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/Accident/{accidentId}");
             response.EnsureSuccessStatusCode();
             
@@ -84,6 +101,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Accident", accident);
             response.EnsureSuccessStatusCode();
             
@@ -100,6 +118,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/Accident/{accidentId}", accident);
             response.EnsureSuccessStatusCode();
             
@@ -116,6 +135,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/Accident/{accidentId}");
             response.EnsureSuccessStatusCode();
         }
@@ -129,6 +149,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/accidents/outstanding-claims");
             response.EnsureSuccessStatusCode();
             
@@ -149,6 +170,7 @@ public class AccidentApiService
     {
         try
         {
+            AddAuthHeader();
             var query = "api/accidents/statistics";
             var queryParams = new List<string>();
             

@@ -11,6 +11,8 @@ public class AuthApiService
 {
     private readonly HttpClient _httpClient;
     private readonly TokenService _tokenService;
+    private readonly AuthSessionTokenCache _sessionTokenCache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly DualAuthStateProvider _authStateProvider;
     private readonly UserAccessContextService _userAccessContextService;
     private readonly ILogger<AuthApiService> _logger;
@@ -18,12 +20,16 @@ public class AuthApiService
     public AuthApiService(
         HttpClient httpClient,
         TokenService tokenService,
+        AuthSessionTokenCache sessionTokenCache,
+        IHttpContextAccessor httpContextAccessor,
         DualAuthStateProvider authStateProvider,
         UserAccessContextService userAccessContextService,
         ILogger<AuthApiService> logger)
     {
         _httpClient = httpClient;
         _tokenService = tokenService;
+        _sessionTokenCache = sessionTokenCache;
+        _httpContextAccessor = httpContextAccessor;
         _authStateProvider = authStateProvider;
         _userAccessContextService = userAccessContextService;
         _logger = logger;
@@ -48,6 +54,11 @@ public class AuthApiService
         await _userAccessContextService.PrimeFromLoginAsync(
             loginResponse.UserAccessCode,
             request.FirstName);
+        var sessionId = _httpContextAccessor.HttpContext?.Session.Id;
+        if (!string.IsNullOrWhiteSpace(sessionId) && !string.IsNullOrWhiteSpace(loginResponse.Token))
+        {
+            _sessionTokenCache.SetAccessToken(sessionId, loginResponse.Token);
+        }
 
         // Notify Blazor that user is now authenticated
         _authStateProvider.NotifyAuthenticationStateChanged();
@@ -72,6 +83,11 @@ public class AuthApiService
 
         // Clear token from session storage
         await _tokenService.ClearTokenAsync();
+        var sessionId = _httpContextAccessor.HttpContext?.Session.Id;
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            _sessionTokenCache.RemoveAccessToken(sessionId);
+        }
         _userAccessContextService.Clear();
         _authStateProvider.NotifyAuthenticationStateChanged();
 

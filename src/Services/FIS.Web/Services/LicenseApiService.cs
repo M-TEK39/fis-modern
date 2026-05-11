@@ -13,18 +13,28 @@ internal class ApiLicenseResponse
 public class LicenseApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<LicenseApiService> _logger;
 
-    public LicenseApiService(HttpClient httpClient, ILogger<LicenseApiService> logger)
+    public LicenseApiService(HttpClient httpClient, TokenService tokenService, ILogger<LicenseApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<LicenseTypeDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiLicenseResponse>>("api/License");
             if (apiResponse == null) return new List<LicenseTypeDto>();
 
@@ -46,6 +56,7 @@ public class LicenseApiService
     {
         try
         {
+            AddAuthHeader();
             var createDto = new
             {
                 licence_description = license.licence_description,
@@ -66,6 +77,7 @@ public class LicenseApiService
     {
         try
         {
+            AddAuthHeader();
             var updateDto = new
             {
                 licence_code = (short)licenceCode,
@@ -87,6 +99,7 @@ public class LicenseApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/License/{licenceCode}");
             return response.IsSuccessStatusCode;
         }

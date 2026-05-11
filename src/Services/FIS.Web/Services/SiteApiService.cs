@@ -6,18 +6,32 @@ namespace FIS.Web.Services;
 public class SiteApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<SiteApiService> _logger;
 
-    public SiteApiService(HttpClient httpClient, ILogger<SiteApiService> logger)
+    public SiteApiService(HttpClient httpClient, TokenService tokenService, ILogger<SiteApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<SiteResponseDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var result = await _httpClient.GetFromJsonAsync<List<SiteResponseDto>>("api/site");
             return result ?? new List<SiteResponseDto>();
         }
@@ -32,6 +46,7 @@ public class SiteApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<SiteResponseDto>($"api/site/{siteCode}");
         }
         catch (Exception ex)
@@ -45,6 +60,7 @@ public class SiteApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/site", site);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<SiteResponseDto>();
@@ -60,6 +76,7 @@ public class SiteApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/site/{siteCode}", site);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<SiteResponseDto>();
@@ -75,6 +92,7 @@ public class SiteApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/site/{siteCode}");
             response.EnsureSuccessStatusCode();
         }

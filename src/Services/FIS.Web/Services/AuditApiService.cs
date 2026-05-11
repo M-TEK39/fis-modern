@@ -5,10 +5,19 @@ namespace FIS.Web.Services;
 public class AuditApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
 
-    public AuditApiService(HttpClient httpClient)
+    public AuditApiService(HttpClient httpClient, TokenService tokenService)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<AuditPagedResult> GetAuditTrailAsync(
@@ -23,6 +32,7 @@ public class AuditApiService
     {
         try
         {
+            AddAuthHeader();
             var url = BuildUrl("api/audit", new()
             {
                 ["tableName"]  = tableName,
@@ -53,6 +63,7 @@ public class AuditApiService
     {
         try
         {
+            AddAuthHeader();
             var url = BuildUrl("api/audit/user-status-history", new()
             {
                 ["userAccessCode"] = userAccessCode?.ToString(),
@@ -78,6 +89,7 @@ public class AuditApiService
     {
         try
         {
+            AddAuthHeader();
             var url = BuildUrl("api/audit/password-history", new()
             {
                 ["userAccessCode"] = userAccessCode?.ToString(),

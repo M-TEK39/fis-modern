@@ -109,6 +109,7 @@
         _saving = true;
         try
         {
+            AddAuthHeader();
 
             var payload = new { startGgNumber = start, endGgNumber = end };
             var response = await Http.PostAsJsonAsync("api/vehicle-inception/gg-blocks", payload);
@@ -131,6 +132,17 @@
         {
             _saving = false;
         }
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            return;
+        }
+
+        Http.DefaultRequestHeaders.Remove("Cookie");
+        Http.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={TokenService.Token}");
     }
 
     private Task ClearAsync()

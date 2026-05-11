@@ -86,6 +86,7 @@ internal class ApiContractResponse
 public class ContractApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private const int RecentContractWindow = 80;
     private static readonly TimeSpan ContractCacheTtl = TimeSpan.FromSeconds(30);
     private List<ContractDto>? _cachedActiveContracts;
@@ -93,13 +94,26 @@ public class ContractApiService
     private List<ContractDto>? _cachedRecentContracts;
     private DateTime _cachedRecentContractsAtUtc;
 
-    public ContractApiService(HttpClient httpClient)
+    public ContractApiService(HttpClient httpClient, TokenService tokenService)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<FIS.Web.Models.ContractDto>> GetContractsAsync()
     {
+        AddAuthHeader();
         if (IsCacheValid(_cachedActiveContractsAtUtc) && _cachedActiveContracts is not null)
         {
             return _cachedActiveContracts;
@@ -132,6 +146,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var parameters = new List<string>
             {
                 $"page={Math.Max(1, query.Page)}",
@@ -274,6 +289,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync($"api/Contracts/{contractId}");
             response.EnsureSuccessStatusCode();
 
@@ -294,6 +310,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Contracts", contract);
             response.EnsureSuccessStatusCode();
             InvalidateCaches();
@@ -311,6 +328,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PutAsJsonAsync($"api/Contracts/{contractId}", contract);
             response.EnsureSuccessStatusCode();
             InvalidateCaches();
@@ -328,6 +346,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/Contracts/{contractId}");
             response.EnsureSuccessStatusCode();
             InvalidateCaches();
@@ -342,6 +361,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.PostAsJsonAsync("api/Contracts/hire", request);
             if (response.IsSuccessStatusCode)
             {
@@ -359,6 +379,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.GetAsync("api/Contracts/active");
             response.EnsureSuccessStatusCode();
 
@@ -379,6 +400,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             return await _httpClient.GetFromJsonAsync<ContractPrintoutDto>($"api/contracts/{contractId}/printout");
         }
         catch
@@ -400,6 +422,7 @@ public class ContractApiService
     {
         try
         {
+            AddAuthHeader();
             using var request = new HttpRequestMessage(method, endpoint);
             if (payload != null && method != HttpMethod.Get)
             {
@@ -593,6 +616,7 @@ public class ContractApiService
 
     private async Task<List<ContractDto>> FetchActiveContractsFromApiAsync()
     {
+        AddAuthHeader();
         var response = await _httpClient.GetAsync("api/Contracts/active");
         if (!response.IsSuccessStatusCode)
         {

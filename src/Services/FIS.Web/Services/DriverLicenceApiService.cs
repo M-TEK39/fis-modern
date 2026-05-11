@@ -19,12 +19,21 @@ internal class ApiDriverLicenceResponse
 public class DriverLicenceApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<DriverLicenceApiService> _logger;
 
-    public DriverLicenceApiService(HttpClient httpClient, ILogger<DriverLicenceApiService> logger)
+    public DriverLicenceApiService(HttpClient httpClient, TokenService tokenService, ILogger<DriverLicenceApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     /// <summary>
@@ -35,6 +44,7 @@ public class DriverLicenceApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiDriverLicenceTypeResponse>>("api/driverlicencetype");
             if (apiResponse == null) return new List<DriverLicenceDto>();
 
@@ -55,6 +65,7 @@ public class DriverLicenceApiService
     {
         try
         {
+            AddAuthHeader();
             var createDto = new
             {
                 description = licence.description
@@ -74,6 +85,7 @@ public class DriverLicenceApiService
     {
         try
         {
+            AddAuthHeader();
             var updateDto = new
             {
                 licence_code = (short)licenceCode,
@@ -94,6 +106,7 @@ public class DriverLicenceApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/driverlicence/{licenceCode}");
             return response.IsSuccessStatusCode;
         }

@@ -12,18 +12,28 @@ internal class ApiProvinceResponse
 public class ProvinceApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<ProvinceApiService> _logger;
 
-    public ProvinceApiService(HttpClient httpClient, ILogger<ProvinceApiService> logger)
+    public ProvinceApiService(HttpClient httpClient, TokenService tokenService, ILogger<ProvinceApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token)) return;
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     public async Task<List<ProvinceDto>> GetAllAsync()
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiProvinceResponse>>("api/province");
             if (apiResponse == null) return new List<ProvinceDto>();
 

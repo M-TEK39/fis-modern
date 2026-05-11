@@ -53,12 +53,25 @@ internal class ApiFuelTypeResponse
 public class ReferenceDataApiService
 {
     private readonly HttpClient _httpClient;
+    private readonly TokenService _tokenService;
     private readonly ILogger<ReferenceDataApiService> _logger;
 
-    public ReferenceDataApiService(HttpClient httpClient, ILogger<ReferenceDataApiService> logger)
+    public ReferenceDataApiService(HttpClient httpClient, TokenService tokenService, ILogger<ReferenceDataApiService> logger)
     {
         _httpClient = httpClient;
+        _tokenService = tokenService;
         _logger = logger;
+    }
+
+    private void AddAuthHeader()
+    {
+        if (string.IsNullOrWhiteSpace(_tokenService.Token))
+        {
+            return;
+        }
+
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={_tokenService.Token}");
     }
 
     // Makes
@@ -66,7 +79,9 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             // Define inline class for API response mapping
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiMakeResponse>>("api/make");
             if (apiResponse == null) return new List<MakeDto>();
             
@@ -88,6 +103,8 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<ApiMakeResponse>($"api/make/{makeCode}");
             if (apiResponse == null) return null;
             
@@ -109,11 +126,13 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             // Map MakeDto to CreateMakeDto for API
             var createMakeDto = new
             {
                 make_description = make.make_name
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PostAsJsonAsync("api/make", createMakeDto);
             return response.IsSuccessStatusCode;
@@ -129,12 +148,14 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             // Map MakeDto to Make entity for API
             var makeEntity = new
             {
                 make_code = (short)makeCode,
                 make_description = make.make_name
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PutAsJsonAsync($"api/make/{makeCode}", makeEntity);
             return response.IsSuccessStatusCode;
@@ -150,6 +171,8 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/make/{makeCode}");
             return response.IsSuccessStatusCode;
         }
@@ -165,6 +188,8 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiModelResponse>>("api/model");
             if (apiResponse == null) return new List<ModelDto>();
             
@@ -205,6 +230,8 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiModelResponse>>($"api/model/make/{makeCode}");
             if (apiResponse == null) return new List<ModelDto>();
 
@@ -245,6 +272,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<ApiModelResponse>($"api/model/{modelCode}");
             if (apiResponse == null) return null;
             
@@ -309,6 +337,7 @@ public class ReferenceDataApiService
                 transmission = model.transmission,
                 wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PostAsJsonAsync("api/model", createModelDto);
             return response.IsSuccessStatusCode;
@@ -349,6 +378,7 @@ public class ReferenceDataApiService
                 transmission = model.transmission,
                 wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PutAsJsonAsync($"api/model/{modelCode}", modelEntity);
             return response.IsSuccessStatusCode;
@@ -364,6 +394,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/model/{modelCode}");
             return response.IsSuccessStatusCode;
         }
@@ -379,6 +410,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiVehicleTypeResponse>>("api/type");
             if (apiResponse == null) return new List<VehicleTypeDto>();
             
@@ -399,6 +431,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<ApiVehicleTypeResponse>($"api/type/{typeCode}");
             if (apiResponse == null) return null;
             
@@ -424,6 +457,7 @@ public class ReferenceDataApiService
             {
                 type_description = type.type_name
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PostAsJsonAsync("api/type", createTypeDto);
             return response.IsSuccessStatusCode;
@@ -445,6 +479,7 @@ public class ReferenceDataApiService
                 type_code = (short)typeCode,
                 type_description = type.type_name
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PutAsJsonAsync($"api/type/{typeCode}", typeEntity);
             return response.IsSuccessStatusCode;
@@ -460,6 +495,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/type/{typeCode}");
             return response.IsSuccessStatusCode;
         }
@@ -475,6 +511,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiFuelTypeResponse>>("api/fueltype");
             if (apiResponse == null) return new List<FuelTypeDto>();
             
@@ -496,6 +533,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var apiResponse = await _httpClient.GetFromJsonAsync<ApiFuelTypeResponse>($"api/fueltype/{fuelTypeCode}");
             if (apiResponse == null) return null;
             
@@ -523,6 +561,7 @@ public class ReferenceDataApiService
                 fuel_description = fuelType.fuel_type_name,
                 rate_per_litre = fuelType.rate_per_litre
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PostAsJsonAsync("api/fueltype", createFuelTypeDto);
             if (!response.IsSuccessStatusCode)
@@ -551,6 +590,7 @@ public class ReferenceDataApiService
                 fuel_description = fuelType.fuel_type_name,
                 rate_per_litre = fuelType.rate_per_litre
             };
+            AddAuthHeader();
             
             var response = await _httpClient.PutAsJsonAsync(
                 $"api/fueltype/{fuelTypeCode}",
@@ -579,6 +619,7 @@ public class ReferenceDataApiService
     {
         try
         {
+            AddAuthHeader();
             var response = await _httpClient.DeleteAsync($"api/fueltype/{fuelTypeCode}");
             return response.IsSuccessStatusCode;
         }

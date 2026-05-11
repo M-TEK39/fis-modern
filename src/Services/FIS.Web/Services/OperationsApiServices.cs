@@ -9,7 +9,7 @@ namespace FIS.Web.Services;
 
 /// <summary>
 /// Lightweight base class for simple CRUD-style API calls with case-insensitive JSON handling.
-/// Uses session cookies forwarded by AuthorizationHeaderHandler.
+/// Uses session access token from TokenService.
 /// </summary>
 public abstract class BaseApiService
 {
@@ -30,10 +30,17 @@ public abstract class BaseApiService
     protected ILogger Logger { get; }
 
     /// <summary>
-    /// Session auth is cookie-based and forwarded by AuthorizationHeaderHandler.
+    /// Adds session access token as cookie header for API auth.
     /// </summary>
     private void AddAuthorizationHeader()
     {
+        if (string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            return;
+        }
+
+        HttpClient.DefaultRequestHeaders.Remove("Cookie");
+        HttpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={TokenService.Token}");
     }
 
     protected async Task<List<T>> GetListAsync<T>(string path)

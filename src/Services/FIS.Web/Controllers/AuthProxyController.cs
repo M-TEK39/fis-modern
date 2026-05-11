@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Json;
 using System.Net;
+using FIS.Web.Services;
 
 namespace FIS.Web.Controllers;
 
@@ -14,12 +15,17 @@ public class AuthProxyController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<AuthProxyController> _logger;
+    private readonly AuthSessionTokenCache _sessionTokenCache;
     private readonly string _apiBaseUrl;
 
-    public AuthProxyController(IConfiguration configuration, ILogger<AuthProxyController> logger)
+    public AuthProxyController(
+        IConfiguration configuration,
+        ILogger<AuthProxyController> logger,
+        AuthSessionTokenCache sessionTokenCache)
     {
         _configuration = configuration;
         _logger = logger;
+        _sessionTokenCache = sessionTokenCache;
         _apiBaseUrl = (_configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5010").TrimEnd('/');
     }
 
@@ -97,6 +103,7 @@ public class AuthProxyController : ControllerBase
 
             // Read response
             var loginResponse = await response.Content.ReadFromJsonAsync<LegacyLoginResponse>();
+            HttpContext.Session.SetString("auth.bootstrap", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString());
 
             // Extract cookies from API response and forward to browser
             var apiUri = new Uri(apiUrl);
@@ -148,6 +155,12 @@ public class AuthProxyController : ControllerBase
                 _logger.LogInformation("✅ Manually set access cookie from response token, Expires: {Expires}", loginResponse.ExpiresAt);
             }
 
+            var sessionKey = HttpContext.Session.Id;
+            if (!string.IsNullOrWhiteSpace(sessionKey) && loginResponse is not null && !string.IsNullOrWhiteSpace(loginResponse.Token))
+            {
+                _sessionTokenCache.SetAccessToken(sessionKey, loginResponse.Token);
+            }
+
             return Ok(loginResponse);
         }
         catch (Exception ex)
@@ -176,6 +189,12 @@ public class AuthProxyController : ControllerBase
 
         Response.Cookies.Delete("FIS_Access_Token");
         Response.Cookies.Delete("FIS_Refresh_Token");
+
+        var sessionKey = HttpContext.Session.Id;
+        if (!string.IsNullOrWhiteSpace(sessionKey))
+        {
+            _sessionTokenCache.RemoveAccessToken(sessionKey);
+        }
 
         _logger.LogInformation("User logged out - auth cookies cleared");
 

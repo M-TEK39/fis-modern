@@ -123,6 +123,13 @@
 
     private void AddAuthHeader()
     {
+        if (string.IsNullOrWhiteSpace(TokenService.Token))
+        {
+            return;
+        }
+
+        Http.DefaultRequestHeaders.Remove("Cookie");
+        Http.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={TokenService.Token}");
     }
 
     private void PreviousPage()
