@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Mail;
 using System.Text;
+using System.Threading;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using Microsoft.Extensions.Configuration;
@@ -271,6 +272,15 @@ public class EmailNotificationService : IEmailNotificationService
             IsActive = true,
         },
     };
+    private static readonly object TemplateLock = new();
+
+    private DateTime _lastTestDate = DateTime.MinValue;
+    private bool _lastTestSuccessful;
+    private string? _lastErrorMessage;
+    private int _dailyEmailsSent;
+    private int _monthlyEmailsSent;
+    private DateTime _dailyCounterDate = DateTime.UtcNow.Date;
+    private DateTime _monthlyCounterDate = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
 
     public EmailNotificationService(
         IConfiguration configuration,
@@ -398,6 +408,10 @@ public class EmailNotificationService : IEmailNotificationService
             }
 
             var template = _defaultTemplates["MaintenanceReminder"];
+            var serviceDueDate = vehicle.service_last_done?.Date.AddDays(90);
+            var serviceDueOdometer = vehicle.service_last_odo.HasValue
+                ? vehicle.service_last_odo.Value + 10000
+                : (int?)null;
             var placeholders = new Dictionary<string, string>
             {
                 ["RecipientName"] = recipientName,
@@ -405,8 +419,8 @@ public class EmailNotificationService : IEmailNotificationService
                 ["FleetNumber"] = vehicle.fleet_number ?? string.Empty,
                 ["VmfCode"] = vmfCode.ToString(),
                 ["CurrentOdometer"] = vehicle.current_odo.ToString("N0"),
-                ["ServiceDueDate"] = "TBD", // TODO: Calculate from maintenance schedule
-                ["ServiceDueOdometer"] = "TBD", // TODO: Calculate from maintenance schedule
+                ["ServiceDueDate"] = serviceDueDate?.ToString("yyyy-MM-dd") ?? "Immediate",
+                ["ServiceDueOdometer"] = serviceDueOdometer?.ToString("N0") ?? "Immediate",
             };
 
             var subject = ReplacePlaceholders(template.Subject, placeholders);
@@ -494,8 +508,13 @@ public class EmailNotificationService : IEmailNotificationService
                 return false;
             }
 
-            // TODO: Calculate COF due date from COF last done date + validity period
-            var cofDueDate = vehicle.cof_last_done?.AddDays(365); // Placeholder: 1 year validity
+            if (string.Equals(vehicle.cof_required, "N", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("COF not required for VMF Code: {VmfCode}", vmfCode);
+                return true;
+            }
+
+            var cofDueDate = vehicle.cof_last_done?.Date.AddYears(1);
             if (!cofDueDate.HasValue)
             {
                 _logger.LogWarning("No COF due date available for VMF Code: {VmfCode}", vmfCode);
@@ -1000,20 +1019,43 @@ public class EmailNotificationService : IEmailNotificationService
                 emailAddress
             );
 
-            // TODO: Generate financial report based on type
-            // This would be implemented after financial reporting is complete
+            var normalizedReportType = string.IsNullOrWhiteSpace(reportType)
+                ? "SummaryIncome"
+                : reportType.Trim();
+            var pdfContent = await _reportingService.GenerateCustomReportPdfAsync(
+                normalizedReportType,
+                new Dictionary<string, object>
+                {
+                    ["financial_year"] = financialYear,
+                }
+            );
 
-            var subject = $"Financial Report - {reportType} (FY {financialYear})";
+            var safeReportName = string.Concat(
+                normalizedReportType.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_')
+            );
+            var attachment = new EmailAttachment
+            {
+                FileName = $"Financial_Report_{safeReportName}_{financialYear}_{DateTime.Now:yyyyMMdd}.pdf",
+                Content = pdfContent,
+                ContentType = "application/pdf",
+                Description = $"{normalizedReportType} financial report for FY {financialYear}",
+            };
+
+            var subject = $"Financial Report - {normalizedReportType} (FY {financialYear})";
             var body =
                 $@"
                 <h2>Financial Report</h2>
                 <p>Dear {recipientName},</p>
-                <p>Please find attached the {reportType} financial report for Financial Year {financialYear}.</p>
+                <p>Please find attached the {normalizedReportType} financial report for Financial Year {financialYear}.</p>
                 <p>Report generated on: {DateTime.Now:yyyy-MM-dd HH:mm}</p>
                 <p>Thank you,<br/>Fleet Management System</p>";
 
-            // TODO: Generate and attach actual financial report
-            return await SendHtmlEmailAsync(emailAddress, subject, body);
+            return await SendEmailWithAttachmentsAsync(
+                emailAddress,
+                subject,
+                body,
+                new List<EmailAttachment> { attachment }
+            );
         }
         catch (Exception ex)
         {
@@ -1026,7 +1068,7 @@ public class EmailNotificationService : IEmailNotificationService
 
     #region Bulk Notifications
 
-    public Task<BulkEmailResult> SendBulkMaintenanceRemindersAsync()
+    public async Task<BulkEmailResult> SendBulkMaintenanceRemindersAsync()
     {
         var result = new BulkEmailResult { CompletedAt = DateTime.Now };
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -1035,16 +1077,60 @@ public class EmailNotificationService : IEmailNotificationService
         {
             _logger.LogInformation("Starting bulk maintenance reminders");
 
-            // TODO: Get vehicles due for maintenance
-            // This would require implementing maintenance scheduling logic
+            // Legacy-friendly baseline due logic:
+            // - service date older than 90 days OR
+            // - service odometer + 10,000km <= current odometer OR
+            // - no service history captured
+            var today = DateTime.Today;
+            var vehicles = (await _vehicleRepository.GetAllAsync())
+                .Where(v =>
+                    !v.is_deleted &&
+                    (
+                        !v.service_last_done.HasValue ||
+                        v.service_last_done.Value.Date <= today.AddDays(-90) ||
+                        !v.service_last_odo.HasValue ||
+                        v.current_odo >= (v.service_last_odo.Value + 10000)
+                    ))
+                .ToList();
 
-            var vehicles = new List<Vehicle>(); // Placeholder
             result.TotalEmails = vehicles.Count;
+            if (vehicles.Count == 0)
+            {
+                return result;
+            }
 
-            // TODO: Implement bulk email sending
+            var activeContracts = (await _contractRepository.GetActiveContractsAsync()).ToList();
+            var users = (await _userRepository.GetAllUsersAsync())
+                .Where(u => !string.IsNullOrWhiteSpace(u.email))
+                .ToList();
+            var fallbackEmail = users.FirstOrDefault()?.email;
 
-            result.SuccessfulEmails = 0;
-            result.FailedEmails = 0;
+            foreach (var vehicle in vehicles)
+            {
+                var recipient = await ResolveVehicleRecipientAsync(
+                    vehicle.vmf_code,
+                    activeContracts,
+                    fallbackEmail);
+
+                if (recipient is null)
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"No recipient found for VMF {vehicle.vmf_code}");
+                    continue;
+                }
+
+                var sent = await SendMaintenanceReminderAsync(
+                    vehicle.vmf_code,
+                    recipient.Value.Email,
+                    recipient.Value.Name);
+
+                if (sent) result.SuccessfulEmails++;
+                else
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"Failed sending maintenance reminder for VMF {vehicle.vmf_code}");
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -1057,25 +1143,195 @@ public class EmailNotificationService : IEmailNotificationService
             result.ExecutionTime = stopwatch.Elapsed;
         }
 
-        return Task.FromResult(result);
+        return result;
     }
 
-    public Task<BulkEmailResult> SendBulkLicenceRemindersAsync()
+    public async Task<BulkEmailResult> SendBulkLicenceRemindersAsync()
     {
-        // TODO: Implement bulk licence reminder logic
-        return Task.FromResult(new BulkEmailResult { CompletedAt = DateTime.Now });
+        var result = new BulkEmailResult { CompletedAt = DateTime.Now };
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            var today = DateTime.Today;
+            var reminderWindowEnd = today.AddDays(30);
+
+            var vehicles = (await _vehicleRepository.GetAllAsync())
+                .Where(v => !v.is_deleted && v.licence_due_date.HasValue)
+                .Where(v => v.licence_due_date!.Value.Date >= today && v.licence_due_date.Value.Date <= reminderWindowEnd)
+                .ToList();
+
+            result.TotalEmails = vehicles.Count;
+            if (vehicles.Count == 0)
+            {
+                return result;
+            }
+
+            var activeContracts = (await _contractRepository.GetActiveContractsAsync()).ToList();
+            var users = (await _userRepository.GetAllUsersAsync())
+                .Where(u => !string.IsNullOrWhiteSpace(u.email))
+                .ToList();
+            var fallbackEmail = users.FirstOrDefault()?.email;
+
+            foreach (var vehicle in vehicles)
+            {
+                var recipient = await ResolveVehicleRecipientAsync(
+                    vehicle.vmf_code,
+                    activeContracts,
+                    fallbackEmail);
+
+                if (recipient is null)
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"No recipient found for VMF {vehicle.vmf_code}");
+                    continue;
+                }
+
+                var sent = await SendLicenceReminderAsync(
+                    vehicle.vmf_code,
+                    recipient.Value.Email,
+                    recipient.Value.Name);
+
+                if (sent) result.SuccessfulEmails++;
+                else
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"Failed sending licence reminder for VMF {vehicle.vmf_code}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending bulk licence reminders");
+            result.ErrorMessages.Add($"Bulk operation failed: {ex.Message}");
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.ExecutionTime = stopwatch.Elapsed;
+        }
+
+        return result;
     }
 
-    public Task<BulkEmailResult> SendBulkCofRemindersAsync()
+    public async Task<BulkEmailResult> SendBulkCofRemindersAsync()
     {
-        // TODO: Implement bulk COF reminder logic
-        return Task.FromResult(new BulkEmailResult { CompletedAt = DateTime.Now });
+        var result = new BulkEmailResult { CompletedAt = DateTime.Now };
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            var today = DateTime.Today;
+            var reminderWindowEnd = today.AddDays(30);
+
+            var vehicles = (await _vehicleRepository.GetAllAsync())
+                .Where(v => !v.is_deleted && v.cof_last_done.HasValue)
+                .Where(v =>
+                {
+                    var dueDate = v.cof_last_done!.Value.Date.AddDays(365);
+                    return dueDate >= today && dueDate <= reminderWindowEnd;
+                })
+                .ToList();
+
+            result.TotalEmails = vehicles.Count;
+            if (vehicles.Count == 0)
+            {
+                return result;
+            }
+
+            var activeContracts = (await _contractRepository.GetActiveContractsAsync()).ToList();
+            var users = (await _userRepository.GetAllUsersAsync())
+                .Where(u => !string.IsNullOrWhiteSpace(u.email))
+                .ToList();
+            var fallbackEmail = users.FirstOrDefault()?.email;
+
+            foreach (var vehicle in vehicles)
+            {
+                var recipient = await ResolveVehicleRecipientAsync(
+                    vehicle.vmf_code,
+                    activeContracts,
+                    fallbackEmail);
+
+                if (recipient is null)
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"No recipient found for VMF {vehicle.vmf_code}");
+                    continue;
+                }
+
+                var sent = await SendCofReminderAsync(
+                    vehicle.vmf_code,
+                    recipient.Value.Email,
+                    recipient.Value.Name);
+
+                if (sent) result.SuccessfulEmails++;
+                else
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"Failed sending COF reminder for VMF {vehicle.vmf_code}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending bulk COF reminders");
+            result.ErrorMessages.Add($"Bulk operation failed: {ex.Message}");
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.ExecutionTime = stopwatch.Elapsed;
+        }
+
+        return result;
     }
 
-    public Task<BulkEmailResult> SendBulkContractExpiryNotificationsAsync()
+    public async Task<BulkEmailResult> SendBulkContractExpiryNotificationsAsync()
     {
-        // TODO: Implement bulk contract expiry notification logic
-        return Task.FromResult(new BulkEmailResult { CompletedAt = DateTime.Now });
+        var result = new BulkEmailResult { CompletedAt = DateTime.Now };
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        try
+        {
+            var today = DateTime.Today;
+            var reminderWindowEnd = today.AddDays(30);
+
+            var contracts = (await _contractRepository.GetActiveContractsAsync())
+                .Where(c => !c.is_deleted && c.target_return_date.HasValue)
+                .Where(c => c.target_return_date!.Value.Date >= today && c.target_return_date.Value.Date <= reminderWindowEnd)
+                .ToList();
+
+            result.TotalEmails = contracts.Count;
+            if (contracts.Count == 0)
+            {
+                return result;
+            }
+
+            foreach (var contract in contracts)
+            {
+                var daysRemaining = Math.Max(0, (contract.target_return_date!.Value.Date - today).Days);
+                var sent = await SendContractExpiryReminderAsync(contract.contract_code, daysRemaining);
+
+                if (sent) result.SuccessfulEmails++;
+                else
+                {
+                    result.FailedEmails++;
+                    result.ErrorMessages.Add($"Failed sending contract expiry reminder for Contract {contract.contract_code}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending bulk contract expiry reminders");
+            result.ErrorMessages.Add($"Bulk operation failed: {ex.Message}");
+        }
+        finally
+        {
+            stopwatch.Stop();
+            result.ExecutionTime = stopwatch.Elapsed;
+        }
+
+        return result;
     }
 
     #endregion
@@ -1099,8 +1355,24 @@ public class EmailNotificationService : IEmailNotificationService
 
     public Task<bool> SaveEmailTemplateAsync(EmailTemplate template)
     {
-        // TODO: Implement template persistence to database
-        _logger.LogInformation("Saving email template: {TemplateName}", template.TemplateName);
+        if (string.IsNullOrWhiteSpace(template.TemplateName))
+        {
+            _logger.LogWarning("Cannot save email template with empty template name");
+            return Task.FromResult(false);
+        }
+
+        lock (TemplateLock)
+        {
+            template.ModifiedDate = DateTime.UtcNow;
+            if (template.CreatedDate == default)
+            {
+                template.CreatedDate = template.ModifiedDate;
+            }
+
+            _defaultTemplates[template.TemplateName] = template;
+        }
+
+        _logger.LogInformation("Saved email template: {TemplateName}", template.TemplateName);
         return Task.FromResult(true);
     }
 
@@ -1121,11 +1393,22 @@ public class EmailNotificationService : IEmailNotificationService
                 <p>Test sent on: {DateTime.Now:yyyy-MM-dd HH:mm:ss}</p>
                 <p>If you received this email, the email configuration is working correctly.</p>";
 
-            return await SendHtmlEmailAsync(testEmailAddress, subject, body);
+            var sent = await SendHtmlEmailAsync(testEmailAddress, subject, body);
+            _lastTestDate = DateTime.UtcNow;
+            _lastTestSuccessful = sent;
+            if (sent)
+            {
+                _lastErrorMessage = null;
+            }
+
+            return sent;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Email configuration test failed");
+            _lastTestDate = DateTime.UtcNow;
+            _lastTestSuccessful = false;
+            _lastErrorMessage = ex.Message;
             return false;
         }
     }
@@ -1136,21 +1419,45 @@ public class EmailNotificationService : IEmailNotificationService
             new EmailServiceStatus
             {
                 IsConfigured = _isConfigured,
-                IsConnected = _isConfigured, // TODO: Test SMTP connection
+                IsConnected = _isConfigured && string.IsNullOrWhiteSpace(_lastErrorMessage),
                 SmtpServer = _smtpServer,
                 SmtpPort = _smtpPort,
                 UseSSL = _useSSL,
                 FromAddress = _fromAddress,
                 FromName = _fromName,
-                LastTestDate = DateTime.MinValue, // TODO: Track last test
-                LastTestSuccessful = false,
-                DailyEmailsSent = 0, // TODO: Track email statistics
-                MonthlyEmailsSent = 0,
+                LastTestDate = _lastTestDate,
+                LastTestSuccessful = _lastTestSuccessful,
+                LastErrorMessage = _lastErrorMessage,
+                DailyEmailsSent = _dailyEmailsSent,
+                MonthlyEmailsSent = _monthlyEmailsSent,
             }
         );
     }
 
     #endregion
+
+    private async Task<(string Email, string Name)?> ResolveVehicleRecipientAsync(
+        int vmfCode,
+        List<Contract> activeContracts,
+        string? fallbackEmail)
+    {
+        var contract = activeContracts.FirstOrDefault(c => c.vmf_code == vmfCode);
+        if (contract is not null)
+        {
+            var site = await _siteRepository.GetByIdAsync(contract.site_code);
+            if (!string.IsNullOrWhiteSpace(site?.net_address))
+            {
+                return (site.net_address!, site.res_person ?? site.net_address!);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(fallbackEmail))
+        {
+            return (fallbackEmail!, fallbackEmail!);
+        }
+
+        return null;
+    }
 
     #region Private Helper Methods
 
@@ -1203,6 +1510,8 @@ public class EmailNotificationService : IEmailNotificationService
             }
 
             await smtpClient.SendMailAsync(mailMessage);
+            RecordSuccessfulSend();
+            _lastErrorMessage = null;
 
             _logger.LogInformation(
                 "Email sent successfully to {Recipients}",
@@ -1217,8 +1526,29 @@ public class EmailNotificationService : IEmailNotificationService
                 "Failed to send email to {Recipients}",
                 string.Join(", ", toAddresses)
             );
+            _lastErrorMessage = ex.Message;
             return false;
         }
+    }
+
+    private void RecordSuccessfulSend()
+    {
+        var now = DateTime.UtcNow;
+        if (_dailyCounterDate != now.Date)
+        {
+            _dailyCounterDate = now.Date;
+            Interlocked.Exchange(ref _dailyEmailsSent, 0);
+        }
+
+        var monthStart = new DateTime(now.Year, now.Month, 1);
+        if (_monthlyCounterDate != monthStart)
+        {
+            _monthlyCounterDate = monthStart;
+            Interlocked.Exchange(ref _monthlyEmailsSent, 0);
+        }
+
+        Interlocked.Increment(ref _dailyEmailsSent);
+        Interlocked.Increment(ref _monthlyEmailsSent);
     }
 
     private string ReplacePlaceholders(string template, Dictionary<string, string> placeholders)

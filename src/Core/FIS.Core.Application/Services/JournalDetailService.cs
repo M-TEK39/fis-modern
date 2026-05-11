@@ -18,6 +18,7 @@ public class JournalDetailService : IJournalDetailService
     private readonly ISiteRepository _siteRepository;
     private readonly IDepartmentRepository _departmentRepository;
     private readonly ITariffCalculationService _tariffCalculationService;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<JournalDetailService> _logger;
 
     public JournalDetailService(
@@ -26,6 +27,7 @@ public class JournalDetailService : IJournalDetailService
         ISiteRepository siteRepository,
         IDepartmentRepository departmentRepository,
         ITariffCalculationService tariffCalculationService,
+        ICurrentUserContext currentUserContext,
         ILogger<JournalDetailService> logger)
     {
         _journalDetailRepository = journalDetailRepository ?? throw new ArgumentNullException(nameof(journalDetailRepository));
@@ -33,6 +35,7 @@ public class JournalDetailService : IJournalDetailService
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
         _departmentRepository = departmentRepository ?? throw new ArgumentNullException(nameof(departmentRepository));
         _tariffCalculationService = tariffCalculationService ?? throw new ArgumentNullException(nameof(tariffCalculationService));
+        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -62,7 +65,7 @@ public class JournalDetailService : IJournalDetailService
             // Calculate financial year
             journalDetail.journal_detail_financial_year = CalculateFinancialYear(journalDetail.journal_detail_date);
 
-            var created = await _journalDetailRepository.CreateAsync(journalDetail, 1); // TODO: Pass actual user ID from JWT
+            var created = await _journalDetailRepository.CreateAsync(journalDetail, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Journal detail created: {JournalDetailCode}, Amount: {Amount}",
                 created.journal_detail_code, created.journal_detail_amount);
@@ -91,7 +94,7 @@ public class JournalDetailService : IJournalDetailService
             // Recalculate financial year if date changed
             journalDetail.journal_detail_financial_year = CalculateFinancialYear(journalDetail.journal_detail_date);
 
-            await _journalDetailRepository.UpdateAsync(journalDetail, 1); // TODO: Pass actual user ID from JWT
+            await _journalDetailRepository.UpdateAsync(journalDetail, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Journal detail updated: {JournalDetailCode}", journalDetail.journal_detail_code);
         }
@@ -167,7 +170,7 @@ public class JournalDetailService : IJournalDetailService
                 journal_detail_isreversaldenied = false
             };
 
-            var createdReversal = await _journalDetailRepository.CreateAsync(reversal, 1); // TODO: Pass actual user ID from JWT
+            var createdReversal = await _journalDetailRepository.CreateAsync(reversal, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Reversal created: {ReversalCode} for original {OriginalCode}",
                 createdReversal.journal_detail_code, journalDetailCode);
@@ -330,7 +333,7 @@ public class JournalDetailService : IJournalDetailService
         {
             _logger.LogInformation("Deleting journal detail: {JournalDetailId}", journalDetailId);
 
-            await _journalDetailRepository.DeleteAsync(journalDetailId, 1); // TODO: Pass actual user ID from JWT
+            await _journalDetailRepository.DeleteAsync(journalDetailId, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Journal detail deleted: {JournalDetailId}", journalDetailId);
         }

@@ -118,13 +118,13 @@
         _results = new List<TrackingDto>();
         try
         {
-            var all = await TrackingService.GetAllAsync<TrackingDto>();
-            _results = _trackerType switch
+            var report = await TrackingService.GetAllVehiclesReportAsync(new TrackingAllVehiclesReportRequestDto
             {
-                "New" => all.Where(t => string.Equals(t.track_type, "New", StringComparison.OrdinalIgnoreCase)).ToList(),
-                "Reused" => all.Where(t => string.Equals(t.track_type, "Reused", StringComparison.OrdinalIgnoreCase)).ToList(),
-                _ => all
-            };
+                StartDate = DateTime.Today.AddYears(-50),
+                EndDate = DateTime.Today.AddYears(10),
+                TrackerType = _trackerType
+            });
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

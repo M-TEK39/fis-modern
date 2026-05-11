@@ -12,3 +12,22 @@ public class TowingDto
     public string? Keys { get; set; }
     public short? Site_code { get; set; }
 }
+
+public class TowingReportDto
+{
+    public string ReportType { get; set; } = string.Empty;
+    public List<TowingDto> Data { get; set; } = new();
+}
+
+public class TowingRequestReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TowingFirmDateReportRequestDto
+{
+    public string FirmName { get; set; } = string.Empty;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}

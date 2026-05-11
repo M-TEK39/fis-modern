@@ -13,13 +13,16 @@ public class UserClaimsService : IUserClaimsService
 {
     private readonly IEntraIdUserMappingRepository _mappingRepository;
     private readonly IUserRepository _userRepository;
+    private readonly ICurrentUserContext _currentUserContext;
 
     public UserClaimsService(
         IEntraIdUserMappingRepository mappingRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        ICurrentUserContext currentUserContext)
     {
         _mappingRepository = mappingRepository;
         _userRepository = userRepository;
+        _currentUserContext = currentUserContext;
     }
 
     public async Task<IEnumerable<Claim>> GetClaimsAsync(string entraObjectId)
@@ -76,7 +79,7 @@ public class UserClaimsService : IUserClaimsService
                 // Update existing mapping
                 existingMapping.user_access_code = userAccessCode;
                 existingMapping.created_date = DateTime.UtcNow; // Update timestamp
-                await _mappingRepository.UpdateAsync(existingMapping, 1); // TODO: Pass actual user ID from JWT
+                await _mappingRepository.UpdateAsync(existingMapping, _currentUserContext.GetCurrentUserIdOrDefault());
             }
             else
             {
@@ -87,7 +90,7 @@ public class UserClaimsService : IUserClaimsService
                     user_access_code = userAccessCode,
                     created_date = DateTime.UtcNow
                 };
-                await _mappingRepository.CreateAsync(newMapping, 1); // TODO: Pass actual user ID from JWT
+                await _mappingRepository.CreateAsync(newMapping, _currentUserContext.GetCurrentUserIdOrDefault());
             }
 
             return true;

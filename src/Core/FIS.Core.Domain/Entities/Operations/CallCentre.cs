@@ -37,6 +37,20 @@ public class CallCentre
     public DateTime? Call_date { get; set; }
 
     /// <summary>
+    /// Incident type/category (legacy field)
+    /// </summary>
+    [StringLength(100)]
+    [Column("Incident_type")]
+    public string? Incident_type { get; set; }
+
+    /// <summary>
+    /// Incident description/details (legacy field, used for cross-module references)
+    /// </summary>
+    [StringLength(500)]
+    [Column("Incident_Desc")]
+    public string? Incident_Desc { get; set; }
+
+    /// <summary>
     /// Name of person who captured the call
     /// </summary>
     [StringLength(100)]

@@ -141,26 +141,14 @@
         _results = new List<TrackingDto>();
         try
         {
-            var all = await TrackingService.GetAllAsync<TrackingDto>();
-            _results = all.Where(t => (!_fromDate.HasValue || (t.install_date.HasValue && t.install_date.Value.Date >= _fromDate.Value.Date)) &&
-                                      (!_toDate.HasValue || (t.install_date.HasValue && t.install_date.Value.Date <= _toDate.Value.Date)))
-                .ToList();
-
-            if (_departmentScope == "one" && _departmentCode.HasValue)
+            var report = await TrackingService.GetDeptPeriodReportAsync(new TrackingDeptPeriodReportRequestDto
             {
-                var siteCodes = _sites
-                    .Where(s => s.DepartmentCode == _departmentCode.Value)
-                    .Select(s => s.SiteCode)
-                    .ToHashSet();
-                var vehicles = await VehicleService.GetVehiclesAsync(pageNumber: 1, pageSize: 5000);
-                var vmfForDepartment = vehicles.Data
-                    .Where(v => v.site_code.HasValue && siteCodes.Contains(v.site_code.Value))
-                    .Select(v => v.vmf_code)
-                    .ToHashSet();
-                _results = _results
-                    .Where(t => t.vmf_code.HasValue && vmfForDepartment.Contains(t.vmf_code.Value))
-                    .ToList();
-            }
+                DepartmentCode = _departmentCode ?? 0,
+                AllDepartments = _departmentScope == "all",
+                StartDate = (_fromDate ?? DateTime.Today.AddYears(-50)).Date,
+                EndDate = (_toDate ?? DateTime.Today.AddYears(10)).Date
+            });
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

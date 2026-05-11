@@ -138,6 +138,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DYWxsQ2VudHJlL0Jvb2tpbmdOb3RpZmljYXRpb25zLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/CallCentre/BookingWorkflow.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DYWxsQ2VudHJlL0Jvb2tpbmdXb3JrZmxvdy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/CallCentre/Help.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9DYWxsQ2VudHJlL0hlbHAucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
@@ -342,6 +346,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9GaW5lcy9EZWxldGVEZXRhaWwucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Fines/Help.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9GaW5lcy9IZWxwLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Fines/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9GaW5lcy9JbmRleC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -514,6 +522,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9MaWNlbnNlcy9HYXJhZ2UucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Licenses/Help.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9MaWNlbnNlcy9IZWxwLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Licenses/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9MaWNlbnNlcy9JbmRleC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -610,6 +622,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Mb3NzZXMvRWRpdC5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Losses/Help.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Mb3NzZXMvSGVscC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Losses/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9Mb3NzZXMvSW5kZXgucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
@@ -628,6 +644,10 @@ build_metadata.AdditionalFiles.CssScope =
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Manuals/Index.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9NYW51YWxzL0luZGV4LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Manuals/LegacyDocRedirect.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9NYW51YWxzL0xlZ2FjeURvY1JlZGlyZWN0LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Monitor/Capture.razor]

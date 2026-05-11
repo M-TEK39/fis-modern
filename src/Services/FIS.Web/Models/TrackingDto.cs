@@ -13,3 +13,56 @@ public class TrackingDto
     public string? track_type { get; set; }
     public string? track_note { get; set; }
 }
+
+public class TrackingReportDto
+{
+    public string ReportType { get; set; } = string.Empty;
+    public List<TrackingDto> Data { get; set; } = new();
+}
+
+public class TrackingOneVehicleReportRequestDto
+{
+    public int VmfCode { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TrackingOneDeviceReportRequestDto
+{
+    public string DeviceId { get; set; } = string.Empty;
+}
+
+public class TrackingAllVehiclesReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public string? TrackerType { get; set; }
+}
+
+public class TrackingAllDevicesReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TrackingInstallPeriodReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TrackingSitePeriodReportRequestDto
+{
+    public int SiteCode { get; set; }
+    public bool AllSites { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class TrackingDeptPeriodReportRequestDto
+{
+    public int DepartmentCode { get; set; }
+    public bool AllDepartments { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}

@@ -105,8 +105,11 @@
         _results = new List<TrackingDto>();
         try
         {
-            var all = await TrackingService.GetAllAsync<TrackingDto>();
-            _results = all.Where(t => string.Equals(t.track_num, _trackerNumber, StringComparison.OrdinalIgnoreCase)).ToList();
+            var report = await TrackingService.GetOneDeviceReportAsync(new TrackingOneDeviceReportRequestDto
+            {
+                DeviceId = _trackerNumber
+            });
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

@@ -53,6 +53,8 @@ public class CallCentreController : BaseApiController
                 vmf_code = dto.VmfCode,
                 Call_time = dto.CallTime,
                 Call_date = dto.CallDate,
+                Incident_type = dto.IncidentType,
+                Incident_Desc = dto.IncidentDesc,
                 Capture_name = dto.CaptureName,
                 User_access_code = dto.UserAccessCode,
                 Caller_name = dto.CallerName,
@@ -93,6 +95,8 @@ public class CallCentreController : BaseApiController
             existing.vmf_code = dto.VmfCode;
             existing.Call_time = dto.CallTime;
             existing.Call_date = dto.CallDate;
+            existing.Incident_type = dto.IncidentType;
+            existing.Incident_Desc = dto.IncidentDesc;
             existing.Capture_name = dto.CaptureName;
             existing.User_access_code = dto.UserAccessCode;
             existing.Caller_name = dto.CallerName;
@@ -507,6 +511,8 @@ public class CreateCallCentreDto
     public int? VmfCode { get; set; }
     public DateTime? CallTime { get; set; }
     public DateTime? CallDate { get; set; }
+    public string? IncidentType { get; set; }
+    public string? IncidentDesc { get; set; }
     public string? CaptureName { get; set; }
     public short? UserAccessCode { get; set; }
     public string? CallerName { get; set; }
@@ -525,6 +531,8 @@ public class UpdateCallCentreDto
     public int? VmfCode { get; set; }
     public DateTime? CallTime { get; set; }
     public DateTime? CallDate { get; set; }
+    public string? IncidentType { get; set; }
+    public string? IncidentDesc { get; set; }
     public string? CaptureName { get; set; }
     public short? UserAccessCode { get; set; }
     public string? CallerName { get; set; }

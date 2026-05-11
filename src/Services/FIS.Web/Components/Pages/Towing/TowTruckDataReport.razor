@@ -92,7 +92,8 @@
         _results = new List<TowingDto>();
         try
         {
-            _results = await TowingService.GetAllAsync<TowingDto>();
+            var report = await TowingService.GetAllTowtrucksReportAsync();
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

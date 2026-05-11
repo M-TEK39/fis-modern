@@ -5,6 +5,7 @@
 @inject CallCentreApiService CallCentreService
 @inject SiteApiService SiteService
 @inject DriverApiService DriverService
+@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Edit / Update an Existing Incident - Fleet Information System</PageTitle>
@@ -130,6 +131,12 @@
             if (short.TryParse(_referenceNumber, out var code))
             {
                 _editing = await CallCentreService.GetByIdAsync<CallCentreDto>(code);
+                if (string.Equals(_editing?.Incident_type, "Booking", StringComparison.OrdinalIgnoreCase))
+                {
+                    Navigation.NavigateTo($"/call-centre/bookings?gmt={code}");
+                    return;
+                }
+
                 if (_editing?.Call_time.HasValue == true)
                 {
                     _callTime = TimeOnly.FromDateTime(_editing.Call_time.Value);

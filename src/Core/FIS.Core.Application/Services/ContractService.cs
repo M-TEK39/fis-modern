@@ -19,6 +19,7 @@ public class ContractService : IContractService
     private readonly ISiteRepository _siteRepository;
     private readonly IContractValidationService _validationService;
     private readonly IJournalDetailService _journalDetailService;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<ContractService> _logger;
 
     public ContractService(
@@ -27,6 +28,7 @@ public class ContractService : IContractService
         ISiteRepository siteRepository,
         IContractValidationService validationService,
         IJournalDetailService journalDetailService,
+        ICurrentUserContext currentUserContext,
         ILogger<ContractService> logger)
     {
         _contractRepository = contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
@@ -34,6 +36,7 @@ public class ContractService : IContractService
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
         _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _journalDetailService = journalDetailService ?? throw new ArgumentNullException(nameof(journalDetailService));
+        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -68,7 +71,7 @@ public class ContractService : IContractService
             contract.Charged_Until = contract.start_date;
 
             // Create contract
-            var createdContract = await _contractRepository.CreateAsync(contract, 1);
+            var createdContract = await _contractRepository.CreateAsync(contract, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Contract created successfully: {ContractCode} for vehicle {VmfCode}",
                 createdContract.contract_code, createdContract.vmf_code);
@@ -165,7 +168,8 @@ public class ContractService : IContractService
             }
 
             // Close contract
-            await _contractRepository.EndContractAsync(contractCode, endDate, currentUserId, endOdometer, notes);
+            var resolvedUserId = currentUserId > 0 ? currentUserId : _currentUserContext.GetCurrentUserIdOrDefault();
+            await _contractRepository.EndContractAsync(contractCode, endDate, resolvedUserId, endOdometer, notes);
 
             _logger.LogInformation("Contract closed successfully: {ContractCode}", contractCode);
 
@@ -254,7 +258,7 @@ public class ContractService : IContractService
                     _logger.LogError(journalEx, "Error processing journal rebill for contract {ContractCode}", contract.contract_code);
                 }
 
-                await _contractRepository.UpdateAsync(contract, 1);
+                await _contractRepository.UpdateAsync(contract, _currentUserContext.GetCurrentUserIdOrDefault());
             }
             else if (changeTracker.DoUpdate)
             {
@@ -294,7 +298,7 @@ public class ContractService : IContractService
                     _logger.LogError(journalEx, "Error updating journal for contract {ContractCode}", contract.contract_code);
                 }
 
-                await _contractRepository.UpdateAsync(contract, 1);
+                await _contractRepository.UpdateAsync(contract, _currentUserContext.GetCurrentUserIdOrDefault());
             }
             else if (changeTracker.DoReversal)
             {
@@ -354,7 +358,7 @@ public class ContractService : IContractService
                 return ContractOperationResult.ValidationFailed(validationResult);
             }
 
-            await _contractRepository.UpdateAsync(contract, 1);
+            await _contractRepository.UpdateAsync(contract, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Contract target return date extended successfully: {ContractCode}", contractCode);
 
@@ -441,7 +445,7 @@ public class ContractService : IContractService
             contract.still_current = "N";
             contract.Notes = $"CANCELLED: {cancellationReason ?? "No reason provided"}";
 
-            await _contractRepository.UpdateAsync(contract, 1);
+            await _contractRepository.UpdateAsync(contract, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Contract cancelled successfully: {ContractCode}", contractCode);
 

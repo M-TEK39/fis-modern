@@ -11,11 +11,13 @@ namespace FIS.Api.Controllers;
 public class AuctionController : BaseApiController
 {
     private readonly IAuctionRepository _repository;
+    private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<AuctionController> _logger;
 
-    public AuctionController(IAuctionRepository repository, ILogger<AuctionController> logger)
+    public AuctionController(IAuctionRepository repository, IVehicleRepository vehicleRepository, ILogger<AuctionController> logger)
     {
         _repository = repository;
+        _vehicleRepository = vehicleRepository;
         _logger = logger;
     }
 
@@ -134,33 +136,125 @@ public class AuctionController : BaseApiController
     /// Generate auction report for one vehicle
     /// </summary>
     [HttpPost("reports/one-vehicle")]
-    public ActionResult<AuctionReportDto> GetReportOneVehicle([FromBody] AuctionOneVehicleRequestDto request) => Ok(new AuctionReportDto { ReportType = "OneVehicle", Data = new List<object>() });
+    public async Task<ActionResult<AuctionReportDto>> GetReportOneVehicle([FromBody] AuctionOneVehicleRequestDto request)
+    {
+        var data = (await GetLiveItemsAsync())
+            .Where(item => item.vmf_code == request.VmfCode)
+            .OrderByDescending(item => item.auth_date)
+            .Cast<object>()
+            .ToList();
+
+        return Ok(new AuctionReportDto { ReportType = "OneVehicle", Data = data });
+    }
 
     /// <summary>
     /// Generate auction report for all vehicles
     /// </summary>
     [HttpPost("reports/all-vehicles")]
-    public ActionResult<AuctionReportDto> GetReportAllVehicles([FromBody] AuctionAllVehiclesRequestDto request) => Ok(new AuctionReportDto { ReportType = "AllVehicles", Data = new List<object>() });
+    public async Task<ActionResult<AuctionReportDto>> GetReportAllVehicles([FromBody] AuctionAllVehiclesRequestDto request)
+    {
+        var data = (await GetLiveItemsAsync())
+            .Where(item => IsWithinInclusiveDateRange(item.auth_date, request.StartDate, request.EndDate))
+            .OrderByDescending(item => item.auth_date)
+            .Cast<object>()
+            .ToList();
+
+        return Ok(new AuctionReportDto { ReportType = "AllVehicles", Data = data });
+    }
 
     /// <summary>
     /// Generate sale to name report
     /// </summary>
     [HttpPost("reports/sale-to-name")]
-    public ActionResult<AuctionReportDto> GetReportSaleToName([FromBody] AuctionSaleToNameRequestDto request) => Ok(new AuctionReportDto { ReportType = "SaleToName", Data = new List<object>() });
+    public async Task<ActionResult<AuctionReportDto>> GetReportSaleToName([FromBody] AuctionSaleToNameRequestDto request)
+    {
+        var buyer = request.BuyerName?.Trim();
+        var query = (await GetLiveItemsAsync())
+            .Where(item => IsWithinInclusiveDateRange(item.auth_date, request.StartDate, request.EndDate));
+
+        if (!string.IsNullOrWhiteSpace(buyer))
+        {
+            query = query.Where(item =>
+                (!string.IsNullOrWhiteSpace(item.sold_id) && item.sold_id.Contains(buyer, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(item.garage_owner) && item.garage_owner.Contains(buyer, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        return Ok(new AuctionReportDto
+        {
+            ReportType = "SaleToName",
+            Data = query.OrderByDescending(item => item.auth_date).Cast<object>().ToList()
+        });
+    }
 
     /// <summary>
     /// Generate auction by GG number report
     /// </summary>
     [HttpPost("reports/auction-gg")]
-    public ActionResult<AuctionReportDto> GetReportAuctionGG([FromBody] AuctionGGRequestDto request) => Ok(new AuctionReportDto { ReportType = "AuctionGG", Data = new List<object>() });
+    public async Task<ActionResult<AuctionReportDto>> GetReportAuctionGG([FromBody] AuctionGGRequestDto request)
+    {
+        var gg = request.GGNumber?.Trim();
+        if (string.IsNullOrWhiteSpace(gg))
+        {
+            return Ok(new AuctionReportDto { ReportType = "AuctionGG", Data = Array.Empty<object>().ToList() });
+        }
+
+        var matchedVmfCodes = (await _vehicleRepository.GetAllAsync())
+            .Where(vehicle => !string.IsNullOrWhiteSpace(vehicle.fleet_number) &&
+                              vehicle.fleet_number.Contains(gg, StringComparison.OrdinalIgnoreCase))
+            .Select(vehicle => vehicle.vmf_code)
+            .ToHashSet();
+
+        var data = (await GetLiveItemsAsync())
+            .Where(item => matchedVmfCodes.Contains(item.vmf_code))
+            .OrderByDescending(item => item.auth_date)
+            .Cast<object>()
+            .ToList();
+
+        return Ok(new AuctionReportDto { ReportType = "AuctionGG", Data = data });
+    }
 
     /// <summary>
     /// Generate auction by lot number report
     /// </summary>
     [HttpPost("reports/auction-lot")]
-    public ActionResult<AuctionReportDto> GetReportAuctionLot([FromBody] AuctionLotRequestDto request) => Ok(new AuctionReportDto { ReportType = "AuctionLot", Data = new List<object>() });
+    public async Task<ActionResult<AuctionReportDto>> GetReportAuctionLot([FromBody] AuctionLotRequestDto request)
+    {
+        var lot = request.LotNumber?.Trim();
+        var data = (await GetLiveItemsAsync())
+            .Where(item => !string.IsNullOrWhiteSpace(lot) &&
+                           item.lot.HasValue &&
+                           item.lot.Value.ToString().Contains(lot, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(item => item.auth_date)
+            .Cast<object>()
+            .ToList();
+
+        return Ok(new AuctionReportDto { ReportType = "AuctionLot", Data = data });
+    }
 
     #endregion
+
+    private async Task<List<Auction>> GetLiveItemsAsync()
+        => (await _repository.GetAllAsync())
+            .Where(item => !item.is_deleted)
+            .ToList();
+
+    private static bool IsWithinInclusiveDateRange(DateTime? candidate, DateTime startDate, DateTime endDate)
+    {
+        if (!candidate.HasValue)
+        {
+            return false;
+        }
+
+        var start = startDate.Date;
+        var end = endDate.Date;
+        if (end < start)
+        {
+            (start, end) = (end, start);
+        }
+
+        var value = candidate.Value.Date;
+        return value >= start && value <= end;
+    }
 }
 
 #region Auction DTOs

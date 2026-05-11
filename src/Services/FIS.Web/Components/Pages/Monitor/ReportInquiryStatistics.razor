@@ -18,8 +18,18 @@
 </div>
 
 <div class="page-content">
+    <div class="form-card">
+        <div class="form-row">
+            <label class="form-label">From Date</label>
+            <input type="date" class="form-input" @bind="_fromDate" />
+        </div>
+        <div class="form-row">
+            <label class="form-label">To Date</label>
+            <input type="date" class="form-input" @bind="_toDate" />
+        </div>
+    </div>
     <div class="form-actions">
-        <button class="btn btn-primary" @onclick="LoadStats">Load Statistics</button>
+        <button class="btn btn-primary" @onclick="LoadStats" disabled="_loading">Load Statistics</button>
     </div>
 
     @if (_loading)
@@ -52,8 +62,8 @@
                         @foreach (var item in PagedStats)
                         {
                             <tr>
-                                <td>@item.Key</td>
-                                <td>@item.Value</td>
+                                <td>@item.InquiryType</td>
+                                <td>@item.Count</td>
                             </tr>
                         }
                     </tbody>
@@ -74,11 +84,13 @@
 
 @code {
     private bool _loading;
-    private Dictionary<string, int> _stats = new();
+    private List<MonitorStatisticItemDto> _stats = new();
+    private DateTime _fromDate = DateTime.Today.AddDays(-30);
+    private DateTime _toDate = DateTime.Today;
     private int _page = 1;
     private readonly int _pageSize = 12;
 
-    private IEnumerable<KeyValuePair<string, int>> PagedStats
+    private IEnumerable<MonitorStatisticItemDto> PagedStats
         => _stats.Skip((_page - 1) * _pageSize).Take(_pageSize);
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_stats.Count / (double)_pageSize));
@@ -86,12 +98,25 @@
     private async Task LoadStats()
     {
         _loading = true;
-        _stats = new Dictionary<string, int>();
+        _stats = new List<MonitorStatisticItemDto>();
         try
         {
-            var all = await MonitorService.GetAllAsync<MonitorDto>();
-            _stats = all.GroupBy(m => string.IsNullOrWhiteSpace(m.Inquiry_type) ? "(Unknown)" : m.Inquiry_type)
-                .ToDictionary(g => g.Key, g => g.Count());
+            if (_toDate.Date < _fromDate.Date)
+            {
+                await JSRuntime.InvokeVoidAsync("console.error", "End date cannot be before start date.");
+                return;
+            }
+
+            var report = await MonitorService.GetInquiryStatisticsAsync(new MonitorStatsRequestDto
+            {
+                StartDate = _fromDate.Date,
+                EndDate = _toDate.Date
+            });
+
+            _stats = report.Data
+                .OrderByDescending(item => item.Count)
+                .ThenBy(item => item.InquiryType, StringComparer.OrdinalIgnoreCase)
+                .ToList();
             _page = 1;
         }
         catch (Exception ex)

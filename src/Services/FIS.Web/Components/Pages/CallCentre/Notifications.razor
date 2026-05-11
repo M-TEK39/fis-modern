@@ -1,7 +1,8 @@
 @page "/call-centre/notifications"
 @rendermode InteractiveServer
+@using FIS.Web.Models
 @using FIS.Web.Services
-@inject CallCentreApiService CallCentreService
+@inject NotifyListApiService NotifyListService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Notification List for eMail Addresses - Fleet Information System</PageTitle>
@@ -12,84 +13,183 @@
             <i class="bx bx-envelope"></i>
             Notification List for eMail Addresses
         </h1>
-        <p class="page-description">Call centre notification workflow.</p>
+        <p class="page-description">Search and maintain notification sections and recipient email addresses.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-secondary" @onclick="LoadAsync">
+            <i class="bx bx-refresh"></i>
+            Refresh
+        </button>
+        <button class="btn btn-primary" @onclick="StartAdd">
+            <i class="bx bx-plus"></i>
+            Add Section
+        </button>
     </div>
 </div>
 
 <div class="page-content">
-    <div class="form-actions">
-        <button class="btn btn-primary" @onclick="LoadNotifications">Load Notifications</button>
+    <div class="search-bar fis-mb-1">
+        <div class="search-input-wrapper">
+            <i class="bx bx-search"></i>
+            <input class="search-input"
+                   type="search"
+                   placeholder="Search section name or email..."
+                   @bind="_searchTerm"
+                   @bind:event="oninput"
+                   @bind:after="OnSearchChanged" />
+            @if (!string.IsNullOrWhiteSpace(_searchTerm))
+            {
+                <button type="button" class="search-clear" @onclick="ClearSearch" aria-label="Clear search">
+                    <i class="bx bx-x"></i>
+                </button>
+            }
+        </div>
     </div>
 
     @if (_loading)
     {
         <div class="loading-state">
             <div class="spinner"></div>
-            <p>Loading...</p>
+            <p>Loading notification sections...</p>
         </div>
     }
-    else if (_notifications.Count == 0)
+    else if (_items.Count == 0)
     {
         <div class="empty-state">
             <i class="bx bx-envelope"></i>
-            <h3>No notifications available</h3>
-            <p>No notifications match the current filter selection.</p>
+            <h3>No notification sections found</h3>
+            <p>No records matched your current search criteria.</p>
         </div>
     }
     else
     {
         <div class="table-container">
+            <div class="table-header">
+                <span class="table-title">@_items.Count record(s)</span>
+            </div>
             <div class="table-wrapper">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Email</th>
+                            <th>Section Name</th>
+                            <th>Email Address</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach (var item in PagedNotifications)
+                        @foreach (var item in PagedItems)
                         {
                             <tr>
-                                <td>@item</td>
+                                <td>@item.Notify_list_desc</td>
+                                <td>@item.Notify_email1</td>
+                                <td class="actions-column">
+                                    <div class="table-actions">
+                                        <button class="btn-icon btn-icon-edit" @onclick="() => StartEdit(item)">
+                                            <i class="bx bx-edit"></i>
+                                        </button>
+                                        <button class="btn-icon btn-icon-delete" @onclick="() => ConfirmDelete(item)">
+                                            <i class="bx bx-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            @if (_notifications.Count > _pageSize)
-            {
-                <div class="pagination">
-                    <button class="pagination-btn" @onclick="PrevPage" disabled="@(_page <= 1)">Previous</button>
-                    <div class="pagination-info">Page @_page of @TotalPages</div>
-                    <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
-                </div>
-                <div class="pagination-meta">Total records: @_notifications.Count | Page size: @_pageSize</div>
-            }
+            <div class="pagination-controls fis-mt-1">
+                <button class="pagination-btn" @onclick="PreviousPage" disabled="@(_page <= 1)">Previous</button>
+                <div class="pagination-info">Page @_page of @TotalPages</div>
+                <button class="pagination-btn" @onclick="NextPage" disabled="@(_page >= TotalPages)">Next</button>
+            </div>
         </div>
+    }
+
+    @if (_showEditor)
+    {
+        <Modal IsVisible="_showEditor"
+               Title="@(_editingId.HasValue ? "Edit Notification Section" : "Add Notification Section")"
+               Size="Modal.ModalSize.Normal"
+               ShowFooter="false"
+               ShowCloseButton="true"
+               OnCancel="CancelEdit">
+            <ChildContent>
+                <div class="form-row">
+                    <label class="form-label">Section(s) Name</label>
+                    <input class="form-input" @bind="_editName" maxlength="255" />
+                </div>
+                <div class="form-row">
+                    <label class="form-label">Email Address</label>
+                    <input class="form-input" @bind="_editEmail" maxlength="255" />
+                </div>
+                <div class="form-actions fis-mt-1">
+                    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Submit</button>
+                    <button class="btn btn-secondary" @onclick="CancelEdit" disabled="@_saving">Cancel</button>
+                </div>
+            </ChildContent>
+        </Modal>
+    }
+
+    @if (_showDeleteConfirm)
+    {
+        <Modal IsVisible="_showDeleteConfirm"
+               Title="Delete Notification Section"
+               Size="Modal.ModalSize.Normal"
+               ShowFooter="false"
+               ShowCloseButton="true"
+               OnCancel="CancelDelete">
+            <ChildContent>
+                <p>Delete notification section <strong>@(_pendingDelete?.Notify_list_desc)</strong>?</p>
+                <div class="form-actions fis-mt-1">
+                    <button class="btn btn-danger" @onclick="DeleteAsync" disabled="@_saving">Delete</button>
+                    <button class="btn btn-secondary" @onclick="CancelDelete" disabled="@_saving">Cancel</button>
+                </div>
+            </ChildContent>
+        </Modal>
     }
 </div>
 
 @code {
-    private bool _loading;
-    private List<string> _notifications = new();
+    private bool _loading = true;
+    private bool _saving;
+    private string _searchTerm = string.Empty;
+    private List<NotifyListDto> _items = new();
     private int _page = 1;
-    private readonly int _pageSize = 12;
+    private const int _pageSize = 12;
 
-    private IEnumerable<string> PagedNotifications => _notifications.Skip((_page - 1) * _pageSize).Take(_pageSize);
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_notifications.Count / (double)_pageSize));
+    private bool _showEditor;
+    private int? _editingId;
+    private string _editName = string.Empty;
+    private string _editEmail = string.Empty;
 
-    private async Task LoadNotifications()
+    private bool _showDeleteConfirm;
+    private NotifyListDto? _pendingDelete;
+
+    private IEnumerable<NotifyListDto> PagedItems => _items.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_items.Count / (double)_pageSize));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
     {
         _loading = true;
-        _notifications = new List<string>();
         try
         {
-            _notifications = await CallCentreService.GetAllAsync<string>();
-            _page = 1;
+            _items = await NotifyListService.GetAllAsync<NotifyListDto>(_searchTerm);
+            _page = Math.Min(_page, TotalPages);
+            if (_page < 1)
+            {
+                _page = 1;
+            }
         }
         catch (Exception ex)
         {
-            await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error loading notify list: {ex.Message}");
+            _items = new();
+            _page = 1;
         }
         finally
         {
@@ -97,7 +197,122 @@
         }
     }
 
-    private void PrevPage()
+    private async Task OnSearchChanged()
+    {
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchTerm = string.Empty;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private void StartAdd()
+    {
+        _editingId = null;
+        _editName = string.Empty;
+        _editEmail = string.Empty;
+        _showEditor = true;
+    }
+
+    private void StartEdit(NotifyListDto item)
+    {
+        _editingId = item.Notify_list_code;
+        _editName = item.Notify_list_desc ?? string.Empty;
+        _editEmail = item.Notify_email1 ?? string.Empty;
+        _showEditor = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editName))
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Section(s) Name is required.");
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var payload = new NotifyListCreateUpdateDto
+            {
+                Notify_list_desc = _editName,
+                Notify_email1 = string.IsNullOrWhiteSpace(_editEmail) ? null : _editEmail
+            };
+
+            if (_editingId.HasValue)
+            {
+                await NotifyListService.UpdateAsync<NotifyListCreateUpdateDto, NotifyListDto>(_editingId.Value, payload);
+            }
+            else
+            {
+                await NotifyListService.CreateAsync<NotifyListCreateUpdateDto, NotifyListDto>(payload);
+            }
+
+            _showEditor = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error saving notify list: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task CancelEdit()
+    {
+        _showEditor = false;
+        _editingId = null;
+        _editName = string.Empty;
+        _editEmail = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private void ConfirmDelete(NotifyListDto item)
+    {
+        _pendingDelete = item;
+        _showDeleteConfirm = true;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is null)
+        {
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await NotifyListService.DeleteAsync(_pendingDelete.Notify_list_code);
+            _showDeleteConfirm = false;
+            _pendingDelete = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("console.error", $"Error deleting notify list record: {ex.Message}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private Task CancelDelete()
+    {
+        _showDeleteConfirm = false;
+        _pendingDelete = null;
+        return Task.CompletedTask;
+    }
+
+    private void PreviousPage()
     {
         if (_page > 1)
         {

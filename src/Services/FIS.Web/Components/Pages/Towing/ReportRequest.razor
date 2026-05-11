@@ -73,6 +73,8 @@
 
 @code {
     private bool _loading;
+    private DateTime _fromDate = DateTime.Today.AddYears(-50);
+    private DateTime _toDate = DateTime.Today.AddYears(10);
     private List<TowingDto> _results = new();
     private Dictionary<int, string> _vehicleLabelByVmf = new();
     private int _page = 1;
@@ -92,7 +94,12 @@
         _results = new List<TowingDto>();
         try
         {
-            _results = await TowingService.GetAllAsync<TowingDto>();
+            var report = await TowingService.GetRequestReportAsync(new TowingRequestReportRequestDto
+            {
+                StartDate = _fromDate.Date,
+                EndDate = _toDate.Date
+            });
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

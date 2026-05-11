@@ -2,7 +2,10 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject LicenseApiService LicenseService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Licences - Fleet Information System</PageTitle>
@@ -18,6 +21,14 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasLicenceRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Licence</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles">
         <div class="menu-tile">
             <button class="menu-tile-header">
@@ -25,7 +36,7 @@
                 <i class="bx bx-wrench"></i>
             </button>
             <div class="menu-tile-body">
-                <div class="menu-item"><span class="menu-item-link">Licence Maintenance Information / Help</span></div>
+                <div class="menu-item"><a class="menu-item-link" href="/licenses/help">Licence Maintenance Information / Help</a></div>
                 <div class="menu-item"><a class="menu-item-link" href="/licenses/one-vehicle">1) Licence Maintenance for ONE Vehicle</a></div>
                 <div class="menu-item"><a class="menu-item-link" href="/licenses/multi-collection">2) Collection for TWO or MORE Licences</a></div>
                 <div class="menu-item"><a class="menu-item-link" href="/licenses/garage">3) Licence Available at Garage</a></div>
@@ -63,9 +74,11 @@
                       Columns="_columns"
                       Rows="_rows"
                       Filters="_filters" />
+    }
 </div>
 
 @code {
+    private bool _hasLicenceRole;
     private bool _loading = true;
     private List<Dictionary<string, string?>> _rows = new();
 
@@ -84,6 +97,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasLicenceRole = HasRole(authState.User, "Licence");
+        if (!_hasLicenceRole)
+        {
+            _loading = false;
+            return;
+        }
+
         _loading = true;
         try
         {
@@ -108,5 +129,21 @@
         {
             _loading = false;
         }
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
     }
 }

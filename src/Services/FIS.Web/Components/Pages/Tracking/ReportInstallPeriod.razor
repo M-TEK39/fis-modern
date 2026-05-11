@@ -103,10 +103,12 @@
         _results = new List<TrackingDto>();
         try
         {
-            var all = await TrackingService.GetAllAsync<TrackingDto>();
-            _results = all.Where(t => (!_fromDate.HasValue || (t.install_date.HasValue && t.install_date.Value.Date >= _fromDate.Value.Date)) &&
-                                      (!_toDate.HasValue || (t.install_date.HasValue && t.install_date.Value.Date <= _toDate.Value.Date)))
-                .ToList();
+            var report = await TrackingService.GetInstallPeriodReportAsync(new TrackingInstallPeriodReportRequestDto
+            {
+                StartDate = (_fromDate ?? DateTime.Today.AddYears(-50)).Date,
+                EndDate = (_toDate ?? DateTime.Today.AddYears(10)).Date
+            });
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

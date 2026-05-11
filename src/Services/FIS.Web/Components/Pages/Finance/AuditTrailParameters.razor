@@ -196,21 +196,15 @@
         _reportRows = new();
         _reportColumns = new();
 
-        var result = await FinanceService.PostActionAsync("api/Report/universal", new
-        {
-            reportType = "financial",
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = Mode,
-                ["auditType"] = reportType,
-                ["outputFormat"] = outputFormat,
-                ["departmentCode"] = _selectedDepartment,
-                ["siteCode"] = _selectedSite
-            },
-            vmfCode = int.TryParse(_selectedVehicle, out var vmfCode) ? vmfCode : (int?)null,
-            startDate = _startDate,
-            endDate = _endDate
-        });
+        var result = await FinanceService.PostAuditTrailReportAsync(
+            Mode,
+            reportType,
+            outputFormat,
+            _selectedDepartment,
+            _selectedSite,
+            int.TryParse(_selectedVehicle, out var vmfCode) ? vmfCode : (int?)null,
+            _startDate,
+            _endDate);
 
         _statusError = !result.Success;
         _statusMessage = result.Message;

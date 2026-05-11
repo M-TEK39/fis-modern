@@ -3,7 +3,7 @@
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
-@inject FinanceApiService FinanceService
+@inject AuctionApiService AuctionService
 @inject VehicleApiService VehicleService
 
 <PageTitle>@PageTitleText - Fleet Information System</PageTitle>
@@ -82,7 +82,7 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label">Auction Number</label>
-                        <input class="form-input" placeholder="e.g. 2003/03" />
+                        <input class="form-input" placeholder="e.g. 2003/03" @bind="_auctionNumberInput" />
                     </div>
                 </div>
                 <div class="contract-action-group">
@@ -95,7 +95,7 @@
                 <div class="form-grid">
                     <div class="form-field">
                         <label class="form-label">Buyer Name</label>
-                        <input class="form-input" placeholder="Buyer Name" />
+                        <input class="form-input" placeholder="Buyer Name" @bind="_buyerNameInput" />
                     </div>
                 </div>
                 <div class="contract-action-group">
@@ -125,7 +125,7 @@
                     </div>
                     <div class="form-field">
                         <label class="form-label">Auction Number</label>
-                        <input class="form-input" placeholder="e.g. 2003/03" />
+                        <input class="form-input" placeholder="e.g. 2003/03" @bind="_auctionNumberInput" />
                     </div>
                 </div>
                 <div class="contract-action-group">
@@ -157,6 +157,8 @@
     private string _vehicleSearchTerm = string.Empty;
     private List<VehicleDto> _vehicleMatches = new();
     private int? _selectedVehicleVmfCode;
+    private string _buyerNameInput = string.Empty;
+    private string _auctionNumberInput = string.Empty;
 
     private void SetNumberType(string value)
     {
@@ -170,29 +172,68 @@
     {
         _running = true;
         _statusMessage = string.Empty;
-
-        var endpoint = Mode switch
+        try
         {
-            "one-vehicle" => "api/auction/reports/one-vehicle",
-            "all-vehicles" => "api/auction/reports/all-vehicles",
-            "sale-to-name" => "api/auction/reports/sale-to-name",
-            "auction-gg" => "api/auction/reports/auction-gg",
-            "auction-lot" => "api/auction/reports/auction-lot",
-            _ => "api/auction/reports"
-        };
+            AuctionReportDto report;
+            switch (Mode)
+            {
+                case "one-vehicle":
+                    if (!_selectedVehicleVmfCode.HasValue)
+                    {
+                        _statusError = true;
+                        _statusMessage = "Select a vehicle first.";
+                        return;
+                    }
+                    report = await AuctionService.GetOneVehicleReportAsync(new AuctionOneVehicleReportRequestDto
+                    {
+                        VmfCode = _selectedVehicleVmfCode.Value
+                    });
+                    break;
+                case "all-vehicles":
+                    report = await AuctionService.GetAllVehiclesReportAsync(new AuctionAllVehiclesReportRequestDto
+                    {
+                        StartDate = DateTime.Today.AddYears(-50),
+                        EndDate = DateTime.Today.AddYears(10)
+                    });
+                    break;
+                case "sale-to-name":
+                    report = await AuctionService.GetSaleToNameReportAsync(new AuctionSaleToNameReportRequestDto
+                    {
+                        BuyerName = _buyerNameInput,
+                        StartDate = DateTime.Today.AddYears(-50),
+                        EndDate = DateTime.Today.AddYears(10)
+                    });
+                    break;
+                case "auction-gg":
+                    report = await AuctionService.GetAuctionGgReportAsync(new AuctionGgReportRequestDto
+                    {
+                        GGNumber = _auctionNumberInput
+                    });
+                    break;
+                case "auction-lot":
+                    report = await AuctionService.GetAuctionLotReportAsync(new AuctionLotReportRequestDto
+                    {
+                        LotNumber = _auctionNumberInput
+                    });
+                    break;
+                default:
+                    _statusError = true;
+                    _statusMessage = "Invalid report mode.";
+                    return;
+            }
 
-        var result = await FinanceService.PostActionAsync(endpoint, new
+            _statusError = false;
+            _statusMessage = $"{report.Data.Count} record(s) returned.";
+        }
+        catch (Exception)
         {
-            mode = Mode,
-            numberType = _numberType,
-            vehicleIdentifier = string.IsNullOrWhiteSpace(_vehicleSearchTerm) ? null : _vehicleSearchTerm.Trim(),
-            vmfCode = _selectedVehicleVmfCode,
-            legacyPath = LegacyPathText
-        });
-
-        _statusError = !result.Success;
-        _statusMessage = result.Message;
-        _running = false;
+            _statusError = true;
+            _statusMessage = "Unable to run report.";
+        }
+        finally
+        {
+            _running = false;
+        }
     }
 
     private async Task SearchVehiclesAsync()

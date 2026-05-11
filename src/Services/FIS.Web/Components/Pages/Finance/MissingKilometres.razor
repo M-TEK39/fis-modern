@@ -191,20 +191,14 @@
         }
         else
         {
-            result = await FinanceService.PostActionAsync("api/Report/universal", new
-            {
-                reportType = "financial",
-                parameters = new Dictionary<string, object?>
-                {
-                    ["mode"] = Action,
-                    ["departmentCode"] = _selectedDepartment,
-                    ["provinceCode"] = _selectedProvince,
-                    ["financialYear"] = _selectedFinancialYear,
-                    ["excludeUnposted"] = _excludeUnposted
-                },
-                startDate = _startDate,
-                endDate = _endDate
-            });
+            result = await FinanceService.PostMissingKilometresReportAsync(
+                Action,
+                _selectedDepartment,
+                _selectedProvince,
+                _selectedFinancialYear,
+                _excludeUnposted,
+                _startDate,
+                _endDate);
         }
 
         _statusError = !result.Success;

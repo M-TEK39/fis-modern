@@ -1,5 +1,8 @@
 @page "/call-centre/reports"
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Call Centre Reports Menu - Fleet Information System</PageTitle>
 
@@ -14,6 +17,14 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasReportsRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Reports</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles">
         <div class="menu-tile">
             <div class="menu-tile-header">
@@ -75,4 +86,31 @@
             </div>
         </div>
     </div>
+    }
 </div>
+
+@code {
+    private bool _hasReportsRole;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasReportsRole = HasRole(authState.User, "Reports");
+    }
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
+}

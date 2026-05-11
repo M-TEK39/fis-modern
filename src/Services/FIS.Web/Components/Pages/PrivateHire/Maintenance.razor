@@ -662,6 +662,8 @@
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? Tab { get; set; }
+    [SupplyParameterFromQuery(Name = "mode")]
+    public string? Mode { get; set; }
 
     protected override void OnParametersSet()
     {
@@ -674,6 +676,14 @@
         {
             case "vehicles":
                 _activeTab = "vehicles";
+                if (!string.IsNullOrWhiteSpace(Mode))
+                {
+                    var requestedMode = Mode.Trim().ToLowerInvariant();
+                    if (requestedMode is "add" or "edit" or "delete")
+                    {
+                        _vehicleMode = requestedMode;
+                    }
+                }
                 break;
             case "contractors":
                 _activeTab = "contractors";

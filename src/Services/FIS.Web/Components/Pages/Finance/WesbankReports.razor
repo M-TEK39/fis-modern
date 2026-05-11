@@ -135,17 +135,11 @@
         _reportColumns = new();
         _reportPage = 1;
 
-        var result = await FinanceService.PostActionAsync("api/Report/universal", new
-        {
-            reportType = "financial",
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = Action,
-                ["provinceCode"] = _selectedProvince
-            },
-            startDate = _startDate,
-            endDate = _endDate
-        });
+        var result = await FinanceService.PostWesbankReportAsync(
+            Action,
+            _selectedProvince,
+            _startDate,
+            _endDate);
 
         _statusError = !result.Success;
         _statusMessage = result.Message;

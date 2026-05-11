@@ -2,8 +2,11 @@
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject WorkshopApiService WorkshopService
 @inject VehicleApiService VehicleService
+@inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Workshop - Fleet Information System</PageTitle>
@@ -19,6 +22,14 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasWorkshopRole)
+    {
+        <div class="alert alert-error">
+            Access denied. Legacy parity: this menu requires the <strong>Workshop</strong> role.
+        </div>
+    }
+    else
+    {
     <div class="menu-tiles fis-mb-15">
         <div class="menu-tile">
             <button class="menu-tile-header" @onclick="ToggleWorkshopInfo">
@@ -144,9 +155,11 @@
             <div class="pagination-meta">Total records: @FilteredEntries.Count | Page size: @_pageSize</div>
         }
     </div>
+    }
 </div>
 
 @code {
+    private bool _hasWorkshopRole;
     private bool _showWorkshopInfo = true;
     private bool _showWorkshopSection = true;
     private bool _loading = true;
@@ -171,6 +184,14 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _hasWorkshopRole = HasRole(authState.User, "Workshop");
+        if (!_hasWorkshopRole)
+        {
+            _loading = false;
+            return;
+        }
+
         await LoadOverviewAsync();
     }
 
@@ -298,6 +319,22 @@
 
     private static bool Contains(string? value, string search)
         => value?.Contains(search, StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
 
     private sealed class WorkshopOverviewRow
     {

@@ -554,23 +554,18 @@
 
     private async Task<FinanceApiResult> RunUniversalReportAsync(string reportAction, string reportType)
     {
-        return await FinanceService.PostActionAsync("api/Report/universal", new
-        {
+        return await FinanceService.PostFinanceReportsPageReportAsync(
             reportType,
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = Action,
-                ["action"] = reportAction,
-                ["departmentCode"] = _selectedDepartment,
-                ["siteCode"] = _selectedSite,
-                ["province"] = _selectedProvince,
-                ["financialYear"] = _selectedFinancialYear,
-                ["batchDate"] = _selectedBatchDate
-            },
-            vmfCode = int.TryParse(_selectedVehicleVmfCode, out var vmfCode) ? vmfCode : (int?)null,
-            startDate = _startDate,
-            endDate = _endDate
-        });
+            Action,
+            reportAction,
+            _selectedDepartment,
+            _selectedSite,
+            _selectedProvince,
+            _selectedFinancialYear,
+            _selectedBatchDate,
+            int.TryParse(_selectedVehicleVmfCode, out var vmfCode) ? vmfCode : (int?)null,
+            _startDate,
+            _endDate);
     }
 
     private async Task DownloadExcelAsync(string reportAction)

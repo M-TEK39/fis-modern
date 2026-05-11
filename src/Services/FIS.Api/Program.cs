@@ -226,6 +226,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 // Register business services
+builder.Services.AddScoped<ICurrentUserContext, CurrentUserContextService>();
 builder.Services.AddScoped<FuelCardManagementService>();
 builder.Services.AddScoped<VehicleService>();
 builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled with PDF service

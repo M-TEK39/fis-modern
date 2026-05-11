@@ -189,18 +189,12 @@
         _reportColumns = new();
         _reportPage = 1;
 
-        var result = await FinanceService.PostActionAsync("api/Report/universal", new
-        {
-            reportType = "financial",
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = Action,
-                ["departmentCode"] = _selectedDepartment,
-                ["siteCode"] = _selectedSite,
-                ["financialYear"] = _selectedFinancialYear
-            },
-            vmfCode = int.TryParse(_selectedVehicle, out var vmfCode) ? vmfCode : (int?)null
-        });
+        var result = await FinanceService.PostOutstandingReportAsync(
+            Action,
+            _selectedDepartment,
+            _selectedSite,
+            _selectedFinancialYear,
+            int.TryParse(_selectedVehicle, out var vmfCode) ? vmfCode : (int?)null);
 
         _statusError = !result.Success;
         _statusMessage = result.Message;

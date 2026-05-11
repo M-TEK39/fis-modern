@@ -1708,7 +1708,7 @@ public class ReportingService : IReportingService
 
         var report = await GenerateVehicleReportAsync(vmfCode);
 
-        // TODO: Implement PDF generation using modern library
+        // Legacy-compatible lightweight PDF output without external rendering dependencies.
         // Options: PuppeteerSharp (HTML to PDF), QuestPDF, or iText7
 
         var htmlContent = GenerateVehicleReportHtml(report);
@@ -1722,10 +1722,7 @@ public class ReportingService : IReportingService
     {
         _logger.LogInformation("Generating custom PDF report: {ReportType}", reportType);
 
-        // TODO: Implement custom report PDF generation
-        // This would handle any report type dynamically
-
-        var htmlContent = GenerateCustomReportHtml(reportType, parameters);
+        var htmlContent = await GenerateCustomReportHtmlAsync(reportType, parameters);
         return await ConvertHtmlToPdfAsync(htmlContent);
     }
 
@@ -1789,15 +1786,143 @@ public class ReportingService : IReportingService
         return html.ToString();
     }
 
-    private string GenerateCustomReportHtml(
+    private async Task<string> GenerateCustomReportHtmlAsync(
         string reportType,
         Dictionary<string, object> parameters
     )
     {
-        // TODO: Implement custom report HTML generation
-        // This would generate HTML based on report type and parameters
+        object? reportData = null;
+        var normalizedReportType = reportType?.Trim() ?? string.Empty;
+        var reportKey = normalizedReportType.Replace("-", string.Empty).Replace("_", string.Empty);
 
-        return $"<html><body><h1>{reportType} Report</h1><p>Custom report content here</p></body></html>";
+        if (string.Equals(reportKey, "SummaryIncome", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateSummaryIncomeReportAsync(GetIntParameter(parameters, "financial_year"));
+        }
+        else if (string.Equals(reportKey, "DetailedIncome", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateDetailedIncomeReportAsync(GetIntParameter(parameters, "financial_year"));
+        }
+        else if (string.Equals(reportKey, "TariffList", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateTariffListReportAsync(GetIntParameter(parameters, "financial_year"));
+        }
+        else if (string.Equals(reportKey, "KiloGaps", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateKiloGapsReportAsync(GetIntParameter(parameters, "financial_year"));
+        }
+        else if (string.Equals(reportKey, "TripSummary", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateTripSummaryReportAsync(
+                GetNullableIntParameter(parameters, "vmf_code"),
+                GetDateParameter(parameters, "start_date"),
+                GetDateParameter(parameters, "end_date"));
+        }
+        else if (string.Equals(reportKey, "MaintenanceCost", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateMaintenanceCostReportAsync(
+                GetNullableIntParameter(parameters, "vmf_code"),
+                GetDateParameter(parameters, "start_date"),
+                GetDateParameter(parameters, "end_date"));
+        }
+        else if (string.Equals(reportKey, "ContractSummary", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateContractSummaryReportAsync(GetNullableIntParameter(parameters, "contract_id"));
+        }
+        else if (string.Equals(reportKey, "ContractBilling", StringComparison.OrdinalIgnoreCase))
+        {
+            reportData = await GenerateContractBillingReportAsync(
+                GetIntParameter(parameters, "contract_id"),
+                GetDateParameter(parameters, "start_date"),
+                GetDateParameter(parameters, "end_date"));
+        }
+
+        var html = new StringBuilder();
+        html.AppendLine("<!DOCTYPE html>");
+        html.AppendLine("<html>");
+        html.AppendLine("<head>");
+        html.AppendLine($"<title>{WebUtility.HtmlEncode(normalizedReportType)} Report</title>");
+        html.AppendLine("<style>body{font-family:Arial,sans-serif;margin:20px;}h1{margin-bottom:0;}h2{margin-top:24px;}pre{white-space:pre-wrap;background:#f7f7f7;padding:12px;border-radius:6px;border:1px solid #ddd;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#f0f0f0;}</style>");
+        html.AppendLine("</head>");
+        html.AppendLine("<body>");
+        html.AppendLine($"<h1>{WebUtility.HtmlEncode(normalizedReportType)} Report</h1>");
+        html.AppendLine($"<p>Generated: {DateTime.Now:yyyy-MM-dd HH:mm}</p>");
+
+        html.AppendLine("<h2>Parameters</h2>");
+        html.AppendLine("<table><thead><tr><th>Parameter</th><th>Value</th></tr></thead><tbody>");
+        foreach (var parameter in parameters.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            html.AppendLine(
+                $"<tr><td>{WebUtility.HtmlEncode(parameter.Key)}</td><td>{WebUtility.HtmlEncode(parameter.Value?.ToString() ?? string.Empty)}</td></tr>");
+        }
+        html.AppendLine("</tbody></table>");
+
+        if (reportData is not null)
+        {
+            var json = JsonSerializer.Serialize(reportData, new JsonSerializerOptions
+            {
+                WriteIndented = true,
+            });
+
+            html.AppendLine("<h2>Report Data</h2>");
+            html.AppendLine($"<pre>{WebUtility.HtmlEncode(json)}</pre>");
+        }
+        else
+        {
+            html.AppendLine("<h2>Report Data</h2>");
+            html.AppendLine("<p>No specific generator mapped for this report type yet.</p>");
+        }
+
+        html.AppendLine("</body>");
+        html.AppendLine("</html>");
+
+        return html.ToString();
+    }
+
+    private static int GetIntParameter(Dictionary<string, object> parameters, string key)
+    {
+        if (!TryGetParameter(parameters, key, out var raw) || !int.TryParse(raw, out var value))
+        {
+            throw new InvalidOperationException($"Required integer parameter '{key}' is missing.");
+        }
+
+        return value;
+    }
+
+    private static int? GetNullableIntParameter(Dictionary<string, object> parameters, string key)
+    {
+        return TryGetParameter(parameters, key, out var raw) && int.TryParse(raw, out var value)
+            ? value
+            : null;
+    }
+
+    private static DateTime GetDateParameter(Dictionary<string, object> parameters, string key)
+    {
+        if (!TryGetParameter(parameters, key, out var raw) || !DateTime.TryParse(raw, out var value))
+        {
+            throw new InvalidOperationException($"Required date parameter '{key}' is missing.");
+        }
+
+        return value;
+    }
+
+    private static bool TryGetParameter(
+        Dictionary<string, object> parameters,
+        string key,
+        out string value
+    )
+    {
+        foreach (var entry in parameters)
+        {
+            if (string.Equals(entry.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                value = entry.Value?.ToString() ?? string.Empty;
+                return true;
+            }
+        }
+
+        value = string.Empty;
+        return false;
     }
 
     private async Task<byte[]> ConvertHtmlToPdfAsync(string htmlContent)

@@ -14,17 +14,20 @@ public class TripService : ITripService
     private readonly ITripRepository _tripRepository;
     private readonly IContractRepository _contractRepository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<TripService> _logger;
 
     public TripService(
         ITripRepository tripRepository,
         IContractRepository contractRepository,
         IVehicleRepository vehicleRepository,
+        ICurrentUserContext currentUserContext,
         ILogger<TripService> logger)
     {
         _tripRepository = tripRepository ?? throw new ArgumentNullException(nameof(tripRepository));
         _contractRepository = contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
         _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -55,7 +58,7 @@ public class TripService : ITripService
                 trip.expiry_date = new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.DaysInMonth(DateTime.Now.Year, DateTime.Now.Month));
             }
 
-            var createdTrip = await _tripRepository.CreateAsync(trip, 1); // TODO: Pass actual user ID from JWT
+            var createdTrip = await _tripRepository.CreateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Trip authority created: {TripAuthorityCode} for contract {ContractCode}",
                 createdTrip.trip_authority_code, createdTrip.contract_code);
@@ -92,7 +95,7 @@ public class TripService : ITripService
                 throw new InvalidOperationException($"Trip {trip.trip_authority_code} is locked for transfer and cannot be modified");
             }
 
-            await _tripRepository.UpdateAsync(trip, 1); // TODO: Pass actual user ID from JWT
+            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Trip authority updated: {TripAuthorityCode}", trip.trip_authority_code);
         }
@@ -314,7 +317,7 @@ public class TripService : ITripService
             }
 
             trip.locked_for_transfer = true;
-            await _tripRepository.UpdateAsync(trip, 1); // TODO: Pass actual user ID from JWT
+            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Trip {TripAuthorityCode} locked for transfer", tripAuthorityCode);
         }
@@ -341,7 +344,7 @@ public class TripService : ITripService
             }
 
             trip.locked_for_transfer = false;
-            await _tripRepository.UpdateAsync(trip, 1); // TODO: Pass actual user ID from JWT
+            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Trip {TripAuthorityCode} unlocked from transfer", tripAuthorityCode);
         }
@@ -375,7 +378,7 @@ public class TripService : ITripService
                 throw new InvalidOperationException($"Trip {tripAuthorityCode} is locked for transfer and cannot be deleted");
             }
 
-            await _tripRepository.DeleteAsync(tripAuthorityCode, 1); // TODO: Pass actual user ID from JWT
+            await _tripRepository.DeleteAsync(tripAuthorityCode, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Trip authority deleted: {TripAuthorityCode}", tripAuthorityCode);
         }
@@ -422,7 +425,7 @@ public class TripService : ITripService
             }
 
             trip.expiry_date = newExpiryDate;
-            await _tripRepository.UpdateAsync(trip, 1); // TODO: Pass actual user ID from JWT
+            await _tripRepository.UpdateAsync(trip, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Trip {TripAuthorityCode} expiry extended to {NewExpiryDate}",
                 tripAuthorityCode, newExpiryDate);

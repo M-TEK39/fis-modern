@@ -311,6 +311,11 @@ builder.Services.AddHttpClient<CallCentreApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 }).AddHttpMessageHandler<AuthorizationHeaderHandler>();
+builder.Services.AddHttpClient<NotifyListApiService>(client =>
+{
+    client.BaseAddress = apiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<AuthorizationHeaderHandler>();
 builder.Services.AddHttpClient<ClassApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

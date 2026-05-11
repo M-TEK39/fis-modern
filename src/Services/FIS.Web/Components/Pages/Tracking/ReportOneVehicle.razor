@@ -180,8 +180,13 @@
         _results = new List<TrackingDto>();
         try
         {
-            var all = await TrackingService.GetAllAsync<TrackingDto>();
-            _results = all.Where(t => t.vmf_code == _selectedVmfCode.Value).ToList();
+            var report = await TrackingService.GetOneVehicleReportAsync(new TrackingOneVehicleReportRequestDto
+            {
+                VmfCode = _selectedVmfCode.Value,
+                StartDate = DateTime.Today.AddYears(-50),
+                EndDate = DateTime.Today.AddYears(10)
+            });
+            _results = report.Data;
             _page = 1;
         }
         catch (Exception ex)

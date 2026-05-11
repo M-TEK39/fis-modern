@@ -32,20 +32,10 @@
                         @foreach (var item in group.Items.Where(CanView))
                         {
                             <li class="@GetItemClasses(item)">
-                                @if (item.Disabled)
-                                {
-                                    <span class="legacy-link disabled" role="link" aria-disabled="true">
-                                        <i class="@item.Icon" aria-hidden="true"></i>
-                                        <span class="legacy-label">@item.Title</span>
-                                    </span>
-                                }
-                                else
-                                {
-                                    <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
-                                        <i class="@item.Icon" aria-hidden="true"></i>
-                                        <span class="legacy-label">@item.Title</span>
-                                    </NavLink>
-                                }
+                                <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
+                                    <i class="@item.Icon" aria-hidden="true"></i>
+                                    <span class="legacy-label">@item.Title</span>
+                                </NavLink>
                             </li>
                         }
                     </ul>
@@ -61,7 +51,6 @@
         string Href,
         string Icon,
         long? RequiredPermission = null,
-        bool Disabled = false,
         NavLinkMatch Match = NavLinkMatch.Prefix);
     private sealed record NavGroup(string Id, string Title, string Icon, IReadOnlyList<NavItem> Items);
 
@@ -70,62 +59,62 @@
         new("general", "General", "bx bx-grid-alt",
         [
         new("Home", "/home", "bx bx-home", Match: NavLinkMatch.All),
-            new("Manuals", "/manuals", "bx bx-book", Disabled: false)
+            new("Manuals", "/manuals", "bx bx-book")
         ]),
         new("fleet-ops", "Fleet Operations", "bx bx-car",
         [
-            new("Vehicle Master", "/vehicles", "bx bx-car", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Vehicle Orders", "/vehicle-orders", "bx bx-cart", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Vehicle Photos", "/vehicle-photos", "bx bx-image", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Vehicle Asset Verification", "/vehicle-verification", "bx bx-clipboard", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", LegacyPermissionBits.ContractManagement, Disabled: false),
-            new("Workshop", "/workshop", "bx bx-wrench", LegacyPermissionBits.Workshop, Disabled: false),
-            new("Job Cards", "/job-cards", "bx bx-id-card", LegacyPermissionBits.Workshop, Disabled: false),
-            new("Driver & Authoriser Mgmt", "/drivers", "bx bx-id-card", LegacyPermissionBits.UserAdministration, Disabled: false),
-            new("Validation Data", "/reference-data", "bx bx-check-shield", LegacyPermissionBits.VehicleManagement, Disabled: false)
+            new("Vehicle Master", "/vehicles", "bx bx-car", LegacyPermissionBits.VehicleManagement),
+            new("Vehicle Orders", "/vehicle-orders", "bx bx-cart", LegacyPermissionBits.VehicleManagement),
+            new("Vehicle Photos", "/vehicle-photos", "bx bx-image", LegacyPermissionBits.VehicleManagement),
+            new("Vehicle Asset Verification", "/vehicle-verification", "bx bx-clipboard", LegacyPermissionBits.VehicleManagement),
+            new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", LegacyPermissionBits.ContractManagement),
+            new("Workshop", "/workshop", "bx bx-wrench", LegacyPermissionBits.Workshop),
+            new("Job Cards", "/job-cards", "bx bx-id-card", LegacyPermissionBits.Workshop),
+            new("Driver & Authoriser Mgmt", "/drivers", "bx bx-id-card", LegacyPermissionBits.VehicleManagement),
+            new("Validation Data", "/validation-data", "bx bx-check-shield", LegacyPermissionBits.VehicleManagement)
         ]),
         new("trips-hire", "Trips & Hire", "bx bx-navigation",
         [
-            new("Trips", "/trips", "bx bx-navigation", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Trip Authorities", "/trip-authorities", "bx bx-clipboard", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Trip Queries", "/trip-query", "bx bx-question-mark", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Private Hire", "/private-hire", "bx bx-car", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Taxis", "/taxis", "bx bx-taxi", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Third Party Rentals", "/third-party", "bx bx-building-house", LegacyPermissionBits.ContractManagement, Disabled: false)
+            new("Trips", "/trips", "bx bx-navigation", LegacyPermissionBits.VehicleManagement),
+            new("Trip Authorities", "/trip-authorities", "bx bx-clipboard", LegacyPermissionBits.VehicleManagement),
+            new("Trip Queries", "/trip-query", "bx bx-question-mark", LegacyPermissionBits.VehicleManagement),
+            new("Private Hire", "/private-hire", "bx bx-car", LegacyPermissionBits.VehicleManagement),
+            new("Taxis", "/taxis", "bx bx-taxi", LegacyPermissionBits.VehicleManagement),
+            new("Third Party Rentals", "/third-party", "bx bx-building-house", LegacyPermissionBits.ContractManagement)
         ]),
         new("incidents", "Incidents & Compliance", "bx bx-shield-quarter",
         [
-            new("Accidents", "/accidents", "bx bxs-car-crash", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Fines", "/fines", "bx bx-receipt", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Licenses", "/licenses", "bx bxs-user-badge", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Losses", "/losses", "bx bx-x-circle", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Clearance", "/clearance", "bx bx-shield-quarter", LegacyPermissionBits.VehicleManagement, Disabled: false)
+            new("Accidents", "/accidents", "bx bxs-car-crash", LegacyPermissionBits.VehicleManagement),
+            new("Fines", "/fines", "bx bx-receipt", LegacyPermissionBits.VehicleManagement),
+            new("Licenses", "/licenses", "bx bxs-user-badge", LegacyPermissionBits.VehicleManagement),
+            new("Losses", "/losses", "bx bx-x-circle", LegacyPermissionBits.VehicleManagement),
+            new("Clearance", "/clearance", "bx bx-shield-quarter", LegacyPermissionBits.VehicleManagement)
         ]),
         new("finance", "Finance & Contracts", "bx bx-wallet",
         [
-            new("Contracts", "/contracts", "bx bx-file", LegacyPermissionBits.ContractManagement, Disabled: false),
-            new("Finance", "/finance", "bx bx-wallet", LegacyPermissionBits.Financial, Disabled: false),
-            new("Fuel Cards", "/fuel-cards", "bx bx-credit-card", LegacyPermissionBits.Financial, Disabled: false),
-            new("Tariff Calculator", "/tariff-calculator", "bx bx-calculator", LegacyPermissionBits.Financial, Disabled: false),
-            new("Reports", "/reports", "bx bx-file-find", LegacyPermissionBits.Reports, Disabled: false),
-            new("Auction", "/auction", "bx bx-dollar", LegacyPermissionBits.Financial, Disabled: false)
+            new("Contracts", "/contracts", "bx bx-file", LegacyPermissionBits.ContractManagement),
+            new("Finance", "/finance", "bx bx-wallet", LegacyPermissionBits.Financial),
+            new("Fuel Cards", "/fuel-cards", "bx bx-credit-card", LegacyPermissionBits.Financial),
+            new("Tariff Calculator", "/tariff-calculator", "bx bx-calculator", LegacyPermissionBits.Financial),
+            new("Reports", "/reports", "bx bx-file-find", LegacyPermissionBits.Reports),
+            new("Auction", "/auction", "bx bx-dollar", LegacyPermissionBits.Financial)
         ]),
         new("logs", "Logs & Monitoring", "bx bx-pulse",
         [
-            new("Log Books", "/log-books", "bx bx-notepad", LegacyPermissionBits.Reports, Disabled: false),
-            new("Log Sheets", "/log-sheets", "bx bx-table", LegacyPermissionBits.Reports, Disabled: false),
-            new("Monitor", "/monitor", "bx bx-line-chart", LegacyPermissionBits.Reports, Disabled: false),
-            new("Tracking", "/tracking", "bx bx-radar", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("Towing", "/towing", "bx bx-anchor", LegacyPermissionBits.VehicleManagement, Disabled: false)
+            new("Log Books", "/log-books", "bx bx-notepad", LegacyPermissionBits.Reports),
+            new("Log Sheets", "/log-sheets", "bx bx-table", LegacyPermissionBits.Reports),
+            new("Monitor", "/monitor", "bx bx-line-chart", LegacyPermissionBits.Reports),
+            new("Tracking", "/tracking", "bx bx-radar", LegacyPermissionBits.VehicleManagement),
+            new("Towing", "/towing", "bx bx-anchor", LegacyPermissionBits.VehicleManagement)
         ]),
         new("admin", "Admin & Reference", "bx bx-user-circle",
         [
-            new("Call Centre", "/call-centre", "bx bx-phone-call", LegacyPermissionBits.VehicleManagement, Disabled: false),
-            new("User Administration", "/users", "bx bx-user", LegacyPermissionBits.UserAdministration, Disabled: false),
-            new("Troubleshoot", "/troubleshoot", "bx bx-wrench", LegacyPermissionBits.UserAdministration, Disabled: false),
-            new("Notice Management", "/notice-management", "bx bx-bell", LegacyPermissionBits.UserAdministration, Disabled: false),
-            new("Change Password", "/change-password", "bx bx-lock-open", Disabled: false),
-            new("Change Password and Question", "/change-password-question", "bx bx-shield-quarter", Disabled: false)
+            new("Call Centre", "/call-centre", "bx bx-phone-call", LegacyPermissionBits.VehicleManagement),
+            new("User Administration", "/users", "bx bx-user", LegacyPermissionBits.UserAdministration),
+            new("Troubleshoot", "/troubleshoot", "bx bx-wrench", LegacyPermissionBits.UserAdministration),
+            new("Notice Management", "/notice-management", "bx bx-bell", LegacyPermissionBits.UserAdministration),
+            new("Change Password", "/change-password", "bx bx-lock-open"),
+            new("Change Password and Question", "/change-password-question", "bx bx-shield-quarter")
         ])
     ];
 
@@ -246,11 +235,6 @@
     private string GetItemClasses(NavItem item)
     {
         var classes = new List<string> { "nav-item" };
-        if (item.Disabled)
-        {
-            classes.Add("disabled");
-        }
-
         if (IsActive(item))
         {
             classes.Add("active");

@@ -265,17 +265,15 @@
         _reportColumns = new();
         _reportPage = 1;
 
-        var result = await FinanceService.PostActionAsync("api/Report/universal", new
-        {
-            reportType = "summary",
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = Action,
-                ["departmentCode"] = _selectedDepartment,
-                ["siteCode"] = _selectedSite,
-                ["provinceCode"] = _selectedProvince
-            }
-        });
+        var result = await FinanceService.PostRegionalReportAsync(
+            "summary",
+            Action,
+            _selectedDepartment,
+            _selectedSite,
+            _selectedProvince,
+            null,
+            null,
+            null);
 
         _statusError = !result.Success;
         _statusMessage = result.Message;
@@ -294,18 +292,15 @@
         _reportColumns = new();
         _reportPage = 1;
 
-        var result = await FinanceService.PostActionAsync("api/Report/universal", new
-        {
-            reportType = "financial",
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = Action,
-                ["summaryType"] = reportType,
-                ["provinceCode"] = _selectedProvince
-            },
-            startDate = _startDate,
-            endDate = _endDate
-        });
+        var result = await FinanceService.PostRegionalReportAsync(
+            "financial",
+            Action,
+            null,
+            null,
+            _selectedProvince,
+            reportType,
+            _startDate,
+            _endDate);
 
         _statusError = !result.Success;
         _statusMessage = result.Message;

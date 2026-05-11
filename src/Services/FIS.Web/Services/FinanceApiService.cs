@@ -217,6 +217,149 @@ public class FinanceApiService
     public Task<FinanceApiResult> PostActionAsync(string endpoint, object payload)
         => SendAsync(HttpMethod.Post, endpoint, payload);
 
+    public Task<FinanceApiResult> PostProfitabilityReportAsync(string? financialYear)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/profitability",
+            new
+            {
+                financialYear = financialYear ?? string.Empty
+            });
+
+    public Task<FinanceApiResult> PostOutstandingReportAsync(
+        string? mode,
+        string? departmentCode,
+        string? siteCode,
+        string? financialYear,
+        int? vmfCode)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/outstanding",
+            new
+            {
+                mode = mode ?? string.Empty,
+                departmentCode = departmentCode ?? string.Empty,
+                siteCode = siteCode ?? string.Empty,
+                financialYear = financialYear ?? string.Empty,
+                vmfCode
+            });
+
+    public Task<FinanceApiResult> PostWesbankReportAsync(
+        string? mode,
+        string? provinceCode,
+        DateTime? startDate,
+        DateTime? endDate)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/wesbank",
+            new
+            {
+                mode = mode ?? string.Empty,
+                provinceCode = provinceCode ?? string.Empty,
+                startDate,
+                endDate
+            });
+
+    public Task<FinanceApiResult> PostAuditTrailReportAsync(
+        string? mode,
+        string? auditType,
+        string? outputFormat,
+        string? departmentCode,
+        string? siteCode,
+        int? vmfCode,
+        DateTime? startDate,
+        DateTime? endDate)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/audit-trail",
+            new
+            {
+                mode = mode ?? string.Empty,
+                auditType = auditType ?? string.Empty,
+                outputFormat = outputFormat ?? string.Empty,
+                departmentCode = departmentCode ?? string.Empty,
+                siteCode = siteCode ?? string.Empty,
+                vmfCode,
+                startDate,
+                endDate
+            });
+
+    public Task<FinanceApiResult> PostRegionalReportAsync(
+        string? reportType,
+        string? mode,
+        string? departmentCode,
+        string? siteCode,
+        string? provinceCode,
+        string? summaryType,
+        DateTime? startDate,
+        DateTime? endDate)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/regional",
+            new
+            {
+                reportType = reportType ?? string.Empty,
+                mode = mode ?? string.Empty,
+                departmentCode = departmentCode ?? string.Empty,
+                siteCode = siteCode ?? string.Empty,
+                provinceCode = provinceCode ?? string.Empty,
+                summaryType = summaryType ?? string.Empty,
+                startDate,
+                endDate
+            });
+
+    public Task<FinanceApiResult> PostMissingKilometresReportAsync(
+        string? mode,
+        string? departmentCode,
+        string? provinceCode,
+        string? financialYear,
+        bool excludeUnposted,
+        DateTime? startDate,
+        DateTime? endDate)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/missing-kilometres",
+            new
+            {
+                mode = mode ?? string.Empty,
+                departmentCode = departmentCode ?? string.Empty,
+                provinceCode = provinceCode ?? string.Empty,
+                financialYear = financialYear ?? string.Empty,
+                excludeUnposted,
+                startDate,
+                endDate
+            });
+
+    public Task<FinanceApiResult> PostFinanceReportsPageReportAsync(
+        string? reportType,
+        string? mode,
+        string? action,
+        string? departmentCode,
+        string? siteCode,
+        string? province,
+        string? financialYear,
+        string? batchDate,
+        int? vmfCode,
+        DateTime? startDate,
+        DateTime? endDate)
+        => SendAsync(
+            HttpMethod.Post,
+            "api/report/finance/reports",
+            new
+            {
+                reportType = reportType ?? "financial",
+                mode = mode ?? string.Empty,
+                action = action ?? string.Empty,
+                departmentCode = departmentCode ?? string.Empty,
+                siteCode = siteCode ?? string.Empty,
+                province = province ?? string.Empty,
+                financialYear = financialYear ?? string.Empty,
+                batchDate = batchDate ?? string.Empty,
+                vmfCode,
+                startDate,
+                endDate
+            });
+
     public Task<FinanceApiResult> PutActionAsync(string endpoint, object payload)
         => SendAsync(HttpMethod.Put, endpoint, payload);
 

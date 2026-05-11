@@ -7,6 +7,7 @@ public class CallCentreDto
     public DateTime? Call_time { get; set; }
     public DateTime? Call_date { get; set; }
     public string? Incident_type { get; set; }
+    public string? Incident_Desc { get; set; }
     public string? Capture_name { get; set; }
     public short? User_access_code { get; set; }
     public string? Caller_name { get; set; }

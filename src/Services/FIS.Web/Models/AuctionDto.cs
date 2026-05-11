@@ -18,3 +18,37 @@ public sealed record AuctionDto
     public string? sold_id { get; set; }
     public string? remark { get; set; }
 }
+
+public class AuctionReportDto
+{
+    public string ReportType { get; set; } = string.Empty;
+    public List<AuctionDto> Data { get; set; } = new();
+}
+
+public class AuctionOneVehicleReportRequestDto
+{
+    public int VmfCode { get; set; }
+}
+
+public class AuctionAllVehiclesReportRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class AuctionSaleToNameReportRequestDto
+{
+    public string BuyerName { get; set; } = string.Empty;
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class AuctionGgReportRequestDto
+{
+    public string GGNumber { get; set; } = string.Empty;
+}
+
+public class AuctionLotReportRequestDto
+{
+    public string LotNumber { get; set; } = string.Empty;
+}

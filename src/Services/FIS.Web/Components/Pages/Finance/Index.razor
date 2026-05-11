@@ -24,6 +24,16 @@
 </div>
 
 <div class="page-content">
+    @if (!_hasFinancialReportsRole)
+    {
+        <div class="empty-state">
+            <i class="bx bx-lock-alt"></i>
+            <h3>Access denied</h3>
+            <p>You do not have permission to access Finance functions.</p>
+        </div>
+    }
+    else
+    {
     @if (_isBatchRunning)
     {
         <div class="alert alert-warning fis-mb-1">
@@ -342,6 +352,7 @@
                       Columns="_columns"
                       Rows="_rows"
                       Filters="_filters" />
+    }
 </div>
 
 @code {

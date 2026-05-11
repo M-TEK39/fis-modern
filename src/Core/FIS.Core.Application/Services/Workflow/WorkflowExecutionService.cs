@@ -180,7 +180,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StepID = firstStep.StepID,
                 DateStarted = DateTime.Now,
                 IsBusy = true,
-                StartedByUserName = "User" // TODO: Get actual username from user service
+                StartedByUserName = $"User {userId}"
             };
 
             var createdStatus = await _statusRepository.CreateAsync(status, userId);
@@ -339,7 +339,7 @@ public class WorkflowExecutionService : IWorkflowExecutionService
                 StepID = nextStep.StepID,
                 DateStarted = DateTime.Now,
                 IsBusy = true,
-                StartedByUserName = "User" // TODO: Get actual username
+                StartedByUserName = $"User {userId}"
             };
 
             var createdNextStatus = await _statusRepository.CreateAsync(nextStatus, userId);

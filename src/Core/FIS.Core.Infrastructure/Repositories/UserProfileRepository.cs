@@ -168,8 +168,23 @@ public class UserProfileRepository : IUserProfileRepository
         if (user == null)
             return false;
 
-        // TODO: Use proper password hashing (bcrypt, PBKDF2, etc.)
-        // For now, direct comparison (legacy compatibility)
+        if (string.IsNullOrWhiteSpace(user.password))
+            return false;
+
+        // Support modern hashed passwords while preserving legacy plaintext compatibility.
+        // This keeps existing users functional during phased migration.
+        if (LooksLikeBcryptHash(user.password))
+        {
+            return BCrypt.Net.BCrypt.Verify(password, user.password);
+        }
+
         return user.password == password;
+    }
+
+    private static bool LooksLikeBcryptHash(string value)
+    {
+        return value.StartsWith("$2a$", StringComparison.Ordinal)
+               || value.StartsWith("$2b$", StringComparison.Ordinal)
+               || value.StartsWith("$2y$", StringComparison.Ordinal);
     }
 }

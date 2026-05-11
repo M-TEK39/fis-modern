@@ -6,6 +6,7 @@
 @inject VehicleLookupApiService VehicleLookupService
 @inject SiteApiService SiteService
 @inject DriverApiService DriverService
+@inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 
 <PageTitle>Capture a New Incident - Fleet Information System</PageTitle>
@@ -27,6 +28,17 @@
         </div>
         <div class="form-card-body">
             <div class="form-grid">
+                <div class="form-field">
+                    <label class="form-label">Incident Type</label>
+                    <select class="form-select" @bind="_incidentType">
+                        <option value="Query">Query</option>
+                        <option value="Booking">Booking</option>
+                        <option value="Road_Assistance">Road Side Assistance</option>
+                        <option value="Accident">Accident</option>
+                        <option value="Hi-Jack">Hi-Jack</option>
+                        <option value="Loss_Theft">Loss/Theft</option>
+                    </select>
+                </div>
                 <div class="form-field">
                     <label class="form-label">Lookup Type</label>
                     <div class="contract-search-radio">
@@ -147,6 +159,7 @@
     private bool _loading;
     private bool _showForm;
     private string _searchTerm = string.Empty;
+    private string _incidentType = "Query";
     private string _lookupType = "GG";
     private TimeOnly? _callTime;
     private CallCentreDto _form = new();
@@ -167,6 +180,12 @@
         _loading = true;
         try
         {
+            if (string.Equals(_incidentType, "Booking", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo("/call-centre/bookings");
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(_searchTerm))
             {
                 _vehicleMatches = new();
@@ -194,6 +213,7 @@
             {
                 vmf_code = selectedVehicle.VmfCode,
                 GG_number = selectedVehicle.GGNumber,
+                Incident_type = _incidentType,
                 Call_date = DateTime.Today
             };
             _showForm = true;
@@ -236,6 +256,7 @@
         _form = new CallCentreDto();
         _showForm = false;
         _searchTerm = string.Empty;
+        _incidentType = "Query";
         _vehicleMatches = new();
         _selectedVmfCode = null;
         _callTime = null;

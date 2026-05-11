@@ -112,6 +112,20 @@ public class ReportApiService
         }
     }
 
+    public async Task<ReportHelpDto> GetHelpAsync()
+    {
+        try
+        {
+            var result = await _httpClient.GetFromJsonAsync<ReportHelpDto>("api/report/help");
+            return result ?? new ReportHelpDto();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading report help.");
+            return new ReportHelpDto();
+        }
+    }
+
     public async Task<FmlMaintenanceHistoryReportDto> GetFmlMaintenanceHistoryAsync(
         DateTime? startDate = null,
         DateTime? endDate = null,

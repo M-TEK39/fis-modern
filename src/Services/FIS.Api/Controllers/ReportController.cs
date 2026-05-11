@@ -390,6 +390,261 @@ public class ReportController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Generate profitability report for VIP and pool vehicles.
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/profitability")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceProfitabilityReport([FromBody] FinanceProfitabilityRequest request)
+    {
+        try
+        {
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = "financial",
+                Parameters = new Dictionary<string, object>
+                {
+                    ["mode"] = "profitability",
+                    ["financialYear"] = request.FinancialYear ?? string.Empty
+                }
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating finance profitability report");
+            return StatusCode(500, new { error = "Failed to generate profitability report", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate outstanding amounts financial report.
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/outstanding")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceOutstandingReport([FromBody] FinanceOutstandingRequest request)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["mode"] = request.Mode ?? string.Empty,
+                ["departmentCode"] = request.DepartmentCode ?? string.Empty,
+                ["siteCode"] = request.SiteCode ?? string.Empty,
+                ["financialYear"] = request.FinancialYear ?? string.Empty
+            };
+
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = "financial",
+                Parameters = parameters,
+                VmfCode = request.VmfCode
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating finance outstanding report");
+            return StatusCode(500, new { error = "Failed to generate outstanding report", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate Wesbank expenses financial report.
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/wesbank")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceWesbankReport([FromBody] FinanceWesbankRequest request)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["mode"] = request.Mode ?? string.Empty,
+                ["provinceCode"] = request.ProvinceCode ?? string.Empty
+            };
+
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = "financial",
+                Parameters = parameters,
+                StartDate = request.StartDate,
+                EndDate = request.EndDate
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating finance wesbank report");
+            return StatusCode(500, new { error = "Failed to generate wesbank report", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate finance audit trail report.
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/audit-trail")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceAuditTrailReport([FromBody] FinanceAuditTrailRequest request)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["mode"] = request.Mode ?? string.Empty,
+                ["auditType"] = request.AuditType ?? string.Empty,
+                ["outputFormat"] = request.OutputFormat ?? string.Empty,
+                ["departmentCode"] = request.DepartmentCode ?? string.Empty,
+                ["siteCode"] = request.SiteCode ?? string.Empty
+            };
+
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = "financial",
+                Parameters = parameters,
+                StartDate = request.StartDate,
+                EndDate = request.EndDate,
+                VmfCode = request.VmfCode
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating finance audit trail report");
+            return StatusCode(500, new { error = "Failed to generate finance audit trail report", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate finance regional reports (asset and summary variants).
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/regional")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceRegionalReport([FromBody] FinanceRegionalRequest request)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["mode"] = request.Mode ?? string.Empty,
+                ["departmentCode"] = request.DepartmentCode ?? string.Empty,
+                ["siteCode"] = request.SiteCode ?? string.Empty,
+                ["provinceCode"] = request.ProvinceCode ?? string.Empty
+            };
+
+            if (!string.IsNullOrWhiteSpace(request.SummaryType))
+            {
+                parameters["summaryType"] = request.SummaryType;
+            }
+
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = string.IsNullOrWhiteSpace(request.ReportType) ? "financial" : request.ReportType!,
+                Parameters = parameters,
+                StartDate = request.StartDate,
+                EndDate = request.EndDate
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating finance regional report");
+            return StatusCode(500, new { error = "Failed to generate finance regional report", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate missing kilometres financial report variants.
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/missing-kilometres")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceMissingKilometresReport([FromBody] FinanceMissingKilometresRequest request)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["mode"] = request.Mode ?? string.Empty,
+                ["departmentCode"] = request.DepartmentCode ?? string.Empty,
+                ["provinceCode"] = request.ProvinceCode ?? string.Empty,
+                ["financialYear"] = request.FinancialYear ?? string.Empty,
+                ["excludeUnposted"] = request.ExcludeUnposted
+            };
+
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = "financial",
+                Parameters = parameters,
+                StartDate = request.StartDate,
+                EndDate = request.EndDate
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating missing kilometres report");
+            return StatusCode(500, new { error = "Failed to generate missing kilometres report", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Generate finance reports page report variants.
+    /// Dedicated endpoint replacing generic universal mode posting from UI.
+    /// </summary>
+    [HttpPost("finance/reports")]
+    [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
+    public async Task<ActionResult> GetFinanceReportsPageReport([FromBody] FinanceReportsPageRequest request)
+    {
+        try
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["mode"] = request.Mode ?? string.Empty,
+                ["action"] = request.Action ?? string.Empty,
+                ["departmentCode"] = request.DepartmentCode ?? string.Empty,
+                ["siteCode"] = request.SiteCode ?? string.Empty,
+                ["province"] = request.Province ?? string.Empty,
+                ["financialYear"] = request.FinancialYear ?? string.Empty,
+                ["batchDate"] = request.BatchDate ?? string.Empty
+            };
+
+            var universalRequest = new UniversalReportRequest
+            {
+                ReportType = request.ReportType ?? "financial",
+                Parameters = parameters,
+                StartDate = request.StartDate,
+                EndDate = request.EndDate,
+                VmfCode = request.VmfCode
+            };
+
+            var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
+            return Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating finance reports page report");
+            return StatusCode(500, new { error = "Failed to generate finance reports page report", message = ex.Message });
+        }
+    }
+
     #endregion
 
     #region Maintenance Reports
@@ -1825,3 +2080,75 @@ public class CaptureActivityEntry
 
 // Note: Report model types referenced above should be defined in IReportingService interface
 // VehicleReport, MasterFileReport, UniversalReportRequest, ServiceHistoryReport, etc.
+
+public class FinanceProfitabilityRequest
+{
+    public string? FinancialYear { get; set; }
+}
+
+public class FinanceOutstandingRequest
+{
+    public string? Mode { get; set; }
+    public string? DepartmentCode { get; set; }
+    public string? SiteCode { get; set; }
+    public string? FinancialYear { get; set; }
+    public int? VmfCode { get; set; }
+}
+
+public class FinanceWesbankRequest
+{
+    public string? Mode { get; set; }
+    public string? ProvinceCode { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+}
+
+public class FinanceAuditTrailRequest
+{
+    public string? Mode { get; set; }
+    public string? AuditType { get; set; }
+    public string? OutputFormat { get; set; }
+    public string? DepartmentCode { get; set; }
+    public string? SiteCode { get; set; }
+    public int? VmfCode { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+}
+
+public class FinanceRegionalRequest
+{
+    public string? ReportType { get; set; }
+    public string? Mode { get; set; }
+    public string? DepartmentCode { get; set; }
+    public string? SiteCode { get; set; }
+    public string? ProvinceCode { get; set; }
+    public string? SummaryType { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+}
+
+public class FinanceMissingKilometresRequest
+{
+    public string? Mode { get; set; }
+    public string? DepartmentCode { get; set; }
+    public string? ProvinceCode { get; set; }
+    public string? FinancialYear { get; set; }
+    public bool ExcludeUnposted { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+}
+
+public class FinanceReportsPageRequest
+{
+    public string? ReportType { get; set; }
+    public string? Mode { get; set; }
+    public string? Action { get; set; }
+    public string? DepartmentCode { get; set; }
+    public string? SiteCode { get; set; }
+    public string? Province { get; set; }
+    public string? FinancialYear { get; set; }
+    public string? BatchDate { get; set; }
+    public int? VmfCode { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+}

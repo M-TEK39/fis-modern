@@ -126,10 +126,30 @@ public class CallCentreApiService(HttpClient httpClient, TokenService tokenServi
     private const string BasePath = "api/callcentre";
 
     public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
+    public async Task<CallCentreNotificationsDto> GetNotificationsAsync()
+        => await GetAsync<CallCentreNotificationsDto>($"{BasePath}/notifications") ?? new CallCentreNotificationsDto();
     public Task<T?> GetByIdAsync<T>(short id) => GetAsync<T>($"{BasePath}/{id}");
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(short id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(short id) => DeleteAsync($"{BasePath}/{id}");
+}
+
+public class NotifyListApiService(HttpClient httpClient, TokenService tokenService, ILogger<NotifyListApiService> logger) : BaseApiService(httpClient, tokenService, logger)
+{
+    private const string BasePath = "api/notifylist";
+
+    public Task<List<T>> GetAllAsync<T>(string? search = null)
+    {
+        var path = string.IsNullOrWhiteSpace(search)
+            ? BasePath
+            : $"{BasePath}?search={Uri.EscapeDataString(search.Trim())}";
+        return GetListAsync<T>(path);
+    }
+
+    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
+    public Task<T?> CreateAsync<TPayload, T>(TPayload payload) => PostAsync<TPayload, T>(BasePath, payload);
+    public Task<T?> UpdateAsync<TPayload, T>(int id, TPayload payload) => PutAsync<TPayload, T>($"{BasePath}/{id}", payload);
+    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
 
 public class FineApiService(HttpClient httpClient, TokenService tokenService, ILogger<FineApiService> logger) : BaseApiService(httpClient, tokenService, logger)
@@ -186,6 +206,9 @@ public class MonitorApiService(HttpClient httpClient, TokenService tokenService,
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+    public async Task<MonitorReportDto> GetInquiryStatisticsAsync(MonitorStatsRequestDto request)
+        => await PostAsync<MonitorStatsRequestDto, MonitorReportDto>($"{BasePath}/reports/inquiry-statistics", request)
+           ?? new MonitorReportDto();
 }
 
 public class TrackingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TrackingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
@@ -197,6 +220,27 @@ public class TrackingApiService(HttpClient httpClient, TokenService tokenService
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+    public async Task<TrackingReportDto> GetOneVehicleReportAsync(TrackingOneVehicleReportRequestDto request)
+        => await PostAsync<TrackingOneVehicleReportRequestDto, TrackingReportDto>($"{BasePath}/reports/one-vehicle", request)
+           ?? new TrackingReportDto();
+    public async Task<TrackingReportDto> GetOneDeviceReportAsync(TrackingOneDeviceReportRequestDto request)
+        => await PostAsync<TrackingOneDeviceReportRequestDto, TrackingReportDto>($"{BasePath}/reports/one-device", request)
+           ?? new TrackingReportDto();
+    public async Task<TrackingReportDto> GetAllVehiclesReportAsync(TrackingAllVehiclesReportRequestDto request)
+        => await PostAsync<TrackingAllVehiclesReportRequestDto, TrackingReportDto>($"{BasePath}/reports/all-vehicles", request)
+           ?? new TrackingReportDto();
+    public async Task<TrackingReportDto> GetAllDevicesReportAsync(TrackingAllDevicesReportRequestDto request)
+        => await PostAsync<TrackingAllDevicesReportRequestDto, TrackingReportDto>($"{BasePath}/reports/all-devices", request)
+           ?? new TrackingReportDto();
+    public async Task<TrackingReportDto> GetInstallPeriodReportAsync(TrackingInstallPeriodReportRequestDto request)
+        => await PostAsync<TrackingInstallPeriodReportRequestDto, TrackingReportDto>($"{BasePath}/reports/install-period", request)
+           ?? new TrackingReportDto();
+    public async Task<TrackingReportDto> GetSitePeriodReportAsync(TrackingSitePeriodReportRequestDto request)
+        => await PostAsync<TrackingSitePeriodReportRequestDto, TrackingReportDto>($"{BasePath}/reports/site-period", request)
+           ?? new TrackingReportDto();
+    public async Task<TrackingReportDto> GetDeptPeriodReportAsync(TrackingDeptPeriodReportRequestDto request)
+        => await PostAsync<TrackingDeptPeriodReportRequestDto, TrackingReportDto>($"{BasePath}/reports/dept-period", request)
+           ?? new TrackingReportDto();
 }
 
 public class TowingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TowingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
@@ -208,6 +252,15 @@ public class TowingApiService(HttpClient httpClient, TokenService tokenService, 
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+    public async Task<TowingReportDto> GetRequestReportAsync(TowingRequestReportRequestDto request)
+        => await PostAsync<TowingRequestReportRequestDto, TowingReportDto>($"{BasePath}/reports/request", request)
+           ?? new TowingReportDto();
+    public async Task<TowingReportDto> GetAllTowtrucksReportAsync()
+        => await GetAsync<TowingReportDto>($"{BasePath}/reports/towtruck/all")
+           ?? new TowingReportDto();
+    public async Task<TowingReportDto> GetFirmDateReportAsync(TowingFirmDateReportRequestDto request)
+        => await PostAsync<TowingFirmDateReportRequestDto, TowingReportDto>($"{BasePath}/reports/firm-date", request)
+           ?? new TowingReportDto();
 }
 
 public class AuctionApiService(HttpClient httpClient, TokenService tokenService, ILogger<AuctionApiService> logger) : BaseApiService(httpClient, tokenService, logger)
@@ -220,6 +273,21 @@ public class AuctionApiService(HttpClient httpClient, TokenService tokenService,
     public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
+    public async Task<AuctionReportDto> GetOneVehicleReportAsync(AuctionOneVehicleReportRequestDto request)
+        => await PostAsync<AuctionOneVehicleReportRequestDto, AuctionReportDto>($"{BasePath}/reports/one-vehicle", request)
+           ?? new AuctionReportDto();
+    public async Task<AuctionReportDto> GetAllVehiclesReportAsync(AuctionAllVehiclesReportRequestDto request)
+        => await PostAsync<AuctionAllVehiclesReportRequestDto, AuctionReportDto>($"{BasePath}/reports/all-vehicles", request)
+           ?? new AuctionReportDto();
+    public async Task<AuctionReportDto> GetSaleToNameReportAsync(AuctionSaleToNameReportRequestDto request)
+        => await PostAsync<AuctionSaleToNameReportRequestDto, AuctionReportDto>($"{BasePath}/reports/sale-to-name", request)
+           ?? new AuctionReportDto();
+    public async Task<AuctionReportDto> GetAuctionGgReportAsync(AuctionGgReportRequestDto request)
+        => await PostAsync<AuctionGgReportRequestDto, AuctionReportDto>($"{BasePath}/reports/auction-gg", request)
+           ?? new AuctionReportDto();
+    public async Task<AuctionReportDto> GetAuctionLotReportAsync(AuctionLotReportRequestDto request)
+        => await PostAsync<AuctionLotReportRequestDto, AuctionReportDto>($"{BasePath}/reports/auction-lot", request)
+           ?? new AuctionReportDto();
 }
 
 public class LossApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossApiService> logger) : BaseApiService(httpClient, tokenService, logger)

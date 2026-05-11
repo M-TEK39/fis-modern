@@ -104,15 +104,7 @@
         _reportRows = new();
         _reportColumns = new();
 
-        var result = await FinanceService.PostActionAsync("api/Report/universal", new
-        {
-            reportType = "financial",
-            parameters = new Dictionary<string, object?>
-            {
-                ["mode"] = "profitability",
-                ["financialYear"] = _selectedYear
-            }
-        });
+        var result = await FinanceService.PostProfitabilityReportAsync(_selectedYear);
 
         _statusError = !result.Success;
         _statusMessage = result.Message;

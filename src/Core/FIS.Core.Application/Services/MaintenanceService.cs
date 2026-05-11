@@ -12,15 +12,18 @@ public class MaintenanceService : IMaintenanceService
 {
     private readonly IMaintenanceRecordRepository _maintenanceRecordRepository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<MaintenanceService> _logger;
 
     public MaintenanceService(
         IMaintenanceRecordRepository maintenanceRecordRepository,
         IVehicleRepository vehicleRepository,
+        ICurrentUserContext currentUserContext,
         ILogger<MaintenanceService> logger)
     {
         _maintenanceRecordRepository = maintenanceRecordRepository ?? throw new ArgumentNullException(nameof(maintenanceRecordRepository));
         _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -58,7 +61,7 @@ public class MaintenanceService : IMaintenanceService
                 maintenanceRecord.Status = "COMPLETED";
             }
 
-            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
+            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Maintenance record created: ID {MaintenanceId}, Next service: {NextServiceDate} / {NextServiceOdometer}km",
                 created.MaintenanceId, created.NextServiceDate, created.NextServiceOdometer);
@@ -99,7 +102,7 @@ public class MaintenanceService : IMaintenanceService
                     maintenanceRecord.ServiceIntervalKm.Value);
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
+            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Maintenance record updated: {MaintenanceId}", maintenanceRecord.MaintenanceId);
         }
@@ -514,7 +517,7 @@ public class MaintenanceService : IMaintenanceService
                 StillCurrentFlag = "Y"
             };
 
-            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
+            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Maintenance scheduled: ID {MaintenanceId}", created.MaintenanceId);
 
@@ -567,7 +570,7 @@ public class MaintenanceService : IMaintenanceService
                     actualOdometer, maintenanceRecord.ServiceIntervalKm.Value);
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
+            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Maintenance {MaintenanceId} completed successfully", maintenanceId);
         }
@@ -602,7 +605,7 @@ public class MaintenanceService : IMaintenanceService
                 maintenanceRecord.MechanicNotes = $"CANCELLED: {reason}";
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, 1); // TODO: Pass actual user ID from JWT
+            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Maintenance {MaintenanceId} cancelled", maintenanceId);
         }
@@ -753,7 +756,7 @@ public class MaintenanceService : IMaintenanceService
             // Could add validation here to prevent deletion of certain records
             // For example, don't delete if it's linked to warranty claims, etc.
 
-            await _maintenanceRecordRepository.DeleteAsync(maintenanceId, 1); // TODO: Pass actual user ID from JWT
+            await _maintenanceRecordRepository.DeleteAsync(maintenanceId, _currentUserContext.GetCurrentUserIdOrDefault());
 
             _logger.LogInformation("Maintenance record deleted: {MaintenanceId}", maintenanceId);
         }

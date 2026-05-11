@@ -15,6 +15,7 @@ public class AnalyticsService : IAnalyticsService
     private readonly IWorkflowExecutionSummaryRepository _summaryRepository;
     private readonly IStepRepository _stepRepository;
     private readonly IWorkflowRepository _workflowRepository;
+    private readonly ICurrentUserContext _currentUserContext;
     private readonly ILogger<AnalyticsService> _logger;
 
     public AnalyticsService(
@@ -23,6 +24,7 @@ public class AnalyticsService : IAnalyticsService
         IWorkflowExecutionSummaryRepository summaryRepository,
         IStepRepository stepRepository,
         IWorkflowRepository workflowRepository,
+        ICurrentUserContext currentUserContext,
         ILogger<AnalyticsService> logger)
     {
         _historyRepository = historyRepository;
@@ -30,6 +32,7 @@ public class AnalyticsService : IAnalyticsService
         _summaryRepository = summaryRepository;
         _stepRepository = stepRepository;
         _workflowRepository = workflowRepository;
+        _currentUserContext = currentUserContext;
         _logger = logger;
     }
 
@@ -131,7 +134,7 @@ public class AnalyticsService : IAnalyticsService
                 metric.BottleneckStepID = stepPerformance.StepID;
             }
 
-            await _metricRepository.CreateAsync(metric, 1); // System-generated
+            await _metricRepository.CreateAsync(metric, _currentUserContext.GetCurrentUserIdOrDefault()); // System-generated
             return metric;
         }
         catch (Exception ex)

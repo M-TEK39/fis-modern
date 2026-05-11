@@ -1,4 +1,5 @@
 @page "/vehicle-verification"
+@page "/asset-verification"
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
@@ -29,7 +30,7 @@
             <p>Loading access profile...</p>
         </div>
     }
-    else if (!_hasVehicleAccess)
+    else if (!_hasAssetVerificationAccess)
     {
         <div class="empty-state">
             <i class="bx bx-lock-alt"></i>
@@ -86,7 +87,7 @@
 
 @code {
     private bool _authResolved;
-    private bool _hasVehicleAccess;
+    private bool _hasAssetVerificationAccess;
     private bool _showVerificationInfo = true;
     private bool _showVerificationMaintenance = true;
     private bool _loading = true;
@@ -114,7 +115,7 @@
     protected override async Task OnInitializedAsync()
     {
         await ResolveAccessAsync();
-        if (_hasVehicleAccess)
+        if (_hasAssetVerificationAccess)
         {
             await LoadPreviewAsync();
         }
@@ -135,6 +136,13 @@
             return;
         }
 
+        if (HasRole(user, "Asset Verification"))
+        {
+            _hasAssetVerificationAccess = true;
+            _authResolved = true;
+            return;
+        }
+
         var accessLevelClaim = user.FindFirst("access_level")?.Value;
         long accessLevel;
         if (!long.TryParse(accessLevelClaim, out accessLevel))
@@ -144,7 +152,8 @@
             accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(userAccessCode, firstName);
         }
 
-        _hasVehicleAccess =
+        // Fallback path when role claims are incomplete; preserves prior behavior.
+        _hasAssetVerificationAccess =
             (accessLevel & LegacyPermissionBits.VehicleManagement) == LegacyPermissionBits.VehicleManagement;
 
         _authResolved = true;
@@ -162,6 +171,22 @@
 
     private static int? TryParseInt(string? value)
         => int.TryParse(value, out var parsed) ? parsed : null;
+
+    private static bool HasRole(ClaimsPrincipal user, string role)
+    {
+        if (user.IsInRole(role))
+        {
+            return true;
+        }
+
+        var roleClaims = user.Claims
+            .Where(c => c.Type == ClaimTypes.Role || c.Type.Equals("role", StringComparison.OrdinalIgnoreCase) || c.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Value);
+
+        return roleClaims.Any(value =>
+            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase)));
+    }
 
     private async Task LoadPreviewAsync()
     {

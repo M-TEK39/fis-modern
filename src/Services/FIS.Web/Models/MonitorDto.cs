@@ -12,3 +12,21 @@ public class MonitorDto
     public string? Driver_persalno { get; set; }
     public short? Driver_Site { get; set; }
 }
+
+public class MonitorStatsRequestDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
+public class MonitorReportDto
+{
+    public string ReportType { get; set; } = string.Empty;
+    public List<MonitorStatisticItemDto> Data { get; set; } = new();
+}
+
+public class MonitorStatisticItemDto
+{
+    public string InquiryType { get; set; } = string.Empty;
+    public int Count { get; set; }
+}

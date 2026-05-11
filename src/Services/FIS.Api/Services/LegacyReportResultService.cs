@@ -165,8 +165,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "taxis-history-bookings-period" => "taxis",
             "taxis-requisition-numbers-period" => "taxis",
             "taxis-per-hire-company" => "taxis",
-            "taxis-list-inservice-per-department" => "taxis",
-            "taxis-list-per-department" => "taxis",
+            "taxis-list-inservice-per-department" => "taxis-list-inservice-per-department",
+            "taxis-list-per-department" => "taxis-list-per-department",
             "taxis-reprint-requisition" => "taxis",
             "taxis-reprint-taxi-log" => "taxis",
             "taxis-fin-general-requisitions" => "taxis-financial",
@@ -333,7 +333,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "els-manual-kilo" => "trip-authority",
             "driver-information-finyear" => "trip-authority",
             "high-distance-department" => "high-distance-dept",
-            "high-distance-all" => "high-distance-dept",
+            "high-distance-all" => "high-distance-all",
 
             // Department/site variants
             "departments-sites-contact" => "departments-sites",
