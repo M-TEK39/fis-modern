@@ -59,8 +59,16 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "Username and password are required" });
         }
 
-        // Validate against LegacyUserCredential table
-        var user = await _userRepository.GetByEmailAsync(request.Username);
+        // Accept either user_access_code (numeric) or email/username identifier.
+        User? user;
+        if (int.TryParse(request.Username.Trim(), out var requestedUserCode) && requestedUserCode > 0)
+        {
+            user = await _userRepository.GetByIdAsync(requestedUserCode);
+        }
+        else
+        {
+            user = await _userRepository.GetByEmailAsync(request.Username.Trim());
+        }
         if (user == null)
         {
             _logger.LogWarning("Login failed: user not found for {Username}", request.Username);
