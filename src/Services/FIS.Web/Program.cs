@@ -3,6 +3,7 @@ using FIS.Web.Services;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
@@ -74,11 +75,26 @@ builder.Services.AddSession(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true; // Required for GDPR compliance
     options.Cookie.Name = ".FIS.Session";
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+});
+
+// Honor X-Forwarded-Proto from nginx so Request.IsHttps is correct behind the reverse proxy
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // Register HttpContextAccessor for dual auth
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<AuthSessionTokenCache>();
+builder.Services.AddTransient<SessionCookieAuthHandler>();
+builder.Services.ConfigureHttpClientDefaults(http =>
+{
+    http.AddHttpMessageHandler<SessionCookieAuthHandler>();
+});
 
 // Register TokenService (scoped to user circuit)
 builder.Services.AddScoped<TokenService>();
@@ -93,9 +109,7 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
     sp.GetRequiredService<DualAuthStateProvider>());
 
 var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5010";
-var webBaseUrl = builder.Configuration["ApiSettings:WebBaseUrl"] ?? "http://localhost:5268";
 var apiBaseUri = new Uri($"{apiBaseUrl.TrimEnd('/')}/");
-var webBaseUri = new Uri($"{webBaseUrl.TrimEnd('/')}/");
 
 // Register API services
 builder.Services.AddHttpClient<VehicleApiService>(client =>
@@ -297,9 +311,7 @@ builder.Services.AddHttpClient<UserProfileApiService>(client =>
 builder.Services.AddScoped<UserAccessContextService>();
 builder.Services.AddHttpClient<AuthApiService>(client =>
 {
-    // Point to local web server (AuthProxyController), NOT the API
-    // Calls local proxy, not API
-    client.BaseAddress = webBaseUri;
+    client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddHttpClient<SiteApiService>(client =>
@@ -477,6 +489,9 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
+// MUST come first: respect X-Forwarded-Proto from nginx so the rest of the pipeline knows the request was HTTPS
+app.UseForwardedHeaders();
 
 app.UseHttpsRedirection();
 

@@ -14,6 +14,7 @@ using FIS.Core.Infrastructure.Services;
 using FIS.Data.SqlServer;
 using FIS.Data.SqlServer.Interceptors;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using SendGrid;
@@ -143,7 +144,15 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddSingleton<ISessionTokenStore, InMemorySessionTokenStore>();
+builder.Services.AddSingleton<ISessionTokenStore, SqlSessionTokenStore>();
+builder.Services.AddHostedService<SessionTokenSchemaInitializer>();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.AddAuthentication(options =>
 {
@@ -163,7 +172,7 @@ builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled
 builder.Services.AddScoped<ILegacyReportResultService, LegacyReportResultService>();
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 
-// Register PDF service (stub implementation)
+// Register lightweight PDF service.
 builder.Services.AddScoped<IPdfGenerationService, PdfGenerationService>();
 
 // Financial services
@@ -365,6 +374,9 @@ if (app.Environment.IsDevelopment())
         Authorization = new[] { new HangfireDashboardAuthorizationFilter() }
     });
 }
+
+// MUST come first: respect X-Forwarded-Proto from nginx so Request.IsHttps is correct behind the reverse proxy
+app.UseForwardedHeaders();
 
 // Add security headers
 app.UseHttpsRedirection();

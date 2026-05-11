@@ -1,4 +1,5 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -97,10 +98,14 @@ public class FinanceController : BaseApiController
     public async Task<ActionResult<BatchStartResultDto>> StartBatch([FromBody] StartBatchDto? request)
     {
         var requestedDate = request?.BatchDate.Date ?? DateTime.Today;
+        if (requestedDate == DateTime.MinValue)
+        {
+            requestedDate = DateTime.Today;
+        }
         var financialSystemCode = request?.FinancialSystemCode > 0 ? request.FinancialSystemCode : (byte)1;
         var batchMode = request?.BatchMode ?? ExportBatchMode.BatchAppendOrCreate;
 
-        if (requestedDate == DateTime.MinValue || requestedDate == DateTime.MaxValue)
+        if (requestedDate == DateTime.MaxValue)
         {
             return BadRequest(new { error = "Invalid batch date." });
         }
@@ -1212,23 +1217,184 @@ public class FinanceController : BaseApiController
     }
 
     [HttpPost("missing-kilometres/close-gaps")]
-    public ActionResult CloseKilometerGaps()
+    public async Task<ActionResult> CloseKilometerGaps([FromBody] CloseKiloGapsRequest? request)
     {
-        return Ok(new { message = "Kilometer gaps closed", recordsProcessed = 0 });
+        if (request is null || string.IsNullOrWhiteSpace(request.FinancialYear))
+        {
+            return BadRequest(new { error = "Financial year is required." });
+        }
+
+        if (!short.TryParse(request.FinancialYear, NumberStyles.Integer, CultureInfo.InvariantCulture, out var financialYear))
+        {
+            return BadRequest(new { error = "Financial year is invalid." });
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var gapsDataSet = await BuildCloseKiloGapsDataSetAsync(financialYear, currentUserId);
+        if (gapsDataSet.Tables.Count == 0 || gapsDataSet.Tables[0].Rows.Count == 0)
+        {
+            return Ok(new
+            {
+                message = $"No Kilo gaps were found for Financial Year=[{financialYear}/{financialYear + 1}]. Therefore, no kilo gaps were closed.",
+                recordsProcessed = 0
+            });
+        }
+
+        var xmlDoc = gapsDataSet.GetXml();
+        var affected = await ExecuteCloseKiloGapsProcAsync(xmlDoc);
+
+        return Ok(new
+        {
+            message = $"A total of {affected} kilo gaps (excluding VIP) were successfully closed for Financial Year=[{financialYear}/{financialYear + 1}].",
+            recordsProcessed = affected
+        });
     }
 
     [HttpGet("reports/reversals-tree/{journalNumber}")]
-    public ActionResult<ReversalTreeDto> GetReversalTree(string journalNumber)
+    public async Task<ActionResult<ReversalTreeDto>> GetReversalTree(string journalNumber)
     {
-        var tree = new ReversalTreeDto { JournalNumber = journalNumber, Reversals = new List<ReversalNodeDto>() };
-        return Ok(tree);
+        if (string.IsNullOrWhiteSpace(journalNumber))
+        {
+            return BadRequest(new { error = "Journal number is required." });
+        }
+
+        var trimmed = journalNumber.Trim();
+        var hasJournalCode = long.TryParse(trimmed, out var journalCode);
+        var hasJournalDetailId = int.TryParse(trimmed, out var journalDetailId);
+
+        var roots = await _context.JournalDetails
+            .AsNoTracking()
+            .Where(jd =>
+                !jd.is_deleted &&
+                ((hasJournalCode && jd.journal_code == journalCode) ||
+                 (hasJournalDetailId && jd.journal_detail_id == journalDetailId)))
+            .Select(jd => jd.journal_detail_code)
+            .ToListAsync();
+
+        if (roots.Count == 0)
+        {
+            return NotFound(new { error = "Journal not found." });
+        }
+
+        var visited = new HashSet<Guid>(roots);
+        var frontier = roots.ToList();
+        var reversalRows = new List<ReversalNodeDto>();
+
+        while (frontier.Count > 0)
+        {
+            var matches = await _context.JournalDetails
+                .AsNoTracking()
+                .Where(jd =>
+                    !jd.is_deleted &&
+                    jd.journal_detail_reversalof.HasValue &&
+                    frontier.Contains(jd.journal_detail_reversalof.Value))
+                .Select(jd => new
+                {
+                    jd.journal_detail_code,
+                    jd.journal_code,
+                    jd.journal_detail_id,
+                    jd.journal_detail_date,
+                    jd.journal_detail_amount
+                })
+                .ToListAsync();
+
+            frontier = new List<Guid>();
+            foreach (var row in matches)
+            {
+                if (!visited.Add(row.journal_detail_code))
+                {
+                    continue;
+                }
+
+                frontier.Add(row.journal_detail_code);
+                reversalRows.Add(new ReversalNodeDto
+                {
+                    JournalNumber = row.journal_code?.ToString(CultureInfo.InvariantCulture) ?? row.journal_detail_id.ToString(CultureInfo.InvariantCulture),
+                    ReversalDate = row.journal_detail_date,
+                    Amount = row.journal_detail_amount
+                });
+            }
+        }
+
+        return Ok(new ReversalTreeDto
+        {
+            JournalNumber = trimmed,
+            Reversals = reversalRows
+                .OrderBy(x => x.ReversalDate)
+                .ThenBy(x => x.JournalNumber)
+                .ToList()
+        });
     }
 
     [HttpPost("standard-bank/import")]
-    public ActionResult<ImportResultDto> ImportStandardBankData([FromBody] StandardBankImportDto request)
+    [RequestFormLimits(MultipartBodyLengthLimit = 20 * 1024 * 1024)]
+    [RequestSizeLimit(20 * 1024 * 1024)]
+    public async Task<ActionResult<ImportResultDto>> ImportStandardBankData([FromForm] IFormFile? file)
     {
-        var result = new ImportResultDto { Success = true, RecordsImported = 0, RecordsFailed = 0 };
-        return Ok(result);
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(new { error = "No file uploaded." });
+        }
+
+        var imported = 0;
+        var failed = 0;
+
+        await using var stream = file.OpenReadStream();
+        using var reader = new StreamReader(stream);
+
+        var header = await reader.ReadLineAsync();
+        if (string.IsNullOrWhiteSpace(header))
+        {
+            return BadRequest(new { error = "Uploaded file is empty." });
+        }
+
+        var headerColumns = ParseCsvLine(header);
+        var vmfIndex = FindHeaderIndex(headerColumns, "vmf_code", "vmf", "vehicle_code");
+        var siteIndex = FindHeaderIndex(headerColumns, "site_code", "site");
+        var fuelCardIndex = FindHeaderIndex(headerColumns, "fuel_card_code", "fuel_card");
+        var fileDateIndex = FindHeaderIndex(headerColumns, "file_date", "transaction_date", "date");
+
+        while (!reader.EndOfStream)
+        {
+            var line = await reader.ReadLineAsync();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            try
+            {
+                var columns = ParseCsvLine(line);
+                var tx = new WesbankTransaction
+                {
+                    vmf_code = ParseNullableInt(columns, vmfIndex),
+                    site_code = ParseNullableInt(columns, siteIndex),
+                    fuel_card_code = ParseNullableInt(columns, fuelCardIndex),
+                    file_date = ParseNullableDate(columns, fileDateIndex) ?? DateTime.Today,
+                    date_created = DateTime.UtcNow,
+                    is_deleted = false
+                };
+
+                _context.WesbankTransactions.Add(tx);
+                imported++;
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        if (imported > 0)
+        {
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok(new ImportResultDto
+        {
+            Success = imported > 0 && failed == 0,
+            RecordsImported = imported,
+            RecordsFailed = failed
+        });
     }
 
     #endregion
@@ -1859,6 +2025,368 @@ public class FinanceController : BaseApiController
         }
     }
 
+    private static List<string> ParseCsvLine(string line)
+    {
+        var values = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inQuotes = false;
+
+        for (var i = 0; i < line.Length; i++)
+        {
+            var ch = line[i];
+            if (ch == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                }
+                else
+                {
+                    inQuotes = !inQuotes;
+                }
+                continue;
+            }
+
+            if (ch == ',' && !inQuotes)
+            {
+                values.Add(current.ToString().Trim());
+                current.Clear();
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        values.Add(current.ToString().Trim());
+        return values;
+    }
+
+    private static int FindHeaderIndex(List<string> headers, params string[] aliases)
+    {
+        for (var i = 0; i < headers.Count; i++)
+        {
+            var normalized = headers[i].Trim().ToLowerInvariant().Replace(" ", "_");
+            if (aliases.Any(alias => normalized == alias))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int? ParseNullableInt(List<string> columns, int index)
+    {
+        if (index < 0 || index >= columns.Count)
+        {
+            return null;
+        }
+
+        return int.TryParse(columns[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+            ? value
+            : null;
+    }
+
+    private static DateTime? ParseNullableDate(List<string> columns, int index)
+    {
+        if (index < 0 || index >= columns.Count)
+        {
+            return null;
+        }
+
+        var raw = columns[index];
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed))
+        {
+            return parsed.Date;
+        }
+
+        if (DateTime.TryParse(raw, CultureInfo.GetCultureInfo("en-ZA"), DateTimeStyles.AssumeLocal, out parsed))
+        {
+            return parsed.Date;
+        }
+
+        return null;
+    }
+
+    private async Task<DataSet> BuildCloseKiloGapsDataSetAsync(short financialYear, int currentUserId)
+    {
+        var allKilos = await LoadAllVehicleKilosAsync();
+        var table = CreateKiloGapsTableSchema();
+        var maxGapNumber = await GetMaxGapRecordNumberAsync();
+        var closeGapNumber = maxGapNumber + 1;
+
+        DataRow? prev = null;
+        foreach (DataRow current in allKilos.Rows)
+        {
+            if (prev is not null &&
+                SafeInt(prev, "vmf_code") == SafeInt(current, "vmf_code") &&
+                !string.Equals(SafeString(prev, "TA_REK"), SafeString(current, "TA_REK"), StringComparison.OrdinalIgnoreCase))
+            {
+                var prevEnd = SafeInt(prev, "end_odo");
+                var currStart = SafeInt(current, "start_odo");
+                var gapSize = currStart - prevEnd;
+                if (gapSize > 0)
+                {
+                    var prevSite = SafeString(prev, "Site");
+                    var currSite = SafeString(current, "Site");
+                    var prevContractType = SafeString(prev, "contract_type");
+                    var currContractType = SafeString(current, "contract_type");
+                    var prevFinancialYear = SafeShort(prev, "FinancialYear");
+                    var currFinancialYear = SafeShort(current, "FinancialYear");
+
+                    if (string.Equals(prevSite, currSite, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(prevContractType, "VIP", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(currContractType, "VIP", StringComparison.OrdinalIgnoreCase) &&
+                        prevFinancialYear >= financialYear - 1 &&
+                        currFinancialYear == financialYear)
+                    {
+                        var row = table.NewRow();
+                        FillGapRow(row, prev, current, gapSize, closeGapNumber, currentUserId);
+                        table.Rows.Add(row);
+                        closeGapNumber++;
+                    }
+                }
+            }
+
+            prev = current;
+        }
+
+        var result = new DataSet("NewDataSet");
+        result.Tables.Add(table);
+        return result;
+    }
+
+    private static void FillGapRow(DataRow row, DataRow prev, DataRow next, int gapSize, int gapNumber, int userId)
+    {
+        row["Prev_vmf_code"] = SafeInt(prev, "vmf_code");
+        row["Prev_registration_number"] = SafeString(prev, "registration_number");
+        row["Prev_fleet_number"] = SafeString(prev, "fleet_number");
+        row["Prev_start_odo"] = SafeDouble(prev, "start_odo");
+        row["Prev_end_odo"] = SafeDouble(prev, "end_odo");
+        row["Prev_contract_code"] = SafeDouble(prev, "contract_code");
+        row["Prev_contract_type"] = SafeString(prev, "contract_type");
+        row["Prev_contract_start_odo"] = SafeInt(prev, "contract_start_odo");
+        row["Prev_Dept_ID"] = SafeDouble(prev, "Dept_ID");
+        row["Prev_Dept_Code"] = SafeString(prev, "Dept_Code");
+        row["Prev_site_code"] = SafeDouble(prev, "site_code");
+        row["Prev_Site"] = SafeString(prev, "Site");
+        row["Prev_TA_REK"] = SafeString(prev, "TA_REK");
+        row["Prev_TransactionDate"] = SafeDate(prev, "TransactionDate");
+        row["Prev_billing_month"] = SafeString(prev, "billing_month");
+        row["Prev_trx_month"] = SafeString(prev, "trx_month");
+        row["Prev_Post_Date"] = SafeDate(prev, "Post_Date");
+        row["Prev_Bill_Date"] = SafeDate(prev, "Bill_Date");
+        row["Prev_Source_Date"] = SafeDate(prev, "Source_Date");
+        row["Prev_FinancialYear"] = SafeString(prev, "FinancialYear");
+        row["Prev_Tariff"] = SafeDecimal(prev, "Tariff");
+        row["Prev_Type"] = SafeString(prev, "Type");
+
+        row["Gap_size"] = Convert.ToDouble(gapSize, CultureInfo.InvariantCulture);
+        row["GapSize_Amount"] = Math.Round(gapSize * SafeDecimal(next, "Tariff"), 2);
+        row["Gap_RekNumber"] = $"GAP{gapNumber.ToString(CultureInfo.InvariantCulture).PadLeft(7, '0')}";
+        row["UserID_ToCloseGap"] = Convert.ToDecimal(userId, CultureInfo.InvariantCulture);
+
+        row["Next_vmf_code"] = SafeInt(next, "vmf_code");
+        row["Next_registration_number"] = SafeString(next, "registration_number");
+        row["Next_fleet_number"] = SafeString(next, "fleet_number");
+        row["Next_start_odo"] = SafeDouble(next, "start_odo");
+        row["Next_end_odo"] = SafeDouble(next, "end_odo");
+        row["Next_contract_code"] = SafeDouble(next, "contract_code");
+        row["Next_contract_type"] = SafeString(next, "contract_type");
+        row["Next_contract_start_odo"] = SafeInt(next, "contract_start_odo");
+        row["Next_Dept_ID"] = SafeDouble(next, "Dept_ID");
+        row["Next_Dept_Code"] = SafeString(next, "Dept_Code");
+        row["Next_site_code"] = SafeDouble(next, "site_code");
+        row["Next_Site"] = SafeString(next, "Site");
+        row["Next_TA_REK"] = SafeString(next, "TA_REK");
+        row["Next_TransactionDate"] = SafeDate(next, "TransactionDate");
+        row["Next_billing_month"] = SafeString(next, "billing_month");
+        row["Next_trx_month"] = SafeString(next, "trx_month");
+        row["Next_Post_Date"] = SafeDate(next, "Post_Date");
+        row["Next_Bill_Date"] = SafeDate(next, "Bill_Date");
+        row["Next_Source_Date"] = SafeDate(next, "Source_Date");
+        row["Next_FinancialYear"] = SafeString(next, "FinancialYear");
+        row["Next_Tariff"] = SafeDecimal(next, "Tariff");
+        row["Next_Type"] = SafeString(next, "Type");
+    }
+
+    private async Task<DataTable> LoadAllVehicleKilosAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "DEV_REP_AllVehicleKilos";
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandTimeout = 180;
+            var startDateParameter = command.CreateParameter();
+            startDateParameter.ParameterName = "@StartDate";
+            startDateParameter.DbType = DbType.DateTime;
+            startDateParameter.Value = new DateTime(1900, 1, 1);
+            command.Parameters.Add(startDateParameter);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            var table = new DataTable("AllKilosTable");
+            table.Load(reader);
+            return table;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<int> ExecuteCloseKiloGapsProcAsync(string xmlDoc)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "DEV_INS_CloseKiloGapsFromXML";
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandTimeout = 180;
+            var xmlParameter = command.CreateParameter();
+            xmlParameter.ParameterName = "@XMLDoc";
+            xmlParameter.DbType = DbType.String;
+            xmlParameter.Value = xmlDoc;
+            command.Parameters.Add(xmlParameter);
+
+            return await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<int> GetMaxGapRecordNumberAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "DEV_SEL_LogsheetMaxGapRekNumber";
+            command.CommandType = CommandType.StoredProcedure;
+            command.CommandTimeout = 60;
+            var scalar = await command.ExecuteScalarAsync();
+            if (scalar is null || scalar is DBNull)
+            {
+                return 0;
+            }
+
+            return Convert.ToInt32(scalar, CultureInfo.InvariantCulture);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static DataTable CreateKiloGapsTableSchema()
+    {
+        var table = new DataTable("KiloGapsTable");
+        table.Columns.Add("Prev_vmf_code", typeof(int));
+        table.Columns.Add("Prev_registration_number", typeof(string));
+        table.Columns.Add("Prev_fleet_number", typeof(string));
+        table.Columns.Add("Prev_start_odo", typeof(double));
+        table.Columns.Add("Prev_end_odo", typeof(double));
+        table.Columns.Add("Prev_contract_code", typeof(double));
+        table.Columns.Add("Prev_contract_type", typeof(string));
+        table.Columns.Add("Prev_contract_start_odo", typeof(int));
+        table.Columns.Add("Prev_Dept_ID", typeof(double));
+        table.Columns.Add("Prev_Dept_Code", typeof(string));
+        table.Columns.Add("Prev_site_code", typeof(double));
+        table.Columns.Add("Prev_Site", typeof(string));
+        table.Columns.Add("Prev_TA_REK", typeof(string));
+        table.Columns.Add("Prev_TransactionDate", typeof(DateTime));
+        table.Columns.Add("Prev_billing_month", typeof(string));
+        table.Columns.Add("Prev_trx_month", typeof(string));
+        table.Columns.Add("Prev_Post_Date", typeof(DateTime));
+        table.Columns.Add("Prev_Bill_Date", typeof(DateTime));
+        table.Columns.Add("Prev_Source_Date", typeof(DateTime));
+        table.Columns.Add("Prev_FinancialYear", typeof(string));
+        table.Columns.Add("Prev_Tariff", typeof(decimal));
+        table.Columns.Add("Prev_Type", typeof(string));
+        table.Columns.Add("Gap_size", typeof(double));
+        table.Columns.Add("GapSize_Amount", typeof(decimal));
+        table.Columns.Add("Gap_RekNumber", typeof(string));
+        table.Columns.Add("UserID_ToCloseGap", typeof(decimal));
+        table.Columns.Add("Next_vmf_code", typeof(int));
+        table.Columns.Add("Next_registration_number", typeof(string));
+        table.Columns.Add("Next_fleet_number", typeof(string));
+        table.Columns.Add("Next_start_odo", typeof(double));
+        table.Columns.Add("Next_end_odo", typeof(double));
+        table.Columns.Add("Next_contract_code", typeof(double));
+        table.Columns.Add("Next_contract_type", typeof(string));
+        table.Columns.Add("Next_contract_start_odo", typeof(int));
+        table.Columns.Add("Next_Dept_ID", typeof(double));
+        table.Columns.Add("Next_Dept_Code", typeof(string));
+        table.Columns.Add("Next_site_code", typeof(double));
+        table.Columns.Add("Next_Site", typeof(string));
+        table.Columns.Add("Next_TA_REK", typeof(string));
+        table.Columns.Add("Next_TransactionDate", typeof(DateTime));
+        table.Columns.Add("Next_billing_month", typeof(string));
+        table.Columns.Add("Next_trx_month", typeof(string));
+        table.Columns.Add("Next_Post_Date", typeof(DateTime));
+        table.Columns.Add("Next_Bill_Date", typeof(DateTime));
+        table.Columns.Add("Next_Source_Date", typeof(DateTime));
+        table.Columns.Add("Next_FinancialYear", typeof(string));
+        table.Columns.Add("Next_Tariff", typeof(decimal));
+        table.Columns.Add("Next_Type", typeof(string));
+        return table;
+    }
+
+    private static string SafeString(DataRow row, string column)
+        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToString(row[column], CultureInfo.InvariantCulture) ?? string.Empty : string.Empty;
+
+    private static int SafeInt(DataRow row, string column)
+        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToInt32(row[column], CultureInfo.InvariantCulture) : 0;
+
+    private static short SafeShort(DataRow row, string column)
+        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToInt16(row[column], CultureInfo.InvariantCulture) : (short)0;
+
+    private static double SafeDouble(DataRow row, string column)
+        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToDouble(row[column], CultureInfo.InvariantCulture) : 0d;
+
+    private static decimal SafeDecimal(DataRow row, string column)
+        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToDecimal(row[column], CultureInfo.InvariantCulture) : 0m;
+
+    private static DateTime SafeDate(DataRow row, string column)
+        => row.Table.Columns.Contains(column) && row[column] is not DBNull ? Convert.ToDateTime(row[column], CultureInfo.InvariantCulture) : DateTime.MinValue;
+
     #endregion
 }
 
@@ -1880,6 +2408,7 @@ public class PastelExportDto { public DateTime StartDate { get; set; } public Da
 public class PastelCustomerExportDto { public int? DepartmentCode { get; set; } public string? BatchDate { get; set; } public byte FinancialSystemCode { get; set; } = 1; public ExportBatchMode? BatchMode { get; set; } public bool SkipPosting { get; set; } public bool ReverseBatch { get; set; } }
 public class ReversalTreeDto { public string JournalNumber { get; set; } = ""; public List<ReversalNodeDto> Reversals { get; set; } = new(); }
 public class ReversalNodeDto { public string JournalNumber { get; set; } = ""; public DateTime ReversalDate { get; set; } public decimal Amount { get; set; } }
+public class CloseKiloGapsRequest { public string FinancialYear { get; set; } = ""; }
 public class StandardBankImportDto { [Required] public string FileContent { get; set; } = ""; }
 public class ImportResultDto { public bool Success { get; set; } public int RecordsImported { get; set; } public int RecordsFailed { get; set; } public List<string> Errors { get; set; } = new(); }
 public class TariffParametersDto

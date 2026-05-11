@@ -1,9 +1,29 @@
 @page "/taxis/logs/{Mode}"
+@page "/Taxis/Taxi_log_1.aspx"
+@page "/Taxis/Taxi_log_12.aspx"
+@page "/Taxis/Taxi_log_2.aspx"
+@page "/Taxis/Taxi_log_Edit_1.aspx"
+@page "/Taxis/Taxi_log_Edit_2.aspx"
+@page "/Taxis/Reprint_Taxi_Log_1.aspx"
+@page "/Taxis/Report_Reprint_Taxi_Log_1.aspx"
+@page "/Taxis/White_log.aspx"
+@page "/Taxis/White_log_2.aspx"
+@page "/Private_Hire/Taxi_log_1.aspx"
+@page "/Private_Hire/Taxi_log_2.aspx"
+@page "/Private_Hire/Edit_Taxi_log_1.aspx"
+@page "/Private_Hire/Edit_Taxi_log_2.aspx"
+@page "/Private_Hire/Invoice/Edit_Taxi_log_1.aspx"
+@page "/Private_Hire/Invoice/Edit_Taxi_log_2.aspx"
+@page "/Private_Hire/GGVIP/Invoice/Edit_Taxi_log_1.aspx"
+@page "/Private_Hire/GGVIP/Invoice/Edit_Taxi_log_2.aspx"
+@page "/Private_Hire/GGVIP/White_log.aspx"
+@page "/Private_Hire/GGVIP/White_log_2.aspx"
 @rendermode InteractiveServer
 @using System.Globalization
 @using System.Net.Http.Json
 @using FIS.Web.Models
 @using FIS.Web.Services
+@inject NavigationManager Navigation
 @inject TaxiLogApiService TaxiLogService
 @inject VehicleApiService VehicleService
 @inject HttpClient Http
@@ -276,7 +296,7 @@
 
     protected override void OnParametersSet()
     {
-        var normalized = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        var normalized = ResolveMode();
         _isWhiteLogMode = normalized == "white-log";
         _isEditMode = normalized == "edit";
         _isReprintMode = normalized == "reprint";
@@ -297,6 +317,40 @@
             "reprint" => "Reprint taxi log output.",
             "white-log" => "Capture kilometres for GG vehicles not used for claiming.",
             _ => "Taxi log workflow."
+        };
+    }
+
+    private string ResolveMode()
+    {
+        var normalized = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            return normalized;
+        }
+
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "private_hire/taxi_log_1.aspx" => "enter",
+            "private_hire/taxi_log_2.aspx" => "enter",
+            "private_hire/edit_taxi_log_1.aspx" => "edit",
+            "private_hire/edit_taxi_log_2.aspx" => "edit",
+            "private_hire/invoice/edit_taxi_log_1.aspx" => "edit",
+            "private_hire/invoice/edit_taxi_log_2.aspx" => "edit",
+            "private_hire/ggvip/invoice/edit_taxi_log_1.aspx" => "edit",
+            "private_hire/ggvip/invoice/edit_taxi_log_2.aspx" => "edit",
+            "private_hire/ggvip/white_log.aspx" => "white-log",
+            "private_hire/ggvip/white_log_2.aspx" => "white-log",
+            "taxis/taxi_log_1.aspx" => "enter",
+            "taxis/taxi_log_12.aspx" => "enter",
+            "taxis/taxi_log_2.aspx" => "enter",
+            "taxis/taxi_log_edit_1.aspx" => "edit",
+            "taxis/taxi_log_edit_2.aspx" => "edit",
+            "taxis/reprint_taxi_log_1.aspx" => "reprint",
+            "taxis/report_reprint_taxi_log_1.aspx" => "reprint",
+            "taxis/white_log.aspx" => "white-log",
+            "taxis/white_log_2.aspx" => "white-log",
+            _ => string.Empty
         };
     }
 

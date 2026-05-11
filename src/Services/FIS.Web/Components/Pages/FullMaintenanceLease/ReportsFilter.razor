@@ -1,4 +1,5 @@
 @page "/full-maintenance-lease/reports/filter"
+@page "/NOMPending/NOMRpt_SelectDatesOrFinYear.aspx"
 @rendermode InteractiveServer
 @inject NavigationManager Navigation
 
@@ -81,6 +82,12 @@
     [SupplyParameterFromQuery(Name = "report")]
     public string? ReportKey { get; set; }
 
+    [SupplyParameterFromQuery(Name = "Follow_Page")]
+    public string? LegacyFollowPage { get; set; }
+
+    [SupplyParameterFromQuery(Name = "caption")]
+    public string? LegacyCaption { get; set; }
+
     private readonly ReportFilterModel _filter = new();
 
     private readonly List<string> FinancialYears = new()
@@ -95,7 +102,10 @@
 
     protected override void OnInitialized()
     {
-        _reportCaption = ReportKey switch
+        var reportKey = ResolveReportKey();
+        _reportCaption = !string.IsNullOrWhiteSpace(LegacyCaption)
+            ? LegacyCaption
+            : reportKey switch
         {
             "maintenance-history" => "FML Vehicle Maintenance History",
             "over-utilized" => "List of over utilized FML vehicles (based on km's)",
@@ -105,7 +115,7 @@
 
     private void ViewReport()
     {
-        var target = ReportKey switch
+        var target = ResolveReportKey() switch
         {
             "maintenance-history" => "/full-maintenance-lease/reports/maintenance-history",
             "over-utilized" => "/full-maintenance-lease/reports/over-utilized",
@@ -119,6 +129,21 @@
     private void GoBack()
     {
         Navigation.NavigateTo("/full-maintenance-lease/reports");
+    }
+
+    private string? ResolveReportKey()
+    {
+        if (!string.IsNullOrWhiteSpace(ReportKey))
+        {
+            return ReportKey;
+        }
+
+        return LegacyFollowPage switch
+        {
+            "Rpt_FMLVehicleMaintenanceHistory" => "maintenance-history",
+            "Rpt_OverUtilizedFMLVehiclesOnKm" => "over-utilized",
+            _ => null
+        };
     }
 
     private void Clear()

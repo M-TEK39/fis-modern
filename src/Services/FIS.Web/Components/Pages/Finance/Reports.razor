@@ -1,12 +1,20 @@
 @page "/finance/reports/{Action?}"
+@page "/Finance/GetFinancialReports.aspx"
+@page "/Finance/GetFinancialReportsProvince.aspx"
+@page "/Finance/SelectFinancialYear.aspx"
+@page "/Finance/GetReportParameters.aspx"
+@page "/Finance/SelectSearchParameters.aspx"
+@page "/GetVehicleBillingHistoryReport.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using System.Text.Json
 @using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -315,6 +323,11 @@
         _sites = await FinanceService.GetSitesAsync();
 
         EnsurePostingMonthSelected();
+    }
+
+    protected override void OnParametersSet()
+    {
+        Action = ResolveLegacyAction();
     }
 
     private async Task OnDepartmentChangedAsync()
@@ -983,4 +996,57 @@
     private string SectionTitle => PageTitleText;
 
     private string SectionDescription => "Select parameters to generate the report.";
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.Trim('/').ToLowerInvariant();
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        static string Read(IDictionary<string, Microsoft.Extensions.Primitives.StringValues> values, string key)
+            => values.TryGetValue(key, out var result) ? result.ToString() : string.Empty;
+
+        var mode = Read(query, "Mode").Trim().ToLowerInvariant();
+        var item = Read(query, "Item").Trim().ToLowerInvariant();
+
+        return path switch
+        {
+            "finance/getfinancialreports.aspx" => mode switch
+            {
+                "department" => "department",
+                "province" => "province",
+                "site" => "site",
+                _ => "department"
+            },
+            "finance/getfinancialreportsprovince.aspx" => mode switch
+            {
+                "department" => "department",
+                "province" => "province",
+                "site" => "site",
+                _ => "department"
+            },
+            "finance/getreportparameters.aspx" => "reversals-tree",
+            "finance/selectfinancialyear.aspx" => item switch
+            {
+                "vehiclebillinghistory" => "vehicle-billing-history",
+                "summaryincomesplit" => "income-split-summary",
+                "detailedincomesplit" => "income-split-detailed",
+                _ => "department"
+            },
+            "finance/selectsearchparameters.aspx" => item switch
+            {
+                "invoicedamountspermonth" => "income-department",
+                "invoicedamountspermonthpersite" => "income-department-site",
+                "invoicedamountspermonthpersitepervehicle" => "download-income-department-site-vehicle",
+                _ => "department"
+            },
+            _ => "department"
+        };
+    }
 }

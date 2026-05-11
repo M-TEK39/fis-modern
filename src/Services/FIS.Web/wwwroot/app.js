@@ -2,6 +2,66 @@ window.fisLayout = window.fisLayout || {};
 window.fisDownload = window.fisDownload || {};
 window.fisDevice = window.fisDevice || {};
 window.fisPrint = window.fisPrint || {};
+window.fisAuth = window.fisAuth || {};
+
+window.fisAuth.postJson = async function (url, payload) {
+  const options = {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json"
+    }
+  };
+
+  if (payload !== undefined && payload !== null) {
+    options.body = JSON.stringify(payload);
+  }
+
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(await window.fisAuth.readErrorMessage(response));
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return await response.json();
+};
+
+window.fisAuth.login = function (request) {
+  return window.fisAuth.postJson("/AuthProxy/login", request);
+};
+
+window.fisAuth.refresh = function () {
+  return window.fisAuth.postJson("/AuthProxy/refresh", null);
+};
+
+window.fisAuth.logout = function () {
+  return window.fisAuth.postJson("/AuthProxy/logout", null);
+};
+
+window.fisAuth.readErrorMessage = async function (response) {
+  const text = await response.text();
+  if (!text) {
+    return `Request failed (${response.status}).`;
+  }
+
+  try {
+    const payload = JSON.parse(text);
+    if (payload && typeof payload.error === "string" && payload.error.length > 0) {
+      return payload.error;
+    }
+
+    if (typeof payload === "string" && payload.length > 0) {
+      return payload;
+    }
+  } catch {
+    // Use raw text below.
+  }
+
+  return text;
+};
 
 window.fisLayout._sidebarMediaListenerRegistered =
   window.fisLayout._sidebarMediaListenerRegistered || false;

@@ -866,6 +866,10 @@ build_metadata.AdditionalFiles.CssScope =
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL0luZGV4LnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/LegacyReportRouter.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL0xlZ2FjeVJlcG9ydFJvdXRlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
 [/home/dev/work/fis-modern/src/Services/FIS.Web/Components/Pages/Reports/Licences.razor]
 build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50cy9QYWdlcy9SZXBvcnRzL0xpY2VuY2VzLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 

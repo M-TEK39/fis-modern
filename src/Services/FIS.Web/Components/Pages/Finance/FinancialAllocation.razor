@@ -1,11 +1,18 @@
 @page "/finance/financial-allocation/{Action?}"
+@page "/Finance/BASImporter/Importer.aspx"
+@page "/Finance/BASImporter/Activate.aspx"
+@page "/Finance/SelectSegmentTypeCode.aspx"
+@page "/Finance/EditJournalBASCodes.aspx"
+@page "/Finance/VehicleJournalBASCodesMap.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using System.Text.Json
 @inject FinanceApiService FinanceService
+@inject NavigationManager Navigation
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -299,6 +306,11 @@
         _segmentTypes = await FinanceService.GetSegmentTypesAsync();
     }
 
+    protected override void OnParametersSet()
+    {
+        Action = ResolveLegacyAction();
+    }
+
     private void OnImportFileSelected(InputFileChangeEventArgs args)
     {
         _importFile = args.File;
@@ -524,4 +536,33 @@
         "departments-missing-financial-system" => "List departments with missing financial system settings.",
         _ => "Select a finance allocation function from the menu."
     };
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.Trim('/').ToLowerInvariant();
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        static string Read(IDictionary<string, Microsoft.Extensions.Primitives.StringValues> values, string key)
+            => values.TryGetValue(key, out var result) ? result.ToString() : string.Empty;
+
+        return path switch
+        {
+            "finance/basimporter/importer.aspx" => "import-bas",
+            "finance/basimporter/activate.aspx" => "activate-bas",
+            "finance/selectsegmenttypecode.aspx" => "view-bas",
+            "finance/editjournalbascodes.aspx" => "fix-invalid-journals",
+            "finance/vehiclejournalbascodesmap.aspx" => "allocate-fund-codes",
+            "fisreports/showreport.aspx" when Read(query, "Item").Trim().Equals("JournalsWithInvalidBASCodes", StringComparison.OrdinalIgnoreCase) => "invalid-journals",
+            "fisreports/showreport.aspx" when Read(query, "Item").Trim().Equals("DepartmentsWithNoBASCodes", StringComparison.OrdinalIgnoreCase) => "departments-no-bas",
+            "fisreports/showreport.aspx" when Read(query, "Item").Trim().Equals("DepartmentsWithMissingFinancialSystem", StringComparison.OrdinalIgnoreCase) => "departments-missing-financial-system",
+            _ => "import-bas"
+        };
+    }
 }

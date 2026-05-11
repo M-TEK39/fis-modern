@@ -1,4 +1,9 @@
 @page "/reports/tariffs"
+@page "/Validation/RPTtariffs.aspx"
+@page "/Validation/RPT_Class_Tariff.aspx"
+@page "/Validation/RPT_Licence_Tariff.aspx"
+@page "/Validation/RPT_Model_Tariff.aspx"
+@page "/Validation/RPT_Taxi_Tariff.aspx"
 @rendermode InteractiveServer
 @inject NavigationManager Navigation
 
@@ -54,7 +59,7 @@
 </div>
 
 @code {
-    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
+    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode) || !string.IsNullOrWhiteSpace(ResolveLegacyReportType());
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
@@ -72,7 +77,7 @@
         Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/tariffs", filters));
     }
 
-    private string GetReportKey() => NormalizeReportType(QReportType) switch
+    private string GetReportKey() => ResolveReportType() switch
     {
         "class-codes-with-tariffs" => "tariffs-class-codes",
         "licence-fees" => "tariffs-licence-fees",
@@ -82,7 +87,7 @@
         _ => "tariffs-class-codes"
     };
 
-    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
+    private string GetSelectedCaption() => ResolveReportType() switch
     {
         "class-codes-with-tariffs" => "Class codes with tariffs",
         "licence-fees" => "Licence fees",
@@ -91,6 +96,27 @@
         "nom-vehicles-without-tariffs" => "List of NOM Vehicles that don't have Tariffs",
         _ => "Tariffs Reports"
     };
+
+    private string ResolveReportType()
+    {
+        var legacy = ResolveLegacyReportType();
+        return string.IsNullOrWhiteSpace(legacy)
+            ? NormalizeReportType(QReportType)
+            : legacy;
+    }
+
+    private string ResolveLegacyReportType()
+    {
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "validation/rpt_class_tariff.aspx" => "class-codes-with-tariffs",
+            "validation/rpt_licence_tariff.aspx" => "licence-fees",
+            "validation/rpt_model_tariff.aspx" => "make-model-with-tariffs",
+            "validation/rpt_taxi_tariff.aspx" => "private-taxi-tariffs",
+            _ => string.Empty
+        };
+    }
 
     private static string NormalizeReportType(string? value)
         => value?.Trim().ToLowerInvariant() switch

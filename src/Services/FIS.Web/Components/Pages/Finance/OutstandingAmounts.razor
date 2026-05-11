@@ -1,10 +1,13 @@
 @page "/finance/outstanding/{Action?}"
+@page "/Finance/GetExpenditureReport.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using System.Text.Json
 @inject FinanceApiService FinanceService
+@inject NavigationManager Navigation
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -166,6 +169,11 @@
         _financialYears = await FinanceService.GetFinancialYearsAsync();
     }
 
+    protected override void OnParametersSet()
+    {
+        Action = ResolveLegacyAction();
+    }
+
     private async Task OnDepartmentChangedAsync()
     {
         _sites = await FinanceService.GetSitesAsync(_selectedDepartment);
@@ -324,4 +332,37 @@
     };
 
     private string SectionTitle => PageTitleText;
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.Trim('/').ToLowerInvariant();
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (path == "finance/getexpenditurereport.aspx")
+        {
+            return "department-site-vehicle";
+        }
+
+        if (path == "fisreports/showreport.aspx" && query.TryGetValue("Item", out var item))
+        {
+            var value = item.ToString().Trim().ToLowerInvariant();
+            return value switch
+            {
+                "alloutstandingamountsperdepartment" => "department",
+                "alloutstandingamountsperdepartmentandsite" => "department-site",
+                "alloutstandingamountsatmonthendpervehicle" => "month-end-vehicle",
+                "allocationexception" => "allocation-exception",
+                _ => "department-site-vehicle"
+            };
+        }
+
+        return "department-site-vehicle";
+    }
 }

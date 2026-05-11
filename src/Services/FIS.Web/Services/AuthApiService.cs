@@ -1,5 +1,7 @@
+using System.Net;
 using System.Net.Http.Json;
 using FIS.Web.Models;
+using Microsoft.JSInterop;
 
 namespace FIS.Web.Services;
 
@@ -13,6 +15,7 @@ public class AuthApiService
     private readonly TokenService _tokenService;
     private readonly AuthSessionTokenCache _sessionTokenCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IJSRuntime _jsRuntime;
     private readonly DualAuthStateProvider _authStateProvider;
     private readonly UserAccessContextService _userAccessContextService;
     private readonly ILogger<AuthApiService> _logger;
@@ -22,6 +25,7 @@ public class AuthApiService
         TokenService tokenService,
         AuthSessionTokenCache sessionTokenCache,
         IHttpContextAccessor httpContextAccessor,
+        IJSRuntime jsRuntime,
         DualAuthStateProvider authStateProvider,
         UserAccessContextService userAccessContextService,
         ILogger<AuthApiService> logger)
@@ -30,6 +34,7 @@ public class AuthApiService
         _tokenService = tokenService;
         _sessionTokenCache = sessionTokenCache;
         _httpContextAccessor = httpContextAccessor;
+        _jsRuntime = jsRuntime;
         _authStateProvider = authStateProvider;
         _userAccessContextService = userAccessContextService;
         _logger = logger;
@@ -37,16 +42,8 @@ public class AuthApiService
 
     public async Task<LegacyLoginResponse> LoginAsync(LegacyLoginRequest request)
     {
-        // Call the proxy controller which handles cookie forwarding from API to browser
-        var response = await _httpClient.PostAsJsonAsync("/AuthProxy/login", request);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var message = await ReadErrorMessage(response);
-            throw new InvalidOperationException(message);
-        }
-
-        var loginResponse = await response.Content.ReadFromJsonAsync<LegacyLoginResponse>()
+        // Browser-side fetch is required so HttpOnly Set-Cookie headers are stored by the browser.
+        var loginResponse = await _jsRuntime.InvokeAsync<LegacyLoginResponse>("fisAuth.login", request)
             ?? throw new InvalidOperationException("Login response was empty.");
 
         await _tokenService.SetTokenAsync(loginResponse.Token, loginResponse.ExpiresAt);
@@ -57,7 +54,7 @@ public class AuthApiService
         var sessionId = _httpContextAccessor.HttpContext?.Session.Id;
         if (!string.IsNullOrWhiteSpace(sessionId) && !string.IsNullOrWhiteSpace(loginResponse.Token))
         {
-            _sessionTokenCache.SetAccessToken(sessionId, loginResponse.Token);
+            _sessionTokenCache.SetAccessToken(sessionId, loginResponse.Token, loginResponse.ExpiresAt);
         }
 
         // Notify Blazor that user is now authenticated
@@ -71,10 +68,9 @@ public class AuthApiService
 
     public async Task LogoutAsync()
     {
-        // Call proxy controller logout
         try
         {
-            await _httpClient.PostAsync("/AuthProxy/logout", null);
+            await _jsRuntime.InvokeVoidAsync("fisAuth.logout");
         }
         catch (Exception ex)
         {
@@ -96,56 +92,85 @@ public class AuthApiService
 
     public async Task<ChangePasswordResponse> ChangePasswordAsync(ChangePasswordRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/change-password", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/change-password", request);
         return await HandleChangePasswordResponse(response);
     }
 
     public async Task<ChangePasswordResponse> ChangePasswordQuestionAsync(ChangePasswordQuestionRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/change-password-question", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/change-password-question", request);
         return await HandleChangePasswordResponse(response);
     }
 
     public async Task<UserAdminResponse> ResetLoginAsync(ResetLoginRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/reset-login", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/reset-login", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> ForcePasswordAsync(ForcePasswordRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/force-password", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/force-password", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> ForgotPasswordStartAsync(ForgotPasswordStartRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/forgot-password/start", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/forgot-password/start", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> ForgotPasswordConfirmAsync(ForgotPasswordConfirmRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/forgot-password/confirm", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/forgot-password/confirm", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> ActivateUserAsync(ActivateUserRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/activate-user", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/activate-user", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> DeactivateUserAsync(DeactivateExpiredPasswordRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/deactivate-user", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/deactivate-user", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> DeactivateExpiredPasswordAsync(DeactivateExpiredPasswordRequest request)
     {
-        var response = await _httpClient.PostAsJsonAsync("api/auth/deactivate-expired", request);
+        var response = await PostAsJsonWithAuthRetryAsync("api/auth/deactivate-expired", request);
         return await HandleUserAdminResponse(response);
+    }
+
+    private async Task<HttpResponseMessage> PostAsJsonWithAuthRetryAsync<TRequest>(string path, TRequest request)
+    {
+        await AddAuthorizationHeaderAsync();
+        var response = await _httpClient.PostAsJsonAsync(path, request);
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return response;
+        }
+
+        if (!await _tokenService.RefreshAccessTokenAsync())
+        {
+            return response;
+        }
+
+        response.Dispose();
+        await AddAuthorizationHeaderAsync();
+        return await _httpClient.PostAsJsonAsync(path, request);
+    }
+
+    private async Task AddAuthorizationHeaderAsync()
+    {
+        var token = await _tokenService.GetTokenAsync();
+        _httpClient.DefaultRequestHeaders.Remove("Cookie");
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={token}");
+        }
     }
 
     private async Task<ChangePasswordResponse> HandleChangePasswordResponse(HttpResponseMessage response)

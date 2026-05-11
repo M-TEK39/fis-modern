@@ -1,4 +1,12 @@
 @page "/reports/logsheets"
+@page "/Logs/Log_Report.aspx"
+@page "/logs/RPT_outstanding1.aspx"
+@page "/logs/RPT_Logs_per_vehicle.aspx"
+@page "/logs/RPT_Logs_per_vehicle_1.aspx"
+@page "/logs/RPT_logsheet_per_vehicle.aspx"
+@page "/logs/RPT_logsheet_per_rek.aspx"
+@page "/logs/RPT_uits_els_en_logs_geld_main.aspx"
+@page "/logs/RPT_Logs_per_dept_1.aspx"
 @rendermode InteractiveServer
 @inject NavigationManager Navigation
 
@@ -55,7 +63,7 @@
 </div>
 
 @code {
-    private bool _isResultView => ReportFilterHelper.IsResultView(ViewMode);
+    private bool _isResultView => ResolveLegacyReportTypeFromPath() is not null || ReportFilterHelper.IsResultView(ViewMode);
 
     [Parameter, SupplyParameterFromQuery(Name = "view")]
     public string? ViewMode { get; set; }
@@ -73,7 +81,7 @@
         Navigation.NavigateTo(ReportFilterHelper.BuildResultUrl("/reports/logsheets", filters));
     }
 
-    private string GetReportKey() => NormalizeReportType(QReportType) switch
+    private string GetReportKey() => ResolveReportType() switch
     {
         "one-vehicle" => "logsheets-one-vehicle",
         "vehicle-odo-balance" => "logsheets-vehicle-odo-balance",
@@ -84,7 +92,7 @@
         _ => "logsheets"
     };
 
-    private string GetSelectedCaption() => NormalizeReportType(QReportType) switch
+    private string GetSelectedCaption() => ResolveReportType() switch
     {
         "one-vehicle" => "Log Report On One Vehicle",
         "vehicle-odo-balance" => "Report Per Vehicle - Log Odo Balance",
@@ -106,4 +114,24 @@
             "per-dept-site" => "per-dept-site",
             _ => "per-dept-site"
         };
+
+    private string ResolveReportType()
+        => ResolveLegacyReportTypeFromPath() ?? NormalizeReportType(QReportType);
+
+    private string? ResolveLegacyReportTypeFromPath()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+
+        return path switch
+        {
+            "logs/rpt_outstanding1.aspx" => "one-vehicle",
+            "logs/rpt_logs_per_vehicle.aspx" => "one-vehicle",
+            "logs/rpt_logs_per_vehicle_1.aspx" => "vehicle-odo-balance",
+            "logs/rpt_logsheet_per_vehicle.aspx" => "vehicle-contract-els-manual",
+            "logs/rpt_logsheet_per_rek.aspx" => "vehicle-details-per-rek",
+            "logs/rpt_uits_els_en_logs_geld_main.aspx" => "all-outstanding",
+            "logs/rpt_logs_per_dept_1.aspx" => "per-dept-site",
+            _ => null
+        };
+    }
 }

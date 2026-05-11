@@ -13,6 +13,7 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
     private readonly AuthSessionTokenCache _sessionTokenCache;
     private readonly ILogger<JwtAuthenticationStateProvider> _logger;
     private const string AccessCookie = "FIS_Access_Token";
+    private static readonly TimeSpan BootstrapAccessLifetime = TimeSpan.FromMinutes(14);
 
     public JwtAuthenticationStateProvider(
         TokenService tokenService,
@@ -70,15 +71,15 @@ public class JwtAuthenticationStateProvider : AuthenticationStateProvider
         if (httpContext.Request.Cookies.TryGetValue(AccessCookie, out var cookieToken) &&
             !string.IsNullOrWhiteSpace(cookieToken))
         {
-            await _tokenService.SetTokenAsync(cookieToken, DateTime.UtcNow.AddHours(8));
+            await _tokenService.SetTokenAsync(cookieToken, DateTime.UtcNow.Add(BootstrapAccessLifetime));
             return;
         }
 
         var sessionKey = httpContext.Session?.Id;
         if (!string.IsNullOrWhiteSpace(sessionKey) &&
-            _sessionTokenCache.TryGetAccessToken(sessionKey, out var cachedToken))
+            _sessionTokenCache.TryGetAccessToken(sessionKey, out var cachedToken, out var expiresAtUtc))
         {
-            await _tokenService.SetTokenAsync(cachedToken, DateTime.UtcNow.AddHours(8));
+            await _tokenService.SetTokenAsync(cachedToken, expiresAtUtc);
         }
     }
 

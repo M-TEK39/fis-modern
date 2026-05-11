@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Net.Http;
+using System.Net;
 using FIS.Web.Models;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
@@ -32,23 +33,42 @@ public abstract class BaseApiService
     /// <summary>
     /// Adds session access token as cookie header for API auth.
     /// </summary>
-    private void AddAuthorizationHeader()
+    private async Task AddAuthorizationHeaderAsync()
     {
-        if (string.IsNullOrWhiteSpace(TokenService.Token))
+        var token = await TokenService.GetTokenAsync();
+        if (string.IsNullOrWhiteSpace(token))
         {
             return;
         }
 
         HttpClient.DefaultRequestHeaders.Remove("Cookie");
-        HttpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={TokenService.Token}");
+        HttpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", $"FIS_Access_Token={token}");
+    }
+
+    private async Task<HttpResponseMessage> SendWithAuthRetryAsync(Func<Task<HttpResponseMessage>> send)
+    {
+        await AddAuthorizationHeaderAsync();
+        var response = await send();
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return response;
+        }
+
+        if (!await TokenService.RefreshAccessTokenAsync())
+        {
+            return response;
+        }
+
+        response.Dispose();
+        await AddAuthorizationHeaderAsync();
+        return await send();
     }
 
     protected async Task<List<T>> GetListAsync<T>(string path)
     {
         try
         {
-            AddAuthorizationHeader();
-            var response = await HttpClient.GetAsync(path);
+            var response = await SendWithAuthRetryAsync(() => HttpClient.GetAsync(path));
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<List<T>>(_jsonOptions) ?? new();
         }
@@ -63,8 +83,7 @@ public abstract class BaseApiService
     {
         try
         {
-            AddAuthorizationHeader();
-            var response = await HttpClient.GetAsync(path);
+            var response = await SendWithAuthRetryAsync(() => HttpClient.GetAsync(path));
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<T>(_jsonOptions);
         }
@@ -79,8 +98,7 @@ public abstract class BaseApiService
     {
         try
         {
-            AddAuthorizationHeader();
-            var response = await HttpClient.PostAsJsonAsync(path, payload);
+            var response = await SendWithAuthRetryAsync(() => HttpClient.PostAsJsonAsync(path, payload));
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TResponse>(_jsonOptions);
         }
@@ -95,8 +113,7 @@ public abstract class BaseApiService
     {
         try
         {
-            AddAuthorizationHeader();
-            var response = await HttpClient.PutAsJsonAsync(path, payload);
+            var response = await SendWithAuthRetryAsync(() => HttpClient.PutAsJsonAsync(path, payload));
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<TResponse>(_jsonOptions);
         }
@@ -111,7 +128,7 @@ public abstract class BaseApiService
     {
         try
         {
-            var response = await HttpClient.DeleteAsync(path);
+            var response = await SendWithAuthRetryAsync(() => HttpClient.DeleteAsync(path));
             response.EnsureSuccessStatusCode();
         }
         catch (Exception ex)

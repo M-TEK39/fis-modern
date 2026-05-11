@@ -56,16 +56,17 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-      - ConnectionStrings__Default=Server=mssql,1433;Database=${MSSQL_DB_NAME:-legacy};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=True;TrustServerCertificate=True;
-      - Cors__Origins__0=http://localhost:5001
-      - Cors__Origins__1=http://${SERVER_IP:-localhost}:5001
-    ports:
-      - "5000:8080"
-    depends_on:
-      mssql:
-        condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
+      - TZ=Africa/Johannesburg
+      - ConnectionStrings__Default=Server=${DB_HOST};Database=${DB_NAME:-legacy};User Id=${DB_USER};Password=${DB_PASSWORD};Encrypt=False;TrustServerCertificate=True;
+      - Cors__Origins__0=https://localhost
+      - Cors__Origins__1=https://${SERVER_IP:-localhost}
+      - Cors__Origins__2=https://${SERVER_HOSTNAME:-localhost}
+    expose:
+      - "8080"
+    volumes:
+      - fis-uploads:/app/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -85,14 +86,35 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
+      - TZ=Africa/Johannesburg
       - ApiSettings__BaseUrl=http://fis-api:8080
-      - ApiSettings__WebBaseUrl=http://localhost:8080
-    ports:
-      - "5001:8080"
+      - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
+    expose:
+      - "8080"
     depends_on:
       fis-api:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - fis-network
+
+  # nginx TLS terminator — exposes HTTPS on 443 (web) and 5443 (API)
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: fis-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "5443:5443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      fis-api:
+        condition: service_healthy
+      fis-web:
+        condition: service_started
     networks:
       - fis-network
 
@@ -158,6 +180,8 @@ services:
 
 volumes:
   fis-mssql-data:
+    driver: local
+  fis-uploads:
     driver: local
 
 networks:

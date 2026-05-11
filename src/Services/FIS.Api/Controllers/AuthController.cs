@@ -109,21 +109,28 @@ public class AuthController : ControllerBase
         _context.LegacyUserCredentials.Update(credential);
         await _context.SaveChangesAsync();
 
-        // Password expiry check — prefer stored expiry_date, fall back to config-based calculation
-        bool passwordExpired;
-        int daysRemaining;
-        var fallbackExpiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "90");
+        // Password expiry check — disabled by default for legacy data compatibility.
+        // Set JwtSettings:EnforcePasswordExpiry=true in config once real expiry data is in place.
+        bool passwordExpired = false;
+        int daysRemaining = int.MaxValue;
+        var enforceExpiry = bool.TryParse(_configuration["JwtSettings:EnforcePasswordExpiry"], out var enforceFlag) && enforceFlag;
 
-        if (credential.password_expiry_date.HasValue)
+        if (enforceExpiry)
         {
-            passwordExpired = DateTime.UtcNow > credential.password_expiry_date.Value;
-            daysRemaining = Math.Max(0, (int)(credential.password_expiry_date.Value - DateTime.UtcNow).TotalDays);
-        }
-        else
-        {
-            var passwordAge = (DateTime.UtcNow - credential.last_password_change).TotalDays;
-            passwordExpired = passwordAge > fallbackExpiryDays;
-            daysRemaining = Math.Max(0, (int)(fallbackExpiryDays - passwordAge));
+            var fallbackExpiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "90");
+
+            if (credential.password_expiry_date.HasValue && credential.password_expiry_date.Value > new DateTime(2000, 1, 1))
+            {
+                passwordExpired = DateTime.UtcNow > credential.password_expiry_date.Value;
+                daysRemaining = Math.Max(0, (int)(credential.password_expiry_date.Value - DateTime.UtcNow).TotalDays);
+            }
+            else if (credential.last_password_change > new DateTime(2000, 1, 1))
+            {
+                var passwordAge = (DateTime.UtcNow - credential.last_password_change).TotalDays;
+                passwordExpired = passwordAge > fallbackExpiryDays;
+                daysRemaining = Math.Max(0, (int)(fallbackExpiryDays - passwordAge));
+            }
+            // else: no usable timestamp on the credential row — treat as "not expired" rather than force-expire legacy users
         }
 
         var authClaims = BuildAuthClaims(user.user_access_code, user.email ?? request.Username, passwordExpired);

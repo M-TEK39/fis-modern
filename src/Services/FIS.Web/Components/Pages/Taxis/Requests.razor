@@ -1,6 +1,61 @@
 @page "/taxis/requests/{Mode}"
+@page "/Taxis/Request_GGVIP_11[2].aspx"
+@page "/Taxis/Request_GGVIP_22[2].aspx"
+@page "/Taxis/Request_GGVIP_33[2].aspx"
+@page "/Taxis/Request_GGVIP_UsingPrevFinYearsBASCodes.aspx"
+@page "/Taxis/Request_GGVIP_R.aspx"
+@page "/Taxis/Request_GGVIP_Recurring.aspx"
+@page "/Taxis/Return_booking.aspx"
+@page "/Taxis/question.aspx"
+@page "/Taxis/Edit_GGVIP_1[1].aspx"
+@page "/Taxis/Edit_GGVIP_2[1].aspx"
+@page "/Taxis/Edit_GGVIP_UsingPrevFinYearsBASCodes.aspx"
+@page "/Taxis/Cancel.aspx"
+@page "/Taxis/Cancel_2.aspx"
+@page "/Taxis/Request_GGVIP_reprint_1_2.aspx"
+@page "/Taxis/Request_GGVIP_reprint_2_2.aspx"
+@page "/Taxis/Request_GGVIP_reprint_2_2_Edit.aspx"
+@page "/Taxis/Request_GGVIP_reprint_2_2_Edit_JIA.aspx"
+@page "/Taxis/Request_GGVIP_reprint_2_2._Edit.aspx"
+@page "/Taxis/Request_GGVIP_reprint_2_2._Edit_JIA.aspx"
+@page "/Taxis/Request_GGVIP_reprint_LOG.aspx"
+@page "/Taxis/Report_Request_GGVIP_reprint_1_2.aspx"
+@page "/Taxis/Report_Request_GGVIP_reprint_2_2.aspx"
+@page "/Taxis/Report_request_GGVIP_reprint_LOG.aspx"
+@page "/Taxis/RPT_today_reqs.aspx"
+@page "/Taxis/RPT_JIA_pickups.aspx"
+@page "/Private_Hire/Request_taxi.aspx"
+@page "/Private_Hire/Request_taxi_1.aspx"
+@page "/Private_Hire/Request_taxi_2.aspx"
+@page "/Private_Hire/Request_taxi_22.aspx"
+@page "/Private_Hire/Request_taxi_3.aspx"
+@page "/Private_Hire/Request_taxi_33.aspx"
+@page "/Private_Hire/Request_GG_taxi.aspx"
+@page "/Private_Hire/Sub_contractor.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_11.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_2.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_22.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_3.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_33.aspx"
+@page "/Private_Hire/Edit_taxi_req.aspx"
+@page "/Private_Hire/Edit_Taxi_req_priv_1.aspx"
+@page "/Private_Hire/Edit_Taxi_req_priv_2.aspx"
+@page "/Private_Hire/GGVIP/Edit_GGVIP_1.aspx"
+@page "/Private_Hire/GGVIP/Edit_GGVIP_2.aspx"
+@page "/Private_Hire/Change_provider.aspx"
+@page "/Private_Hire/Change_provider_2.aspx"
+@page "/Private_Hire/Cancel.aspx"
+@page "/Private_Hire/Cancel_2.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_reprint.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_reprint_1.aspx"
+@page "/Private_Hire/GGVIP/Request_GGVIP_reprint_2.aspx"
+@page "/Private_Hire/Request_GGVIP_reprint_2.aspx"
+@page "/Private_Hire/Request_contractor_reprint.aspx"
+@page "/Private_Hire/RPT_today_reqs.aspx"
 @rendermode InteractiveServer
 @using FIS.Web.Services
+@inject NavigationManager Navigation
 @inject TaxiApiService TaxiService
 @inject IJSRuntime JS
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
@@ -600,17 +655,19 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _isEnter = Mode == "enter";
-        _isEnterPrevBas = Mode == "enter-prev-bas";
-        _isEdit = Mode == "edit";
-        _isEditPrevBas = Mode == "edit-prev-bas";
-        _isCancel = Mode == "cancel";
-        _isReprint = Mode == "reprint";
-        _isPending = Mode == "pending";
-        _isPendingJia = Mode == "pending-jia";
+        var mode = ResolveMode();
+
+        _isEnter = mode == "enter";
+        _isEnterPrevBas = mode == "enter-prev-bas";
+        _isEdit = mode == "edit";
+        _isEditPrevBas = mode == "edit-prev-bas";
+        _isCancel = mode == "cancel";
+        _isReprint = mode == "reprint";
+        _isPending = mode == "pending";
+        _isPendingJia = mode == "pending-jia";
         _showPrevBasBanner = _isEnterPrevBas || _isEditPrevBas;
 
-        _pageTitle = Mode switch
+        _pageTitle = mode switch
         {
             "enter" => "Enter Taxi Requisition",
             "enter-prev-bas" => "Enter Taxi Requisition using Previous Fin Years BAS Codes",
@@ -623,7 +680,7 @@
             _ => "Taxi Requisition"
         };
 
-        _pageDescription = Mode switch
+        _pageDescription = mode switch
         {
             "pending" => "Pending Chauffeur Driven Requests",
             "pending-jia" => "Pending JIA Pick-ups",
@@ -636,6 +693,75 @@
         {
             await LoadTaxiRequestsAsync();
         }
+    }
+
+    private string ResolveMode()
+    {
+        var normalized = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            return normalized;
+        }
+
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "private_hire/request_taxi.aspx" => "enter",
+            "private_hire/request_taxi_1.aspx" => "enter",
+            "private_hire/request_taxi_2.aspx" => "enter",
+            "private_hire/request_taxi_22.aspx" => "enter",
+            "private_hire/request_taxi_3.aspx" => "enter",
+            "private_hire/request_taxi_33.aspx" => "enter",
+            "private_hire/request_gg_taxi.aspx" => "enter",
+            "private_hire/sub_contractor.aspx" => "enter",
+            "private_hire/ggvip/request_ggvip.aspx" => "enter",
+            "private_hire/ggvip/request_ggvip_11.aspx" => "enter",
+            "private_hire/ggvip/request_ggvip_2.aspx" => "enter",
+            "private_hire/ggvip/request_ggvip_22.aspx" => "enter",
+            "private_hire/ggvip/request_ggvip_3.aspx" => "enter",
+            "private_hire/ggvip/request_ggvip_33.aspx" => "enter",
+            "private_hire/edit_taxi_req.aspx" => "edit",
+            "private_hire/edit_taxi_req_priv_1.aspx" => "edit",
+            "private_hire/edit_taxi_req_priv_2.aspx" => "edit",
+            "private_hire/ggvip/edit_ggvip_1.aspx" => "edit",
+            "private_hire/ggvip/edit_ggvip_2.aspx" => "edit",
+            "private_hire/change_provider.aspx" => "edit",
+            "private_hire/change_provider_2.aspx" => "edit",
+            "private_hire/cancel.aspx" => "cancel",
+            "private_hire/cancel_2.aspx" => "cancel",
+            "private_hire/ggvip/request_ggvip_reprint.aspx" => "reprint",
+            "private_hire/ggvip/request_ggvip_reprint_1.aspx" => "reprint",
+            "private_hire/ggvip/request_ggvip_reprint_2.aspx" => "reprint",
+            "private_hire/request_ggvip_reprint_2.aspx" => "reprint",
+            "private_hire/request_contractor_reprint.aspx" => "reprint",
+            "private_hire/rpt_today_reqs.aspx" => "pending",
+            "taxis/request_ggvip_11[2].aspx" => "enter",
+            "taxis/request_ggvip_22[2].aspx" => "enter",
+            "taxis/request_ggvip_33[2].aspx" => "enter",
+            "taxis/request_ggvip_usingprevfinyearsbascodes.aspx" => "enter-prev-bas",
+            "taxis/request_ggvip_r.aspx" => "enter",
+            "taxis/request_ggvip_recurring.aspx" => "enter",
+            "taxis/return_booking.aspx" => "enter",
+            "taxis/question.aspx" => "enter",
+            "taxis/edit_ggvip_1[1].aspx" => "edit",
+            "taxis/edit_ggvip_2[1].aspx" => "edit",
+            "taxis/edit_ggvip_usingprevfinyearsbascodes.aspx" => "edit-prev-bas",
+            "taxis/cancel.aspx" => "cancel",
+            "taxis/cancel_2.aspx" => "cancel",
+            "taxis/request_ggvip_reprint_1_2.aspx" => "reprint",
+            "taxis/request_ggvip_reprint_2_2.aspx" => "reprint",
+            "taxis/request_ggvip_reprint_2_2_edit.aspx" => "reprint",
+            "taxis/request_ggvip_reprint_2_2_edit_jia.aspx" => "reprint",
+            "taxis/request_ggvip_reprint_2_2._edit.aspx" => "reprint",
+            "taxis/request_ggvip_reprint_2_2._edit_jia.aspx" => "reprint",
+            "taxis/request_ggvip_reprint_log.aspx" => "reprint",
+            "taxis/report_request_ggvip_reprint_1_2.aspx" => "reprint",
+            "taxis/report_request_ggvip_reprint_2_2.aspx" => "reprint",
+            "taxis/report_request_ggvip_reprint_log.aspx" => "reprint",
+            "taxis/rpt_today_reqs.aspx" => "pending",
+            "taxis/rpt_jia_pickups.aspx" => "pending-jia",
+            _ => string.Empty
+        };
     }
 
     private async Task LoadTaxiRequestsAsync()

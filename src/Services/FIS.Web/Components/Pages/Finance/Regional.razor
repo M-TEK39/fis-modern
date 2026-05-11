@@ -1,12 +1,19 @@
 @page "/finance/regional/{Action?}"
+@page "/Finance/FinanceRegionMenu.aspx"
+@page "/Finance/FinanceRegionAssetMenu.aspx"
+@page "/Finance/GetTotalCostReportsDateRangeProvince.aspx"
+@page "/Finance/GetTotalCostReportsDateRange.aspx"
+@page "/Finance/AssetVehicleReports.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using System.Text.Json
 @using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -253,6 +260,11 @@
         _provinces = await FinanceService.GetProvincesAsync();
     }
 
+    protected override void OnParametersSet()
+    {
+        Action = ResolveLegacyAction();
+    }
+
     private async Task OnDepartmentChangedAsync()
     {
         _sites = await FinanceService.GetSitesAsync(_selectedDepartment);
@@ -452,4 +464,50 @@
         "assets-site" => "Asset List: Vehicles in FIS",
         _ => "Regional Module: Finance"
     };
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.Trim('/').ToLowerInvariant();
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (path == "finance/financeregionmenu.aspx")
+        {
+            return "menu";
+        }
+
+        if (path == "finance/financeregionassetmenu.aspx")
+        {
+            return "assets";
+        }
+
+        if (path == "finance/assetvehiclereports.aspx")
+        {
+            return "assets";
+        }
+
+        if (path == "finance/gettotalcostreportsdaterangeprovince.aspx")
+        {
+            return "summary-per-province";
+        }
+
+        if (path == "finance/gettotalcostreportsdaterange.aspx")
+        {
+            return "summary-all";
+        }
+
+        if (path == "openreport_4.aspx" && query.TryGetValue("Report", out var report))
+        {
+            var value = report.ToString().Trim().ToLowerInvariant();
+            return value == "summaryreportperprovince" ? "summary-per-province" : "summary-all";
+        }
+
+        return "menu";
+    }
 }

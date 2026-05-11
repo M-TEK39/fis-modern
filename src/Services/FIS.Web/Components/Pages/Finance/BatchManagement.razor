@@ -1,10 +1,15 @@
 @page "/finance/batch-management"
 @page "/finance/batch-management/{Action?}"
+@page "/Finance/BatchManagement.aspx"
+@page "/Finance/StartAndEndBatch.aspx"
+@page "/Finance/RollbackBatch.aspx"
+@page "/Finance/CheckSCOA.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
 @inject FinanceApiService FinanceService
+@inject NavigationManager Navigation
 
 <PageTitle>Batch Management</PageTitle>
 
@@ -79,6 +84,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        Action = ResolveLegacyAction();
         _batchStatus = await FinanceService.GetBatchStatusAsync();
 
         if (string.IsNullOrWhiteSpace(Action))
@@ -104,5 +110,23 @@
         _statusError = !result.Success;
         _statusMessage = result.Message;
         _batchStatus = await FinanceService.GetBatchStatusAsync();
+    }
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "finance/startandendbatch.aspx" => "start",
+            "finance/checkscoa.aspx" => "check-scoa",
+            "finance/rollbackbatch.aspx" => "rollback",
+            _ => string.Empty
+        };
     }
 }

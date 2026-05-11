@@ -1,12 +1,15 @@
 @page "/finance/missing-kilometres/{Action?}"
+@page "/FISReports/SelectSearchParameters_Dept_Prov_DateRange.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using System.Text.Json
 @using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -172,6 +175,11 @@
         _departments = await FinanceService.GetDepartmentsAsync();
         _provinces = await FinanceService.GetProvincesAsync();
         _financialYears = await FinanceService.GetFinancialYearsAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        Action = ResolveLegacyAction();
     }
 
     private async Task RunActionAsync()
@@ -379,4 +387,34 @@
     };
 
     private string SectionTitle => PageTitleText;
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.Trim('/').ToLowerInvariant();
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        static string Read(IDictionary<string, Microsoft.Extensions.Primitives.StringValues> values, string key)
+            => values.TryGetValue(key, out var result) ? result.ToString() : string.Empty;
+
+        var item = Read(query, "Item").Trim().ToLowerInvariant();
+        var outputFormat = Read(query, "OutputFormat").Trim().ToLowerInvariant();
+        var action = Read(query, "action").Trim().ToLowerInvariant();
+
+        return path switch
+        {
+            "fisreports/selectsearchparameters_dept_prov_daterange.aspx" when item == "comparebilledkilosandfuelconsumption" => "fuel-consumption",
+            "finance/selectsearchparameters.aspx" when item == "vehicleswithnokilosconsumingfuel" => "no-kilos-consuming-fuel",
+            "finance/selectfinancialyear.aspx" when action == "closekilogaps" => "close-gaps",
+            "finance/selectfinancialyear.aspx" when item == "kilogaps" && outputFormat == "xls" => "kilo-gaps-xls",
+            "finance/selectfinancialyear.aspx" when item == "kilogaps" => "kilo-gaps-pdf",
+            _ => "fuel-consumption"
+        };
+    }
 }

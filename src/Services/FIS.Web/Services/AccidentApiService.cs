@@ -197,6 +197,53 @@ public class AccidentApiService
             return new AccidentStatisticsDto();
         }
     }
+
+    public async Task<List<Dictionary<string, string>>> GetDuplicateAccidentReportAsync(string garage)
+    {
+        try
+        {
+            AddAuthHeader();
+            var response = await _httpClient.GetAsync($"api/accidents/reports/duplicates?garage={Uri.EscapeDataString(garage ?? "all")}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<Dictionary<string, string>>>() ?? new List<Dictionary<string, string>>();
+        }
+        catch
+        {
+            return new List<Dictionary<string, string>>();
+        }
+    }
+
+    public async Task<List<Dictionary<string, string>>> GetPeriodStatusReportAsync(string departmentNumber, DateTime startDate, DateTime endDate, string status)
+    {
+        try
+        {
+            AddAuthHeader();
+            var query =
+                $"api/accidents/reports/period-status?departmentNumber={Uri.EscapeDataString(departmentNumber ?? string.Empty)}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}&status={Uri.EscapeDataString(status ?? "open")}";
+            var response = await _httpClient.GetAsync(query);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<Dictionary<string, string>>>() ?? new List<Dictionary<string, string>>();
+        }
+        catch
+        {
+            return new List<Dictionary<string, string>>();
+        }
+    }
+
+    public async Task<List<Dictionary<string, string>>> GetNewAccidentsReportAsync(string mode)
+    {
+        try
+        {
+            AddAuthHeader();
+            var response = await _httpClient.GetAsync($"api/accidents/reports/new-accidents?mode={Uri.EscapeDataString(mode ?? "all")}");
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<List<Dictionary<string, string>>>() ?? new List<Dictionary<string, string>>();
+        }
+        catch
+        {
+            return new List<Dictionary<string, string>>();
+        }
+    }
 }
 
 // DTOs for Accident operations (AccidentDto is in Models namespace)

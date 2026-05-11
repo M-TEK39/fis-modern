@@ -1,11 +1,14 @@
 @page "/finance/interface/{Action?}"
+@page "/Finance/SelectBatchDate.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using Microsoft.JSInterop
 @inject FinanceApiService FinanceService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 
 <PageTitle>@PageTitleText</PageTitle>
 
@@ -68,6 +71,11 @@
         _batchDates = await FinanceService.GetBatchDatesAsync();
     }
 
+    protected override void OnParametersSet()
+    {
+        Action = ResolveLegacyAction();
+    }
+
     private async Task SubmitAsync()
     {
         _submitting = true;
@@ -109,4 +117,27 @@
     };
 
     private string SectionTitle => PageTitleText;
+
+    private string ResolveLegacyAction()
+    {
+        var normalizedAction = (Action ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalizedAction))
+        {
+            return normalizedAction;
+        }
+
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var path = uri.AbsolutePath.Trim('/').ToLowerInvariant();
+        if (path != "finance/selectbatchdate.aspx")
+        {
+            return "pastel-csv";
+        }
+
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        var followPage = query.TryGetValue("FollowPage", out var follow) ? follow.ToString().Trim().ToLowerInvariant() : string.Empty;
+
+        return followPage.Contains("item=exportpastelcsvwithclient", StringComparison.OrdinalIgnoreCase)
+            ? "pastel-csv-customer"
+            : "pastel-csv";
+    }
 }

@@ -221,6 +221,7 @@ public class FisDbContext : DbContext
     public DbSet<Approver> Approvers { get; set; } = null!;
     public DbSet<UserMessage> UserMessages { get; set; } = null!;
     public DbSet<UserStatusHistory> UserStatusHistories { get; set; } = null!;
+    public DbSet<SessionToken> SessionTokens { get; set; } = null!;
 
     // System Entities
     public DbSet<TSLog> TSLogs { get; set; } = null!;
@@ -305,6 +306,13 @@ public class FisDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<SessionToken>(entity =>
+        {
+            entity.HasKey(e => e.token_id);
+            entity.HasIndex(e => e.session_id).HasDatabaseName("IX_fis_session_tokens_session_id");
+            entity.HasIndex(e => e.expires_at).HasDatabaseName("IX_fis_session_tokens_expires_at");
+        });
 
         modelBuilder.Entity<Vehicle>(entity =>
         {

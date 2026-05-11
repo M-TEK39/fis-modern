@@ -1,9 +1,56 @@
 @page "/reference-data"
+@page "/Validation/MNT_department.aspx"
+@page "/Validation/MNT_Department_Add.aspx"
+@page "/Validation/MNT_Department_Edit.aspx"
+@page "/Validation/MNT_DepartmentEdit.aspx"
+@page "/Validation/MNT_Department_Update.aspx"
+@page "/Validation/MNT_Department_Del.aspx"
+@page "/Validation/MNT_Department_Del_Check.aspx"
+@page "/Validation/MNT_make.aspx"
+@page "/Validation/MNT_Make_Add.aspx"
+@page "/Validation/MNT_Make_Edit.aspx"
+@page "/Validation/MNT_Make_Update.aspx"
+@page "/Validation/MNT_Make_Del.aspx"
+@page "/Validation/MNT_Make_Del_Check.aspx"
+@page "/Validation/MNT_model.aspx"
+@page "/Validation/MNT_Model_Add.aspx"
+@page "/Validation/MNT_Model_Edit.aspx"
+@page "/Validation/MNT_Model_Update.aspx"
+@page "/Validation/MNT_Model_Del.aspx"
+@page "/Validation/MNT_Model_Del_Check.aspx"
+@page "/Validation/MNT_Site.aspx"
+@page "/Validation/MNT_SiteAdd.aspx"
+@page "/Validation/MNT_Site_Edit.aspx"
+@page "/Validation/MNT_Site_Update.aspx"
+@page "/Validation/MNT_Site_Del.aspx"
+@page "/Validation/MNT_Site_Del_Check.aspx"
+@page "/Validation/MNT_Class.aspx"
+@page "/Validation/MNT_Class_Add.aspx"
+@page "/Validation/MNT_Class_Edit.aspx"
+@page "/Validation/MNT_Class_Update.aspx"
+@page "/Validation/MNT_Class_Del.aspx"
+@page "/Validation/MNT_Class_Del_Check.aspx"
+@page "/Validation/MNT_Licence_Fees.aspx"
+@page "/Validation/MNT_Licence_Fee_Add.aspx"
+@page "/Validation/MNT_Licence_Fee_Edit.aspx"
+@page "/Validation/MNT_Licence_Fee_Update.aspx"
+@page "/Validation/MNT_DriversLicence.aspx"
+@page "/Validation/MNT_Driverslicence_Add.aspx"
+@page "/Validation/MNT_DriversLicence_Edit.aspx"
+@page "/Validation/MNT_DriverLicence_Update.aspx"
+@page "/Validation/MNT_extras.aspx"
+@page "/Validation/MNT_Loss_Type.aspx"
+@page "/Validation/MNT_Loss_Type_Add.aspx"
+@page "/Validation/MNT_Loss_Type_Edit.aspx"
+@page "/Validation/MNT_Loss_Type_Update.aspx"
+@page "/Validation/MNT_Loss_Type_Del.aspx"
+@page "/Validation/MNT_Loss_Type_Del_Check.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using FIS.Web.Components.Pages.ReferenceData
+@inject NavigationManager Navigation
 @inject ReferenceDataApiService RefDataService
 @inject DepartmentApiService DepartmentService
 
@@ -178,12 +225,10 @@
 
     protected override void OnParametersSet()
     {
-        if (string.IsNullOrWhiteSpace(Tab))
-        {
-            return;
-        }
+        var requested = string.IsNullOrWhiteSpace(Tab)
+            ? ResolveLegacyTabFromPath()
+            : Tab.Trim().ToLowerInvariant();
 
-        var requested = Tab.Trim().ToLowerInvariant();
         var allowed = new HashSet<string>
         {
             "makes", "types", "fueltypes", "classes", "units", "licenses", "models",
@@ -194,6 +239,61 @@
         {
             _activeTab = requested;
         }
+    }
+
+    private string ResolveLegacyTabFromPath()
+    {
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "validation/mnt_department.aspx" => "departments",
+            "validation/mnt_department_add.aspx" => "departments",
+            "validation/mnt_department_edit.aspx" => "departments",
+            "validation/mnt_departmentedit.aspx" => "departments",
+            "validation/mnt_department_update.aspx" => "departments",
+            "validation/mnt_department_del.aspx" => "departments",
+            "validation/mnt_department_del_check.aspx" => "departments",
+            "validation/mnt_make.aspx" => "makes",
+            "validation/mnt_make_add.aspx" => "makes",
+            "validation/mnt_make_edit.aspx" => "makes",
+            "validation/mnt_make_update.aspx" => "makes",
+            "validation/mnt_make_del.aspx" => "makes",
+            "validation/mnt_make_del_check.aspx" => "makes",
+            "validation/mnt_model.aspx" => "models",
+            "validation/mnt_model_add.aspx" => "models",
+            "validation/mnt_model_edit.aspx" => "models",
+            "validation/mnt_model_update.aspx" => "models",
+            "validation/mnt_model_del.aspx" => "models",
+            "validation/mnt_model_del_check.aspx" => "models",
+            "validation/mnt_site.aspx" => "sites",
+            "validation/mnt_siteadd.aspx" => "sites",
+            "validation/mnt_site_edit.aspx" => "sites",
+            "validation/mnt_site_update.aspx" => "sites",
+            "validation/mnt_site_del.aspx" => "sites",
+            "validation/mnt_site_del_check.aspx" => "sites",
+            "validation/mnt_class.aspx" => "classes",
+            "validation/mnt_class_add.aspx" => "classes",
+            "validation/mnt_class_edit.aspx" => "classes",
+            "validation/mnt_class_update.aspx" => "classes",
+            "validation/mnt_class_del.aspx" => "classes",
+            "validation/mnt_class_del_check.aspx" => "classes",
+            "validation/mnt_licence_fees.aspx" => "licensefees",
+            "validation/mnt_licence_fee_add.aspx" => "licensefees",
+            "validation/mnt_licence_fee_edit.aspx" => "licensefees",
+            "validation/mnt_licence_fee_update.aspx" => "licensefees",
+            "validation/mnt_driverslicence.aspx" => "driverlicenses",
+            "validation/mnt_driverslicence_add.aspx" => "driverlicenses",
+            "validation/mnt_driverslicence_edit.aspx" => "driverlicenses",
+            "validation/mnt_driverlicence_update.aspx" => "driverlicenses",
+            "validation/mnt_extras.aspx" => "extras",
+            "validation/mnt_loss_type.aspx" => "losstypes",
+            "validation/mnt_loss_type_add.aspx" => "losstypes",
+            "validation/mnt_loss_type_edit.aspx" => "losstypes",
+            "validation/mnt_loss_type_update.aspx" => "losstypes",
+            "validation/mnt_loss_type_del.aspx" => "losstypes",
+            "validation/mnt_loss_type_del_check.aspx" => "losstypes",
+            _ => string.Empty
+        };
     }
 
     private void SetActiveTab(string tab)

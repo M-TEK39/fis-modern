@@ -1,9 +1,15 @@
 @page "/private-hire/maintenance"
+@page "/Private_Hire/MNT_Add_PHV_pass.aspx"
+@page "/Private_Hire/MNT_Edit_PHV_pass.aspx"
+@page "/Private_Hire/MNT_del_phv_pass.aspx"
+@page "/Private_Hire/Add_PHV_contractor.aspx"
+@page "/Private_Hire/MNT_Edit_PHV_Contractor.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Services
 @using FIS.Web.Models
 @inject PrivateHireApiService PrivateHireService
+@inject NavigationManager Navigation
 
 <PageTitle>Private Hire Maintenance - Fleet Information System</PageTitle>
 
@@ -667,6 +673,18 @@
 
     protected override void OnParametersSet()
     {
+        var legacyTarget = ResolveLegacyTargetFromPath();
+        if (legacyTarget is not null)
+        {
+            _activeTab = legacyTarget.Value.Tab;
+            if (!string.IsNullOrWhiteSpace(legacyTarget.Value.Mode))
+            {
+                _vehicleMode = legacyTarget.Value.Mode;
+            }
+
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(Tab))
         {
             return;
@@ -692,6 +710,21 @@
                 _activeTab = "reports";
                 break;
         }
+    }
+
+    private (string Tab, string? Mode)? ResolveLegacyTargetFromPath()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+
+        return path switch
+        {
+            "private_hire/mnt_add_phv_pass.aspx" => ("vehicles", "add"),
+            "private_hire/mnt_edit_phv_pass.aspx" => ("vehicles", "edit"),
+            "private_hire/mnt_del_phv_pass.aspx" => ("vehicles", "delete"),
+            "private_hire/add_phv_contractor.aspx" => ("contractors", "add"),
+            "private_hire/mnt_edit_phv_contractor.aspx" => ("contractors", "edit"),
+            _ => null
+        };
     }
 
     private void SetActiveTab(string tab)

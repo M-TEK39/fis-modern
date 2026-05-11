@@ -1,4 +1,35 @@
 @page "/taxis/reports/{Mode}"
+@page "/Taxis/RPT_one_num_taxi_main.aspx"
+@page "/Taxis/RPT_one_num_taxi_report.aspx"
+@page "/Taxis/RPT_TaxiCountLogsPerUser.aspx"
+@page "/Taxis/RPT_Requests1.aspx"
+@page "/Taxis/RPT_reqno_taxi_main.aspx"
+@page "/Taxis/RPT_reqno_taxi_report.aspx"
+@page "/Taxis/RPT_My_reqs.aspx"
+@page "/Taxis/RPT_My_reqs2.aspx"
+@page "/Taxis/RPT_My_reqs3.aspx"
+@page "/Taxis/RPT_taxis_per_company1.aspx"
+@page "/Taxis/RPT_taxis_per_company1(a).aspx"
+@page "/Taxis/RPT_taxis_per_company1_c.aspx"
+@page "/Taxis/RPT_taxis_per_company2.aspx"
+@page "/Taxis/RPT_taxis_per_company2(a).aspx"
+@page "/Taxis/RPT_taxis_per_company2_c.aspx"
+@page "/Taxis/RPT_list_of_taxis_per_department.aspx"
+@page "/Taxis/RPT_list_of_taxis_inservice_per_department.aspx"
+@page "/Taxis/RPT_General_1.aspx"
+@page "/Taxis/No_log.aspx"
+@page "/Taxis/Taxi_Fin_reports.aspx"
+@page "/Private_Hire/RPT_General_1.aspx"
+@page "/Private_Hire/No_log.aspx"
+@page "/Private_Hire/RPT_cancel.aspx"
+@page "/Private_Hire/Invoice/RPT_Invoices_1.aspx"
+@page "/Private_Hire/Invoice/RPT_Invoices_2.aspx"
+@page "/Private_Hire/Invoice/RPT_Invoice_1.aspx"
+@page "/Private_Hire/GGVIP/Invoice/RPT_Invoices_1.aspx"
+@page "/Private_Hire/GGVIP/Invoice/RPT_Invoices_2.aspx"
+@page "/Private_Hire/GGVIP/Invoice/RPT_Invoice_1.aspx"
+@page "/Private_Hire/Invoiced_logs_A.aspx"
+@page "/Private_Hire/Invoiced_logs.aspx"
 @rendermode InteractiveServer
 @using FIS.Web.Services
 @using Microsoft.AspNetCore.WebUtilities
@@ -606,15 +637,17 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _isOneTaxiNumber = Mode == "one-taxi-number";
-        _isLogsPerUser = Mode == "logs-per-user";
-        _isOldRequisitions = Mode == "old-requisitions";
-        _isTaxisPerCompany = Mode == "taxis-per-company";
-        _isTaxisPerDepartment = Mode == "taxis-per-department";
-        _isTaxisInServicePerDepartment = Mode == "taxis-inservice-per-department";
-        _isLogsRequisitionsStatus = Mode == "logs-requisitions-status";
+        var mode = ResolveMode();
 
-        _pageTitle = Mode switch
+        _isOneTaxiNumber = mode == "one-taxi-number";
+        _isLogsPerUser = mode == "logs-per-user";
+        _isOldRequisitions = mode == "old-requisitions";
+        _isTaxisPerCompany = mode == "taxis-per-company";
+        _isTaxisPerDepartment = mode == "taxis-per-department";
+        _isTaxisInServicePerDepartment = mode == "taxis-inservice-per-department";
+        _isLogsRequisitionsStatus = mode == "logs-requisitions-status";
+
+        _pageTitle = mode switch
         {
             "one-taxi-number" => "Report On One Taxi Number",
             "logs-per-user" => "Number Of Taxi Logs Captured Per User For Date",
@@ -626,7 +659,7 @@
             _ => "Taxi Reports"
         };
 
-        _pageDescription = Mode switch
+        _pageDescription = mode switch
         {
             "one-taxi-number" => "Search by taxi registration number.",
             "logs-per-user" => "Taxi requisitions and logs captured by user.",
@@ -644,10 +677,68 @@
         ApplyInitialModeData();
     }
 
+    private string ResolveMode()
+    {
+        var normalized = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            return normalized;
+        }
+
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "private_hire/rpt_general_1.aspx" => "old-requisitions",
+            "private_hire/no_log.aspx" => "logs-requisitions-status",
+            "private_hire/rpt_cancel.aspx" => "logs-requisitions-status",
+            "private_hire/invoice/rpt_invoices_1.aspx" => "logs-requisitions-status",
+            "private_hire/invoice/rpt_invoices_2.aspx" => "logs-requisitions-status",
+            "private_hire/invoice/rpt_invoice_1.aspx" => "logs-requisitions-status",
+            "private_hire/ggvip/invoice/rpt_invoices_1.aspx" => "logs-requisitions-status",
+            "private_hire/ggvip/invoice/rpt_invoices_2.aspx" => "logs-requisitions-status",
+            "private_hire/ggvip/invoice/rpt_invoice_1.aspx" => "logs-requisitions-status",
+            "private_hire/invoiced_logs_a.aspx" => "logs-requisitions-status",
+            "private_hire/invoiced_logs.aspx" => "logs-requisitions-status",
+            "taxis/rpt_one_num_taxi_main.aspx" => "one-taxi-number",
+            "taxis/rpt_one_num_taxi_report.aspx" => "one-taxi-number",
+            "taxis/rpt_taxicountlogsperuser.aspx" => "logs-per-user",
+            "taxis/rpt_requests1.aspx" => "old-requisitions",
+            "taxis/rpt_reqno_taxi_main.aspx" => "old-requisitions",
+            "taxis/rpt_reqno_taxi_report.aspx" => "old-requisitions",
+            "taxis/rpt_my_reqs.aspx" => "old-requisitions",
+            "taxis/rpt_my_reqs2.aspx" => "old-requisitions",
+            "taxis/rpt_my_reqs3.aspx" => "old-requisitions",
+            "taxis/rpt_taxis_per_company1.aspx" => "taxis-per-company",
+            "taxis/rpt_taxis_per_company1(a).aspx" => "taxis-per-company",
+            "taxis/rpt_taxis_per_company1_c.aspx" => "taxis-per-company",
+            "taxis/rpt_taxis_per_company2.aspx" => "taxis-per-company",
+            "taxis/rpt_taxis_per_company2(a).aspx" => "taxis-per-company",
+            "taxis/rpt_taxis_per_company2_c.aspx" => "taxis-per-company",
+            "taxis/rpt_list_of_taxis_per_department.aspx" => "taxis-per-department",
+            "taxis/rpt_list_of_taxis_inservice_per_department.aspx" => "taxis-inservice-per-department",
+            "taxis/rpt_general_1.aspx" => "old-requisitions",
+            "taxis/no_log.aspx" => "logs-requisitions-status",
+            "taxis/taxi_fin_reports.aspx" => "logs-requisitions-status",
+            _ => string.Empty
+        };
+    }
+
     private string GetStatusReportTitle()
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
+        var legacyType = ResolveLegacyStatusType();
+        if (!string.IsNullOrWhiteSpace(legacyType))
+        {
+            return legacyType switch
+            {
+                "outstanding" => "Outstanding Taxi Logs vs Captured Requisitions",
+                "cancelled" => "Cancelled Requisitions",
+                "invoiced" => "Requisitions Captured With Logs Closed Off",
+                _ => "Report"
+            };
+        }
+
         if (query.TryGetValue("type", out var typeValue))
         {
             return typeValue.ToString() switch
@@ -834,12 +925,38 @@
     {
         var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
         var query = QueryHelpers.ParseQuery(uri.Query);
+        var legacyType = ResolveLegacyStatusType();
+        if (!string.IsNullOrWhiteSpace(legacyType))
+        {
+            return legacyType;
+        }
+
         if (query.TryGetValue("type", out var typeValue))
         {
             return typeValue.ToString().Trim().ToLowerInvariant();
         }
 
         return "all";
+    }
+
+    private string ResolveLegacyStatusType()
+    {
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "private_hire/no_log.aspx" => "outstanding",
+            "private_hire/rpt_cancel.aspx" => "cancelled",
+            "private_hire/invoice/rpt_invoices_1.aspx" => "invoiced",
+            "private_hire/invoice/rpt_invoices_2.aspx" => "invoiced",
+            "private_hire/invoice/rpt_invoice_1.aspx" => "invoiced",
+            "private_hire/ggvip/invoice/rpt_invoices_1.aspx" => "invoiced",
+            "private_hire/ggvip/invoice/rpt_invoices_2.aspx" => "invoiced",
+            "private_hire/ggvip/invoice/rpt_invoice_1.aspx" => "invoiced",
+            "private_hire/invoiced_logs_a.aspx" => "invoiced",
+            "private_hire/invoiced_logs.aspx" => "invoiced",
+            "taxis/no_log.aspx" => "outstanding",
+            _ => string.Empty
+        };
     }
 
     private static string GetDerivedStatus(TaxiRequestDto request)

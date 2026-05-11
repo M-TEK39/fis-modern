@@ -1,7 +1,30 @@
 @page "/accidents/reports/{Mode}"
+@page "/Accident/RPT_one_num_main_accident.htm"
+@page "/Accident/RPT_one_prnum_main_accident.htm"
+@page "/Accident/RPT_one_prnumc_main_accident.htm"
+@page "/Accident/RPT_all_main_Accident.htm"
+@page "/Accident/RPT_allgar_main_Accident.htm"
+@page "/Accident/RPT_flagnew_main_Accident.htm"
+@page "/Accident/RPT_flagnew_report_Accident.aspx"
+@page "/Accident/RPT_Dept_period_main_Accident.aspx"
+@page "/Accident/RPT_Dept_period_main_Accident.htm"
+@page "/Accident/RPT_Dept_periodVIP_main_Accident.aspx"
+@page "/Accident/RPT_Dept_month_main_Accident.htm"
+@page "/Accident/RPT_Dept_finyear_main_Accident.htm"
+@page "/Accident/RPT_Dept_finyear_cost_main_Accident.aspx"
+@page "/Accident/RPT_letter_outstanddoc_main_Accident.aspx"
+@page "/Accident/RPT_letter_inspection_main_Accident.aspx"
+@page "/Accident/RPT_categories_Accident.aspx"
+@page "/Accident/RPT_lastggref_Accident.aspx"
+@page "/Accident/RPT_period_report1.aspx"
+@page "/Accident/RPT_period_report2.aspx"
+@page "/Accident/RPT_accident_driver_main.aspx"
+@page "/Accident/RPT_F_dup_main_Accident.htm"
+@page "/Accident/RPT_F_dup_report_Accident.aspx"
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
+@inject NavigationManager Navigation
 @inject AccidentApiService AccidentService
 @inject SiteApiService SiteService
 @inject VehicleLookupApiService VehicleLookupService
@@ -26,7 +49,7 @@
 <div class="page-content">
     <div class="form-card">
         <div class="form-card-body">
-            @if (Mode == "one-vehicle")
+            @if (CurrentMode == "one-vehicle")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Search Parameters</h2>
@@ -101,7 +124,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "private-vehicle" || Mode == "private-vehicle-capture-desc")
+            else if (CurrentMode == "private-vehicle" || CurrentMode == "private-vehicle-capture-desc")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Search Parameters</h2>
@@ -154,7 +177,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "all-detail")
+            else if (CurrentMode == "all-detail")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Accident Date Range</h2>
@@ -237,7 +260,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "all-garage-detail")
+            else if (CurrentMode == "all-garage-detail")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Garage</h2>
@@ -329,32 +352,32 @@
                     </div>
                 </div>
             }
-            else if (Mode == "new-accidents")
+            else if (CurrentMode == "new-accidents")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Report On</h2>
                     <div class="form-grid">
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="newAccidents" checked />
+                                <input type="radio" name="newAccidents" checked="@(_newAccidentReportMode == "call")" @onchange='() => _newAccidentReportMode = "call"' />
                                 New Accident's Reported by Call Centre
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="newAccidents" />
+                                <input type="radio" name="newAccidents" checked="@(_newAccidentReportMode == "garage")" @onchange='() => _newAccidentReportMode = "garage"' />
                                 New Accident's Reported to HQ, by Garage
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="newAccidents" />
+                                <input type="radio" name="newAccidents" checked="@(_newAccidentReportMode == "confirm")" @onchange='() => _newAccidentReportMode = "confirm"' />
                                 Conformation of receipt by HQ
                             </label>
                         </div>
                         <div class="form-field">
                             <label class="form-label">
-                                <input type="radio" name="newAccidents" />
+                                <input type="radio" name="newAccidents" checked="@(_newAccidentReportMode == "all")" @onchange='() => _newAccidentReportMode = "all"' />
                                 Both
                             </label>
                         </div>
@@ -378,47 +401,49 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr>
-                                        <td>GPA-0003</td>
-                                        <td>GG78321</td>
-                                        <td>JHB</td>
-                                        <td>2024/03/05</td>
-                                        <td>11:10</td>
-                                        <td>Soweto</td>
-                                        <td>2023/24</td>
-                                        <td>2024/03/06</td>
-                                        <td>No</td>
-                                        <td>2024/03/06</td>
-                                        <td>Hit and run</td>
-                                        <td>TA-233</td>
-                                        <td>K. Naidoo</td>
-                                        <td>9009097009083</td>
-                                        <td>SITE-03</td>
-                                        <td>R. Kgatla</td>
-                                        <td>011-555-6677</td>
-                                        <td>HQ-5011</td>
-                                        <td>GG-7001</td>
-                                        <td>CASE-990</td>
-                                        <td>18000</td>
-                                        <td>Rear bumper</td>
-                                        <td>No</td>
-                                        <td>No</td>
-                                        <td>0</td>
-                                        <td>TP-3009</td>
-                                        <td>Unknown</td>
-                                        <td>0</td>
-                                        <td>2024/04/02</td>
-                                        <td>Pending police report</td>
-                                    </tr>
-                                    @foreach (var report in PagedRecentReports)
+                                    @if (_customReportRows.Count == 0)
                                     {
                                         <tr>
-                                            <td>@report.ReportType</td>
-                                            <td>@report.Name</td>
-                                            <td></td>
-                                            <td>@FormatDate(report.GeneratedDate)</td>
-                                            <td colspan="14"></td>
+                                            <td colspan="@NewAccidentsColumns.Length">No report rows returned for the selected mode.</td>
                                         </tr>
+                                    }
+                                    else
+                                    {
+                                        @foreach (var row in _customReportRows)
+                                        {
+                                            <tr>
+                                                <td>@GetReportValue(row, "registration_number")</td>
+                                                <td>@GetReportValue(row, "fleet_number")</td>
+                                                <td>@GetReportValue(row, "garage")</td>
+                                                <td>@GetReportValue(row, "occurence_date")</td>
+                                                <td>@GetReportValue(row, "occurence_time")</td>
+                                                <td>@GetReportValue(row, "occurence_place")</td>
+                                                <td>@GetReportValue(row, "fin_year")</td>
+                                                <td>@GetReportValue(row, "date_updated")</td>
+                                                <td>@GetReportValue(row, "flag_gg_hq")</td>
+                                                <td>@GetReportValue(row, "flag_gg_hq_date")</td>
+                                                <td>@GetReportValue(row, "description")</td>
+                                                <td>@GetReportValue(row, "trip_author")</td>
+                                                <td>@GetReportValue(row, "driver_name")</td>
+                                                <td>@GetReportValue(row, "driver_employ_number")</td>
+                                                <td>@GetReportValue(row, "department_number")</td>
+                                                <td>@GetReportValue(row, "transoffic_name")</td>
+                                                <td>@GetReportValue(row, "transoffic_tel")</td>
+                                                <td>@GetReportValue(row, "hq_reference")</td>
+                                                <td>@GetReportValue(row, "gg_reference")</td>
+                                                <td>@GetReportValue(row, "case_number")</td>
+                                                <td>@GetReportValue(row, "cost_of_repair")</td>
+                                                <td>@GetReportValue(row, "damage_description")</td>
+                                                <td>@GetReportValue(row, "driver_fault")</td>
+                                                <td>@GetReportValue(row, "death")</td>
+                                                <td>@GetReportValue(row, "injured")</td>
+                                                <td>@GetReportValue(row, "third_party_regno")</td>
+                                                <td>@GetReportValue(row, "third_party_owner")</td>
+                                                <td>@GetReportValue(row, "third_party_claim")</td>
+                                                <td>@GetReportValue(row, "file_close_date")</td>
+                                                <td>@GetReportValue(row, "notes")</td>
+                                            </tr>
+                                        }
                                     }
                                 </tbody>
                             </table>
@@ -426,7 +451,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "department-period")
+            else if (CurrentMode == "department-period")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Department/Site Period</h2>
@@ -525,7 +550,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "site-period-vip")
+            else if (CurrentMode == "site-period-vip")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Site Period (VIP/GG/Hire Type)</h2>
@@ -631,7 +656,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "department-month")
+            else if (CurrentMode == "department-month")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Department/Site Month/Year</h2>
@@ -749,7 +774,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "department-finyear")
+            else if (CurrentMode == "department-finyear")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Department/Site Financial Year</h2>
@@ -833,7 +858,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "accident-costs-finyear")
+            else if (CurrentMode == "accident-costs-finyear")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Accident Costs Financial Year</h2>
@@ -885,7 +910,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "letter-outstanding-docs" || Mode == "letter-inspection")
+            else if (CurrentMode == "letter-outstanding-docs" || CurrentMode == "letter-inspection")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Vehicle Search</h2>
@@ -946,7 +971,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "categories")
+            else if (CurrentMode == "categories")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Accident Categories</h2>
@@ -975,7 +1000,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "last-gg-reference")
+            else if (CurrentMode == "last-gg-reference")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Last GG Reference Numbers</h2>
@@ -1006,7 +1031,7 @@
                     </div>
                 </div>
             }
-            else if (Mode == "weekly-quarterly-yearly")
+            else if (CurrentMode == "weekly-quarterly-yearly")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Accident Period Report</h2>
@@ -1095,7 +1120,157 @@
                     </div>
                 </div>
             }
-            else if (Mode == "driver-report")
+            else if (CurrentMode == "period-open-close")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Accident Report For A Period</h2>
+                    <div class="form-grid">
+                        <div class="form-field">
+                            <label class="form-label">Department/Site Code (optional)</label>
+                            <input class="form-input" @bind="_periodDepartmentNumber" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">Begin Date</label>
+                            <input type="date" class="form-input" @bind="_periodBeginDate" />
+                        </div>
+                        <div class="form-field">
+                            <label class="form-label">End Date</label>
+                            <input type="date" class="form-input" @bind="_periodEndDate" />
+                        </div>
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="periodStatus" checked="@(_periodStatus == "open")" @onchange='() => _periodStatus = "open"' />
+                                    Open Accidents
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="periodStatus" checked="@(_periodStatus == "close")" @onchange='() => _periodStatus = "close"' />
+                                    Closed Accidents
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                @if (_customReportRows.Count > 0)
+                {
+                    <div class="form-section">
+                        <h2 class="form-section-title">Period Report Output</h2>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Reg Number</th>
+                                            <th>GG Number</th>
+                                            <th>Accident Date</th>
+                                            <th>Dept/Site Code</th>
+                                            <th>Dept/Site</th>
+                                            <th>Hire Type</th>
+                                            <th>Accident Description</th>
+                                            <th>Driver</th>
+                                            <th>Transport Officer</th>
+                                            <th>Call Refer</th>
+                                            <th>GG Car Damage</th>
+                                            <th>File Close Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _customReportRows)
+                                        {
+                                            <tr>
+                                                <td>@GetReportValue(row, "registration_number")</td>
+                                                <td>@GetReportValue(row, "fleet_number")</td>
+                                                <td>@GetReportValue(row, "occurence_date")</td>
+                                                <td>@GetReportValue(row, "department_number")</td>
+                                                <td>@GetReportValue(row, "site_description")</td>
+                                                <td>@GetReportValue(row, "hire_type")</td>
+                                                <td>@GetReportValue(row, "accident_type_description")</td>
+                                                <td>@GetReportValue(row, "driver_name")</td>
+                                                <td>@GetReportValue(row, "transoffic_name")</td>
+                                                <td>@GetReportValue(row, "call_refer")</td>
+                                                <td>@GetReportValue(row, "cost_of_repair")</td>
+                                                <td>@GetReportValue(row, "file_close_date")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else if (CurrentMode == "duplicate-accidents")
+            {
+                <div class="form-section">
+                    <h2 class="form-section-title">Duplicate Accidents</h2>
+                    <div class="form-grid">
+                        <div class="form-field form-group-full">
+                            <div class="contract-search-radio">
+                                <label class="form-radio-label">
+                                    <input type="radio" name="dupGarage" checked="@(_duplicateGarage == "jhb")" @onchange='() => _duplicateGarage = "jhb"' />
+                                    JHB
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="dupGarage" checked="@(_duplicateGarage == "pta")" @onchange='() => _duplicateGarage = "pta"' />
+                                    PTA
+                                </label>
+                                <label class="form-radio-label">
+                                    <input type="radio" name="dupGarage" checked="@(_duplicateGarage == "all")" @onchange='() => _duplicateGarage = "all"' />
+                                    ALL
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
+                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
+                    </div>
+                </div>
+                @if (_customReportRows.Count > 0)
+                {
+                    <div class="form-section">
+                        <h2 class="form-section-title">Duplicate Accidents Output</h2>
+                        <div class="table-container">
+                            <div class="table-wrapper">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>GG Number</th>
+                                            <th>Reg Number</th>
+                                            <th>Accident Date</th>
+                                            <th>Accident Time</th>
+                                            <th>Accident Place</th>
+                                            <th>Driver</th>
+                                            <th>Case Number</th>
+                                            <th>Cost of Repair</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var row in _customReportRows)
+                                        {
+                                            <tr>
+                                                <td>@GetReportValue(row, "fleet_number")</td>
+                                                <td>@GetReportValue(row, "registration_number")</td>
+                                                <td>@GetReportValue(row, "occurence_date")</td>
+                                                <td>@GetReportValue(row, "occurence_time")</td>
+                                                <td>@GetReportValue(row, "occurence_place")</td>
+                                                <td>@GetReportValue(row, "driver_name")</td>
+                                                <td>@GetReportValue(row, "case_number")</td>
+                                                <td>@GetReportValue(row, "cost_of_repair")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else if (CurrentMode == "driver-report")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Driver Search</h2>
@@ -1190,6 +1365,13 @@
     private short? _departmentMonthSiteCode;
     private short? _departmentFinYearSiteCode;
     private short? _weeklyPeriodSiteCode;
+    private string _newAccidentReportMode = "call";
+    private string _duplicateGarage = "all";
+    private string _periodStatus = "open";
+    private string _periodDepartmentNumber = string.Empty;
+    private DateTime _periodBeginDate = DateTime.Today.AddMonths(-1);
+    private DateTime _periodEndDate = DateTime.Today;
+    private List<Dictionary<string, string>> _customReportRows = new();
     private int _page = 1;
     private const int _pageSize = 12;
     private IEnumerable<ReportDto> PagedRecentReports => _recentReports.Skip((_page - 1) * _pageSize).Take(_pageSize);
@@ -1203,11 +1385,24 @@
 
     private async Task LoadReports()
     {
-        if (Mode == "one-vehicle")
+        _customReportRows = new();
+        if (CurrentMode == "one-vehicle")
         {
             await SearchOneVehicleAsync();
         }
-        else if (Mode == "letter-outstanding-docs" || Mode == "letter-inspection")
+        else if (CurrentMode == "duplicate-accidents")
+        {
+            _customReportRows = await AccidentService.GetDuplicateAccidentReportAsync(_duplicateGarage);
+        }
+        else if (CurrentMode == "new-accidents")
+        {
+            _customReportRows = await AccidentService.GetNewAccidentsReportAsync(_newAccidentReportMode);
+        }
+        else if (CurrentMode == "period-open-close")
+        {
+            _customReportRows = await AccidentService.GetPeriodStatusReportAsync(_periodDepartmentNumber, _periodBeginDate, _periodEndDate, _periodStatus);
+        }
+        else if (CurrentMode == "letter-outstanding-docs" || CurrentMode == "letter-inspection")
         {
             var keyword = _letterVehicleSearchTerm.Trim();
             if (!string.IsNullOrWhiteSpace(keyword))
@@ -1337,11 +1532,13 @@
     [Parameter]
     public string? Mode { get; set; }
 
+    private string CurrentMode => ResolveMode();
+
     private string _pageTitle = "Accident Report";
 
     protected override void OnParametersSet()
     {
-        _pageTitle = Mode switch
+        _pageTitle = CurrentMode switch
         {
             "one-vehicle" => "One Vehicle Accidents",
             "private-vehicle" => "Private Vehicle Accidents",
@@ -1359,10 +1556,52 @@
             "categories" => "List of Accident Categories",
             "last-gg-reference" => "Last GG Reference Number Used",
             "weekly-quarterly-yearly" => "Weekly, Quarterly And Yearly Report - Opened And Closed Accidents",
+            "period-open-close" => "Accident Report For A Period",
+            "duplicate-accidents" => "Report on ALL Duplicate Accidents",
             "driver-report" => "Report By Driver Name Or ID Number",
             _ => "Accident Report"
         };
     }
+
+    private string ResolveMode()
+    {
+        var normalized = (Mode ?? string.Empty).Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(normalized))
+        {
+            return normalized;
+        }
+
+        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
+        return path switch
+        {
+            "accident/rpt_one_num_main_accident.htm" => "one-vehicle",
+            "accident/rpt_one_prnum_main_accident.htm" => "private-vehicle",
+            "accident/rpt_one_prnumc_main_accident.htm" => "private-vehicle-capture-desc",
+            "accident/rpt_all_main_accident.htm" => "all-detail",
+            "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
+            "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
+            "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
+            "accident/rpt_dept_period_main_accident.aspx" => "department-period",
+            "accident/rpt_dept_period_main_accident.htm" => "department-period",
+            "accident/rpt_dept_periodvip_main_accident.aspx" => "site-period-vip",
+            "accident/rpt_dept_month_main_accident.htm" => "department-month",
+            "accident/rpt_dept_finyear_main_accident.htm" => "department-finyear",
+            "accident/rpt_dept_finyear_cost_main_accident.aspx" => "accident-costs-finyear",
+            "accident/rpt_letter_outstanddoc_main_accident.aspx" => "letter-outstanding-docs",
+            "accident/rpt_letter_inspection_main_accident.aspx" => "letter-inspection",
+            "accident/rpt_categories_accident.aspx" => "categories",
+            "accident/rpt_lastggref_accident.aspx" => "last-gg-reference",
+            "accident/rpt_period_report1.aspx" => "weekly-quarterly-yearly",
+            "accident/rpt_period_report2.aspx" => "period-open-close",
+            "accident/rpt_accident_driver_main.aspx" => "driver-report",
+            "accident/rpt_f_dup_main_accident.htm" => "duplicate-accidents",
+            "accident/rpt_f_dup_report_accident.aspx" => "duplicate-accidents",
+            _ => string.Empty
+        };
+    }
+
+    private static string GetReportValue(Dictionary<string, string> row, string key)
+        => row.TryGetValue(key, out var value) ? value : string.Empty;
 
     private static readonly string[] OneVehicleFields =
     {
