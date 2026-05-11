@@ -57,6 +57,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ConnectionStrings__Default=Server=mssql,1433;Database=${MSSQL_DB_NAME:-legacy};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=True;TrustServerCertificate=True;
+      - Cors__Origins__0=http://localhost:5001
+      - Cors__Origins__1=http://${SERVER_IP:-localhost}:5001
     ports:
       - "5000:8080"
     depends_on:
@@ -84,7 +86,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ApiSettings__BaseUrl=http://fis-api:8080
-      - ApiSettings__WebBaseUrl=http://localhost:8080
+      - ApiSettings__WebBaseUrl=http://${SERVER_IP:-localhost}:5001
     ports:
       - "5001:8080"
     depends_on:
