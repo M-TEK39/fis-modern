@@ -24,7 +24,7 @@ RUN dotnet restore src/Services/FIS.Api/FIS.Api.csproj
 COPY src/ src/
 
 # Build and publish
-RUN dotnet publish src/Services/FIS.Api/FIS.Api.csproj -c Release --no-restore -o /app/publish
+RUN dotnet publish src/Services/FIS.Api/FIS.Api.csproj -c Release -o /app/publish
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
