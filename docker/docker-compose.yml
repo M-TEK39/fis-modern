@@ -86,7 +86,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - ApiSettings__BaseUrl=http://fis-api:8080
-      - ApiSettings__WebBaseUrl=http://${SERVER_IP:-localhost}:5001
+      - ApiSettings__WebBaseUrl=http://localhost:8080
     ports:
       - "5001:8080"
     depends_on:
