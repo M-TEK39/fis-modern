@@ -75,7 +75,9 @@ builder.Services.AddSession(options =>
     options.Cookie.HttpOnly = true;
     options.Cookie.IsEssential = true; // Required for GDPR compliance
     options.Cookie.Name = ".FIS.Session";
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    // SameAsRequest: cookie is Secure-only when served over HTTPS, plain when served over HTTP.
+    // Once nginx terminates TLS, X-Forwarded-Proto + UseForwardedHeaders make this Secure automatically.
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
@@ -96,20 +98,23 @@ builder.Services.ConfigureHttpClientDefaults(http =>
     http.AddHttpMessageHandler<SessionCookieAuthHandler>();
 });
 
-// Register TokenService (scoped to user circuit)
+// Register TokenService (scoped to user circuit) — used for refresh-token rotation, NOT auth state
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<SidebarStateService>();
 
-// Register JWT AuthenticationStateProvider for Blazor Server
-builder.Services.AddScoped<JwtAuthenticationStateProvider>();
-
-// Register DualAuthStateProvider as both itself AND as AuthenticationStateProvider
-builder.Services.AddScoped<DualAuthStateProvider>();
-builder.Services.AddScoped<AuthenticationStateProvider>(sp => 
-    sp.GetRequiredService<DualAuthStateProvider>());
-
 var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"] ?? "http://localhost:5010";
 var apiBaseUri = new Uri($"{apiBaseUrl.TrimEnd('/')}/");
+
+// Session-based authentication state provider — single source of truth.
+// Calls /api/auth/validate to get the full claim set (including access_level + role claims).
+builder.Services.AddHttpClient(nameof(SessionAuthenticationStateProvider), client =>
+{
+    client.BaseAddress = apiBaseUri;
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddScoped<SessionAuthenticationStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
+    sp.GetRequiredService<SessionAuthenticationStateProvider>());
 
 // Register API services
 builder.Services.AddHttpClient<VehicleApiService>(client =>

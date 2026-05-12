@@ -16,7 +16,7 @@ public class AuthApiService
     private readonly AuthSessionTokenCache _sessionTokenCache;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IJSRuntime _jsRuntime;
-    private readonly DualAuthStateProvider _authStateProvider;
+    private readonly SessionAuthenticationStateProvider _authStateProvider;
     private readonly UserAccessContextService _userAccessContextService;
     private readonly ILogger<AuthApiService> _logger;
 
@@ -26,7 +26,7 @@ public class AuthApiService
         AuthSessionTokenCache sessionTokenCache,
         IHttpContextAccessor httpContextAccessor,
         IJSRuntime jsRuntime,
-        DualAuthStateProvider authStateProvider,
+        SessionAuthenticationStateProvider authStateProvider,
         UserAccessContextService userAccessContextService,
         ILogger<AuthApiService> logger)
     {

@@ -133,7 +133,18 @@ public class AuthController : ControllerBase
             // else: no usable timestamp on the credential row — treat as "not expired" rather than force-expire legacy users
         }
 
-        var authClaims = BuildAuthClaims(user.user_access_code, user.email ?? request.Username, passwordExpired);
+        var accessLevel = await _context.UserAccessOlds
+            .AsNoTracking()
+            .Where(a => a.user_access_code == user.user_access_code)
+            .Select(a => (long?)a.AccessLevel)
+            .FirstOrDefaultAsync() ?? 0L;
+
+        var grantedRoles = LegacyRoleMap.RolesForAccessLevel(accessLevel).ToArray();
+        _logger.LogInformation(
+            "Login: user_access_code={UserAccessCode} access_level={AccessLevel} roles={Roles}",
+            user.user_access_code, accessLevel, string.Join(",", grantedRoles));
+
+        var authClaims = BuildAuthClaims(user.user_access_code, user.email ?? request.Username, accessLevel, passwordExpired);
         var tokens = _sessionTokenStore.IssueTokens(authClaims);
 
         WriteAuthCookies(tokens.AccessToken, tokens.AccessExpiresAt, tokens.RefreshToken, tokens.RefreshExpiresAt);
@@ -225,18 +236,15 @@ public class AuthController : ControllerBase
     [Authorize]
     public ActionResult<object> ValidateToken()
     {
-        var userAccessCode = User.FindFirst("user_access_code")?.Value;
-        var email = User.FindFirst(ClaimTypes.Email)?.Value;
-        var expiryClaim = User.FindFirst(ClaimTypes.Expiration)?.Value;
-        var expiresAt = DateTimeOffset.TryParse(expiryClaim, out var parsedExpiry) ? parsedExpiry.UtcDateTime : (DateTime?)null;
+        var claims = User.Claims
+            .Select(c => new { type = c.Type, value = c.Value })
+            .ToArray();
 
         return Ok(new
         {
             valid = true,
-            userAccessCode,
-            email,
-            expiresAt,
-            authType = User.Identity?.AuthenticationType
+            authType = User.Identity?.AuthenticationType,
+            claims
         });
     }
 
@@ -1037,15 +1045,73 @@ public class AuthController : ControllerBase
 
     private static readonly string RefreshTokenCookieName = "FIS_Refresh_Token";
 
-    private static List<Claim> BuildAuthClaims(int userAccessCode, string email, bool passwordExpired = false)
+    private static List<Claim> BuildAuthClaims(int userAccessCode, string email, long accessLevel = 0, bool passwordExpired = false)
     {
-        return
-        [
+        var claims = new List<Claim>
+        {
             new Claim("user_access_code", userAccessCode.ToString()),
             new Claim(ClaimTypes.Email, email),
             new Claim(ClaimTypes.Name, email),
-            new Claim("password_change_required", passwordExpired.ToString().ToLowerInvariant())
+            new Claim("password_change_required", passwordExpired.ToString().ToLowerInvariant()),
+            new Claim("access_level", accessLevel.ToString())
+        };
+
+        // Derive named legacy role claims from the bitmask so pages using IsInRole() work
+        foreach (var role in LegacyRoleMap.RolesForAccessLevel(accessLevel))
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role));
+        }
+
+        return claims;
+    }
+
+    // Permission bits (must mirror FIS.Web.Services.LegacyPermissionBits)
+    private const long BitVehicleManagement = 1;
+    private const long BitContractManagement = 2;
+    private const long BitUserAdministration = 4;
+    private const long BitReports = 8;
+    private const long BitFinancial = 16;
+    private const long BitWorkshop = 32;
+
+    private static class LegacyRoleMap
+    {
+        // role name (as checked by pages) -> required permission bit
+        private static readonly (string Role, long Bit)[] Map =
+        [
+            ("Vehicle Master",          BitVehicleManagement),
+            ("Asset Verification",      BitVehicleManagement),
+            ("Accidents",               BitVehicleManagement),
+            ("Call Centre",             BitVehicleManagement),
+            ("Fines",                   BitVehicleManagement),
+            ("Licence",                 BitVehicleManagement),
+            ("Losses",                  BitVehicleManagement),
+            ("Tracking",                BitVehicleManagement),
+            ("Towing",                  BitVehicleManagement),
+            ("Trip Authorities",        BitVehicleManagement),
+            ("Private Hire Vehicles",   BitVehicleManagement),
+            ("Taxis",                   BitVehicleManagement),
+            ("Clearance",               BitVehicleManagement),
+            ("Contracts",               BitContractManagement),
+            ("User Administration",     BitUserAdministration),
+            ("Reports",                 BitReports),
+            ("Management Reports",      BitReports),
+            ("Logbooks",                BitReports),
+            ("Logsheets",               BitReports),
+            ("Monitor",                 BitReports),
+            ("Fuelcards",               BitFinancial),
+            ("Auction",                 BitFinancial),
+            ("Financial Data (All Departments)", BitFinancial),
+            ("Financial Data (Own Department)",  BitFinancial),
+            ("Financial Reports",       BitFinancial),
+            ("Workshop",                BitWorkshop),
+            ("Trouble Shooting",        BitWorkshop),
         ];
+
+        public static IEnumerable<string> RolesForAccessLevel(long accessLevel)
+        {
+            if (accessLevel <= 0) return Array.Empty<string>();
+            return Map.Where(m => (accessLevel & m.Bit) == m.Bit).Select(m => m.Role);
+        }
     }
 
     private void WriteAuthCookies(
