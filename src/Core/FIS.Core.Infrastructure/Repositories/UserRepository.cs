@@ -24,7 +24,6 @@ public class UserRepository : IUserRepository
     public async Task<User?> GetByIdAsync(int userAccessCode)
     {
         return await _context.Users
-                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
     }
 
@@ -37,7 +36,6 @@ public class UserRepository : IUserRepository
             return null;
 
         return await _context.Users
-                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(u => u.email == email);
     }
 
@@ -50,7 +48,6 @@ public class UserRepository : IUserRepository
             return null;
 
         return await _context.Users
-                .Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(u => u.tel_no == telephone);
     }
 
@@ -60,7 +57,6 @@ public class UserRepository : IUserRepository
     public async Task<IEnumerable<User>> GetAllUsersAsync()
     {
         return await _context.Users
-                .Where(x => !x.is_deleted)
             .OrderBy(u => u.user_access_code)
             .ToListAsync();
     }
@@ -73,11 +69,7 @@ public class UserRepository : IUserRepository
         if (user == null)
             throw new ArgumentNullException(nameof(user));
 
-        // Auto-populate audit fields
-            user.date_created = DateTime.UtcNow;
-            user.is_deleted = false;
-            
-            _context.Users.Add(user);
+        _context.Users.Add(user);
         await _context.SaveChangesAsync();
         return user;
     }
@@ -106,9 +98,7 @@ public class UserRepository : IUserRepository
         var user = await GetByIdAsync(userAccessCode);
         if (user != null)
         {
-            // Soft delete instead of hard delete
-                user.is_deleted = true;
-                user.date_updated = DateTime.UtcNow;
+            _context.Users.Remove(user);
             await _context.SaveChangesAsync();
         }
     }

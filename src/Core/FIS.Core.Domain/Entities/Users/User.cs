@@ -21,26 +21,4 @@ public class User
     [Column("email")]
     public string? email { get; set; }
 
-    // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    [Column("date_created")]
-    public DateTime date_created { get; set; }
-
-    [Column("date_updated")]
-    public DateTime? date_updated { get; set; }
-
-    [Column("created_by_user_code")]
-    public int? created_by_user_code { get; set; }
-
-    [Column("modified_by_user_code")]
-    public int? modified_by_user_code { get; set; }
-
-    [Column("is_deleted")]
-    public bool is_deleted { get; set; } = false;
-
-    // Navigation properties for audit trail
-    [ForeignKey("created_by_user_code")]
-    public virtual User? CreatedByUser { get; set; }
-
-    [ForeignKey("modified_by_user_code")]
-    public virtual User? ModifiedByUser { get; set; }
 }

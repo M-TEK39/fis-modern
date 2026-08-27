@@ -23,7 +23,7 @@ public class UserProfileRepository : IUserProfileRepository
     public async Task<UserAccessOld?> GetByIdAsync(short userAccessCode)
     {
         return await _context.UserAccessOlds
-            .Where(u => !u.is_deleted && u.user_active)
+            .Where(u => u.user_active)
             .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
     }
 
@@ -36,7 +36,7 @@ public class UserProfileRepository : IUserProfileRepository
             return null;
 
         return await _context.UserAccessOlds
-            .Where(u => !u.is_deleted && u.user_active)
+            .Where(u => u.user_active)
             .FirstOrDefaultAsync(u => u.FirstName != null &&
                                      u.FirstName.ToLower() == firstName.ToLower().Trim());
     }
@@ -50,7 +50,7 @@ public class UserProfileRepository : IUserProfileRepository
             return null;
 
         return await _context.UserAccessOlds
-            .Where(u => !u.is_deleted && u.user_active)
+            .Where(u => u.user_active)
             .FirstOrDefaultAsync(u => u.E_Mail != null &&
                                      u.E_Mail.ToLower() == email.ToLower().Trim());
     }
@@ -61,7 +61,7 @@ public class UserProfileRepository : IUserProfileRepository
     public async Task<IEnumerable<UserAccessOld>> GetAllActiveAsync()
     {
         return await _context.UserAccessOlds
-            .Where(u => !u.is_deleted && u.user_active)
+            .Where(u => u.user_active)
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
@@ -73,7 +73,7 @@ public class UserProfileRepository : IUserProfileRepository
     public async Task<IEnumerable<UserAccessOld>> GetBySiteAsync(short siteCode)
     {
         return await _context.UserAccessOlds
-            .Where(u => !u.is_deleted && u.user_active && u.Site_code == siteCode)
+            .Where(u => u.user_active && u.Site_code == siteCode)
             .OrderBy(u => u.FirstName)
             .ThenBy(u => u.LastName)
             .ToListAsync();
@@ -90,7 +90,7 @@ public class UserProfileRepository : IUserProfileRepository
         var term = searchTerm.ToLower().Trim();
 
         return await _context.UserAccessOlds
-            .Where(u => !u.is_deleted && u.user_active &&
+            .Where(u => u.user_active &&
                        ((u.FirstName != null && u.FirstName.ToLower().Contains(term)) ||
                         (u.LastName != null && u.LastName.ToLower().Contains(term)) ||
                         (u.E_Mail != null && u.E_Mail.ToLower().Contains(term)) ||
@@ -106,8 +106,6 @@ public class UserProfileRepository : IUserProfileRepository
     public async Task<UserAccessOld> CreateAsync(UserAccessOld userProfile, int currentUserId)
     {
         userProfile.date_created = DateTime.Now;
-        userProfile.created_by_user_code = currentUserId;
-        userProfile.is_deleted = false;
         userProfile.user_active = true;
 
         _context.UserAccessOlds.Add(userProfile);
@@ -127,12 +125,10 @@ public class UserProfileRepository : IUserProfileRepository
             throw new KeyNotFoundException($"User profile with code {userProfile.user_access_code} not found");
 
         existing.date_updated = DateTime.Now;
-        existing.modified_by_user_code = currentUserId;
 
         // Use CurrentValues.SetValues for tracking-safe updates
         _context.Entry(existing).CurrentValues.SetValues(userProfile);
         _context.Entry(existing).Property(x => x.date_created).IsModified = false;
-        _context.Entry(existing).Property(x => x.created_by_user_code).IsModified = false;
 
         await _context.SaveChangesAsync();
     }
@@ -148,10 +144,8 @@ public class UserProfileRepository : IUserProfileRepository
         if (userProfile == null)
             throw new KeyNotFoundException($"User profile with code {userAccessCode} not found");
 
-        userProfile.is_deleted = true;
         userProfile.user_active = false;
         userProfile.date_updated = DateTime.Now;
-        userProfile.modified_by_user_code = currentUserId;
 
         await _context.SaveChangesAsync();
     }

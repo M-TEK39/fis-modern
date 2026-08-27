@@ -10,8 +10,10 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
     container_name: fis-api
+    env_file:
+      - ../.env
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
       - TZ=Africa/Johannesburg
       - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
@@ -39,7 +41,7 @@ services:
       dockerfile: docker/Dockerfile.web
     container_name: fis-web
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
       - ASPNETCORE_URLS=http://+:8080
       - TZ=Africa/Johannesburg
       - ApiSettings__BaseUrl=http://fis-api:8080

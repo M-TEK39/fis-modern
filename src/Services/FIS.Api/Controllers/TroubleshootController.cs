@@ -46,7 +46,7 @@ public class TroubleshootController : BaseApiController
     {
         var users = await _context.UserAccessOlds
             .AsNoTracking()
-            .Where(x => !x.is_deleted)
+            .Where(x => x.user_active)
             .OrderBy(x => x.name)
             .Take(500)
             .Select(x => new TroubleshootUserDto
@@ -67,7 +67,7 @@ public class TroubleshootController : BaseApiController
     {
         var users = await _context.UserAccessOlds
             .AsNoTracking()
-            .Where(x => !x.is_deleted)
+            .Where(x => x.user_active)
             .Join(
                 _context.Sites.AsNoTracking(),
                 u => u.Site_code,

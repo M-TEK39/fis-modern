@@ -115,26 +115,13 @@ public class UserAccessOld
     [Column("Cellphone_Number")]
     public int? Cellphone_Number { get; set; }
 
-    // Global audit fields (some overlap with legacy columns)
+    // Legacy timestamp fields
     [Column("date_created")]
-    public DateTime date_created { get; set; }
+    public DateTime? date_created { get; set; }
 
     [Column("date_updated")]
     public DateTime? date_updated { get; set; }
 
-    [Column("created_by_user_code")]
-    public int? created_by_user_code { get; set; }
-
-    [Column("modified_by_user_code")]
-    public int? modified_by_user_code { get; set; }
-
-    [Column("is_deleted")]
-    public bool is_deleted { get; set; } = false;
-
-    // Navigation properties
-    [ForeignKey("created_by_user_code")]
-    public virtual User? CreatedByUser { get; set; }
-
-    [ForeignKey("modified_by_user_code")]
-    public virtual User? ModifiedByUser { get; set; }
+    [Column("approver_code_at_gfleet")]
+    public int? approver_code_at_gfleet { get; set; }
 }
