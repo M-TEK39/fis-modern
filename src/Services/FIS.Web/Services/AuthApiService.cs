@@ -116,13 +116,13 @@ public class AuthApiService
 
     public async Task<UserAdminResponse> ForgotPasswordStartAsync(ForgotPasswordStartRequest request)
     {
-        var response = await PostAsJsonWithAuthRetryAsync("api/auth/forgot-password/start", request);
+        var response = await _httpClient.PostAsJsonAsync("api/auth/forgot-password/start", request);
         return await HandleUserAdminResponse(response);
     }
 
     public async Task<UserAdminResponse> ForgotPasswordConfirmAsync(ForgotPasswordConfirmRequest request)
     {
-        var response = await PostAsJsonWithAuthRetryAsync("api/auth/forgot-password/confirm", request);
+        var response = await _httpClient.PostAsJsonAsync("api/auth/forgot-password/confirm", request);
         return await HandleUserAdminResponse(response);
     }
 
@@ -244,7 +244,7 @@ public class AuthApiService
             // Fall back to status text if payload isn't JSON.
         }
 
-        return $"Login failed ({(int)response.StatusCode}).";
+        return $"Request failed ({(int)response.StatusCode}).";
     }
 }
 

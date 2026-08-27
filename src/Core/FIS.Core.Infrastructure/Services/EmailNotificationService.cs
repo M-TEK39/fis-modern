@@ -1,10 +1,12 @@
-using System.Net;
-using System.Net.Mail;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
+using Azure.Core;
+using Azure.Identity;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 
 namespace FIS.Core.Infrastructure.Services;
@@ -12,7 +14,7 @@ namespace FIS.Core.Infrastructure.Services;
 /// <summary>
 /// Email notification service implementation for Fleet Information System
 /// Provides modern replacement for legacy email functionality
-/// Uses SMTP client with modern configuration and error handling
+/// Uses Microsoft Graph with Entra ID app-only authentication and error handling
 /// </summary>
 public class EmailNotificationService : IEmailNotificationService
 {
@@ -24,14 +26,17 @@ public class EmailNotificationService : IEmailNotificationService
     private readonly IMaintenanceRecordRepository _maintenanceRepository;
     private readonly IUserRepository _userRepository;
     private readonly ISiteRepository _siteRepository;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     // Email configuration settings
-    private readonly string _smtpServer;
-    private readonly int _smtpPort;
-    private readonly bool _useSSL;
-    private readonly string _username;
-    private readonly string _password;
-    private readonly string _fromAddress;
+    private readonly string _provider;
+    private readonly string _graphAuthentication;
+    private readonly string _graphTenantId;
+    private readonly string _graphClientId;
+    private readonly string _graphManagedIdentityClientId;
+    private readonly string _graphSenderUserPrincipalName;
+    private readonly string _graphEndpoint;
+    private readonly TokenCredential? _graphCredential;
     private readonly string _fromName;
     private readonly bool _isConfigured;
 
@@ -290,7 +295,8 @@ public class EmailNotificationService : IEmailNotificationService
         IContractRepository contractRepository,
         IMaintenanceRecordRepository maintenanceRepository,
         IUserRepository userRepository,
-        ISiteRepository siteRepository
+        ISiteRepository siteRepository,
+        IHttpClientFactory httpClientFactory
     )
     {
         _configuration = configuration;
@@ -301,26 +307,46 @@ public class EmailNotificationService : IEmailNotificationService
         _maintenanceRepository = maintenanceRepository;
         _userRepository = userRepository;
         _siteRepository = siteRepository;
+        _httpClientFactory = httpClientFactory;
 
         // Load email configuration
         var emailConfig = _configuration.GetSection("EmailSettings");
-        _smtpServer = emailConfig["SmtpServer"] ?? string.Empty;
-        _smtpPort = int.Parse(emailConfig["SmtpPort"] ?? "587");
-        _useSSL = bool.Parse(emailConfig["UseSSL"] ?? "true");
-        _username = emailConfig["Username"] ?? string.Empty;
-        _password = emailConfig["Password"] ?? string.Empty;
-        _fromAddress = emailConfig["FromAddress"] ?? string.Empty;
+        _provider = (emailConfig["Provider"] ?? "MicrosoftGraph").Trim().ToLowerInvariant();
+        _graphAuthentication = (emailConfig["GraphAuthentication"] ?? "managed-identity")
+            .Trim()
+            .ToLowerInvariant();
+        _graphTenantId = emailConfig["GraphTenantId"]?.Trim() ?? string.Empty;
+        _graphClientId = emailConfig["GraphClientId"]?.Trim() ?? string.Empty;
+        _graphManagedIdentityClientId = emailConfig["GraphManagedIdentityClientId"]?.Trim() ?? string.Empty;
+        _graphSenderUserPrincipalName = (
+            emailConfig["GraphSenderUserPrincipalName"]
+            ?? emailConfig["FromAddress"]
+            ?? string.Empty
+        ).Trim();
+        _graphEndpoint = (emailConfig["GraphEndpoint"] ?? "https://graph.microsoft.com/v1.0").TrimEnd('/');
         _fromName = emailConfig["FromName"] ?? "Fleet Management System";
 
+        if (_provider is "microsoftgraph" or "graph")
+        {
+            _graphCredential = CreateGraphCredential(emailConfig);
+        }
+
         _isConfigured =
-            !string.IsNullOrEmpty(_smtpServer)
-            && !string.IsNullOrEmpty(_username)
-            && !string.IsNullOrEmpty(_fromAddress);
+            _provider is "microsoftgraph" or "graph"
+            && _graphCredential is not null
+            && Uri.TryCreate(_graphEndpoint, UriKind.Absolute, out var graphUri)
+            && graphUri.Scheme == Uri.UriSchemeHttps
+            && graphUri.Host.Equals("graph.microsoft.com", StringComparison.OrdinalIgnoreCase)
+            && graphUri.AbsolutePath.TrimEnd('/') == "/v1.0"
+            && string.IsNullOrEmpty(graphUri.Query)
+            && string.IsNullOrEmpty(graphUri.Fragment)
+            && !string.IsNullOrWhiteSpace(_graphSenderUserPrincipalName);
 
         if (!_isConfigured)
         {
             _logger.LogWarning(
-                "Email service is not properly configured. Check EmailSettings in configuration."
+                "Email service is not properly configured for Microsoft Graph. "
+                    + "Check EmailSettings:Provider, GraphAuthentication, sender mailbox, and Entra credentials."
             );
         }
     }
@@ -1420,10 +1446,12 @@ public class EmailNotificationService : IEmailNotificationService
             {
                 IsConfigured = _isConfigured,
                 IsConnected = _isConfigured && string.IsNullOrWhiteSpace(_lastErrorMessage),
-                SmtpServer = _smtpServer,
-                SmtpPort = _smtpPort,
-                UseSSL = _useSSL,
-                FromAddress = _fromAddress,
+                Provider = "MicrosoftGraph",
+                Authentication = _graphAuthentication,
+                SmtpServer = "graph.microsoft.com",
+                SmtpPort = 443,
+                UseSSL = true,
+                FromAddress = _graphSenderUserPrincipalName,
                 FromName = _fromName,
                 LastTestDate = _lastTestDate,
                 LastTestSuccessful = _lastTestSuccessful,
@@ -1461,6 +1489,55 @@ public class EmailNotificationService : IEmailNotificationService
 
     #region Private Helper Methods
 
+    private TokenCredential? CreateGraphCredential(IConfigurationSection emailConfig)
+    {
+        try
+        {
+            return _graphAuthentication switch
+            {
+                "managed-identity" or "managedidentity" or "mi" =>
+                    string.IsNullOrWhiteSpace(_graphManagedIdentityClientId)
+                        ? new ManagedIdentityCredential()
+                        : new ManagedIdentityCredential(_graphManagedIdentityClientId),
+                "client-secret" or "clientsecret" =>
+                    CreateClientSecretCredential(emailConfig),
+                _ => LogUnsupportedGraphAuthentication()
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unable to initialize Microsoft Graph authentication provider");
+            return null;
+        }
+    }
+
+    private TokenCredential? CreateClientSecretCredential(IConfigurationSection emailConfig)
+    {
+        var clientSecret = emailConfig["GraphClientSecret"]?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(_graphTenantId)
+            || string.IsNullOrWhiteSpace(_graphClientId)
+            || string.IsNullOrWhiteSpace(clientSecret))
+        {
+            _logger.LogWarning(
+                "Graph client-secret authentication requires GraphTenantId, GraphClientId, and "
+                    + "EmailSettings:GraphClientSecret from a secret store or environment variable."
+            );
+            return null;
+        }
+
+        return new ClientSecretCredential(_graphTenantId, _graphClientId, clientSecret);
+    }
+
+    private TokenCredential? LogUnsupportedGraphAuthentication()
+    {
+        _logger.LogWarning(
+            "Unsupported EmailSettings:GraphAuthentication value {Authentication}. "
+                + "Use managed-identity or client-secret.",
+            _graphAuthentication
+        );
+        return null;
+    }
+
     private async Task<bool> SendEmailInternalAsync(
         List<string> toAddresses,
         string subject,
@@ -1477,44 +1554,77 @@ public class EmailNotificationService : IEmailNotificationService
 
         try
         {
-            using var smtpClient = new SmtpClient(_smtpServer, _smtpPort)
+            var accessToken = await _graphCredential!.GetTokenAsync(
+                new TokenRequestContext(new[] { "https://graph.microsoft.com/.default" }),
+                CancellationToken.None
+            );
+
+            var requestBody = new Dictionary<string, object?>
             {
-                EnableSsl = _useSSL,
-                Credentials = new NetworkCredential(_username, _password),
+                ["message"] = new Dictionary<string, object?>
+                {
+                    ["subject"] = subject,
+                    ["body"] = new Dictionary<string, string>
+                    {
+                        ["contentType"] = isHtml ? "HTML" : "Text",
+                        ["content"] = body
+                    },
+                    ["toRecipients"] = toAddresses
+                        .Where(address => !string.IsNullOrWhiteSpace(address))
+                        .Select(address => new Dictionary<string, object?>
+                        {
+                            ["emailAddress"] = new Dictionary<string, string>
+                            {
+                                ["address"] = address.Trim()
+                            }
+                        })
+                        .ToList(),
+                    ["attachments"] = attachments.Select(attachment => new Dictionary<string, object?>
+                    {
+                        ["@odata.type"] = "#microsoft.graph.fileAttachment",
+                        ["name"] = attachment.FileName,
+                        ["contentType"] = attachment.ContentType,
+                        ["contentBytes"] = Convert.ToBase64String(attachment.Content)
+                    }).ToList()
+                },
+                ["saveToSentItems"] = false
             };
 
-            using var mailMessage = new MailMessage
-            {
-                From = new MailAddress(_fromAddress, _fromName),
-                Subject = subject,
-                Body = body,
-                IsBodyHtml = isHtml,
-            };
+            using var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"{_graphEndpoint}/users/{Uri.EscapeDataString(_graphSenderUserPrincipalName)}/sendMail"
+            );
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+                "Bearer",
+                accessToken.Token
+            );
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json"
+            );
 
-            // Add recipients
-            foreach (var toAddress in toAddresses)
+            using var response = await _httpClientFactory.CreateClient().SendAsync(request);
+            if (!response.IsSuccessStatusCode)
             {
-                mailMessage.To.Add(toAddress);
-            }
-
-            // Add attachments
-            foreach (var attachment in attachments)
-            {
-                var memoryStream = new MemoryStream(attachment.Content);
-                var mailAttachment = new Attachment(
-                    memoryStream,
-                    attachment.FileName,
-                    attachment.ContentType
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var safeDetails = responseBody.Length > 500
+                    ? responseBody[..500]
+                    : responseBody;
+                _lastErrorMessage = $"Microsoft Graph sendMail returned {(int)response.StatusCode}: {safeDetails}";
+                _logger.LogError(
+                    "Microsoft Graph sendMail failed with status {StatusCode}: {Details}",
+                    (int)response.StatusCode,
+                    safeDetails
                 );
-                mailMessage.Attachments.Add(mailAttachment);
+                return false;
             }
 
-            await smtpClient.SendMailAsync(mailMessage);
             RecordSuccessfulSend();
             _lastErrorMessage = null;
 
             _logger.LogInformation(
-                "Email sent successfully to {Recipients}",
+                "Email sent successfully through Microsoft Graph to {Recipients}",
                 string.Join(", ", toAddresses)
             );
             return true;

@@ -234,6 +234,8 @@ public class EmailServiceStatus
 {
     public bool IsConfigured { get; set; }
     public bool IsConnected { get; set; }
+    public string Provider { get; set; } = string.Empty;
+    public string Authentication { get; set; } = string.Empty;
     public string SmtpServer { get; set; } = string.Empty;
     public int SmtpPort { get; set; }
     public bool UseSSL { get; set; }

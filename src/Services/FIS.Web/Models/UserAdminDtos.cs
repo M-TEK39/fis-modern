@@ -18,8 +18,9 @@ public class ForgotPasswordStartRequest
 
 public class ForgotPasswordConfirmRequest
 {
-    public string Username { get; set; } = string.Empty;
-    public string Answer { get; set; } = string.Empty;
+    public string Token { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+    public string ConfirmNewPassword { get; set; } = string.Empty;
 }
 
 public class ActivateUserRequest
@@ -36,8 +37,6 @@ public class UserAdminResponse
 {
     public bool Success { get; set; }
     public string? Message { get; set; }
-    public string? Question { get; set; }
-    public string? NewPassword { get; set; }
 }
 
 public class UserSummaryDto
