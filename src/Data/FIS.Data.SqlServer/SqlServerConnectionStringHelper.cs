@@ -5,7 +5,7 @@ namespace FIS.Data.SqlServer;
 public static class SqlServerConnectionStringHelper
 {
     public const string SafeFallbackConnectionString =
-        "Server=localhost,1433;Database=legacy;Integrated Security=True;TrustServerCertificate=True;";
+        "Server=192.0.2.10,1433;Database=legacy;User Id=YOUR_DB_USER;Password=YOUR_DB_PASSWORD;Encrypt=False;TrustServerCertificate=True;";
 
     public static string Resolve(string? connectionString, bool isDevelopment)
     {

@@ -10,6 +10,8 @@ PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 MSSQL_HOST_PORT="${MSSQL_HOST_PORT:-1433}"
 MSSQL_DB_NAME="${MSSQL_DB_NAME:-legacy}"
 MSSQL_SA_PASSWORD="${MSSQL_SA_PASSWORD:-Behox@1903}"
+DB_HOST="${DB_HOST:-192.0.2.10}"
+DB_PORT="${DB_PORT:-1433}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -66,7 +68,7 @@ Commands:
   restart-db     Restart the database container
   logs-db        Show database container logs
   
-  start-full     Start all services (database, API, web)
+  start-full     Start application services using external SQL Server, API, web
   stop-full      Stop all services
   restart-full   Restart all services
   logs-full      Show logs for all services
@@ -134,7 +136,7 @@ start_full() {
     print_status "Full application started successfully!"
     print_status "API: http://localhost:5000"
     print_status "Web: http://localhost:5001"
-    print_status "Database: localhost:${MSSQL_HOST_PORT}"
+    print_status "Database: ${DB_HOST}:${DB_PORT} (external Windows SQL Server)"
 }
 
 stop_full() {
@@ -235,7 +237,7 @@ reset_all() {
             run_compose -f docker/docker-compose.dev.yml down -v
             
             # Remove volumes
-            docker volume rm -f fis-mssql-data fis-mssql-dev-data 2>/dev/null || true
+            docker volume rm -f fis-mssql-dev-data 2>/dev/null || true
             
             # Rebuild and start
             build_all

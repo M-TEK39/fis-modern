@@ -1,51 +1,8 @@
 version: '3.8'
 
 services:
-  # SQL Server 2019 Database
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: fis-mssql19
-    environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Behox@1903}"
-      MSSQL_PID: "Developer"
-      MSSQL_TCP_PORT: "1433"
-      TZ: "Africa/Johannesburg"
-    ports:
-      - "${MSSQL_HOST_PORT:-1433}:1433"
-    volumes:
-      - fis-mssql-data:/var/opt/mssql
-    restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "(/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\") >/dev/null 2>&1"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    networks:
-      - fis-network
-
-  # Database initialization
-  db-init:
-    image: mcr.microsoft.com/mssql-tools:latest
-    environment:
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Behox@1903}"
-      MSSQL_DB_NAME: "${MSSQL_DB_NAME:-legacy}"
-      MSSQL_APP_LOGIN: "${MSSQL_APP_LOGIN:-legacy}"
-      MSSQL_APP_PASSWORD: "${MSSQL_APP_PASSWORD:-legacy@1903}"
-    depends_on:
-      mssql:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >-
-        SQLCMD="/opt/mssql-tools18/bin/sqlcmd"; [ -x "$$SQLCMD" ] || SQLCMD="/opt/mssql-tools/bin/sqlcmd"; until "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" >/dev/null 2>&1; do echo 'Waiting for SQL Server to be ready...'; sleep 5; done; echo 'SQL Server is ready. Initializing database...'; "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "IF DB_ID('$$MSSQL_DB_NAME') IS NULL CREATE DATABASE [$$MSSQL_DB_NAME];" && "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -d "$$MSSQL_DB_NAME" -Q "IF NOT EXISTS (SELECT name FROM sys.sql_logins WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE LOGIN [$$MSSQL_APP_LOGIN] WITH PASSWORD = '$$MSSQL_APP_PASSWORD', CHECK_POLICY = ON; END IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE USER [$$MSSQL_APP_LOGIN] FOR LOGIN [$$MSSQL_APP_LOGIN]; EXEC sp_addrolemember N'db_owner', N'$$MSSQL_APP_LOGIN'; END" && echo 'Database initialization completed successfully.';
-    networks:
-      - fis-network
+  # SQL Server is hosted externally on Windows. Set DB_HOST in the deployment
+  # environment to the Windows server address; 192.0.2.10 is documentation-only.
 
   # FIS API Service
   fis-api:
@@ -57,7 +14,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - TZ=Africa/Johannesburg
-      - ConnectionStrings__Default=Server=${DB_HOST};Database=${DB_NAME:-legacy};User Id=${DB_USER};Password=${DB_PASSWORD};Encrypt=False;TrustServerCertificate=True;
+      - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
       - Cors__Origins__0=https://localhost
       - Cors__Origins__1=https://${SERVER_IP:-localhost}
       - Cors__Origins__2=https://${SERVER_HOSTNAME:-localhost}
@@ -65,8 +22,6 @@ services:
       - "8080"
     volumes:
       - fis-uploads:/app/uploads
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -127,13 +82,8 @@ services:
       - ..:/src
     command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj"]
     environment:
-      - ConnectionStrings__Default=Server=mssql,1433;Database=${MSSQL_DB_NAME:-legacy};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=True;TrustServerCertificate=True;
+      - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
       - DOTNET_ENVIRONMENT=Development
-    depends_on:
-      mssql:
-        condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     restart: "no"
     profiles:
       - tools
@@ -149,13 +99,8 @@ services:
       - ..:/src
     command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseSeederTool/DatabaseSeederTool.csproj"]
     environment:
-      - ConnectionStrings__Default=Server=mssql,1433;Database=${MSSQL_DB_NAME:-legacy};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=True;TrustServerCertificate=True;
+      - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
       - DOTNET_ENVIRONMENT=Development
-    depends_on:
-      mssql:
-        condition: service_healthy
-      db-init:
-        condition: service_completed_successfully
     restart: "no"
     profiles:
       - tools
@@ -179,8 +124,6 @@ services:
       - fis-network
 
 volumes:
-  fis-mssql-data:
-    driver: local
   fis-uploads:
     driver: local
 

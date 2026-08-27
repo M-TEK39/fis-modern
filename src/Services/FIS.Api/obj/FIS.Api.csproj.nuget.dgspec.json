@@ -15,7 +15,7 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/root/.nuget/NuGet/NuGet.Config"
+          "/home/dev/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -97,7 +97,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.126/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.130/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
@@ -112,7 +112,7 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/root/.nuget/NuGet/NuGet.Config"
+          "/home/dev/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -171,7 +171,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.126/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.130/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
@@ -186,7 +186,7 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/root/.nuget/NuGet/NuGet.Config"
+          "/home/dev/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -259,7 +259,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.126/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.130/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
@@ -274,7 +274,7 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/root/.nuget/NuGet/NuGet.Config"
+          "/home/dev/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -353,7 +353,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.126/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.130/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
@@ -368,7 +368,7 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/root/.nuget/NuGet/NuGet.Config"
+          "/home/dev/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -445,7 +445,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.126/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.130/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
@@ -460,7 +460,7 @@
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "/home/dev/work/fis-modern/nuget.config",
-          "/root/.nuget/NuGet/NuGet.Config"
+          "/home/dev/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -579,7 +579,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.126/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/lib/dotnet/sdk/8.0.130/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
