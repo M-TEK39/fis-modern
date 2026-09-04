@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,11 +12,16 @@ namespace FIS.Api.Controllers;
 public class TowingController : BaseApiController
 {
     private readonly ITowingRepository _repository;
+    private readonly TowTruckCompatibilityService _towTruckService;
     private readonly ILogger<TowingController> _logger;
 
-    public TowingController(ITowingRepository repository, ILogger<TowingController> logger)
+    public TowingController(
+        ITowingRepository repository,
+        TowTruckCompatibilityService towTruckService,
+        ILogger<TowingController> logger)
     {
         _repository = repository;
+        _towTruckService = towTruckService;
         _logger = logger;
     }
 
@@ -55,6 +61,20 @@ public class TowingController : BaseApiController
     }
 
     #region Specialized Operations
+
+    [HttpGet("tow-trucks")]
+    public async Task<ActionResult<IEnumerable<TowTruckOption>>> GetTowTrucks()
+    {
+        try
+        {
+            return Ok(await _towTruckService.GetAllAsync(HttpContext.RequestAborted));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving tow truck options");
+            return StatusCode(500, "Error retrieving tow truck options");
+        }
+    }
 
     [HttpGet("menu")]
     public ActionResult<TowingMenuDto> GetMenu() => Ok(new TowingMenuDto { Options = new List<string> { "Request", "Towtruck Data", "Reports", "Help" } });

@@ -2,15 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import { saveQueryIncidentAction } from "@/app/call-centre/incident/capture/actions";
+import {
+  saveQueryIncidentAction,
+  saveRoadAssistanceAction,
+} from "@/app/call-centre/incident/capture/actions";
 import SessionRecovery from "@/app/home/session-recovery";
 import {
   CallCentreApiError,
   getCallCentreSites,
+  getCallCentreTowTrucks,
   getCallCentreVehicle,
   searchCallCentreVehicles,
   type CallCentreSiteOption,
   type CallCentreVehicleOption,
+  type TowTruckOption,
 } from "@/lib/api-call-centre";
 import { getNotifyLists, type NotifyListRecord } from "@/lib/api-notify-list";
 import { getSession } from "@/lib/session";
@@ -315,6 +320,180 @@ function QueryIncidentForm({
   );
 }
 
+function RoadAssistanceForm({
+  vehicle,
+  sites,
+  notifyLists,
+  towTrucks,
+  error,
+}: Readonly<{
+  vehicle: CallCentreVehicleOption;
+  sites: CallCentreSiteOption[];
+  notifyLists: NotifyListRecord[];
+  towTrucks: TowTruckOption[];
+  error: string;
+}>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedSite = sites[0]?.code ?? "";
+
+  return (
+    <section className="vehicle-form-section" aria-labelledby="road-form-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">Road Assistance · {vehicle.displayText}</p>
+          <h2 id="road-form-title">Capture Road Assistance Details</h2>
+        </div>
+      </div>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <form action={saveRoadAssistanceAction} className="form-stack">
+        <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
+        <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
+        <input name="xgp" type="hidden" value={vehicle.registrationNumber ?? ""} />
+        <input name="xinctype" type="hidden" value="Road_Assistance" />
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-transport-officer-name">Trans Officer Name</label>
+            <input id="road-transport-officer-name" name="xtrsname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-transport-officer-tel">Trans Officer Tel</label>
+            <input id="road-transport-officer-tel" name="xtrstel" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-transport-officer-fax">Trans Officer Fax</label>
+            <input id="road-transport-officer-fax" name="xtrsfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-transport-officer-email">Trans Officer Email</label>
+            <input id="road-transport-officer-email" name="xtrseml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="road-transport-officer-site">Trans Officer Site</label>
+          <select id="road-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+            <option value="">Select site</option>
+            {sites.map((site) => (
+              <option key={site.code} value={site.code}>
+                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-caller-name">Caller Name</label>
+            <input id="road-caller-name" name="xcalname" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-caller-tel">Caller Cell / Tel</label>
+            <input id="road-caller-tel" name="xcaltel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-caller-fax">Caller Fax</label>
+            <input id="road-caller-fax" name="xcalfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-caller-email">Caller Email</label>
+            <input id="road-caller-email" name="xcaleml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-driver-name">Driver Name</label>
+            <input id="road-driver-name" name="xdrvname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-driver-tel">Driver Cell / Tel</label>
+            <input id="road-driver-tel" name="xdrvtel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-driver-persal">Driver Persal</label>
+            <input id="road-driver-persal" name="xdrvperno" maxLength={15} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-inform-cro">Inform CLO of Change?</label>
+            <select id="road-inform-cro" name="xcro" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="road-cro-remarks">Remarks for CLO</label>
+            <input id="road-cro-remarks" name="xcrem" maxLength={60} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-incident-date">Incident Date</label>
+            <input id="road-incident-date" name="xincdat" type="date" defaultValue={today} required />
+          </div>
+          <div className="field">
+            <label htmlFor="road-incident-time">Incident Time</label>
+            <input id="road-incident-time" name="xinctime" type="time" required />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-town">Town</label>
+            <input id="road-town" name="x2town" maxLength={20} />
+          </div>
+          <div className="field">
+            <label htmlFor="road-suburb">Suburb</label>
+            <input id="road-suburb" name="x1town" maxLength={30} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="road-street">Street Name</label>
+          <input id="road-street" name="xstreet" maxLength={30} />
+        </div>
+        <div className="field">
+          <label htmlFor="road-vehicle-problem">Vehicle Problem</label>
+          <input id="road-vehicle-problem" name="xincdesc" maxLength={60} />
+        </div>
+        <div className="field">
+          <label htmlFor="road-tow-truck">Assist Company Name</label>
+          <select id="road-tow-truck" name="xtruckcod" defaultValue="">
+            <option value="">Select assistance company</option>
+            {towTrucks.map((towTruck) => (
+              <option key={towTruck.code} value={towTruck.code}>
+                {towTruck.name ?? `Company ${towTruck.code}`}{towTruck.telephone ? ` (${towTruck.telephone})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="road-towing-remarks">Remarks (e.g. Keys, Contact info)</label>
+          <input id="road-towing-remarks" name="xrem" maxLength={50} />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="road-notify-list">Notify Following People</label>
+            <select id="road-notify-list" name="xnotc" defaultValue="">
+              <option value="">Select notification list</option>
+              {notifyLists.map((item) => (
+                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="road-call-closed">Call Closed?</label>
+            <select id="road-call-closed" name="xclosed" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" type="submit">Submit</button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 export default async function IncidentCapturePage({ searchParams }: IncidentCapturePageProps) {
   await connection();
   const session = await getSession();
@@ -349,14 +528,16 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
   let vehicles: CallCentreVehicleOption[] = [];
   let sites: CallCentreSiteOption[] = [];
   let notifyLists: NotifyListRecord[] = [];
+  let towTrucks: TowTruckOption[] = [];
   let loadError = "";
 
   try {
     if (vmfCode !== null) {
-      [vehicle, sites, notifyLists] = await Promise.all([
+      [vehicle, sites, notifyLists, towTrucks] = await Promise.all([
         getCallCentreVehicle(vmfCode),
         getCallCentreSites(),
         getNotifyLists(),
+        incidentType === "Road_Assistance" ? getCallCentreTowTrucks() : Promise.resolve([]),
       ]);
     } else if (identifier.trim()) {
       vehicles = (await searchCallCentreVehicles(identifier.trim())).filter((candidate) => {
@@ -384,7 +565,11 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
             <div className="status-icon status-icon-success" aria-hidden="true">✓</div>
             <p className="eyebrow">Incident captured</p>
             <h2>{savedCode ? `Call Centre reference ${savedCode}` : "The incident was captured successfully."}</h2>
-            <p className="muted-copy">The legacy Call_centre business fields were saved.</p>
+            <p className="muted-copy">
+              {incidentType === "Road_Assistance"
+                ? "The legacy Call_centre and Towing business fields were saved."
+                : "The legacy Call_centre business fields were saved."}
+            </p>
           </section>
         ) : null}
         {loadError ? <ApiUnavailable message={loadError} /> : null}
@@ -421,7 +606,16 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 error={error}
               />
             ) : null}
-            {incidentType !== "Query" && incidentType !== "Booking" && vehicle ? (
+            {incidentType === "Road_Assistance" && vehicle ? (
+              <RoadAssistanceForm
+                vehicle={vehicle}
+                sites={sites}
+                notifyLists={notifyLists}
+                towTrucks={towTrucks}
+                error={error}
+              />
+            ) : null}
+            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Road_Assistance" && vehicle ? (
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">{incidentType}</p>
                 <h2>This incident branch is next in the capture migration.</h2>

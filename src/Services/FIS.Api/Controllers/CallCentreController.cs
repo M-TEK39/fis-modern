@@ -1,7 +1,9 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -11,11 +13,19 @@ namespace FIS.Api.Controllers;
 public class CallCentreController : BaseApiController
 {
     private readonly ICallCentreRepository _repository;
+    private readonly ITowingRepository _towingRepository;
+    private readonly FisDbContext _context;
     private readonly ILogger<CallCentreController> _logger;
 
-    public CallCentreController(ICallCentreRepository repository, ILogger<CallCentreController> logger)
+    public CallCentreController(
+        ICallCentreRepository repository,
+        ITowingRepository towingRepository,
+        FisDbContext context,
+        ILogger<CallCentreController> logger)
     {
         _repository = repository;
+        _towingRepository = towingRepository;
+        _context = context;
         _logger = logger;
     }
 
@@ -67,6 +77,86 @@ public class CallCentreController : BaseApiController
         {
             _logger.LogError(ex, "Error creating call centre record");
             return StatusCode(500, new { error = "Failed to create call centre record", message = ex.Message });
+        }
+    }
+
+    [HttpPost("road-assistance")]
+    public async Task<ActionResult<RoadAssistanceCreateResultDto>> CreateRoadAssistance(
+        [FromBody] CreateRoadAssistanceDto dto)
+    {
+        if (dto.VmfCode is not > 0)
+        {
+            return BadRequest(new { error = "A valid vehicle is required." });
+        }
+
+        if (!string.Equals(dto.IncidentType, "Road_Assistance", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "The incident type must be Road_Assistance." });
+        }
+
+        if (!string.Equals(dto.InformCro, "Y", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(dto.InformCro, "N", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "Inform_CRO must be Y or N." });
+        }
+
+        if (!string.Equals(dto.CallClosed, "Y", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(dto.CallClosed, "N", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "call_closed must be Y or N." });
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var now = DateTime.UtcNow;
+        var call = new CallCentre
+        {
+            Call_time = now,
+            Call_date = now.Date,
+            Incident_date = dto.IncidentDate ?? now.Date,
+            Incident_time = dto.IncidentTime,
+            Counter = 1,
+            User_access_code = GetLegacyUserAccessCode(),
+            Capture_name = User.Identity?.Name
+        };
+        ApplyFields(call, dto);
+        call.User_access_code = GetLegacyUserAccessCode();
+        call.Capture_name = User.Identity?.Name;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        try
+        {
+            var createdCall = await _repository.CreateAsync(call, currentUserId);
+            var towing = new Towing
+            {
+                vmf_code = dto.VmfCode.Value,
+                Call_refer = createdCall.Call_centre_code,
+                Tow_request_date = now.Date,
+                Tow_request_time = now,
+                Tow_location_start = dto.TowingLocationStart,
+                Vehicle_problem = dto.VehicleProblem,
+                Site_code = dto.TransportOfficerSite,
+                Tow_Truck_code = dto.TowTruckCode,
+                Contact_person_name = dto.TransportOfficerName,
+                Contact_person_tel = dto.TransportOfficerTel,
+                Remaks = dto.TowingRemarks
+            };
+            var createdTowing = await _towingRepository.CreateAsync(towing, currentUserId);
+
+            await transaction.CommitAsync(HttpContext.RequestAborted);
+            return Ok(new RoadAssistanceCreateResultDto
+            {
+                CallCentreCode = createdCall.Call_centre_code,
+                TowingCode = createdTowing.Towing_code
+            });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(HttpContext.RequestAborted);
+            _logger.LogError(
+                ex,
+                "Error creating road assistance record for vehicle {VmfCode}",
+                dto.VmfCode);
+            return StatusCode(500, new { error = "Failed to create road assistance record." });
         }
     }
 
@@ -533,6 +623,20 @@ public class CreateCallCentreDto : CallCentreFieldsDto
 
 public class UpdateCallCentreDto : CallCentreFieldsDto
 {
+}
+
+public class CreateRoadAssistanceDto : CallCentreFieldsDto
+{
+    public string? TowingLocationStart { get; set; }
+    public string? VehicleProblem { get; set; }
+    public string? TowingRemarks { get; set; }
+    public short? TowTruckCode { get; set; }
+}
+
+public class RoadAssistanceCreateResultDto
+{
+    public short CallCentreCode { get; set; }
+    public short TowingCode { get; set; }
 }
 
 public abstract class CallCentreFieldsDto

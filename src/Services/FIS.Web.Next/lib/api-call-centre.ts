@@ -18,6 +18,14 @@ export type CallCentreSiteOption = {
   departmentNumber: string | null;
 };
 
+export type TowTruckOption = {
+  code: number;
+  area: string | null;
+  name: string | null;
+  telephone: string | null;
+  fax: string | null;
+};
+
 export type CreateCallCentreRequest = {
   VmfCode: number;
   IncidentType: string;
@@ -35,6 +43,21 @@ export type CreateCallCentreRequest = {
   IncidentRemarks: string | null;
   NotifyListCode: number | null;
   CallClosed: string;
+};
+
+export type CreateRoadAssistanceRequest = CreateCallCentreRequest & {
+  GGNumber: string | null;
+  IncidentDate: string;
+  IncidentTime: string;
+  IncidentTown: string | null;
+  IncidentStreet: string | null;
+  DriverName: string | null;
+  DriverTel: string | null;
+  DriverPersalno: string | null;
+  TowingLocationStart: string | null;
+  VehicleProblem: string | null;
+  TowingRemarks: string | null;
+  TowTruckCode: number | null;
 };
 
 export class CallCentreApiError extends Error {
@@ -201,6 +224,25 @@ function mapSite(value: unknown): CallCentreSiteOption | null {
   };
 }
 
+function mapTowTruck(value: unknown): TowTruckOption | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const code = asNumber(getValue(value, "TowCode", "towCode", "Tow_code"));
+  if (code === null) {
+    return null;
+  }
+
+  return {
+    code,
+    area: asString(getValue(value, "TowArea", "towArea", "Tow_area")),
+    name: asString(getValue(value, "TowName", "towName", "Tow_name")),
+    telephone: asString(getValue(value, "TowTel", "towTel", "Tow_tel")),
+    fax: asString(getValue(value, "TowFax", "towFax", "Tow_fax")),
+  };
+}
+
 export async function searchCallCentreVehicles(searchTerm: string) {
   const response = await requestApi(`api/VehicleLookup?keyword=${encodeURIComponent(searchTerm)}&limit=20`);
   return getCollection(await readJson(response))
@@ -227,6 +269,14 @@ export async function getCallCentreSites() {
     .sort((left, right) => left.description.localeCompare(right.description));
 }
 
+export async function getCallCentreTowTrucks() {
+  const response = await requestApi("api/Towing/tow-trucks");
+  return getCollection(await readJson(response))
+    .map(mapTowTruck)
+    .filter((towTruck): towTruck is TowTruckOption => towTruck !== null)
+    .sort((left, right) => (left.name ?? "").localeCompare(right.name ?? ""));
+}
+
 export async function createCallCentreIncident(request: CreateCallCentreRequest) {
   const response = await requestApi("api/CallCentre", {
     method: "POST",
@@ -238,4 +288,23 @@ export async function createCallCentreIncident(request: CreateCallCentreRequest)
   }
 
   return asNumber(getValue(payload, "Call_centre_code", "call_centre_code", "callCentreCode"));
+}
+
+export async function createRoadAssistanceIncident(request: CreateRoadAssistanceRequest) {
+  const response = await requestApi("api/CallCentre/road-assistance", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid road assistance record.");
+  }
+
+  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  const towingCode = asNumber(getValue(payload, "TowingCode", "towingCode", "Towing_code"));
+  if (callCentreCode === null || towingCode === null) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned incomplete road assistance references.");
+  }
+
+  return { callCentreCode, towingCode };
 }

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import {
   CallCentreApiError,
   createCallCentreIncident,
+  createRoadAssistanceIncident,
 } from "@/lib/api-call-centre";
 import { getSession } from "@/lib/session";
 
@@ -22,27 +23,30 @@ function getText(formData: FormData, ...keys: string[]) {
   return "";
 }
 
-function redirectWithError(message: string, vmfCode = ""): never {
+function redirectWithError(message: string, vmfCode = "", incidentType = ""): never {
   const params = new URLSearchParams({ error: message });
   if (vmfCode) {
     params.set("vmfCode", vmfCode);
+  }
+  if (incidentType) {
+    params.set("incidentType", incidentType);
   }
 
   redirect(`${CAPTURE_PATH}?${params.toString()}`);
 }
 
-async function authorizeCallCentre(vmfCode: string) {
+async function authorizeCallCentre(vmfCode: string, incidentType = "") {
   const session = await getSession();
   if (session.status === "unavailable") {
-    redirectWithError("The sign-in service is temporarily unavailable. Please try again.", vmfCode);
+    redirectWithError("The sign-in service is temporarily unavailable. Please try again.", vmfCode, incidentType);
   }
 
   if (session.status !== "authenticated") {
-    redirectWithError("Your session has expired. Sign in again before continuing.", vmfCode);
+    redirectWithError("Your session has expired. Sign in again before continuing.", vmfCode, incidentType);
   }
 
   if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
-    redirectWithError("You do not have permission to capture call centre incidents.", vmfCode);
+    redirectWithError("You do not have permission to capture call centre incidents.", vmfCode, incidentType);
   }
 }
 
@@ -151,4 +155,123 @@ export async function saveQueryIncidentAction(formData: FormData) {
   } catch (error) {
     redirectWithError(apiErrorMessage(error), String(vmfCode));
   }
+}
+
+export async function saveRoadAssistanceAction(formData: FormData) {
+  const vmfCodeText = getText(formData, "ccVMF", "vmfCode");
+  await authorizeCallCentre(vmfCodeText, "Road_Assistance");
+
+  const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
+  if (vmfCode === null) {
+    redirectWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText, "Road_Assistance");
+  }
+
+  const incidentType = getText(formData, "xinctype", "incidentType") || "Road_Assistance";
+  if (incidentType !== "Road_Assistance") {
+    redirectWithError("This form only captures Road Assistance incidents.", vmfCodeText, "Road_Assistance");
+  }
+
+  const incidentDate = getText(formData, "xincdat", "incidentDate");
+  const incidentTime = getText(formData, "xinctime", "incidentTime");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(incidentDate)) {
+    redirectWithError("Enter a valid incident date.", vmfCodeText, "Road_Assistance");
+  }
+  if (!/^\d{2}:\d{2}$/.test(incidentTime)) {
+    redirectWithError("Enter the incident time in HH:mm format.", vmfCodeText, "Road_Assistance");
+  }
+
+  const informCro = getText(formData, "xcro", "informCro") || "N";
+  if (informCro !== "Y" && informCro !== "N") {
+    redirectWithError("The CLO notification choice is invalid.", vmfCodeText, "Road_Assistance");
+  }
+
+  const callClosed = getText(formData, "xclosed", "callClosed") || "N";
+  if (callClosed !== "Y" && callClosed !== "N") {
+    redirectWithError("The call closed choice is invalid.", vmfCodeText, "Road_Assistance");
+  }
+
+  const transportOfficerName = getText(formData, "xtrsname", "transportOfficerName");
+  const transportOfficerTel = getText(formData, "xtrstel", "transportOfficerTel");
+  const transportOfficerFax = getText(formData, "xtrsfax", "transportOfficerFax");
+  const transportOfficerEmail = getText(formData, "xtrseml", "transportOfficerEmail");
+  const callerName = getText(formData, "xcalname", "callerName");
+  const callerTel = getText(formData, "xcaltel", "callerTel");
+  const callerFax = getText(formData, "xcalfax", "callerFax");
+  const callerEmail = getText(formData, "xcaleml", "callerEmail");
+  const driverName = getText(formData, "xdrvname", "driverName");
+  const driverTel = getText(formData, "xdrvtel", "driverTel");
+  const driverPersalno = getText(formData, "xdrvperno", "driverPersalno");
+  const croRemarks = getText(formData, "xcrem", "croRemarks");
+  const town = getText(formData, "x2town", "town");
+  const suburb = getText(formData, "x1town", "suburb");
+  const street = getText(formData, "xstreet", "street");
+  const vehicleProblem = getText(formData, "xincdesc", "vehicleProblem");
+  const towingRemarks = getText(formData, "xrem", "towingRemarks");
+  const location = [suburb, town].filter(Boolean).join(" ; ");
+
+  validateMaxLength(transportOfficerName, "Transport officer name", 60, vmfCodeText);
+  validateMaxLength(transportOfficerTel, "Transport officer telephone", 15, vmfCodeText);
+  validateMaxLength(transportOfficerFax, "Transport officer fax", 15, vmfCodeText);
+  validateMaxLength(transportOfficerEmail, "Transport officer email", 30, vmfCodeText);
+  validateMaxLength(callerName, "Caller name", 30, vmfCodeText);
+  validateMaxLength(callerTel, "Caller telephone", 30, vmfCodeText);
+  validateMaxLength(callerFax, "Caller fax", 15, vmfCodeText);
+  validateMaxLength(callerEmail, "Caller email", 30, vmfCodeText);
+  validateMaxLength(driverName, "Driver name", 60, vmfCodeText);
+  validateMaxLength(driverTel, "Driver telephone", 30, vmfCodeText);
+  validateMaxLength(driverPersalno, "Driver personnel number", 15, vmfCodeText);
+  validateMaxLength(croRemarks, "CLO remarks", 60, vmfCodeText);
+  validateMaxLength(town, "Town", 20, vmfCodeText);
+  validateMaxLength(suburb, "Suburb", 30, vmfCodeText);
+  validateMaxLength(street, "Street name", 30, vmfCodeText);
+  validateMaxLength(vehicleProblem, "Vehicle problem", 60, vmfCodeText);
+  validateMaxLength(towingRemarks, "Towing remarks", 50, vmfCodeText);
+  validateMaxLength(location, "Location", 50, vmfCodeText);
+  if (informCro === "Y" && !croRemarks) {
+    redirectWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode), "Road_Assistance");
+  }
+
+  let result: Awaited<ReturnType<typeof createRoadAssistanceIncident>>;
+  try {
+    result = await createRoadAssistanceIncident({
+      VmfCode: vmfCode,
+      IncidentType: "Road_Assistance",
+      GGNumber: getText(formData, "xgg", "ggNumber") || null,
+      IncidentDate: `${incidentDate}T00:00:00`,
+      IncidentTime: `${incidentDate}T${incidentTime}:00`,
+      IncidentTown: location || null,
+      IncidentStreet: street || null,
+      DriverName: driverName || transportOfficerName || null,
+      DriverTel: driverName ? driverTel || null : transportOfficerTel || null,
+      DriverPersalno: driverPersalno || null,
+      TransportOfficerName: transportOfficerName || null,
+      TransportOfficerTel: transportOfficerTel || null,
+      TransportOfficerFax: transportOfficerFax || null,
+      TransportOfficerEmail: transportOfficerEmail || null,
+      TransportOfficerSite: getPositiveInt(formData, "xtrssite", "transportOfficerSite"),
+      CallerName: callerName || transportOfficerName || null,
+      CallerTel: callerName ? callerTel || null : transportOfficerTel || null,
+      CallerFax: callerName ? callerFax || null : transportOfficerFax || null,
+      CallerEmail: callerName ? callerEmail || null : transportOfficerEmail || null,
+      InformCro: informCro,
+      CroRemarks: croRemarks || null,
+      IncidentRemarks: null,
+      NotifyListCode: getPositiveInt(formData, "xnotc", "notifyListCode"),
+      CallClosed: callClosed,
+      TowingLocationStart: location || null,
+      VehicleProblem: vehicleProblem || null,
+      TowingRemarks: towingRemarks || null,
+      TowTruckCode: getPositiveInt(formData, "xtruckcod", "towTruckCode"),
+    });
+
+  } catch (error) {
+    redirectWithError(apiErrorMessage(error), String(vmfCode), "Road_Assistance");
+  }
+
+  const params = new URLSearchParams({
+    saved: "1",
+    incidentType: "Road_Assistance",
+    code: String(result.callCentreCode),
+  });
+  redirect(`${CAPTURE_PATH}?${params.toString()}`);
 }
