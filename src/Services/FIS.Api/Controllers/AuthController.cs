@@ -300,6 +300,15 @@ public class AuthController : ControllerBase
     {
         try
         {
+            if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = passwordError
+                });
+            }
+
             if (request.NewPassword != request.ConfirmNewPassword)
             {
                 return BadRequest(new ChangePasswordResponse
@@ -316,6 +325,15 @@ public class AuthController : ControllerBase
                 {
                     Success = false,
                     Message = "User not found"
+                });
+            }
+
+            if (!CanChangePasswordFor(profile.UserAccessCode))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "You can only change your own password."
                 });
             }
 
@@ -382,6 +400,15 @@ public class AuthController : ControllerBase
     {
         try
         {
+            if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = passwordError
+                });
+            }
+
             if (request.NewPassword != request.ConfirmNewPassword)
             {
                 return BadRequest(new ChangePasswordResponse
@@ -398,6 +425,15 @@ public class AuthController : ControllerBase
                 {
                     Success = false,
                     Message = "User not found"
+                });
+            }
+
+            if (!CanChangePasswordFor(profile.UserAccessCode))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "You are not allowed to change this user's password."
                 });
             }
 
@@ -592,6 +628,15 @@ public class AuthController : ControllerBase
                 {
                     Success = false,
                     Message = "New password is required"
+                });
+            }
+
+            if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
+            {
+                return BadRequest(new UserAdminResponse
+                {
+                    Success = false,
+                    Message = passwordError
                 });
             }
 
@@ -1332,6 +1377,18 @@ public class AuthController : ControllerBase
     {
         var actorRaw = User.FindFirst("user_access_code")?.Value;
         return int.TryParse(actorRaw, out var actorUserCode) ? actorUserCode : 0;
+    }
+
+    private bool CanChangePasswordFor(int targetUserAccessCode)
+    {
+        var actorUserAccessCode = GetActorUserCode();
+        if (actorUserAccessCode <= 0)
+        {
+            return false;
+        }
+
+        return actorUserAccessCode == targetUserAccessCode
+            || User.IsInRole("User Administration");
     }
 
     private static string HashSecurityAnswer(string answer)
