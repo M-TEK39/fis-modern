@@ -81,7 +81,11 @@ function ReportTable({ rows }: Readonly<{ rows: RenumberedVehicleReportRow[] }>)
           {rows.map((row, index) => (
             <tr key={`${row.oldVmfCode}-${row.newFleetNumber ?? "replacement"}`}>
               <td>{index + 1}</td>
-              <td>{valueOrDash(row.oldFleetNumber)}</td>
+              <td>
+                <Link href={`/vehicles/recovered?GGnum=${encodeURIComponent(row.oldFleetNumber ?? "")}`}>
+                  {valueOrDash(row.oldFleetNumber)}
+                </Link>
+              </td>
               <td>{valueOrDash(row.oldStatusDescription)}</td>
               <td>{valueOrDash(row.newFleetNumber)}</td>
               <td>{valueOrDash(row.newStatusDescription)}</td>

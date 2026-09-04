@@ -9,6 +9,7 @@ type JsonRecord = Record<string, unknown>;
 
 export type VehicleSnapshotRow = {
   vmfCode: number;
+  statusCode: number;
   fleetNumber: string | null;
   registrationNumber: string | null;
   invoiceNumber: string | null;
@@ -95,6 +96,25 @@ function asNumber(value: unknown) {
   return null;
 }
 
+function statusDescriptionForCode(statusCode: number) {
+  const descriptions: Record<number, string> = {
+    1: "In Service",
+    2: "Withdrawn",
+    3: "Board of Survey",
+    4: "Stolen",
+    5: "Sold",
+    6: "Transferred",
+    7: "Subsidized",
+    8: "From Focus",
+    9: "Privatised",
+    10: "Recovered",
+    11: "Missing",
+    12: "Destroyed",
+  };
+
+  return descriptions[statusCode] ?? null;
+}
+
 function getCollection(payload: unknown) {
   if (Array.isArray(payload)) {
     return payload;
@@ -118,13 +138,16 @@ function toVehicleSnapshot(value: unknown): VehicleSnapshotRow | null {
     return null;
   }
 
+  const statusCode = asNumber(getValue(value, "vehicle_status_code", "vehicleStatusCode")) ?? 0;
   return {
     vmfCode,
+    statusCode,
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
     registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
     invoiceNumber: asString(getValue(value, "invoice_number", "invoiceNumber")),
     modelName: asString(getValue(value, "model_name", "modelName")),
-    statusDescription: asString(getValue(value, "status_description", "statusDescription")),
+    statusDescription:
+      asString(getValue(value, "status_description", "statusDescription")) ?? statusDescriptionForCode(statusCode),
     recoveredGgNumber: asString(getValue(value, "recovered_gg_number", "recoveredGgNumber")),
     renumberedTo: asString(getValue(value, "renumbered_to", "renumberedTo")),
   };
@@ -271,6 +294,10 @@ export async function getVehicleSnapshotPage(page: number, pageSize = PAGE_SIZE)
 
 export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleReportRow[]> {
   const payload = await requestApi("api/vehicles");
+  if (isRecord(payload) && !["data", "items", "results"].some((key) => key in payload)) {
+    throw new VehicleApiError("invalid-response", "The FIS API returned an unexpected vehicle collection.");
+  }
+
   const vehicles = getCollection(payload)
     .map(toVehicleSnapshot)
     .filter((vehicle): vehicle is VehicleSnapshotRow => vehicle !== null);
