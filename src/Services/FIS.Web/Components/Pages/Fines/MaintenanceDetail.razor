@@ -124,12 +124,12 @@
                 </div>
                 <div class="form-field">
                     <label class="form-label">Document Type</label>
-                    <select class="form-select" @bind="_fine.Offence_name">
+                    <select class="form-select" @bind="_fine.Document_type">
                         <option value="">Select Document Type</option>
-                        <option value="Notice of Traffic Offence">Notice of Traffic Offence</option>
-                        <option value="Notice of Summons to be Issued">Notice of Summons to be Issued</option>
-                        <option value="Summons in Criminal Case">Summons in Criminal Case</option>
-                        <option value="Warrant for Arrest">Warrant for Arrest</option>
+                        <option value="Notice Offence">Notice of Traffic Offence</option>
+                        <option value="Summons to Issued">Notice of Summons to be Issued</option>
+                        <option value="Summons Criminal">Summons in Criminal Case</option>
+                        <option value="Warrant Arrest">Warrant for Arrest</option>
                     </select>
                 </div>
                 <div class="form-field">
@@ -211,6 +211,9 @@
                 if (existing is not null)
                 {
                     _fine = existing;
+                    _selectedTrafficDept = existing.Traffic_dept_code;
+                    _deptResponsibleName = existing.Dept_person_name ?? string.Empty;
+                    _deptResponsibleId = existing.Dept_person_id ?? string.Empty;
                     _selectedVehicleVmfCode = _fine.vmf_code;
                 }
             }
@@ -335,6 +338,9 @@
         try
         {
             _fine.vmf_code = _selectedVehicleVmfCode;
+            _fine.Traffic_dept_code = _selectedTrafficDept;
+            _fine.Dept_person_name = _deptResponsibleName.Trim();
+            _fine.Dept_person_id = _deptResponsibleId.Trim();
 
             if (FineId.HasValue)
             {

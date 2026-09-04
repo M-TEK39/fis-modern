@@ -10,5 +10,6 @@ public class TrafficDeptDto
     public string? Traf_post_code { get; set; }
     public string? Traf_telephone { get; set; }
     public string? Traf_fax { get; set; }
+    public string? Traf_cell { get; set; }
     public string? Traf_email { get; set; }
 }

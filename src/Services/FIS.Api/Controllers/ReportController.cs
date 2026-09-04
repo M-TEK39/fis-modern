@@ -21,17 +21,20 @@ public class ReportController : BaseApiController
 {
     private readonly IReportingService _reportingService;
     private readonly ILegacyReportResultService _legacyReportResultService;
+    private readonly IFineRepository _fineRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
 
     public ReportController(
         IReportingService reportingService,
         ILegacyReportResultService legacyReportResultService,
+        IFineRepository fineRepository,
         FisDbContext context,
         ILogger<ReportController> logger)
     {
         _reportingService = reportingService ?? throw new ArgumentNullException(nameof(reportingService));
         _legacyReportResultService = legacyReportResultService ?? throw new ArgumentNullException(nameof(legacyReportResultService));
+        _fineRepository = fineRepository ?? throw new ArgumentNullException(nameof(fineRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -1790,14 +1793,14 @@ public class ReportController : BaseApiController
             // ── Fines ────────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Fines")
             {
-                var q = _context.Fines
+                var q = (await _fineRepository.GetAllAsync())
                     .Where(f => !f.is_deleted
                         && f.date_created >= fromDate && f.date_created <= toDate);
                 if (captured_by.HasValue) q = q.Where(f => f.created_by_user_code == captured_by.Value);
                 if (vmf_code.HasValue) q = q.Where(f => f.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(f => f.date_created)
+                var rows = q.OrderByDescending(f => f.date_created)
                     .Select(f => new { f.Fine_code, f.vmf_code, f.Offence_reference, f.date_created, f.created_by_user_code })
-                    .ToListAsync();
+                    .ToList();
                 var mapped = rows.Where(f => VehicleInScope(f.vmf_code))
                     .Select(f => (object)new CaptureActivityEntry
                     {

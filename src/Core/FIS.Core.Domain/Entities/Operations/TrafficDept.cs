@@ -32,29 +32,34 @@ public class TrafficDept
     [Column("Traf_fax")]
     public string? Traf_fax { get; set; }
 
+    // Present in the legacy Traffic_Dept table. The expanded modern table
+    // was created without it, so it is loaded through the compatibility repository.
+    [NotMapped]
+    public string? Traf_cell { get; set; }
+
     [Column("Traf_email")]
     public string? Traf_email { get; set; }
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    [Column("date_created")]
+    [NotMapped]
     public DateTime date_created { get; set; }
 
-    [Column("date_updated")]
+    [NotMapped]
     public DateTime? date_updated { get; set; }
 
-    [Column("created_by_user_code")]
+    [NotMapped]
     public int? created_by_user_code { get; set; }
 
-    [Column("modified_by_user_code")]
+    [NotMapped]
     public int? modified_by_user_code { get; set; }
 
-    [Column("is_deleted")]
+    [NotMapped]
     public bool is_deleted { get; set; } = false;
 
     // Navigation properties for audit trail
-    [ForeignKey("created_by_user_code")]
+    [NotMapped]
     public virtual User? CreatedByUser { get; set; }
 
-    [ForeignKey("modified_by_user_code")]
+    [NotMapped]
     public virtual User? ModifiedByUser { get; set; }
 }

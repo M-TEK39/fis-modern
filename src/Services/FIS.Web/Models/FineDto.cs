@@ -17,4 +17,8 @@ public class FineDto
     public DateTime? Withdraw_date { get; set; }
     public DateTime? Pay_due_date { get; set; }
     public DateTime? Issuer_notify_date { get; set; }
+    public string? Dept_person_name { get; set; }
+    public string? Dept_person_id { get; set; }
+    public string? Document_type { get; set; }
+    public short? Traffic_dept_code { get; set; }
 }

@@ -105,6 +105,23 @@ public class Fine
     [Column("Issuer_notify_date")]
     public DateTime? Issuer_notify_date { get; set; }
 
+    // Present in the legacy Fines table. Kept out of the static EF mapping
+    // because the expanded modern table was created without these columns.
+    [NotMapped]
+    [StringLength(25)]
+    public string? Dept_person_name { get; set; }
+
+    [NotMapped]
+    [StringLength(13)]
+    public string? Dept_person_id { get; set; }
+
+    [NotMapped]
+    [StringLength(20)]
+    public string? Document_type { get; set; }
+
+    [NotMapped]
+    public short? Traffic_dept_code { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Associated vehicle
@@ -119,25 +136,25 @@ public class Fine
     public virtual Site? Site { get; set; }
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
-    [Column("date_created")]
+    [NotMapped]
     public DateTime date_created { get; set; }
 
-    [Column("date_updated")]
+    [NotMapped]
     public DateTime? date_updated { get; set; }
 
-    [Column("created_by_user_code")]
+    [NotMapped]
     public int? created_by_user_code { get; set; }
 
-    [Column("modified_by_user_code")]
+    [NotMapped]
     public int? modified_by_user_code { get; set; }
 
-    [Column("is_deleted")]
+    [NotMapped]
     public bool is_deleted { get; set; } = false;
 
     // Navigation properties for audit trail
-    [ForeignKey("created_by_user_code")]
+    [NotMapped]
     public virtual User? CreatedByUser { get; set; }
 
-    [ForeignKey("modified_by_user_code")]
+    [NotMapped]
     public virtual User? ModifiedByUser { get; set; }
 }
