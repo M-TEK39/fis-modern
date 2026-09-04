@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Api.Services;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,19 +15,135 @@ public class CallCentreController : BaseApiController
 {
     private readonly ICallCentreRepository _repository;
     private readonly ITowingRepository _towingRepository;
+    private readonly AccidentCompatibilityService _accidentService;
     private readonly FisDbContext _context;
     private readonly ILogger<CallCentreController> _logger;
 
     public CallCentreController(
         ICallCentreRepository repository,
         ITowingRepository towingRepository,
+        AccidentCompatibilityService accidentService,
         FisDbContext context,
         ILogger<CallCentreController> logger)
     {
         _repository = repository;
         _towingRepository = towingRepository;
+        _accidentService = accidentService;
         _context = context;
         _logger = logger;
+    }
+
+    [HttpPost("accident")]
+    public async Task<ActionResult<AccidentCreateResultDto>> CreateAccident(
+        [FromBody] CreateAccidentDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        if (dto.VmfCode is not > 0)
+        {
+            return BadRequest(new { error = "A valid vehicle is required." });
+        }
+
+        if (!string.Equals(dto.IncidentType, "Accident", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "The incident type must be Accident." });
+        }
+
+        if (!IsIncidentChoice(dto.InformCro) || !IsIncidentChoice(dto.CallClosed))
+        {
+            return BadRequest(new { error = "The incident notification and closure choices are invalid." });
+        }
+
+        if (!IsQuestionChoice(dto.Death) || !IsQuestionChoice(dto.Injured))
+        {
+            return BadRequest(new { error = "The death and injury choices are invalid." });
+        }
+
+        if (!IsIncidentChoice(dto.TowNeed))
+        {
+            return BadRequest(new { error = "A tow requirement choice is required." });
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var now = DateTime.UtcNow;
+        var call = new CallCentre
+        {
+            Call_time = now,
+            Call_date = now.Date,
+            Incident_date = dto.IncidentDate ?? now.Date,
+            Incident_time = dto.IncidentTime,
+            Counter = 1,
+            User_access_code = GetLegacyUserAccessCode(),
+            Capture_name = User.Identity?.Name
+        };
+        ApplyFields(call, dto);
+        call.Incident_type = "Accident";
+        call.User_access_code = GetLegacyUserAccessCode();
+        call.Capture_name = User.Identity?.Name;
+
+        var callerProvided = !string.IsNullOrWhiteSpace(dto.CallerName);
+        call.Caller_name = callerProvided ? dto.CallerName : dto.TransportOfficerName;
+        call.Caller_tel = callerProvided ? dto.CallerTel : dto.TransportOfficerTel;
+        call.Caller_fax = callerProvided ? dto.CallerFax : dto.TransportOfficerFax;
+        call.Caller_email = callerProvided ? dto.CallerEmail : dto.TransportOfficerEmail;
+
+        var driverProvided = !string.IsNullOrWhiteSpace(dto.DriverName);
+        call.Driver_name = driverProvided ? dto.DriverName : dto.TransportOfficerName;
+        call.Driver_tel = driverProvided ? dto.DriverTel : dto.TransportOfficerTel;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        try
+        {
+            var createdCall = await _repository.CreateAsync(call, currentUserId);
+            var createdAccident = await _accidentService.CreateAsync(
+                new AccidentCaptureValues(
+                    dto.VmfCode.Value,
+                    createdCall.Call_centre_code,
+                    "Cal",
+                    dto.IncidentDate ?? now.Date,
+                    dto.IncidentTime,
+                    dto.AccidentDescription,
+                    dto.AccidentDriverName ?? dto.DriverName,
+                    dto.AccidentDriverEmployNumber ?? dto.DriverPersalno,
+                    dto.AccidentDriverTel ?? dto.DriverTel,
+                    dto.TransportOfficerSite,
+                    dto.TransportOfficerName,
+                    dto.TransportOfficerTel,
+                    dto.Death,
+                    dto.Injured,
+                    dto.ThirdPartyRegistration,
+                    dto.ThirdPartyOwner,
+                    dto.ThirdPartyTelephone,
+                    dto.DamageDescription,
+                    now,
+                    dto.AccidentNotes,
+                    1,
+                    "C",
+                    now,
+                    dto.OccurencePlace,
+                    dto.TowNeed),
+                currentUserId,
+                HttpContext.RequestAborted);
+
+            await transaction.CommitAsync(HttpContext.RequestAborted);
+            return Ok(new AccidentCreateResultDto
+            {
+                CallCentreCode = createdCall.Call_centre_code,
+                AccidentCode = createdAccident
+            });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(HttpContext.RequestAborted);
+            _logger.LogError(
+                ex,
+                "Error creating accident record for vehicle {VmfCode}",
+                dto.VmfCode);
+            return StatusCode(500, new { error = "Failed to create accident record." });
+        }
     }
 
     [HttpGet]
@@ -570,6 +687,13 @@ public class CallCentreController : BaseApiController
         target.Notify_list_code = dto.NotifyListCode;
         target.call_closed = dto.CallClosed;
     }
+
+    private static bool IsIncidentChoice(string? value)
+        => string.Equals(value, "Y", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(value, "N", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsQuestionChoice(string? value)
+        => IsIncidentChoice(value) || string.Equals(value, "?", StringComparison.Ordinal);
 }
 
 #region Call Centre DTOs
@@ -633,10 +757,33 @@ public class CreateRoadAssistanceDto : CallCentreFieldsDto
     public short? TowTruckCode { get; set; }
 }
 
+public class CreateAccidentDto : CallCentreFieldsDto
+{
+    public string? AccidentDescription { get; set; }
+    public string? DamageDescription { get; set; }
+    public string? ThirdPartyRegistration { get; set; }
+    public string? ThirdPartyOwner { get; set; }
+    public string? ThirdPartyTelephone { get; set; }
+    public string? Death { get; set; }
+    public string? Injured { get; set; }
+    public string? OccurencePlace { get; set; }
+    public string? TowNeed { get; set; }
+    public string? AccidentNotes { get; set; }
+    public string? AccidentDriverName { get; set; }
+    public string? AccidentDriverTel { get; set; }
+    public string? AccidentDriverEmployNumber { get; set; }
+}
+
 public class RoadAssistanceCreateResultDto
 {
     public short CallCentreCode { get; set; }
     public short TowingCode { get; set; }
+}
+
+public class AccidentCreateResultDto
+{
+    public short CallCentreCode { get; set; }
+    public int AccidentCode { get; set; }
 }
 
 public abstract class CallCentreFieldsDto
