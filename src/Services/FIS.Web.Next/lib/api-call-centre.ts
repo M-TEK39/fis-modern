@@ -36,6 +36,11 @@ export type TowTruckOption = {
   fax: string | null;
 };
 
+export type LossTypeOption = {
+  code: number;
+  description: string;
+};
+
 export type CreateCallCentreRequest = {
   VmfCode: number;
   IncidentType: string;
@@ -115,6 +120,18 @@ export type CreateHiJackRequest = CreateCallCentreRequest & {
   DriverTel: string | null;
   DriverPersalno: string | null;
   IncidentDesc: string | null;
+};
+
+export type CreateLossRequest = CreateCallCentreRequest & {
+  IncidentDate: string;
+  IncidentTown: string | null;
+  IncidentStreet: string | null;
+  DriverName: string | null;
+  DriverTel: string | null;
+  DriverPersalno: string | null;
+  IncidentDesc: string | null;
+  LossTypeCode: number;
+  TowNeed: string;
 };
 
 export class CallCentreApiError extends Error {
@@ -300,6 +317,20 @@ function mapTowTruck(value: unknown): TowTruckOption | null {
   };
 }
 
+function mapLossType(value: unknown): LossTypeOption | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const code = asNumber(getValue(value, "LossTypeCode", "loss_type_code", "lossTypeCode"));
+  const description = asString(getValue(value, "Description", "loss_description", "description"));
+  if (code === null || !description) {
+    return null;
+  }
+
+  return { code, description };
+}
+
 function mapCallCentreIncident(value: unknown): CallCentreIncidentRecord | null {
   if (!isRecord(value)) {
     return null;
@@ -363,6 +394,14 @@ export async function getCallCentreTowTrucks() {
     .map(mapTowTruck)
     .filter((towTruck): towTruck is TowTruckOption => towTruck !== null)
     .sort((left, right) => (left.name ?? "").localeCompare(right.name ?? ""));
+}
+
+export async function getCallCentreLossTypes() {
+  const response = await requestApi("api/LossType");
+  return getCollection(await readJson(response))
+    .map(mapLossType)
+    .filter((lossType): lossType is LossTypeOption => lossType !== null)
+    .sort((left, right) => left.description.localeCompare(right.description));
 }
 
 export async function createCallCentreIncident(request: CreateCallCentreRequest) {
@@ -434,6 +473,25 @@ export async function createHiJackIncident(request: CreateHiJackRequest) {
   return { callCentreCode };
 }
 
+export async function createLossIncident(request: CreateLossRequest) {
+  const response = await requestApi("api/CallCentre/loss", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid Loss/Theft record.");
+  }
+
+  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  const lossCode = asNumber(getValue(payload, "LossCode", "lossCode", "loss_code"));
+  if (callCentreCode === null || lossCode === null) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned incomplete Loss/Theft references.");
+  }
+
+  return { callCentreCode, lossCode };
+}
+
 export async function createAccidentTowing(request: CreateAccidentTowingRequest) {
   const response = await requestApi("api/Towing", {
     method: "POST",
@@ -460,6 +518,37 @@ export async function createAccidentTowing(request: CreateAccidentTowingRequest)
   const towingCode = asNumber(getValue(payload, "Towing_code", "towingCode", "TowingCode"));
   if (towingCode === null) {
     throw new CallCentreApiError("invalid-response", "The FIS API returned an incomplete towing reference.");
+  }
+
+  return towingCode;
+}
+
+export async function createLossTowing(request: CreateAccidentTowingRequest) {
+  const response = await requestApi("api/Towing", {
+    method: "POST",
+    body: JSON.stringify({
+      vmf_code: request.VmfCode,
+      Call_refer: request.CallRefer,
+      Tow_request_date: request.RequestDate,
+      Tow_request_time: request.RequestTime,
+      Tow_location_start: request.Location,
+      Vehicle_problem: request.VehicleProblem,
+      Site_code: request.SiteCode,
+      Tow_Truck_code: request.TowTruckCode,
+      Contact_person_name: request.ContactPersonName,
+      Contact_person_tel: request.ContactPersonTel,
+      Contact_person_cell: request.ContactPersonCell,
+      Remaks: request.Remarks,
+    }),
+  });
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid Loss/Theft towing record.");
+  }
+
+  const towingCode = asNumber(getValue(payload, "Towing_code", "towingCode", "TowingCode"));
+  if (towingCode === null) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an incomplete Loss/Theft towing reference.");
   }
 
   return towingCode;

@@ -8,6 +8,8 @@ import {
   createAccidentTowing,
   createCallCentreIncident,
   createHiJackIncident,
+  createLossIncident,
+  createLossTowing,
   createRoadAssistanceIncident,
 } from "@/lib/api-call-centre";
 import { getSession } from "@/lib/session";
@@ -20,6 +22,10 @@ const ACCIDENT_TOW_DETAIL_PATH = "/CallCentre/MNT_accident_towdetail.aspx";
 const ACCIDENT_SHOW_DETAIL_PATH = "/CallCentre/MNT_accident_showdetail.aspx";
 const HIJACK_CAPTURE_PATH = "/CallCentre/MNT_highjack_getdata.aspx";
 const HIJACK_SHOW_DETAIL_PATH = "/CallCentre/MNT_highjack_showdetail.aspx";
+const LOSS_CAPTURE_PATH = "/CallCentre/MNT_loss_getdata.aspx";
+const LOSS_SPLIT_PATH = "/CallCentre/MNT_loss_split.aspx";
+const LOSS_TOW_DETAIL_PATH = "/CallCentre/MNT_loss_towdetail.aspx";
+const LOSS_SHOW_DETAIL_PATH = "/CallCentre/MNT_loss_showdetail.aspx";
 const CALL_CENTRE_ROLE = "Call Centre";
 
 function getText(formData: FormData, ...keys: string[]) {
@@ -80,6 +86,23 @@ function redirectHiJackWithError(message: string, vmfCode = ""): never {
   redirect(`${HIJACK_CAPTURE_PATH}?${params.toString()}`);
 }
 
+function redirectLossWithError(
+  message: string,
+  vmfCode = "",
+  path = LOSS_CAPTURE_PATH,
+  callCentreCode = "",
+): never {
+  const params = new URLSearchParams({ error: message, incidentType: "Loss_Theft" });
+  if (vmfCode) {
+    params.set("ccVMF", vmfCode);
+  }
+  if (callCentreCode) {
+    params.set("cccode", callCentreCode);
+  }
+
+  redirect(`${path}?${params.toString()}`);
+}
+
 async function authorizeCallCentre(vmfCode: string, incidentType = "", path = CAPTURE_PATH) {
   const session = await getSession();
   if (session.status === "unavailable") {
@@ -120,6 +143,36 @@ async function authorizeAccidentTowing(vmfCode: string, callCentreCode: string) 
       "You do not have permission to capture call centre incidents.",
       vmfCode,
       ACCIDENT_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
+  }
+}
+
+async function authorizeLossTowing(vmfCode: string, callCentreCode: string) {
+  const session = await getSession();
+  if (session.status === "unavailable") {
+    redirectLossWithError(
+      "The sign-in service is temporarily unavailable. Please try again.",
+      vmfCode,
+      LOSS_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
+  }
+
+  if (session.status !== "authenticated") {
+    redirectLossWithError(
+      "Your session has expired. Sign in again before continuing.",
+      vmfCode,
+      LOSS_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
+  }
+
+  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+    redirectLossWithError(
+      "You do not have permission to capture call centre incidents.",
+      vmfCode,
+      LOSS_TOW_DETAIL_PATH,
       callCentreCode,
     );
   }
@@ -169,6 +222,29 @@ function validateAccidentTowMaxLength(
 function validateHiJackMaxLength(value: string, field: string, maxLength: number, vmfCode: string) {
   if (value.length > maxLength) {
     redirectHiJackWithError(`${field} must be ${maxLength} characters or fewer.`, vmfCode);
+  }
+}
+
+function validateLossMaxLength(value: string, field: string, maxLength: number, vmfCode: string) {
+  if (value.length > maxLength) {
+    redirectLossWithError(`${field} must be ${maxLength} characters or fewer.`, vmfCode);
+  }
+}
+
+function validateLossTowMaxLength(
+  value: string,
+  field: string,
+  maxLength: number,
+  vmfCode: string,
+  callCentreCode: string,
+) {
+  if (value.length > maxLength) {
+    redirectLossWithError(
+      `${field} must be ${maxLength} characters or fewer.`,
+      vmfCode,
+      LOSS_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
   }
 }
 
@@ -645,6 +721,202 @@ export async function saveHiJackAction(formData: FormData) {
     redirect(`${HIJACK_SHOW_DETAIL_PATH}?${params.toString()}`);
   } catch (error) {
     redirectHiJackWithError(apiErrorMessage(error), String(vmfCode));
+  }
+}
+
+export async function saveLossAction(formData: FormData) {
+  const vmfCodeText = getText(formData, "ccVMF", "vmfCode");
+  await authorizeCallCentre(vmfCodeText, "Loss_Theft", LOSS_CAPTURE_PATH);
+
+  const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
+  if (vmfCode === null) {
+    redirectLossWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+  }
+
+  const incidentType = getText(formData, "xinctype", "incidentType") || "Loss_Theft";
+  if (incidentType !== "Loss_Theft") {
+    redirectLossWithError("This form only captures Loss/Theft incidents.", vmfCodeText);
+  }
+
+  const incidentDate = getText(formData, "xincdat", "incidentDate");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(incidentDate)) {
+    redirectLossWithError("Enter a valid loss date.", vmfCodeText);
+  }
+
+  const lossTypeCode = getPositiveInt(formData, "xlosst", "lossTypeCode");
+  if (lossTypeCode === null) {
+    redirectLossWithError("Choose a loss type.", vmfCodeText);
+  }
+
+  const towNeed = getText(formData, "xtowneed", "towNeed");
+  if (towNeed !== "Y" && towNeed !== "N") {
+    redirectLossWithError("Choose whether a tow truck is needed.", vmfCodeText);
+  }
+
+  const informCro = getText(formData, "xcro", "informCro") || "N";
+  if (informCro !== "Y" && informCro !== "N") {
+    redirectLossWithError("The CLO notification choice is invalid.", vmfCodeText);
+  }
+
+  const callClosed = getText(formData, "xclosed", "callClosed") || "N";
+  if (callClosed !== "Y" && callClosed !== "N") {
+    redirectLossWithError("The call closed choice is invalid.", vmfCodeText);
+  }
+
+  const transportOfficerName = getText(formData, "xtrsname", "transportOfficerName");
+  const transportOfficerTel = getText(formData, "xtrstel", "transportOfficerTel");
+  const transportOfficerFax = getText(formData, "xtrsfax", "transportOfficerFax");
+  const transportOfficerEmail = getText(formData, "xtrseml", "transportOfficerEmail");
+  const callerName = getText(formData, "xcalname", "callerName");
+  const callerTel = getText(formData, "xcaltel", "callerTel");
+  const callerFax = getText(formData, "xcalfax", "callerFax");
+  const callerEmail = getText(formData, "xcaleml", "callerEmail");
+  const driverName = getText(formData, "xdrvname", "driverName");
+  const driverTel = getText(formData, "xdrvtel", "driverTel");
+  const driverPersalno = getText(formData, "xdrvperno", "driverPersalno");
+  const croRemarks = getText(formData, "xcrem", "croRemarks");
+  const suburb = getText(formData, "x1town", "suburb");
+  const town = getText(formData, "x2town", "town");
+  const street = getText(formData, "xstreet", "street");
+  const incidentDescription = getText(formData, "xincdesc", "incidentDescription");
+  const incidentRemarks = getText(formData, "xrem", "incidentRemarks");
+  const placeOfLoss = [suburb, town].filter(Boolean).join(" ; ");
+
+  validateLossMaxLength(transportOfficerName, "Transport officer name", 60, vmfCodeText);
+  // The legacy Losses table stores these two values in varchar(30) and
+  // varchar(20) respectively, even though the Call Centre form is wider.
+  validateLossMaxLength(transportOfficerName, "Loss department contact", 30, vmfCodeText);
+  validateLossMaxLength(transportOfficerTel, "Transport officer telephone", 15, vmfCodeText);
+  validateLossMaxLength(transportOfficerFax, "Transport officer fax", 15, vmfCodeText);
+  validateLossMaxLength(transportOfficerEmail, "Transport officer email", 30, vmfCodeText);
+  validateLossMaxLength(callerName, "Caller name", 40, vmfCodeText);
+  validateLossMaxLength(callerTel, "Caller telephone", 30, vmfCodeText);
+  validateLossMaxLength(callerFax, "Caller fax", 15, vmfCodeText);
+  validateLossMaxLength(callerEmail, "Caller email", 30, vmfCodeText);
+  validateLossMaxLength(driverName, "Driver name", 60, vmfCodeText);
+  validateLossMaxLength(driverName, "Loss driver name", 20, vmfCodeText);
+  validateLossMaxLength(driverTel, "Driver telephone", 30, vmfCodeText);
+  validateLossMaxLength(driverPersalno, "Driver personnel number", 15, vmfCodeText);
+  validateLossMaxLength(croRemarks, "CLO remarks", 60, vmfCodeText);
+  validateLossMaxLength(suburb, "Suburb", 30, vmfCodeText);
+  validateLossMaxLength(town, "Town", 20, vmfCodeText);
+  validateLossMaxLength(placeOfLoss, "Place of loss", 50, vmfCodeText);
+  validateLossMaxLength(street, "Street name", 30, vmfCodeText);
+  validateLossMaxLength(incidentDescription, "Loss description", 60, vmfCodeText);
+  validateLossMaxLength(incidentRemarks, "Remarks", 50, vmfCodeText);
+  if (informCro === "Y" && !croRemarks) {
+    redirectLossWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+  }
+
+  try {
+    const result = await createLossIncident({
+      VmfCode: vmfCode,
+      IncidentType: "Loss_Theft",
+      TransportOfficerName: transportOfficerName || null,
+      TransportOfficerTel: transportOfficerTel || null,
+      TransportOfficerFax: transportOfficerFax || null,
+      TransportOfficerEmail: transportOfficerEmail || null,
+      TransportOfficerSite: getPositiveInt(formData, "xtrssite", "transportOfficerSite"),
+      CallerName: callerName || transportOfficerName || null,
+      CallerTel: callerName ? callerTel || null : transportOfficerTel || null,
+      CallerFax: callerName ? callerFax || null : transportOfficerFax || null,
+      CallerEmail: callerName ? callerEmail || null : transportOfficerEmail || null,
+      InformCro: informCro,
+      CroRemarks: croRemarks || null,
+      IncidentRemarks: incidentRemarks || null,
+      NotifyListCode: getPositiveInt(formData, "xnotc", "notifyListCode"),
+      CallClosed: callClosed,
+      IncidentDate: `${incidentDate}T00:00:00`,
+      IncidentTown: placeOfLoss || null,
+      IncidentStreet: street || null,
+      DriverName: driverName || null,
+      DriverTel: driverTel || null,
+      DriverPersalno: driverPersalno || null,
+      IncidentDesc: incidentDescription || null,
+      LossTypeCode: lossTypeCode,
+      TowNeed: towNeed,
+    });
+
+    const params = new URLSearchParams({
+      xtowneed: towNeed,
+      ccVMF: String(vmfCode),
+      cccode: String(result.callCentreCode),
+      xinctype: "Loss_Theft",
+      xgg: getText(formData, "xgg", "ggNumber"),
+      xgp: getText(formData, "xgp", "registrationNumber"),
+      txtDamage: "",
+      lossCode: String(result.lossCode),
+    });
+    redirect(`${LOSS_SPLIT_PATH}?${params.toString()}`);
+  } catch (error) {
+    redirectLossWithError(apiErrorMessage(error), String(vmfCode));
+  }
+}
+
+export async function saveLossTowingAction(formData: FormData) {
+  const vmfCodeText = getText(formData, "ccVMF", "vmfCode");
+  const callCentreCodeText = getText(formData, "cccode", "callCentreCode");
+  await authorizeLossTowing(vmfCodeText, callCentreCodeText);
+
+  const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
+  const callCentreCode = getPositiveInt(formData, "cccode", "callCentreCode");
+  if (vmfCode === null || callCentreCode === null) {
+    redirectLossWithError(
+      "The Loss/Theft reference is missing. Start the loss capture again.",
+      vmfCodeText,
+      LOSS_TOW_DETAIL_PATH,
+      callCentreCodeText,
+    );
+  }
+
+  const vehicleProblem = getText(formData, "txtDamage", "vehicleProblem");
+  const towTruckCode = getPositiveInt(formData, "xtruckcod", "towTruckCode");
+  const contactName = getText(formData, "xconname", "contactPersonName");
+  const contactTel = getText(formData, "xcontel", "contactPersonTel");
+  const contactCell = getText(formData, "xconcell", "contactPersonCell");
+  const location = getText(formData, "xtown", "location");
+  const remarks = getText(formData, "xrem", "remarks");
+
+  validateLossTowMaxLength(vehicleProblem, "Vehicle problem", 60, vmfCodeText, callCentreCodeText);
+  validateLossTowMaxLength(contactName, "Contact person name", 30, vmfCodeText, callCentreCodeText);
+  validateLossTowMaxLength(contactTel, "Contact person telephone", 20, vmfCodeText, callCentreCodeText);
+  validateLossTowMaxLength(contactCell, "Contact person cell", 10, vmfCodeText, callCentreCodeText);
+  validateLossTowMaxLength(location, "Tow location", 50, vmfCodeText, callCentreCodeText);
+  validateLossTowMaxLength(remarks, "Towing remarks", 50, vmfCodeText, callCentreCodeText);
+
+  try {
+    const now = new Date().toISOString();
+    const towingCode = await createLossTowing({
+      VmfCode: vmfCode,
+      CallRefer: callCentreCode,
+      RequestDate: now,
+      RequestTime: now,
+      Location: location || null,
+      VehicleProblem: vehicleProblem || null,
+      SiteCode: getPositiveInt(formData, "xtrssite", "transportOfficerSite"),
+      TowTruckCode: towTruckCode,
+      ContactPersonName: contactName || null,
+      ContactPersonTel: contactTel || null,
+      ContactPersonCell: contactCell || null,
+      Remarks: remarks || null,
+    });
+
+    const params = new URLSearchParams({
+      saved: "1",
+      incidentType: "Loss_Theft",
+      ccVMF: String(vmfCode),
+      cccode: String(callCentreCode),
+      code: String(callCentreCode),
+      towingCode: String(towingCode),
+    });
+    redirect(`${LOSS_SHOW_DETAIL_PATH}?${params.toString()}`);
+  } catch (error) {
+    redirectLossWithError(
+      apiErrorMessage(error),
+      String(vmfCode),
+      LOSS_TOW_DETAIL_PATH,
+      String(callCentreCode),
+    );
   }
 }
 

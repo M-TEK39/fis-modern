@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import {
   saveAccidentAction,
   saveHiJackAction,
+  saveLossAction,
   saveQueryIncidentAction,
   saveRoadAssistanceAction,
 } from "@/app/call-centre/incident/capture/actions";
@@ -13,10 +14,12 @@ import {
   CallCentreApiError,
   getCallCentreSites,
   getCallCentreTowTrucks,
+  getCallCentreLossTypes,
   getCallCentreVehicle,
   searchCallCentreVehicles,
   type CallCentreSiteOption,
   type CallCentreVehicleOption,
+  type LossTypeOption,
   type TowTruckOption,
 } from "@/lib/api-call-centre";
 import { getNotifyLists, type NotifyListRecord } from "@/lib/api-notify-list";
@@ -529,6 +532,183 @@ function AccidentIncidentForm({
   );
 }
 
+function LossIncidentForm({
+  vehicle,
+  sites,
+  notifyLists,
+  lossTypes,
+  error,
+}: Readonly<{
+  vehicle: CallCentreVehicleOption;
+  sites: CallCentreSiteOption[];
+  notifyLists: NotifyListRecord[];
+  lossTypes: LossTypeOption[];
+  error: string;
+}>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedSite = sites[0]?.code ?? "";
+  const selectedLossType = lossTypes[0]?.code?.toString() ?? "";
+
+  return (
+    <section className="vehicle-form-section" aria-labelledby="loss-form-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">Loss / Theft · {vehicle.displayText}</p>
+          <h2 id="loss-form-title">Capture Loss Details</h2>
+        </div>
+      </div>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <form action={saveLossAction} className="form-stack">
+        <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
+        <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
+        <input name="xgp" type="hidden" value={vehicle.registrationNumber ?? ""} />
+        <input name="xinctype" type="hidden" value="Loss_Theft" />
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-transport-officer-name">Trans Officer Name</label>
+            <input id="loss-transport-officer-name" name="xtrsname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-transport-officer-tel">Trans Officer Tel</label>
+            <input id="loss-transport-officer-tel" name="xtrstel" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-transport-officer-fax">Trans Officer Fax</label>
+            <input id="loss-transport-officer-fax" name="xtrsfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-transport-officer-email">Trans Officer Email</label>
+            <input id="loss-transport-officer-email" name="xtrseml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="loss-transport-officer-site">Trans Officer Site</label>
+          <select id="loss-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+            <option value="">Select site</option>
+            {sites.map((site) => (
+              <option key={site.code} value={site.code}>
+                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-caller-name">Caller Name</label>
+            <input id="loss-caller-name" name="xcalname" maxLength={40} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-caller-tel">Caller Cell / Tel</label>
+            <input id="loss-caller-tel" name="xcaltel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-caller-fax">Caller Fax</label>
+            <input id="loss-caller-fax" name="xcalfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-caller-email">Caller Email</label>
+            <input id="loss-caller-email" name="xcaleml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-driver-name">Driver Name</label>
+            <input id="loss-driver-name" name="xdrvname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-driver-tel">Driver Cell / Tel</label>
+            <input id="loss-driver-tel" name="xdrvtel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-driver-persal">Driver Persal</label>
+            <input id="loss-driver-persal" name="xdrvperno" maxLength={15} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-inform-cro">Inform CLO of Change?</label>
+            <select id="loss-inform-cro" name="xcro" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="loss-cro-remarks">Remarks for CLO</label>
+            <input id="loss-cro-remarks" name="xcrem" maxLength={60} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="loss-date">Date of Loss</label>
+          <input id="loss-date" name="xincdat" type="date" defaultValue={today} required />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-suburb">Suburb (of Loss)</label>
+            <input id="loss-suburb" name="x1town" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="loss-town">Town</label>
+            <input id="loss-town" name="x2town" maxLength={20} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="loss-street">Street Name</label>
+          <input id="loss-street" name="xstreet" maxLength={30} />
+        </div>
+        <div className="field">
+          <label htmlFor="loss-type">Loss Type</label>
+          <select id="loss-type" name="xlosst" defaultValue={selectedLossType} required>
+            <option value="">Select loss type</option>
+            {lossTypes.map((lossType) => (
+              <option key={lossType.code} value={lossType.code}>{lossType.description}</option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="loss-description">Description of Loss</label>
+          <input id="loss-description" name="xincdesc" maxLength={60} />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-tow-needed">Need Tow Truck?</label>
+            <select id="loss-tow-needed" name="xtowneed" defaultValue="?" required>
+              <option value="?">Choose an option</option>
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="loss-remarks">Remarks</label>
+            <input id="loss-remarks" name="xrem" maxLength={50} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="loss-notify-list">Notify Following People</label>
+            <select id="loss-notify-list" name="xnotc" defaultValue="">
+              <option value="">Select notification list</option>
+              {notifyLists.map((item) => (
+                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="loss-call-closed">Call Closed?</label>
+            <select id="loss-call-closed" name="xclosed" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" type="submit">Submit</button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function HiJackIncidentForm({
   vehicle,
   sites,
@@ -899,15 +1079,17 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
   let sites: CallCentreSiteOption[] = [];
   let notifyLists: NotifyListRecord[] = [];
   let towTrucks: TowTruckOption[] = [];
+  let lossTypes: LossTypeOption[] = [];
   let loadError = "";
 
   try {
     if (vmfCode !== null) {
-      [vehicle, sites, notifyLists, towTrucks] = await Promise.all([
+      [vehicle, sites, notifyLists, towTrucks, lossTypes] = await Promise.all([
         getCallCentreVehicle(vmfCode),
         getCallCentreSites(),
         getNotifyLists(),
         incidentType === "Road_Assistance" ? getCallCentreTowTrucks() : Promise.resolve([]),
+        incidentType === "Loss_Theft" ? getCallCentreLossTypes() : Promise.resolve([]),
       ]);
     } else if (identifier.trim()) {
       vehicles = (await searchCallCentreVehicles(identifier.trim())).filter((candidate) => {
@@ -942,7 +1124,9 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                   ? "The legacy Call_centre and Accident business fields were saved."
                   : incidentType === "Hi-Jack"
                     ? "The legacy Call_centre Hi-Jack business fields were saved."
-                    : "The legacy Call_centre business fields were saved."}
+                    : incidentType === "Loss_Theft"
+                      ? "The legacy Call_centre and Losses business fields were saved."
+                      : "The legacy Call_centre business fields were saved."}
             </p>
           </section>
         ) : null}
@@ -1005,7 +1189,16 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 error={error}
               />
             ) : null}
-            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Accident" && incidentType !== "Road_Assistance" && incidentType !== "Hi-Jack" && vehicle ? (
+            {incidentType === "Loss_Theft" && vehicle ? (
+              <LossIncidentForm
+                vehicle={vehicle}
+                sites={sites}
+                notifyLists={notifyLists}
+                lossTypes={lossTypes}
+                error={error}
+              />
+            ) : null}
+            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Accident" && incidentType !== "Road_Assistance" && incidentType !== "Hi-Jack" && incidentType !== "Loss_Theft" && vehicle ? (
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">{incidentType}</p>
                 <h2>This incident branch is next in the capture migration.</h2>
