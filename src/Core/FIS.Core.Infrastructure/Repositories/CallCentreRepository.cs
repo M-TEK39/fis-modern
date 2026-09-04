@@ -488,7 +488,11 @@ public class CallCentreRepository : ICallCentreRepository
         return
         [
             new("vmf_code", "@vmfCode", DbType.Int32, callCentre.vmf_code),
-            new("Call_time", "@callTime", DbType.Time, ToTimeValue(callCentre.Call_time)),
+            // SQL Server accepts datetime2 parameters for both the legacy
+            // time(3) column and the expanded datetime2 column. Keeping the
+            // complete value preserves the date on the expanded schema while
+            // the legacy schema stores only the time portion.
+            new("Call_time", "@callTime", DbType.DateTime2, callCentre.Call_time),
             new("Call_date", "@callDate", DbType.Date, callCentre.Call_date?.Date),
             new("Capture_name", "@captureName", DbType.String, callCentre.Capture_name),
             new("User_access_code", "@userAccessCode", DbType.Int16, callCentre.User_access_code),
@@ -506,7 +510,7 @@ public class CallCentreRepository : ICallCentreRepository
             new("Incident_type", "@incidentType", DbType.String, callCentre.Incident_type),
             new("Incident_Desc", "@incidentDesc", DbType.String, callCentre.Incident_Desc),
             new("Incident_date", "@incidentDate", DbType.Date, callCentre.Incident_date?.Date),
-            new("Incident_time", "@incidentTime", DbType.Time, ToTimeValue(callCentre.Incident_time)),
+            new("Incident_time", "@incidentTime", DbType.DateTime2, callCentre.Incident_time),
             new("Caller_tel", "@callerTel", DbType.String, callCentre.Caller_tel),
             new("TrOfficer_name", "@transportOfficerName", DbType.String, callCentre.TrOfficer_name),
             new("TrOfficer_tel", "@transportOfficerTel", DbType.String, callCentre.TrOfficer_tel),
@@ -517,7 +521,6 @@ public class CallCentreRepository : ICallCentreRepository
             new("Caller_fax", "@callerFax", DbType.String, callCentre.Caller_fax),
             new("TrOfficer_fax", "@transportOfficerFax", DbType.String, callCentre.TrOfficer_fax),
             new("Caller_email", "@callerEmail", DbType.String, callCentre.Caller_email),
-            new("TrOfficer_email", "@transportOfficerEmail", DbType.String, callCentre.TrOfficer_email),
             new("Inform_CRO", "@informCro", DbType.String, callCentre.Inform_CRO),
             new("CRO_Remarks", "@croRemarks", DbType.String, callCentre.CRO_Remarks),
             new("Incident_Remarks", "@incidentRemarks", DbType.String, callCentre.Incident_Remarks),
@@ -597,9 +600,6 @@ public class CallCentreRepository : ICallCentreRepository
             "Call_date" or "Incident_date" => "date",
             _ => "varchar(1)"
         };
-
-    private static TimeSpan? ToTimeValue(DateTime? value)
-        => value?.TimeOfDay;
 
     private static string? ReadString(DbDataReader reader, string column)
     {

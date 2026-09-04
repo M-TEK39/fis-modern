@@ -33,6 +33,82 @@ public class CallCentreController : BaseApiController
         _logger = logger;
     }
 
+    [HttpPost("hijack")]
+    public async Task<ActionResult<HiJackCreateResultDto>> CreateHiJack(
+        [FromBody] CreateHiJackDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        if (dto.VmfCode is not > 0)
+        {
+            return BadRequest(new { error = "A valid vehicle is required." });
+        }
+
+        if (!string.Equals(dto.IncidentType, "Hi-Jack", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "The incident type must be Hi-Jack." });
+        }
+
+        if (dto.IncidentDate is null)
+        {
+            return BadRequest(new { error = "A valid Hi-Jack date is required." });
+        }
+
+        if (!IsIncidentChoice(dto.InformCro) || !IsIncidentChoice(dto.CallClosed))
+        {
+            return BadRequest(new { error = "The incident notification and closure choices are invalid." });
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var now = DateTime.UtcNow;
+        var call = new CallCentre
+        {
+            Call_time = now,
+            Call_date = now.Date,
+            Incident_date = dto.IncidentDate.Value.Date,
+            Incident_time = dto.IncidentTime,
+            Counter = 1,
+            User_access_code = GetLegacyUserAccessCode(),
+            Capture_name = User.Identity?.Name
+        };
+        ApplyFields(call, dto);
+        call.Incident_type = "Hi-Jack";
+        call.User_access_code = GetLegacyUserAccessCode();
+        call.Capture_name = User.Identity?.Name;
+
+        // The legacy form uses the transport officer as the caller and driver
+        // when those optional fields are left blank.
+        var callerProvided = !string.IsNullOrWhiteSpace(dto.CallerName);
+        call.Caller_name = callerProvided ? dto.CallerName : dto.TransportOfficerName;
+        call.Caller_tel = callerProvided ? dto.CallerTel : dto.TransportOfficerTel;
+        call.Caller_fax = callerProvided ? dto.CallerFax : dto.TransportOfficerFax;
+        call.Caller_email = callerProvided ? dto.CallerEmail : dto.TransportOfficerEmail;
+
+        var driverProvided = !string.IsNullOrWhiteSpace(dto.DriverName);
+        call.Driver_name = driverProvided ? dto.DriverName : dto.TransportOfficerName;
+        call.Driver_tel = driverProvided ? dto.DriverTel : dto.TransportOfficerTel;
+
+        try
+        {
+            var created = await _repository.CreateAsync(call, currentUserId);
+            return Ok(new HiJackCreateResultDto
+            {
+                CallCentreCode = created.Call_centre_code
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Error creating Hi-Jack record for vehicle {VmfCode}",
+                dto.VmfCode);
+            return StatusCode(500, new { error = "Failed to create Hi-Jack record." });
+        }
+    }
+
     [HttpPost("accident")]
     public async Task<ActionResult<AccidentCreateResultDto>> CreateAccident(
         [FromBody] CreateAccidentDto dto)
@@ -774,6 +850,10 @@ public class CreateAccidentDto : CallCentreFieldsDto
     public string? AccidentDriverEmployNumber { get; set; }
 }
 
+public class CreateHiJackDto : CallCentreFieldsDto
+{
+}
+
 public class RoadAssistanceCreateResultDto
 {
     public short CallCentreCode { get; set; }
@@ -784,6 +864,11 @@ public class AccidentCreateResultDto
 {
     public short CallCentreCode { get; set; }
     public int AccidentCode { get; set; }
+}
+
+public class HiJackCreateResultDto
+{
+    public short CallCentreCode { get; set; }
 }
 
 public abstract class CallCentreFieldsDto
