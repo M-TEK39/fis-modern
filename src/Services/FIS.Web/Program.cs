@@ -379,11 +379,6 @@ builder.Services.AddHttpClient<AuctionApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<ClearanceApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<MerchantApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
