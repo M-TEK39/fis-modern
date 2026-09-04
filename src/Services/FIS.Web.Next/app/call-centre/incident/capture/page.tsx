@@ -4,6 +4,7 @@ import { connection } from "next/server";
 
 import {
   saveAccidentAction,
+  saveHiJackAction,
   saveQueryIncidentAction,
   saveRoadAssistanceAction,
 } from "@/app/call-centre/incident/capture/actions";
@@ -528,6 +529,167 @@ function AccidentIncidentForm({
   );
 }
 
+function HiJackIncidentForm({
+  vehicle,
+  sites,
+  notifyLists,
+  error,
+}: Readonly<{
+  vehicle: CallCentreVehicleOption;
+  sites: CallCentreSiteOption[];
+  notifyLists: NotifyListRecord[];
+  error: string;
+}>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedSite = sites[0]?.code ?? "";
+
+  return (
+    <section className="vehicle-form-section" aria-labelledby="hijack-form-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">Hi-Jack · {vehicle.displayText}</p>
+          <h2 id="hijack-form-title">Capture Hi-Jack Details</h2>
+        </div>
+      </div>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <form action={saveHiJackAction} className="form-stack">
+        <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
+        <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
+        <input name="xgp" type="hidden" value={vehicle.registrationNumber ?? ""} />
+        <input name="xinctype" type="hidden" value="Hi-Jack" />
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-transport-officer-name">Trans Officer Name</label>
+            <input id="hijack-transport-officer-name" name="xtrsname" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-transport-officer-tel">Trans Officer Tel</label>
+            <input id="hijack-transport-officer-tel" name="xtrstel" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-transport-officer-fax">Trans Officer Fax</label>
+            <input id="hijack-transport-officer-fax" name="xtrsfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-transport-officer-email">Trans Officer Email</label>
+            <input id="hijack-transport-officer-email" name="xtrseml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="hijack-transport-officer-site">Trans Officer Site</label>
+          <select id="hijack-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+            <option value="">Select site</option>
+            {sites.map((site) => (
+              <option key={site.code} value={site.code}>
+                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-caller-name">Caller Name</label>
+            <input id="hijack-caller-name" name="xcalname" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-caller-tel">Caller Cell / Tel</label>
+            <input id="hijack-caller-tel" name="xcaltel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-caller-fax">Caller Fax</label>
+            <input id="hijack-caller-fax" name="xcalfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-caller-email">Caller Email</label>
+            <input id="hijack-caller-email" name="xcaleml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-driver-name">Driver Name</label>
+            <input id="hijack-driver-name" name="xdrvname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-driver-tel">Driver Cell / Tel</label>
+            <input id="hijack-driver-tel" name="xdrvtel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-driver-persal">Driver Persal</label>
+            <input id="hijack-driver-persal" name="xdrvperno" maxLength={15} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-inform-cro">Inform CLO of Change?</label>
+            <select id="hijack-inform-cro" name="xcro" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-cro-remarks">Remarks for CLO</label>
+            <input id="hijack-cro-remarks" name="xcrem" maxLength={60} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-date">Hi-Jack Date</label>
+            <input id="hijack-date" name="xincdat" type="date" defaultValue={today} required />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-time">Hi-Jack Time</label>
+            <input id="hijack-time" name="xinctime" type="time" />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-suburb">Suburb</label>
+            <input id="hijack-suburb" name="x1town" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-town">Town</label>
+            <input id="hijack-town" name="x2town" maxLength={20} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="hijack-street">Street Name</label>
+          <input id="hijack-street" name="xstreet" maxLength={30} />
+        </div>
+        <div className="field">
+          <label htmlFor="hijack-description">Description of Hi-Jack</label>
+          <input id="hijack-description" name="xincdesc" maxLength={60} />
+        </div>
+        <div className="field">
+          <label htmlFor="hijack-remarks">Remarks</label>
+          <input id="hijack-remarks" name="xrem" maxLength={80} />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="hijack-notify-list">Notify Following People</label>
+            <select id="hijack-notify-list" name="xnotc" defaultValue="">
+              <option value="">Select notification list</option>
+              {notifyLists.map((item) => (
+                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="hijack-call-closed">Call Closed?</label>
+            <select id="hijack-call-closed" name="xclosed" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" type="submit">Submit</button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function RoadAssistanceForm({
   vehicle,
   sites,
@@ -778,7 +940,9 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 ? "The legacy Call_centre and Towing business fields were saved."
                 : incidentType === "Accident"
                   ? "The legacy Call_centre and Accident business fields were saved."
-                  : "The legacy Call_centre business fields were saved."}
+                  : incidentType === "Hi-Jack"
+                    ? "The legacy Call_centre Hi-Jack business fields were saved."
+                    : "The legacy Call_centre business fields were saved."}
             </p>
           </section>
         ) : null}
@@ -833,7 +997,15 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 error={error}
               />
             ) : null}
-            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Accident" && incidentType !== "Road_Assistance" && vehicle ? (
+            {incidentType === "Hi-Jack" && vehicle ? (
+              <HiJackIncidentForm
+                vehicle={vehicle}
+                sites={sites}
+                notifyLists={notifyLists}
+                error={error}
+              />
+            ) : null}
+            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Accident" && incidentType !== "Road_Assistance" && incidentType !== "Hi-Jack" && vehicle ? (
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">{incidentType}</p>
                 <h2>This incident branch is next in the capture migration.</h2>

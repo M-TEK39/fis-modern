@@ -106,6 +106,17 @@ export type CreateAccidentTowingRequest = {
   Remarks: string | null;
 };
 
+export type CreateHiJackRequest = CreateCallCentreRequest & {
+  IncidentDate: string;
+  IncidentTime: string | null;
+  IncidentTown: string | null;
+  IncidentStreet: string | null;
+  DriverName: string | null;
+  DriverTel: string | null;
+  DriverPersalno: string | null;
+  IncidentDesc: string | null;
+};
+
 export class CallCentreApiError extends Error {
   constructor(
     public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found",
@@ -403,6 +414,24 @@ export async function createAccidentIncident(request: CreateAccidentRequest) {
   }
 
   return { callCentreCode, accidentCode };
+}
+
+export async function createHiJackIncident(request: CreateHiJackRequest) {
+  const response = await requestApi("api/CallCentre/hijack", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid Hi-Jack record.");
+  }
+
+  const callCentreCode = asNumber(getValue(payload, "CallCentreCode", "callCentreCode", "Call_centre_code"));
+  if (callCentreCode === null) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an incomplete Hi-Jack reference.");
+  }
+
+  return { callCentreCode };
 }
 
 export async function createAccidentTowing(request: CreateAccidentTowingRequest) {

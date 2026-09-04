@@ -7,6 +7,7 @@ import {
   createAccidentIncident,
   createAccidentTowing,
   createCallCentreIncident,
+  createHiJackIncident,
   createRoadAssistanceIncident,
 } from "@/lib/api-call-centre";
 import { getSession } from "@/lib/session";
@@ -17,6 +18,8 @@ const ACCIDENT_CAPTURE_PATH = "/CallCentre/MNT_accident_getdata.aspx";
 const ACCIDENT_SPLIT_PATH = "/CallCentre/MNT_accident_split.aspx";
 const ACCIDENT_TOW_DETAIL_PATH = "/CallCentre/MNT_accident_towdetail.aspx";
 const ACCIDENT_SHOW_DETAIL_PATH = "/CallCentre/MNT_accident_showdetail.aspx";
+const HIJACK_CAPTURE_PATH = "/CallCentre/MNT_highjack_getdata.aspx";
+const HIJACK_SHOW_DETAIL_PATH = "/CallCentre/MNT_highjack_showdetail.aspx";
 const CALL_CENTRE_ROLE = "Call Centre";
 
 function getText(formData: FormData, ...keys: string[]) {
@@ -66,6 +69,15 @@ function redirectAccidentWithError(
   }
 
   redirect(`${path}?${params.toString()}`);
+}
+
+function redirectHiJackWithError(message: string, vmfCode = ""): never {
+  const params = new URLSearchParams({ error: message, incidentType: "Hi-Jack" });
+  if (vmfCode) {
+    params.set("ccVMF", vmfCode);
+  }
+
+  redirect(`${HIJACK_CAPTURE_PATH}?${params.toString()}`);
 }
 
 async function authorizeCallCentre(vmfCode: string, incidentType = "", path = CAPTURE_PATH) {
@@ -151,6 +163,12 @@ function validateAccidentTowMaxLength(
       ACCIDENT_TOW_DETAIL_PATH,
       callCentreCode,
     );
+  }
+}
+
+function validateHiJackMaxLength(value: string, field: string, maxLength: number, vmfCode: string) {
+  if (value.length > maxLength) {
+    redirectHiJackWithError(`${field} must be ${maxLength} characters or fewer.`, vmfCode);
   }
 }
 
@@ -514,6 +532,120 @@ export async function saveAccidentAction(formData: FormData) {
     accidentCode: String(result.accidentCode),
   });
   redirect(`${ACCIDENT_SPLIT_PATH}?${params.toString()}`);
+}
+
+export async function saveHiJackAction(formData: FormData) {
+  const vmfCodeText = getText(formData, "ccVMF", "vmfCode");
+  await authorizeCallCentre(vmfCodeText, "Hi-Jack", HIJACK_CAPTURE_PATH);
+
+  const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
+  if (vmfCode === null) {
+    redirectHiJackWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+  }
+
+  const incidentType = getText(formData, "xinctype", "incidentType") || "Hi-Jack";
+  if (incidentType !== "Hi-Jack") {
+    redirectHiJackWithError("This form only captures Hi-Jack incidents.", vmfCodeText);
+  }
+
+  const incidentDate = getText(formData, "xincdat", "incidentDate");
+  const incidentTime = getText(formData, "xinctime", "incidentTime");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(incidentDate)) {
+    redirectHiJackWithError("Enter a valid Hi-Jack date.", vmfCodeText);
+  }
+  if (incidentTime && !/^\d{2}:\d{2}$/.test(incidentTime)) {
+    redirectHiJackWithError("Enter the Hi-Jack time in HH:mm format.", vmfCodeText);
+  }
+
+  const informCro = getText(formData, "xcro", "informCro") || "N";
+  if (informCro !== "Y" && informCro !== "N") {
+    redirectHiJackWithError("The CLO notification choice is invalid.", vmfCodeText);
+  }
+
+  const callClosed = getText(formData, "xclosed", "callClosed") || "N";
+  if (callClosed !== "Y" && callClosed !== "N") {
+    redirectHiJackWithError("The call closed choice is invalid.", vmfCodeText);
+  }
+
+  const transportOfficerName = getText(formData, "xtrsname", "transportOfficerName");
+  const transportOfficerTel = getText(formData, "xtrstel", "transportOfficerTel");
+  const transportOfficerFax = getText(formData, "xtrsfax", "transportOfficerFax");
+  const transportOfficerEmail = getText(formData, "xtrseml", "transportOfficerEmail");
+  const callerName = getText(formData, "xcalname", "callerName");
+  const callerTel = getText(formData, "xcaltel", "callerTel");
+  const callerFax = getText(formData, "xcalfax", "callerFax");
+  const callerEmail = getText(formData, "xcaleml", "callerEmail");
+  const driverName = getText(formData, "xdrvname", "driverName");
+  const driverTel = getText(formData, "xdrvtel", "driverTel");
+  const driverPersalno = getText(formData, "xdrvperno", "driverPersalno");
+  const croRemarks = getText(formData, "xcrem", "croRemarks");
+  const suburb = getText(formData, "x1town", "suburb");
+  const town = getText(formData, "x2town", "town");
+  const street = getText(formData, "xstreet", "street");
+  const incidentDescription = getText(formData, "xincdesc", "incidentDescription");
+  const incidentRemarks = getText(formData, "xrem", "incidentRemarks");
+  const incidentTown = [suburb, town].filter(Boolean).join(" ; ");
+
+  validateHiJackMaxLength(transportOfficerName, "Transport officer name", 30, vmfCodeText);
+  validateHiJackMaxLength(transportOfficerTel, "Transport officer telephone", 15, vmfCodeText);
+  validateHiJackMaxLength(transportOfficerFax, "Transport officer fax", 15, vmfCodeText);
+  validateHiJackMaxLength(transportOfficerEmail, "Transport officer email", 30, vmfCodeText);
+  validateHiJackMaxLength(callerName, "Caller name", 30, vmfCodeText);
+  validateHiJackMaxLength(callerTel, "Caller telephone", 30, vmfCodeText);
+  validateHiJackMaxLength(callerFax, "Caller fax", 15, vmfCodeText);
+  validateHiJackMaxLength(callerEmail, "Caller email", 30, vmfCodeText);
+  validateHiJackMaxLength(driverName, "Driver name", 60, vmfCodeText);
+  validateHiJackMaxLength(driverTel, "Driver telephone", 30, vmfCodeText);
+  validateHiJackMaxLength(driverPersalno, "Driver personnel number", 15, vmfCodeText);
+  validateHiJackMaxLength(croRemarks, "CLO remarks", 60, vmfCodeText);
+  validateHiJackMaxLength(suburb, "Suburb", 30, vmfCodeText);
+  validateHiJackMaxLength(town, "Town", 20, vmfCodeText);
+  validateHiJackMaxLength(incidentTown, "Incident location", 50, vmfCodeText);
+  validateHiJackMaxLength(street, "Street name", 30, vmfCodeText);
+  validateHiJackMaxLength(incidentDescription, "Hi-Jack description", 60, vmfCodeText);
+  validateHiJackMaxLength(incidentRemarks, "Remarks", 80, vmfCodeText);
+  if (informCro === "Y" && !croRemarks) {
+    redirectHiJackWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+  }
+
+  try {
+    const result = await createHiJackIncident({
+      VmfCode: vmfCode,
+      IncidentType: "Hi-Jack",
+      TransportOfficerName: transportOfficerName || null,
+      TransportOfficerTel: transportOfficerTel || null,
+      TransportOfficerFax: transportOfficerFax || null,
+      TransportOfficerEmail: transportOfficerEmail || null,
+      TransportOfficerSite: getPositiveInt(formData, "xtrssite", "transportOfficerSite"),
+      CallerName: callerName || transportOfficerName || null,
+      CallerTel: callerName ? callerTel || null : transportOfficerTel || null,
+      CallerFax: callerName ? callerFax || null : transportOfficerFax || null,
+      CallerEmail: callerName ? callerEmail || null : transportOfficerEmail || null,
+      InformCro: informCro,
+      CroRemarks: croRemarks || null,
+      IncidentRemarks: incidentRemarks || null,
+      NotifyListCode: getPositiveInt(formData, "xnotc", "notifyListCode"),
+      CallClosed: callClosed,
+      IncidentDate: `${incidentDate}T00:00:00`,
+      IncidentTime: incidentTime ? `${incidentDate}T${incidentTime}:00` : null,
+      IncidentTown: incidentTown || null,
+      IncidentStreet: street || null,
+      DriverName: driverName || transportOfficerName || null,
+      DriverTel: driverName ? driverTel || null : transportOfficerTel || null,
+      DriverPersalno: driverPersalno || null,
+      IncidentDesc: incidentDescription || null,
+    });
+
+    const params = new URLSearchParams({
+      saved: "1",
+      incidentType: "Hi-Jack",
+      ccVMF: String(vmfCode),
+      code: String(result.callCentreCode),
+    });
+    redirect(`${HIJACK_SHOW_DETAIL_PATH}?${params.toString()}`);
+  } catch (error) {
+    redirectHiJackWithError(apiErrorMessage(error), String(vmfCode));
+  }
 }
 
 export async function saveAccidentTowingAction(formData: FormData) {
