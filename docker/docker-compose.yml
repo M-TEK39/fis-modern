@@ -17,6 +17,11 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - TZ=Africa/Johannesburg
       - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
+      - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
+      - AzureAd__TenantId=${AzureAd__TenantId:-}
+      - AzureAd__ClientId=${AzureAd__ClientId:-}
+      - AzureAd__ClientSecret=${AzureAd__ClientSecret:-}
+      - AzureAd__CallbackPath=/signin-microsoft
       - Cors__Origins__0=https://localhost
       - Cors__Origins__1=https://${SERVER_IP:-localhost}
       - Cors__Origins__2=https://${SERVER_HOSTNAME:-localhost}
@@ -46,11 +51,6 @@ services:
       - TZ=Africa/Johannesburg
       - ApiSettings__BaseUrl=http://fis-api:8080
       - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
-      # Keep Microsoft Identity fallback enabled when its deployment secrets
-      # are supplied through the environment; values are never committed here.
-      - AzureAd__TenantId=${AzureAd__TenantId:-}
-      - AzureAd__ClientId=${AzureAd__ClientId:-}
-      - AzureAd__ClientSecret=${AzureAd__ClientSecret:-}
     expose:
       - "8080"
     depends_on:
@@ -71,6 +71,7 @@ services:
       - NEXT_TELEMETRY_DISABLED=1
       - API_BASE_URL=http://fis-api:8080
       - MICROSOFT_SIGN_IN_ENABLED=${AzureAd__ClientId:-}
+      - MICROSOFT_SIGN_IN_URL=/api/auth/microsoft/sign-in
       - PORT=3000
       - HOSTNAME=0.0.0.0
       - TZ=Africa/Johannesburg

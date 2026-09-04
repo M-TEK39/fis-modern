@@ -1526,7 +1526,7 @@ public class AuthController : ControllerBase
 
     private static readonly string RefreshTokenCookieName = "FIS_Refresh_Token";
 
-    private static List<Claim> BuildAuthClaims(int userAccessCode, string email, long accessLevel = 0, bool passwordExpired = false)
+    internal static List<Claim> BuildAuthClaims(int userAccessCode, string email, long accessLevel = 0, bool passwordExpired = false)
     {
         var claims = new List<Claim>
         {
@@ -1554,7 +1554,7 @@ public class AuthController : ControllerBase
     private const long BitFinancial = 16;
     private const long BitWorkshop = 32;
 
-    private static class LegacyRoleMap
+    internal static class LegacyRoleMap
     {
         // role name (as checked by pages) -> required permission bit
         private static readonly (string Role, long Bit)[] Map =

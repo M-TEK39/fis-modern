@@ -30,6 +30,7 @@ function LoginFallback() {
 
 async function LoginContent() {
   const session = await getSession();
+  const microsoftSignInUrl = process.env.MICROSOFT_SIGN_IN_URL?.trim() || "/api/auth/microsoft/sign-in";
   const microsoftSignInEnabled = Boolean(process.env.MICROSOFT_SIGN_IN_ENABLED?.trim());
 
   return (
@@ -74,7 +75,7 @@ async function LoginContent() {
             <p>Use your fleet credentials to access the system.</p>
           </div>
           {microsoftSignInEnabled ? (
-            <a className="button button-secondary button-wide" href="/MicrosoftIdentity/Account/SignIn">
+            <a className="button button-secondary button-wide" href={microsoftSignInUrl}>
               Sign in with Microsoft
             </a>
           ) : null}

@@ -154,13 +154,34 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-builder.Services.AddAuthentication(options =>
+var authenticationBuilder = builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = SessionCookieAuthenticationHandler.SchemeName;
     options.DefaultChallengeScheme = SessionCookieAuthenticationHandler.SchemeName;
 }).AddScheme<AuthenticationSchemeOptions, SessionCookieAuthenticationHandler>(
     SessionCookieAuthenticationHandler.SchemeName,
     _ => { });
+
+if (!string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientId"])
+    && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:TenantId"])
+    && !string.IsNullOrWhiteSpace(builder.Configuration["AzureAd:ClientSecret"]))
+{
+    authenticationBuilder.AddMicrosoftIdentityWebApp(
+        options =>
+        {
+            builder.Configuration.Bind("AzureAd", options);
+            options.CallbackPath = MicrosoftAuthenticationDefaults.CallbackPath;
+        },
+        cookieOptions =>
+        {
+            cookieOptions.Cookie.Name = ".FIS.MicrosoftIdentity";
+            cookieOptions.Cookie.HttpOnly = true;
+            cookieOptions.Cookie.SameSite = SameSiteMode.Lax;
+            cookieOptions.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        },
+        openIdConnectScheme: MicrosoftAuthenticationDefaults.OpenIdConnectScheme,
+        cookieScheme: MicrosoftAuthenticationDefaults.CookieScheme);
+}
 
 builder.Services.AddAuthorization();
 
@@ -172,6 +193,7 @@ builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled
 builder.Services.AddScoped<ILegacyReportResultService, LegacyReportResultService>();
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
 builder.Services.AddScoped<LegacyCredentialCompatibilityService>();
+builder.Services.AddScoped<MicrosoftIdentityCompatibilityService>();
 
 // Register lightweight PDF service.
 builder.Services.AddScoped<IPdfGenerationService, PdfGenerationService>();
