@@ -201,6 +201,51 @@ input:focus-visible {
   outline: 0;
 }
 
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--fis-border);
+  border-radius: 0.7rem;
+  background: var(--fis-elevated);
+  color: var(--fis-text);
+  padding: 0.7rem 0.85rem;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.field textarea {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--fis-info);
+  box-shadow: 0 0 0 4px var(--fis-ring);
+  outline: 0;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.vehicle-form-stack {
+  display: grid;
+  gap: 1.25rem;
+  padding-top: 1.5rem;
+}
+
+.form-error {
+  margin: 0;
+  border: 1px solid hsl(0 72% 51% / 0.3);
+  border-radius: 0.65rem;
+  background: var(--fis-error-bg);
+  color: var(--fis-error);
+  padding: 0.75rem 0.85rem;
+}
+
 .button-row,
 .auth-actions {
   display: flex;
@@ -334,6 +379,11 @@ input:focus-visible {
 .status-icon-error {
   background: var(--fis-error-bg);
   color: var(--fis-error);
+}
+
+.status-icon-success {
+  background: var(--fis-success-bg, hsl(142 71% 95%));
+  color: var(--fis-success, hsl(142 71% 27%));
 }
 
 .eyebrow {
@@ -1164,6 +1214,12 @@ input:focus-visible {
 .button-danger:hover:not(:disabled) {
   border-color: hsl(0 72% 42%);
   background: hsl(0 72% 42%);
+}
+
+@media (max-width: 680px) {
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .notice-success {
