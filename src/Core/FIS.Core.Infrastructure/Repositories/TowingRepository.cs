@@ -413,7 +413,10 @@ public class TowingRepository : ITowingRepository
             new("vmf_code", "@vmfCode", DbType.Int32, towing.vmf_code),
             new("Call_refer", "@callRefer", DbType.Decimal, towing.Call_refer),
             new("Tow_request_date", "@requestDate", DbType.Date, towing.Tow_request_date?.Date),
-            new("Tow_request_time", "@requestTime", DbType.Time, ToTimeValue(towing.Tow_request_time)),
+            // The legacy table stores time(3), while the expanded table uses
+            // datetime2. SQL Server converts this parameter to the target
+            // column without losing the legacy time-only behavior.
+            new("Tow_request_time", "@requestTime", DbType.DateTime2, towing.Tow_request_time),
             new("Tow_location_start", "@locationStart", DbType.String, towing.Tow_location_start),
             new("Vehicle_problem", "@vehicleProblem", DbType.String, towing.Vehicle_problem),
             new("Keys", "@keys", DbType.String, towing.Keys),
@@ -493,9 +496,6 @@ public class TowingRepository : ITowingRepository
             "Tow_request_time" => "time",
             _ => "varchar(1)"
         };
-
-    private static TimeSpan? ToTimeValue(DateTime? value)
-        => value?.TimeOfDay;
 
     private static string? ReadString(DbDataReader reader, string column)
     {

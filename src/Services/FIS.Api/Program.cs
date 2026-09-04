@@ -197,6 +197,7 @@ builder.Services.AddScoped<MicrosoftIdentityCompatibilityService>();
 builder.Services.AddScoped<NotifyListCompatibilityService>();
 builder.Services.AddScoped<TowTruckCompatibilityService>();
 builder.Services.AddScoped<AccidentCompatibilityService>();
+builder.Services.AddScoped<LossCompatibilityService>();
 
 // Register lightweight PDF service.
 builder.Services.AddScoped<IPdfGenerationService, PdfGenerationService>();

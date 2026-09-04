@@ -16,6 +16,7 @@ public class CallCentreController : BaseApiController
     private readonly ICallCentreRepository _repository;
     private readonly ITowingRepository _towingRepository;
     private readonly AccidentCompatibilityService _accidentService;
+    private readonly LossCompatibilityService _lossService;
     private readonly FisDbContext _context;
     private readonly ILogger<CallCentreController> _logger;
 
@@ -23,12 +24,14 @@ public class CallCentreController : BaseApiController
         ICallCentreRepository repository,
         ITowingRepository towingRepository,
         AccidentCompatibilityService accidentService,
+        LossCompatibilityService lossService,
         FisDbContext context,
         ILogger<CallCentreController> logger)
     {
         _repository = repository;
         _towingRepository = towingRepository;
         _accidentService = accidentService;
+        _lossService = lossService;
         _context = context;
         _logger = logger;
     }
@@ -106,6 +109,112 @@ public class CallCentreController : BaseApiController
                 "Error creating Hi-Jack record for vehicle {VmfCode}",
                 dto.VmfCode);
             return StatusCode(500, new { error = "Failed to create Hi-Jack record." });
+        }
+    }
+
+    [HttpPost("loss")]
+    public async Task<ActionResult<LossCreateResultDto>> CreateLoss(
+        [FromBody] CreateLossDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        if (dto.VmfCode is not > 0)
+        {
+            return BadRequest(new { error = "A valid vehicle is required." });
+        }
+
+        if (!string.Equals(dto.IncidentType, "Loss_Theft", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "The incident type must be Loss_Theft." });
+        }
+
+        if (dto.IncidentDate is null)
+        {
+            return BadRequest(new { error = "A valid loss date is required." });
+        }
+
+        if (dto.LossTypeCode is not > 0)
+        {
+            return BadRequest(new { error = "A loss type is required." });
+        }
+
+        if (!IsIncidentChoice(dto.InformCro) || !IsIncidentChoice(dto.CallClosed) ||
+            !IsIncidentChoice(dto.TowNeed))
+        {
+            return BadRequest(new { error = "The incident notification, closure, or towing choices are invalid." });
+        }
+
+        var currentUserId = GetCurrentUserId();
+        var now = DateTime.UtcNow;
+        var rawDriverName = dto.DriverName;
+        var call = new CallCentre
+        {
+            Call_time = now,
+            Call_date = now.Date,
+            Incident_date = dto.IncidentDate.Value.Date,
+            Incident_time = null,
+            Counter = 1,
+            User_access_code = GetLegacyUserAccessCode(),
+            Capture_name = User.Identity?.Name
+        };
+        ApplyFields(call, dto);
+        call.Incident_type = "Loss_Theft";
+        call.User_access_code = GetLegacyUserAccessCode();
+        call.Capture_name = User.Identity?.Name;
+
+        var callerProvided = !string.IsNullOrWhiteSpace(dto.CallerName);
+        call.Caller_name = callerProvided ? dto.CallerName : dto.TransportOfficerName;
+        call.Caller_tel = callerProvided ? dto.CallerTel : dto.TransportOfficerTel;
+        call.Caller_fax = callerProvided ? dto.CallerFax : dto.TransportOfficerFax;
+        call.Caller_email = callerProvided ? dto.CallerEmail : dto.TransportOfficerEmail;
+
+        var driverProvided = !string.IsNullOrWhiteSpace(dto.DriverName);
+        call.Driver_name = driverProvided ? dto.DriverName : dto.TransportOfficerName;
+        call.Driver_tel = driverProvided ? dto.DriverTel : dto.TransportOfficerTel;
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        try
+        {
+            var createdCall = await _repository.CreateAsync(call, currentUserId);
+            var createdLoss = await _lossService.CreateAsync(
+                new LossCaptureValues(
+                    dto.VmfCode.Value,
+                    dto.IncidentDate.Value.Date,
+                    dto.LossTypeCode,
+                    dto.TransportOfficerSite,
+                    dto.TransportOfficerName,
+                    dto.IncidentTown,
+                    rawDriverName,
+                    dto.IncidentRemarks,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    createdCall.Call_centre_code,
+                    dto.TowNeed),
+                currentUserId,
+                HttpContext.RequestAborted);
+
+            await transaction.CommitAsync(HttpContext.RequestAborted);
+            return Ok(new LossCreateResultDto
+            {
+                CallCentreCode = createdCall.Call_centre_code,
+                LossCode = createdLoss,
+            });
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(HttpContext.RequestAborted);
+            _logger.LogError(
+                ex,
+                "Error creating Loss/Theft record for vehicle {VmfCode}",
+                dto.VmfCode);
+            return StatusCode(500, new { error = "Failed to create Loss/Theft record." });
         }
     }
 
@@ -854,6 +963,12 @@ public class CreateHiJackDto : CallCentreFieldsDto
 {
 }
 
+public class CreateLossDto : CallCentreFieldsDto
+{
+    public short? LossTypeCode { get; set; }
+    public string? TowNeed { get; set; }
+}
+
 public class RoadAssistanceCreateResultDto
 {
     public short CallCentreCode { get; set; }
@@ -869,6 +984,12 @@ public class AccidentCreateResultDto
 public class HiJackCreateResultDto
 {
     public short CallCentreCode { get; set; }
+}
+
+public class LossCreateResultDto
+{
+    public short CallCentreCode { get; set; }
+    public short LossCode { get; set; }
 }
 
 public abstract class CallCentreFieldsDto
