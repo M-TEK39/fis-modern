@@ -219,69 +219,6 @@ public class VehicleApiService
             });
     }
 
-    public async Task<VehicleStatusChangeResult> ChangeVehicleStatusAsync(
-        int vmfCode,
-        short newStatusCode,
-        short? siteCode,
-        DateTime? effectiveDate,
-        string? notes)
-    {
-        try
-        {
-            AddAuthorizationHeader();
-
-            var payload = new
-            {
-                new_status_code = newStatusCode,
-                site_code = siteCode,
-                effective_date = effectiveDate,
-                notes
-            };
-
-            var response = await _httpClient.PatchAsJsonAsync($"api/vehicles/{vmfCode}/status", payload);
-            var body = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return new VehicleStatusChangeResult
-                {
-                    Success = false,
-                    StatusCode = (int)response.StatusCode,
-                    Message = ExtractApiErrorMessage(body) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode})."
-                };
-            }
-
-            var parsed = JsonSerializer.Deserialize<VehicleStatusChangeApiResponse>(
-                body,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web)
-                {
-                    PropertyNameCaseInsensitive = true
-                });
-
-            return new VehicleStatusChangeResult
-            {
-                Success = true,
-                StatusCode = (int)response.StatusCode,
-                Message = "Request completed successfully.",
-                new_status_code = parsed?.new_status_code,
-                new_status_description = parsed?.new_status_description,
-                effective_date = parsed?.effective_date,
-                location_code = parsed?.location_code,
-                closed_contract_code = parsed?.closed_contract_code,
-                actions_performed = parsed?.actions_performed ?? new List<string>()
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error changing vehicle status for {VmfCode}", vmfCode);
-            return new VehicleStatusChangeResult
-            {
-                Success = false,
-                Message = "Request failed."
-            };
-        }
-    }
-
     public async Task<VehicleLicenceHistoryResult> GetVehicleLicenceHistoryAsync(int vmfCode)
     {
         try
@@ -476,110 +413,6 @@ public class VehicleApiService
                 Success = false,
                 Endpoint = $"api/vehicles/{vmfCode}/invoice",
                 Message = "Request failed."
-            };
-        }
-    }
-
-    public async Task<List<VehicleAuthorizationDto>> GetPendingAuthorizationsAsync()
-        => await GetVehicleAuthorizationsAsync("api/vehicle/authorization/pending");
-
-    public async Task<List<VehicleAuthorizationDto>> GetAuthorizedAuthorizationsAsync()
-        => await GetVehicleAuthorizationsAsync("api/vehicle/authorization/authorized");
-
-    public async Task<List<VehicleAuthorizationDto>> GetRejectedAuthorizationsAsync()
-        => await GetVehicleAuthorizationsAsync("api/vehicle/authorization/rejected");
-
-    public async Task<VehicleAuthorizationDto?> GetVehicleAuthorizationAsync(int id)
-    {
-        try
-        {
-            AddAuthorizationHeader();
-            var response = await _httpClient.GetAsync($"api/vehicle/authorization/{id}");
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            return await response.Content.ReadFromJsonAsync<VehicleAuthorizationDto>();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading vehicle authorization {Id}", id);
-            return null;
-        }
-    }
-
-    public async Task<FinanceApiResult> ApproveVehicleAuthorizationAsync(int id, string? comment)
-    {
-        return await PostVehicleAuthorizationActionAsync(
-            $"api/vehicle/authorization/{id}/approve",
-            new { comment });
-    }
-
-    public async Task<FinanceApiResult> RejectVehicleAuthorizationAsync(int id, string rejectionReason, string? comment)
-    {
-        return await PostVehicleAuthorizationActionAsync(
-            $"api/vehicle/authorization/{id}/reject",
-            new { rejectionReason, comment });
-    }
-
-    public async Task<FinanceApiResult> AddVehicleAuthorizationCommentAsync(int id, string comment)
-    {
-        return await PostVehicleAuthorizationActionAsync(
-            $"api/vehicle/authorization/{id}/comment",
-            new { comment });
-    }
-
-    private async Task<List<VehicleAuthorizationDto>> GetVehicleAuthorizationsAsync(string endpoint)
-    {
-        try
-        {
-            AddAuthorizationHeader();
-            var response = await _httpClient.GetAsync(endpoint);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<VehicleAuthorizationDto>>()
-                ?? new List<VehicleAuthorizationDto>();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading vehicle authorization list.");
-            return new List<VehicleAuthorizationDto>();
-        }
-    }
-
-    private async Task<FinanceApiResult> PostVehicleAuthorizationActionAsync(string endpoint, object payload)
-    {
-        try
-        {
-            AddAuthorizationHeader();
-            var response = await _httpClient.PostAsJsonAsync(endpoint, payload);
-            var body = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Vehicle authorization action failed. Status: {Status}. Body: {Body}",
-                    response.StatusCode,
-                    body);
-            }
-
-            return new FinanceApiResult
-            {
-                Success = response.IsSuccessStatusCode,
-                StatusCode = (int)response.StatusCode,
-                Endpoint = endpoint,
-                Message = response.IsSuccessStatusCode
-                    ? "Request completed successfully."
-                    : SanitizeUserMessage(ExtractApiErrorMessage(body)) ?? $"Request failed with status {(int)response.StatusCode} ({response.StatusCode}).",
-                ResponseBody = body
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error posting vehicle authorization action.");
-            return new FinanceApiResult
-            {
-                Success = false,
-                Endpoint = endpoint,
-                Message = SanitizeUserMessage(ex.Message) ?? "Request failed."
             };
         }
     }
@@ -852,33 +685,10 @@ public class VehicleLicenceHistoryEntryDto
     public string? update_notes { get; set; }
 }
 
-public class VehicleStatusChangeResult
-{
-    public bool Success { get; set; }
-    public int StatusCode { get; set; }
-    public string Message { get; set; } = string.Empty;
-    public short? new_status_code { get; set; }
-    public string? new_status_description { get; set; }
-    public DateTime? effective_date { get; set; }
-    public short? location_code { get; set; }
-    public int? closed_contract_code { get; set; }
-    public List<string> actions_performed { get; set; } = new();
-}
-
 file sealed class VehicleLicenceHistoryApiResponse
 {
     public int vmf_code { get; set; }
     public string? fleet_number { get; set; }
     public string? registration_number { get; set; }
     public List<VehicleLicenceHistoryEntryDto>? history { get; set; }
-}
-
-file sealed class VehicleStatusChangeApiResponse
-{
-    public short? new_status_code { get; set; }
-    public string? new_status_description { get; set; }
-    public DateTime? effective_date { get; set; }
-    public short? location_code { get; set; }
-    public int? closed_contract_code { get; set; }
-    public List<string>? actions_performed { get; set; }
 }
