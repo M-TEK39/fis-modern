@@ -33,6 +33,14 @@ export type VehicleSnapshotPage = {
   totalPages: number;
 };
 
+export type RenumberedVehicleReportRow = {
+  oldVmfCode: number;
+  oldFleetNumber: string | null;
+  oldStatusDescription: string | null;
+  newFleetNumber: string | null;
+  newStatusDescription: string | null;
+};
+
 export class VehicleApiError extends Error {
   constructor(
     public readonly reason: "unauthorized" | "unavailable" | "invalid-response",
@@ -259,4 +267,31 @@ export async function getVehicleSnapshotPage(page: number, pageSize = PAGE_SIZE)
     totalRecords,
     totalPages,
   };
+}
+
+export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleReportRow[]> {
+  const payload = await requestApi("api/vehicles");
+  const vehicles = getCollection(payload)
+    .map(toVehicleSnapshot)
+    .filter((vehicle): vehicle is VehicleSnapshotRow => vehicle !== null);
+  const vehiclesByFleetNumber = new Map(
+    vehicles
+      .filter((vehicle): vehicle is VehicleSnapshotRow & { fleetNumber: string } => Boolean(vehicle.fleetNumber))
+      .map((vehicle) => [vehicle.fleetNumber.trim().toLocaleLowerCase(), vehicle] as const),
+  );
+
+  return vehicles
+    .filter((vehicle) => Boolean(vehicle.renumberedTo))
+    .map((vehicle) => {
+      const replacement = vehiclesByFleetNumber.get(vehicle.renumberedTo!.trim().toLocaleLowerCase());
+
+      return {
+        oldVmfCode: vehicle.vmfCode,
+        oldFleetNumber: vehicle.fleetNumber,
+        oldStatusDescription: vehicle.statusDescription,
+        newFleetNumber: vehicle.renumberedTo,
+        newStatusDescription: replacement?.statusDescription ?? null,
+      } satisfies RenumberedVehicleReportRow;
+    })
+    .sort((left, right) => (left.oldFleetNumber ?? "").localeCompare(right.oldFleetNumber ?? ""));
 }
