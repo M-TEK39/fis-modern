@@ -99,6 +99,28 @@ public class AuctionController : BaseApiController
         }
     }
 
+    /// <summary>
+    /// Updates the complete legacy auction maintenance workflow, including
+    /// barcode and sale fields stored on the related vehicle_master row.
+    /// </summary>
+    [HttpPut("{id}/maintenance")]
+    public async Task<ActionResult<Auction>> UpdateMaintenance(short id, [FromBody] Auction item)
+    {
+        try
+        {
+            if (id != item.auction_code)
+                return BadRequest("ID mismatch");
+
+            var updated = await _repository.UpdateMaintenanceAsync(item, GetCurrentUserId());
+            return Ok(updated);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating auction maintenance {Id}", id);
+            return StatusCode(500, "Error updating auction maintenance");
+        }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
@@ -155,6 +177,7 @@ public class AuctionController : BaseApiController
     {
         var data = (await GetLiveItemsAsync())
             .Where(item => IsWithinInclusiveDateRange(item.auth_date, request.StartDate, request.EndDate))
+            .Where(item => MatchesAuctionNumberAndGarage(item, request.AuctionNumber, request.Garage))
             .OrderByDescending(item => item.auth_date)
             .Cast<object>()
             .ToList();
@@ -175,8 +198,8 @@ public class AuctionController : BaseApiController
         if (!string.IsNullOrWhiteSpace(buyer))
         {
             query = query.Where(item =>
-                (!string.IsNullOrWhiteSpace(item.sold_id) && item.sold_id.Contains(buyer, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(item.garage_owner) && item.garage_owner.Contains(buyer, StringComparison.OrdinalIgnoreCase)));
+                (!string.IsNullOrWhiteSpace(item.sold_to) && item.sold_to.Contains(buyer, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(item.sold_id) && item.sold_id.Contains(buyer, StringComparison.OrdinalIgnoreCase)));
         }
 
         return Ok(new AuctionReportDto
@@ -192,6 +215,18 @@ public class AuctionController : BaseApiController
     [HttpPost("reports/auction-gg")]
     public async Task<ActionResult<AuctionReportDto>> GetReportAuctionGG([FromBody] AuctionGGRequestDto request)
     {
+        if (!string.IsNullOrWhiteSpace(request.AuctionNumber))
+        {
+            var auctionData = (await GetLiveItemsAsync())
+                .Where(item => MatchesAuctionNumberAndGarage(item, request.AuctionNumber, request.Garage))
+                .OrderBy(item => item.vmf_code)
+                .ThenByDescending(item => item.auth_date)
+                .Cast<object>()
+                .ToList();
+
+            return Ok(new AuctionReportDto { ReportType = "AuctionGG", Data = auctionData });
+        }
+
         var gg = request.GGNumber?.Trim();
         if (string.IsNullOrWhiteSpace(gg))
         {
@@ -219,6 +254,18 @@ public class AuctionController : BaseApiController
     [HttpPost("reports/auction-lot")]
     public async Task<ActionResult<AuctionReportDto>> GetReportAuctionLot([FromBody] AuctionLotRequestDto request)
     {
+        if (!string.IsNullOrWhiteSpace(request.AuctionNumber))
+        {
+            var auctionData = (await GetLiveItemsAsync())
+                .Where(item => MatchesAuctionNumberAndGarage(item, request.AuctionNumber, request.Garage))
+                .OrderBy(item => item.lot)
+                .ThenBy(item => item.vmf_code)
+                .Cast<object>()
+                .ToList();
+
+            return Ok(new AuctionReportDto { ReportType = "AuctionLot", Data = auctionData });
+        }
+
         var lot = request.LotNumber?.Trim();
         var data = (await GetLiveItemsAsync())
             .Where(item => !string.IsNullOrWhiteSpace(lot) &&
@@ -237,6 +284,22 @@ public class AuctionController : BaseApiController
         => (await _repository.GetAllAsync())
             .Where(item => !item.is_deleted)
             .ToList();
+
+    private static bool MatchesAuctionNumberAndGarage(Auction item, string? auctionNumber, string? garage)
+    {
+        if (!string.IsNullOrWhiteSpace(auctionNumber) &&
+            !string.Equals(item.auction_number?.Trim(), auctionNumber.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return garage?.Trim().ToUpperInvariant() switch
+        {
+            "JHB" => item.auction_garage == 1,
+            "PTA" => item.auction_garage == 2,
+            _ => true
+        };
+    }
 
     private static bool IsWithinInclusiveDateRange(DateTime? candidate, DateTime startDate, DateTime endDate)
     {
@@ -261,9 +324,9 @@ public class AuctionController : BaseApiController
 public class AuctionMenuDto { public List<string> Options { get; set; } = new(); }
 public class AuctionReportMenuDto { public List<string> Reports { get; set; } = new(); }
 public class AuctionOneVehicleRequestDto { public int VmfCode { get; set; } }
-public class AuctionAllVehiclesRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+public class AuctionAllVehiclesRequestDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } public string? AuctionNumber { get; set; } public string? Garage { get; set; } }
 public class AuctionSaleToNameRequestDto { public string BuyerName { get; set; } = ""; public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
-public class AuctionGGRequestDto { public string GGNumber { get; set; } = ""; }
-public class AuctionLotRequestDto { public string LotNumber { get; set; } = ""; }
+public class AuctionGGRequestDto { public string GGNumber { get; set; } = ""; public string? AuctionNumber { get; set; } public string? Garage { get; set; } }
+public class AuctionLotRequestDto { public string LotNumber { get; set; } = ""; public string? AuctionNumber { get; set; } public string? Garage { get; set; } }
 public class AuctionReportDto { public string ReportType { get; set; } = ""; public List<object> Data { get; set; } = new(); }
 #endregion

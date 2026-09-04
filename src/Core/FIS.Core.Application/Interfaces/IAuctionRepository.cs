@@ -13,6 +13,7 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Auction>> GetByVehicleAsync(int vmfCode);
         Task<Auction> CreateAsync(Auction auction, int currentUserId);
         Task<Auction> UpdateAsync(Auction auction, int currentUserId);
+        Task<Auction> UpdateMaintenanceAsync(Auction auction, int currentUserId);
         Task DeleteAsync(short auctionCode, int currentUserId);
     }
 }

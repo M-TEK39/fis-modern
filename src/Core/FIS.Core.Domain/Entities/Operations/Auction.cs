@@ -108,6 +108,22 @@ public class Auction
     [Column("remark")]
     public string? remark { get; set; }
 
+    // These four values are legacy auction-maintenance fields stored on the
+    // related vehicle_master row. They are deliberately not mapped to the
+    // auction table; the compatibility repository hydrates and writes them
+    // through the same maintenance operation.
+    [NotMapped]
+    public string? barcode { get; set; }
+
+    [NotMapped]
+    public string? sold_to { get; set; }
+
+    [NotMapped]
+    public DateTime? sold_date { get; set; }
+
+    [NotMapped]
+    public decimal? sold_amount { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Associated vehicle

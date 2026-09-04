@@ -17,6 +17,10 @@ public sealed record AuctionDto
     public decimal? reserve_amount { get; set; }
     public string? sold_id { get; set; }
     public string? remark { get; set; }
+    public string? barcode { get; set; }
+    public string? sold_to { get; set; }
+    public DateTime? sold_date { get; set; }
+    public decimal? sold_amount { get; set; }
 }
 
 public class AuctionReportDto
@@ -34,6 +38,8 @@ public class AuctionAllVehiclesReportRequestDto
 {
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
+    public string? AuctionNumber { get; set; }
+    public string? Garage { get; set; }
 }
 
 public class AuctionSaleToNameReportRequestDto
@@ -46,9 +52,13 @@ public class AuctionSaleToNameReportRequestDto
 public class AuctionGgReportRequestDto
 {
     public string GGNumber { get; set; } = string.Empty;
+    public string? AuctionNumber { get; set; }
+    public string? Garage { get; set; }
 }
 
 public class AuctionLotReportRequestDto
 {
     public string LotNumber { get; set; } = string.Empty;
+    public string? AuctionNumber { get; set; }
+    public string? Garage { get; set; }
 }
