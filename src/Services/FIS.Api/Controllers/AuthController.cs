@@ -26,29 +26,29 @@ namespace FIS.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
-    private readonly IUserRepository _userRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<AuthController> _logger;
     private readonly ISessionTokenStore _sessionTokenStore;
     private readonly IEmailNotificationService _emailNotificationService;
     private readonly IPasswordService _passwordService;
+    private readonly LegacyCredentialCompatibilityService _legacyCredentialCompatibility;
 
     public AuthController(
         IConfiguration configuration,
-        IUserRepository userRepository,
         FisDbContext context,
         ILogger<AuthController> logger,
         ISessionTokenStore sessionTokenStore,
         IEmailNotificationService emailNotificationService,
-        IPasswordService passwordService)
+        IPasswordService passwordService,
+        LegacyCredentialCompatibilityService legacyCredentialCompatibility)
     {
         _configuration = configuration;
-        _userRepository = userRepository;
         _context = context;
         _logger = logger;
         _sessionTokenStore = sessionTokenStore;
         _emailNotificationService = emailNotificationService;
         _passwordService = passwordService;
+        _legacyCredentialCompatibility = legacyCredentialCompatibility;
     }
 
     /// <summary>
@@ -68,54 +68,86 @@ public class AuthController : ControllerBase
             return BadRequest(new { error = "Username and password are required" });
         }
 
-        // Accept either user_access_code (numeric) or email/username identifier.
-        User? user;
-        if (int.TryParse(request.Username.Trim(), out var requestedUserCode) && requestedUserCode > 0)
-        {
-            user = await _userRepository.GetByIdAsync(requestedUserCode);
-        }
-        else
-        {
-            user = await _userRepository.GetByEmailAsync(request.Username.Trim());
-        }
-        if (user == null)
+        // Resolve the legacy profile first. The expanded TS_Users/credential tables
+        // are optional during rollout, so login must not require them to exist.
+        var profile = await ResolveUserProfileAsync(request.Username);
+        if (profile == null)
         {
             _logger.LogWarning("Login failed: user not found for {Username}", request.Username);
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
-        var credential = await _context.LegacyUserCredentials
-            .FirstOrDefaultAsync(c => c.user_access_code == user.user_access_code && c.is_active);
+        var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+        var credential = modernCredentialLookup.Credential;
 
-        if (credential == null)
+        if (credential is not null && !credential.is_active)
         {
-            _logger.LogWarning("Login failed: no active credential for user {UserAccessCode}", user.user_access_code);
+            _logger.LogWarning("Login failed: inactive credential for user {UserAccessCode}", profile.UserAccessCode);
+            return Unauthorized(new { error = "Invalid username or password" });
+        }
+
+        if (profile.UserAccessOld is { user_active: false })
+        {
+            _logger.LogWarning("Login failed: inactive legacy profile for user {UserAccessCode}", profile.UserAccessCode);
+            return Unauthorized(new { error = "Invalid username or password" });
+        }
+
+        var usingModernPassword = !string.IsNullOrWhiteSpace(credential?.password_hash);
+        var storedPassword = usingModernPassword ? credential!.password_hash : profile.UserAccessOld?.password;
+        if (string.IsNullOrWhiteSpace(storedPassword))
+        {
+            _logger.LogWarning("Login failed: no credential for user {UserAccessCode}", profile.UserAccessCode);
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
         // Account lockout check
-        if (credential.account_locked_until.HasValue && credential.account_locked_until.Value > DateTime.UtcNow)
+        if (credential?.account_locked_until.HasValue == true && credential.account_locked_until.Value > DateTime.UtcNow)
         {
             return Unauthorized(new { error = "Account is temporarily locked. Please try again later." });
         }
 
         // Verify password
-        var passwordValid = BCrypt.Net.BCrypt.Verify(request.Password, credential.password_hash);
+        var passwordValid = VerifyStoredPassword(
+            request.Password,
+            storedPassword,
+            allowLegacyPlaintext: !usingModernPassword);
         if (!passwordValid)
         {
-            credential.failed_login_attempts++;
-            if (credential.failed_login_attempts >= 5)
-                credential.account_locked_until = DateTime.UtcNow.AddMinutes(30);
-            _context.LegacyUserCredentials.Update(credential);
+            if (credential is not null)
+            {
+                credential.failed_login_attempts++;
+                if (credential.failed_login_attempts >= 5)
+                    credential.account_locked_until = DateTime.UtcNow.AddMinutes(30);
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            if (profile.UserAccessOld is not null)
+            {
+                profile.UserAccessOld.Retry = (short)Math.Min(short.MaxValue, (profile.UserAccessOld.Retry ?? 0) + 1);
+                _context.UserAccessOlds.Update(profile.UserAccessOld);
+            }
+
             await _context.SaveChangesAsync();
-            _logger.LogWarning("Login failed: wrong password for user {UserAccessCode}", user.user_access_code);
+            _logger.LogWarning("Login failed: wrong password for user {UserAccessCode}", profile.UserAccessCode);
             return Unauthorized(new { error = "Invalid username or password" });
         }
 
         // Successful login — reset failed attempts
-        credential.failed_login_attempts = 0;
-        credential.account_locked_until = null;
-        _context.LegacyUserCredentials.Update(credential);
+        if (credential is not null)
+        {
+            credential.failed_login_attempts = 0;
+            credential.account_locked_until = null;
+            _context.LegacyUserCredentials.Update(credential);
+        }
+
+        if (profile.UserAccessOld is not null)
+        {
+            profile.UserAccessOld.Retry = 0;
+            profile.UserAccessOld.last_log_on = DateTime.UtcNow;
+            profile.UserAccessOld.date_updated = DateTime.UtcNow;
+            _context.UserAccessOlds.Update(profile.UserAccessOld);
+        }
+
         await _context.SaveChangesAsync();
 
         // Password expiry check — disabled by default for legacy data compatibility.
@@ -128,12 +160,17 @@ public class AuthController : ControllerBase
         {
             var fallbackExpiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "90");
 
-            if (credential.password_expiry_date.HasValue && credential.password_expiry_date.Value > new DateTime(2000, 1, 1))
+            if (credential?.password_expiry_date.HasValue == true && credential.password_expiry_date.Value > new DateTime(2000, 1, 1))
             {
                 passwordExpired = DateTime.UtcNow > credential.password_expiry_date.Value;
                 daysRemaining = Math.Max(0, (int)(credential.password_expiry_date.Value - DateTime.UtcNow).TotalDays);
             }
-            else if (credential.last_password_change > new DateTime(2000, 1, 1))
+            else if (profile.UserAccessOld?.PWD_Expires.HasValue == true && profile.UserAccessOld.PWD_Expires.Value > new DateTime(2000, 1, 1))
+            {
+                passwordExpired = DateTime.UtcNow > profile.UserAccessOld.PWD_Expires.Value;
+                daysRemaining = Math.Max(0, (int)(profile.UserAccessOld.PWD_Expires.Value - DateTime.UtcNow).TotalDays);
+            }
+            else if (credential?.last_password_change > new DateTime(2000, 1, 1))
             {
                 var passwordAge = (DateTime.UtcNow - credential.last_password_change).TotalDays;
                 passwordExpired = passwordAge > fallbackExpiryDays;
@@ -142,18 +179,15 @@ public class AuthController : ControllerBase
             // else: no usable timestamp on the credential row — treat as "not expired" rather than force-expire legacy users
         }
 
-        var accessLevel = await _context.UserAccessOlds
-            .AsNoTracking()
-            .Where(a => a.user_access_code == user.user_access_code)
-            .Select(a => (long?)a.AccessLevel)
-            .FirstOrDefaultAsync() ?? 0L;
+        var accessLevel = profile.UserAccessOld?.AccessLevel ?? 0L;
 
         var grantedRoles = LegacyRoleMap.RolesForAccessLevel(accessLevel).ToArray();
         _logger.LogInformation(
             "Login: user_access_code={UserAccessCode} access_level={AccessLevel} roles={Roles}",
-            user.user_access_code, accessLevel, string.Join(",", grantedRoles));
+            profile.UserAccessCode, accessLevel, string.Join(",", grantedRoles));
 
-        var authClaims = BuildAuthClaims(user.user_access_code, user.email ?? request.Username, accessLevel, passwordExpired);
+        var email = profile.User?.email ?? profile.UserAccessOld?.E_Mail ?? request.Username.Trim();
+        var authClaims = BuildAuthClaims(profile.UserAccessCode, email, accessLevel, passwordExpired);
         var tokens = _sessionTokenStore.IssueTokens(authClaims);
 
         WriteAuthCookies(tokens.AccessToken, tokens.AccessExpiresAt, tokens.RefreshToken, tokens.RefreshExpiresAt);
@@ -162,8 +196,8 @@ public class AuthController : ControllerBase
         {
             Token = tokens.AccessToken,
             ExpiresAt = tokens.AccessExpiresAt.UtcDateTime,
-            UserAccessCode = user.user_access_code,
-            Email = user.email,
+            UserAccessCode = profile.UserAccessCode,
+            Email = profile.User?.email ?? profile.UserAccessOld?.E_Mail,
             PasswordExpired = passwordExpired,
             PasswordExpiresIn = daysRemaining,
             Message = passwordExpired
@@ -275,12 +309,8 @@ public class AuthController : ControllerBase
                 });
             }
 
-            // Try to parse username as user_access_code, or lookup by email
-            int.TryParse(request.Username, out var userCode);
-            var user = userCode > 0
-                ? await _userRepository.GetByIdAsync(userCode)
-                : await _userRepository.GetByEmailAsync(request.Username);
-            if (user == null)
+            var profile = await ResolveUserProfileAsync(request.Username);
+            if (profile == null)
             {
                 return NotFound(new ChangePasswordResponse
                 {
@@ -289,28 +319,38 @@ public class AuthController : ControllerBase
                 });
             }
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == user.user_access_code && c.is_active);
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
+            var usingModernPassword = !string.IsNullOrWhiteSpace(credential?.password_hash);
+            var storedPassword = usingModernPassword ? credential!.password_hash : profile.UserAccessOld?.password;
 
-            if (credential == null)
+            if (credential is not null && !credential.is_active)
+                return BadRequest(new ChangePasswordResponse { Success = false, Message = "No active credential record found for this user" });
+
+            if (string.IsNullOrWhiteSpace(storedPassword))
                 return BadRequest(new ChangePasswordResponse { Success = false, Message = "No credential record found for this user" });
 
-            if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, credential.password_hash))
+            if (!VerifyStoredPassword(request.CurrentPassword, storedPassword, allowLegacyPlaintext: !usingModernPassword))
                 return BadRequest(new ChangePasswordResponse { Success = false, Message = "Current password is incorrect" });
 
             var changedByRaw = User.FindFirst("user_access_code")?.Value;
             int.TryParse(changedByRaw, out int changedBy);
             var now = DateTime.UtcNow;
 
-            credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-            credential.last_password_change = now;
-            credential.password_expiry_date = now.AddDays(90);
-            credential.changed_by_user_code = changedBy > 0 ? changedBy : null;
-            credential.modified_date = now;
-            credential.failed_login_attempts = 0;
-            credential.account_locked_until = null;
-            _context.LegacyUserCredentials.Update(credential);
-            await _context.SaveChangesAsync();
+            if (credential is not null)
+            {
+                credential.password_hash = _passwordService.HashPassword(request.NewPassword);
+                credential.last_password_change = now;
+                credential.password_expiry_date = now.AddDays(90);
+                credential.changed_by_user_code = changedBy > 0 ? changedBy : null;
+                credential.modified_date = now;
+                credential.failed_login_attempts = 0;
+                credential.account_locked_until = null;
+                _context.LegacyUserCredentials.Update(credential);
+            }
+
+            ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
+            await SaveChangesWithOptionalCredentialAsync(credential);
 
             _logger.LogInformation(
                 "Password changed successfully for user {Username} by user_access_code {ChangedBy}",
@@ -380,9 +420,20 @@ public class AuthController : ControllerBase
                 });
             }
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode && c.is_active);
-            if (credential == null)
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
+            var usingModernPassword = !string.IsNullOrWhiteSpace(credential?.password_hash);
+            var storedPassword = usingModernPassword ? credential!.password_hash : profile.UserAccessOld?.password;
+            if (credential is not null && !credential.is_active)
+            {
+                return BadRequest(new ChangePasswordResponse
+                {
+                    Success = false,
+                    Message = "No active credential record found for this user"
+                });
+            }
+
+            if (string.IsNullOrWhiteSpace(storedPassword))
             {
                 return BadRequest(new ChangePasswordResponse
                 {
@@ -391,7 +442,7 @@ public class AuthController : ControllerBase
                 });
             }
 
-            if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, credential.password_hash))
+            if (!VerifyStoredPassword(request.OldPassword, storedPassword, allowLegacyPlaintext: !usingModernPassword))
             {
                 return BadRequest(new ChangePasswordResponse
                 {
@@ -403,17 +454,21 @@ public class AuthController : ControllerBase
             var actorUserCode = GetActorUserCode();
             var now = DateTime.UtcNow;
 
-            credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-            credential.last_password_change = now;
-            credential.password_expiry_date = now.AddDays(90);
-            credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
-            credential.modified_date = now;
-            credential.failed_login_attempts = 0;
-            credential.account_locked_until = null;
-            credential.password_reset_token = SerializeSecurityQuestionPayload(
-                request.SecurityQuestion.Trim(),
-                HashSecurityAnswer(request.SecurityAnswer));
-            credential.password_reset_token_expiry = null;
+            if (credential is not null)
+            {
+                credential.password_hash = _passwordService.HashPassword(request.NewPassword);
+                credential.last_password_change = now;
+                credential.password_expiry_date = now.AddDays(90);
+                credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                credential.modified_date = now;
+                credential.failed_login_attempts = 0;
+                credential.account_locked_until = null;
+                credential.password_reset_token = SerializeSecurityQuestionPayload(
+                    request.SecurityQuestion.Trim(),
+                    HashSecurityAnswer(request.SecurityAnswer));
+                credential.password_reset_token_expiry = null;
+                _context.LegacyUserCredentials.Update(credential);
+            }
 
             if (!string.IsNullOrWhiteSpace(request.Email))
             {
@@ -431,8 +486,8 @@ public class AuthController : ControllerBase
                 }
             }
 
-            _context.LegacyUserCredentials.Update(credential);
-            await _context.SaveChangesAsync();
+            ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
+            await SaveChangesWithOptionalCredentialAsync(credential);
 
             return Ok(new ChangePasswordResponse
             {
@@ -476,13 +531,14 @@ public class AuthController : ControllerBase
             if (profile.UserAccessOld != null)
             {
                 profile.UserAccessOld.user_active = true;
+                profile.UserAccessOld.Retry = 0;
                 profile.UserAccessOld.last_log_on = now;
                 profile.UserAccessOld.date_updated = now;
                 _context.UserAccessOlds.Update(profile.UserAccessOld);
             }
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
             if (credential != null)
             {
                 credential.failed_login_attempts = 0;
@@ -542,14 +598,14 @@ public class AuthController : ControllerBase
             var now = DateTime.UtcNow;
             var actorUserCode = GetActorUserCode();
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
-            if (credential == null)
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
+            if (credential == null && modernCredentialLookup.StoreAvailable && profile.User != null)
             {
                 credential = new Core.Domain.Entities.Auth.LegacyUserCredential
                 {
                     user_access_code = profile.UserAccessCode,
-                    password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword),
+                    password_hash = _passwordService.HashPassword(request.NewPassword),
                     password_salt = string.Empty,
                     last_password_change = now,
                     password_expiry_date = now.AddDays(90),
@@ -563,36 +619,33 @@ public class AuthController : ControllerBase
             }
             else
             {
-                credential.password_hash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-                credential.last_password_change = now;
-                credential.password_expiry_date = now.AddDays(90);
-                credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
-                credential.failed_login_attempts = 0;
-                credential.account_locked_until = null;
-                credential.is_active = true;
-                credential.modified_date = now;
-
-                var existingPayload = DeserializeSecurityQuestionPayload(credential.password_reset_token);
-                if (existingPayload is null)
+                if (credential != null)
                 {
-                    credential.password_reset_token = SerializeSecurityQuestionPayload(
-                        DefaultSecurityQuestion,
-                        HashSecurityAnswer(profile.ResolvedUsername));
-                    credential.password_reset_token_expiry = null;
+                    credential.password_hash = _passwordService.HashPassword(request.NewPassword);
+                    credential.last_password_change = now;
+                    credential.password_expiry_date = now.AddDays(90);
+                    credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
+                    credential.failed_login_attempts = 0;
+                    credential.account_locked_until = null;
+                    credential.is_active = true;
+                    credential.modified_date = now;
+
+                    var existingPayload = DeserializeSecurityQuestionPayload(credential.password_reset_token);
+                    if (existingPayload is null)
+                    {
+                        credential.password_reset_token = SerializeSecurityQuestionPayload(
+                            DefaultSecurityQuestion,
+                            HashSecurityAnswer(profile.ResolvedUsername));
+                        credential.password_reset_token_expiry = null;
+                    }
+
+                    _context.LegacyUserCredentials.Update(credential);
                 }
-
-                _context.LegacyUserCredentials.Update(credential);
             }
 
-            if (profile.UserAccessOld != null)
-            {
-                profile.UserAccessOld.user_active = true;
-                profile.UserAccessOld.PWD_Expires = now.AddDays(90);
-                profile.UserAccessOld.date_updated = now;
-                _context.UserAccessOlds.Update(profile.UserAccessOld);
-            }
+            ApplyLegacyPasswordChange(profile.UserAccessOld, request.NewPassword, now);
 
-            await _context.SaveChangesAsync();
+            await SaveChangesWithOptionalCredentialAsync(credential);
 
             return Ok(new UserAdminResponse
             {
@@ -634,13 +687,9 @@ public class AuthController : ControllerBase
                 return Ok(new UserAdminResponse { Success = true, Message = genericMessage });
             }
 
-            LegacyUserCredential? credential = null;
-            try
-            {
-                credential = await _context.LegacyUserCredentials
-                    .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode && c.is_active);
-            }
-            catch (SqlException ex) when (ex.Number == 208)
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
+            if (!modernCredentialLookup.StoreAvailable)
             {
                 _logger.LogInformation(
                     "Legacy_User_Credentials is not present; using the legacy user_access_old1 password reset path for user_access_code {UserAccessCode}",
@@ -681,7 +730,7 @@ public class AuthController : ControllerBase
                 credential.password_reset_token_expiry = tokenExpiry;
                 credential.modified_date = DateTime.UtcNow;
                 _context.LegacyUserCredentials.Update(credential);
-                await _context.SaveChangesAsync();
+                await SaveChangesWithOptionalCredentialAsync(modernCredentialLookup.Credential);
             }
 
             var resetUrl = $"{passwordResetBaseUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
@@ -799,12 +848,23 @@ public class AuthController : ControllerBase
                     });
                 }
 
-                legacyUser.password = _passwordService.HashPassword(request.NewPassword);
-                legacyUser.user_active = true;
-                legacyUser.PWD_Expires = now.AddDays(90);
-                legacyUser.date_updated = now;
-                _context.UserAccessOlds.Update(legacyUser);
-                await _context.SaveChangesAsync();
+                ApplyLegacyPasswordChange(legacyUser, request.NewPassword, now);
+
+                var modernCredentialLookup = await TryGetModernCredentialAsync(legacyUserAccessCode);
+                if (modernCredentialLookup.Credential is not null)
+                {
+                    modernCredentialLookup.Credential.password_hash = _passwordService.HashPassword(request.NewPassword);
+                    modernCredentialLookup.Credential.last_password_change = now;
+                    modernCredentialLookup.Credential.password_expiry_date = now.AddDays(90);
+                    modernCredentialLookup.Credential.failed_login_attempts = 0;
+                    modernCredentialLookup.Credential.account_locked_until = null;
+                    modernCredentialLookup.Credential.password_reset_token = null;
+                    modernCredentialLookup.Credential.password_reset_token_expiry = null;
+                    modernCredentialLookup.Credential.is_active = true;
+                    modernCredentialLookup.Credential.modified_date = now;
+                    _context.LegacyUserCredentials.Update(modernCredentialLookup.Credential);
+                }
+                await SaveChangesWithOptionalCredentialAsync(modernCredentialLookup.Credential);
 
                 return Ok(new UserAdminResponse
                 {
@@ -824,7 +884,7 @@ public class AuthController : ControllerBase
                         && c.password_reset_token_expiry.HasValue
                         && c.password_reset_token_expiry.Value > now);
             }
-            catch (SqlException ex) when (ex.Number == 208)
+            catch (SqlException ex) when (IsMissingSchemaObject(ex))
             {
                 return BadRequest(new UserAdminResponse
                 {
@@ -841,6 +901,8 @@ public class AuthController : ControllerBase
                 });
             }
 
+            await _legacyCredentialCompatibility.HydrateAsync(credential);
+
             credential.password_hash = _passwordService.HashPassword(request.NewPassword);
             credential.last_password_change = now;
             credential.password_expiry_date = now.AddDays(90);
@@ -856,13 +918,10 @@ public class AuthController : ControllerBase
                 .FirstOrDefaultAsync(u => u.user_access_code == credential.user_access_code);
             if (userAccessOld != null)
             {
-                userAccessOld.user_active = true;
-                userAccessOld.PWD_Expires = now.AddDays(90);
-                userAccessOld.date_updated = now;
-                _context.UserAccessOlds.Update(userAccessOld);
+                ApplyLegacyPasswordChange(userAccessOld, request.NewPassword, now);
             }
 
-            await _context.SaveChangesAsync();
+            await SaveChangesWithOptionalCredentialAsync(credential);
             await transaction.CommitAsync();
 
             return Ok(new UserAdminResponse
@@ -912,8 +971,8 @@ public class AuthController : ControllerBase
                 _context.UserAccessOlds.Update(profile.UserAccessOld);
             }
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
             if (credential != null)
             {
                 credential.is_active = true;
@@ -971,8 +1030,8 @@ public class AuthController : ControllerBase
                 _context.UserAccessOlds.Update(profile.UserAccessOld);
             }
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
             if (credential != null)
             {
                 credential.is_active = false;
@@ -1018,8 +1077,8 @@ public class AuthController : ControllerBase
                 });
             }
 
-            var credential = await _context.LegacyUserCredentials
-                .FirstOrDefaultAsync(c => c.user_access_code == profile.UserAccessCode);
+            var modernCredentialLookup = await TryGetModernCredentialAsync(profile.UserAccessCode);
+            var credential = modernCredentialLookup.Credential;
             var baselineDate = profile.UserAccessOld?.last_log_on
                 ?? credential?.last_password_change
                 ?? DateTime.UtcNow;
@@ -1073,6 +1132,152 @@ public class AuthController : ControllerBase
 
     private const string DefaultSecurityQuestion = "What is your username?";
 
+    private async Task<ModernCredentialLookup> TryGetModernCredentialAsync(int userAccessCode)
+    {
+        try
+        {
+            var credential = await _context.LegacyUserCredentials
+                .FirstOrDefaultAsync(c => c.user_access_code == userAccessCode);
+
+            if (credential is not null)
+            {
+                await _legacyCredentialCompatibility.HydrateAsync(credential);
+            }
+
+            return new ModernCredentialLookup(true, credential);
+        }
+        catch (SqlException ex) when (IsMissingSchemaObject(ex))
+        {
+            _logger.LogInformation(
+                "Expanded credential store is unavailable; using legacy user_access_old1 for user_access_code {UserAccessCode}",
+                userAccessCode);
+            return new ModernCredentialLookup(false, null);
+        }
+    }
+
+    private async Task SaveChangesWithOptionalCredentialAsync(LegacyUserCredential? credential)
+    {
+        await _context.SaveChangesAsync();
+        if (credential is not null)
+        {
+            await _legacyCredentialCompatibility.PersistAsync(credential);
+        }
+    }
+
+    private async Task<User?> TryGetModernUserAsync(int userAccessCode)
+    {
+        try
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+        }
+        catch (SqlException ex) when (IsMissingSchemaObject(ex))
+        {
+            return null;
+        }
+    }
+
+    private async Task<User?> TryGetModernUserByEmailAsync(string email)
+    {
+        try
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.email != null && u.email.ToLower() == email);
+        }
+        catch (SqlException ex) when (IsMissingSchemaObject(ex))
+        {
+            return null;
+        }
+    }
+
+    private async Task<UserAccessOld?> TryGetLegacyProfileByCodeAsync(short userAccessCode)
+    {
+        try
+        {
+            return await _context.UserAccessOlds
+                .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+        }
+        catch (SqlException ex) when (IsMissingSchemaObject(ex))
+        {
+            return null;
+        }
+    }
+
+    private async Task<UserAccessOld?> TryGetLegacyProfileByIdentifierAsync(string normalizedIdentifier)
+    {
+        try
+        {
+            return await _context.UserAccessOlds
+                .FirstOrDefaultAsync(u => (
+                    (u.name != null && u.name.ToLower() == normalizedIdentifier) ||
+                    (u.E_Mail != null && u.E_Mail.ToLower() == normalizedIdentifier) ||
+                    (u.FirstName != null && u.FirstName.ToLower() == normalizedIdentifier)));
+        }
+        catch (SqlException ex) when (IsMissingSchemaObject(ex))
+        {
+            return null;
+        }
+    }
+
+    private bool VerifyStoredPassword(string password, string storedHash, bool allowLegacyPlaintext)
+    {
+        var normalizedHash = storedHash.Trim();
+        if (LooksLikeBcryptHash(normalizedHash))
+        {
+            return _passwordService.VerifyPassword(password, normalizedHash);
+        }
+
+        if (LooksLikeLegacyMd5Hash(normalizedHash))
+        {
+            var suppliedHash = HashLegacyPassword(password);
+            return CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(suppliedHash),
+                Encoding.UTF8.GetBytes(normalizedHash.ToUpperInvariant()));
+        }
+
+        return allowLegacyPlaintext
+            && string.Equals(storedHash.TrimEnd(), password, StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeBcryptHash(string value)
+    {
+        return value.StartsWith("$2a$", StringComparison.Ordinal)
+            || value.StartsWith("$2b$", StringComparison.Ordinal)
+            || value.StartsWith("$2y$", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeLegacyMd5Hash(string value)
+    {
+        return value.Length == 32 && value.All(Uri.IsHexDigit);
+    }
+
+    private static string HashLegacyPassword(string password)
+    {
+        return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
+    }
+
+    private void ApplyLegacyPasswordChange(UserAccessOld? legacyUser, string newPassword, DateTime now)
+    {
+        if (legacyUser is null)
+        {
+            return;
+        }
+
+        // user_access_old1.password is char(32) and the legacy application
+        // verifies the uppercase MD5 representation. It cannot store BCrypt.
+        legacyUser.password = HashLegacyPassword(newPassword);
+        legacyUser.user_active = true;
+        legacyUser.Retry = 0;
+        legacyUser.PWD_Expires = now.AddDays(90);
+        legacyUser.date_updated = now;
+        _context.UserAccessOlds.Update(legacyUser);
+    }
+
+    private static bool IsMissingSchemaObject(SqlException exception)
+    {
+        return exception.Number is 207 or 208;
+    }
+
     private async Task<ResolvedUserProfile?> ResolveUserProfileAsync(string username)
     {
         if (string.IsNullOrWhiteSpace(username))
@@ -1088,32 +1293,24 @@ public class AuthController : ControllerBase
 
         if (short.TryParse(username, out var code) && code > 0)
         {
-            userAccessOld = await _context.UserAccessOlds
-                .FirstOrDefaultAsync(u => u.user_access_code == code);
-            user = await _context.Users
-                .FirstOrDefaultAsync(u => u.user_access_code == code);
+            userAccessOld = await TryGetLegacyProfileByCodeAsync(code);
+            user = await TryGetModernUserAsync(code);
         }
         else
         {
-            userAccessOld = await _context.UserAccessOlds
-                .FirstOrDefaultAsync(u => (
-                    (u.name != null && u.name.ToLower() == normalized) ||
-                    (u.E_Mail != null && u.E_Mail.ToLower() == normalized)));
+            userAccessOld = await TryGetLegacyProfileByIdentifierAsync(normalized);
 
             if (userAccessOld != null)
             {
-                user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.user_access_code == userAccessOld.user_access_code);
+                user = await TryGetModernUserAsync(userAccessOld.user_access_code);
             }
             else
             {
-                user = await _context.Users
-                    .FirstOrDefaultAsync(u => u.email != null && u.email.ToLower() == normalized);
+                user = await TryGetModernUserByEmailAsync(normalized);
 
                 if (user != null)
                 {
-                    userAccessOld = await _context.UserAccessOlds
-                        .FirstOrDefaultAsync(u => u.user_access_code == user.user_access_code);
+                    userAccessOld = await TryGetLegacyProfileByCodeAsync((short)user.user_access_code);
                 }
             }
         }
@@ -1433,6 +1630,7 @@ public class AuthController : ControllerBase
             });
     }
 
+    private sealed record ModernCredentialLookup(bool StoreAvailable, LegacyUserCredential? Credential);
     private sealed record ResolvedUserProfile(int UserAccessCode, string ResolvedUsername, UserAccessOld? UserAccessOld, User? User);
     private sealed class SecurityQuestionPayload
     {

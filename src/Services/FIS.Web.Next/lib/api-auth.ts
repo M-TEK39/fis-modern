@@ -48,11 +48,6 @@ type LoginPayload = {
   passwordExpiresIn?: number;
 };
 
-type CredentialValidationPayload = {
-  isValid?: boolean;
-  userAccessCode?: number;
-};
-
 function getApiBaseUrl() {
   const value = process.env.API_BASE_URL?.trim() || "http://localhost:5010";
   return `${value.replace(/\/$/, "")}/`;
@@ -164,30 +159,12 @@ export async function setAuthCookies(authCookies: ForwardedAuthCookie[]) {
   }
 }
 
-export async function loginAgainstApi(firstName: string, password: string): Promise<ApiLoginResult> {
+export async function loginAgainstApi(username: string, password: string): Promise<ApiLoginResult> {
   try {
-    const validationResponse = await fetchApi("api/userprofile/validate", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ firstName, password }),
-    });
-
-    if (!validationResponse.ok) {
-      return { ok: false, reason: validationResponse.status >= 500 ? "unavailable" : "invalid-credentials" };
-    }
-
-    const validation = await readJson<CredentialValidationPayload>(validationResponse);
-    if (!validation?.isValid || !validation.userAccessCode) {
-      return { ok: false, reason: "invalid-credentials" };
-    }
-
     const loginResponse = await fetchApi("api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        username: String(validation.userAccessCode),
-        password,
-      }),
+      body: JSON.stringify({ username, password }),
     });
 
     const payload = await readJson<LoginPayload>(loginResponse);

@@ -171,6 +171,7 @@ builder.Services.AddScoped<VehicleService>();
 builder.Services.AddScoped<IReportingService, ReportingService>(); // Re-enabled with PDF service
 builder.Services.AddScoped<ILegacyReportResultService, LegacyReportResultService>();
 builder.Services.AddScoped<IEmailNotificationService, EmailNotificationService>();
+builder.Services.AddScoped<LegacyCredentialCompatibilityService>();
 
 // Register lightweight PDF service.
 builder.Services.AddScoped<IPdfGenerationService, PdfGenerationService>();

@@ -1,4 +1,5 @@
 using FIS.Data.SqlServer;
+using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,13 +17,18 @@ public class AuditController : BaseApiController
 {
     private readonly FisDbContext _context;
     private readonly ILogger<AuditController> _logger;
+    private readonly LegacyCredentialCompatibilityService _legacyCredentialCompatibility;
 
     private const int MaxPageSize = 200;
 
-    public AuditController(FisDbContext context, ILogger<AuditController> logger)
+    public AuditController(
+        FisDbContext context,
+        ILogger<AuditController> logger,
+        LegacyCredentialCompatibilityService legacyCredentialCompatibility)
     {
         _context = context;
         _logger = logger;
+        _legacyCredentialCompatibility = legacyCredentialCompatibility;
     }
 
     /// <summary>
@@ -219,23 +225,39 @@ public class AuditController : BaseApiController
 
             var total = await query.CountAsync();
 
-            var items = await query
+            var credentialRows = await query
                 .OrderByDescending(c => c.last_password_change)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .Select(c => new
                 {
+                    c.credential_id,
                     c.user_access_code,
                     c.last_password_change,
-                    c.password_expiry_date,
-                    c.changed_by_user_code,
                     c.failed_login_attempts,
-                    c.account_locked_until,
-                    IsExpired = c.password_expiry_date.HasValue
-                        ? DateTime.UtcNow > c.password_expiry_date.Value
-                        : false
+                    c.account_locked_until
                 })
                 .ToListAsync();
+
+            var optionalFields = await _legacyCredentialCompatibility.ReadManyAsync(
+                credentialRows.Select(row => row.credential_id));
+
+            var items = credentialRows.Select(row =>
+            {
+                optionalFields.TryGetValue(row.credential_id, out var optional);
+                var expiryDate = optional?.PasswordExpiryDate;
+
+                return new
+                {
+                    row.user_access_code,
+                    row.last_password_change,
+                    password_expiry_date = expiryDate,
+                    changed_by_user_code = optional?.ChangedByUserCode,
+                    row.failed_login_attempts,
+                    row.account_locked_until,
+                    IsExpired = expiryDate.HasValue && DateTime.UtcNow > expiryDate.Value
+                };
+            }).ToList();
 
             return Ok(new
             {

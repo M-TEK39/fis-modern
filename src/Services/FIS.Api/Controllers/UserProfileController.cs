@@ -2,6 +2,8 @@ using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace FIS.Api.Controllers;
 
@@ -167,7 +169,9 @@ public class UserProfileController : BaseApiController
                 passport_number = dto.PassportNumber,
                 Cellphone_Number = dto.CellphoneNumber,
                 Fax_Number = dto.FaxNumber,
-                password = string.IsNullOrWhiteSpace(dto.Password) ? null : BCrypt.Net.BCrypt.HashPassword(dto.Password),
+                // user_access_old1.password is char(32) and the legacy login
+                // contract stores the uppercase MD5 digest, not BCrypt.
+                password = string.IsNullOrWhiteSpace(dto.Password) ? null : HashLegacyPassword(dto.Password),
                 user_status = "Active",
                 AccessLevel = dto.AccessLevel ?? 1
             };
@@ -320,6 +324,11 @@ public class UserProfileController : BaseApiController
             UserActive = u.user_active,
             LastLogOn = u.last_log_on
         };
+    }
+
+    private static string HashLegacyPassword(string password)
+    {
+        return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
     }
 }
 

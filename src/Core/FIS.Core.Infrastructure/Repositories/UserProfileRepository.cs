@@ -2,6 +2,8 @@ using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
@@ -165,14 +167,25 @@ public class UserProfileRepository : IUserProfileRepository
         if (string.IsNullOrWhiteSpace(user.password))
             return false;
 
-        // Support modern hashed passwords while preserving legacy plaintext compatibility.
-        // This keeps existing users functional during phased migration.
-        if (LooksLikeBcryptHash(user.password))
+        var storedPassword = user.password.Trim();
+
+        // The expanded path uses BCrypt. The original user_access_old1 table
+        // stores an uppercase MD5 digest in char(32), so support both formats
+        // without writing the modern hash back into the legacy column.
+        if (LooksLikeBcryptHash(storedPassword))
         {
-            return BCrypt.Net.BCrypt.Verify(password, user.password);
+            return BCrypt.Net.BCrypt.Verify(password, storedPassword);
         }
 
-        return user.password == password;
+        if (LooksLikeLegacyMd5Hash(storedPassword))
+        {
+            var suppliedHash = Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
+            return CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(suppliedHash),
+                Encoding.UTF8.GetBytes(storedPassword.ToUpperInvariant()));
+        }
+
+        return user.password.TrimEnd() == password;
     }
 
     private static bool LooksLikeBcryptHash(string value)
@@ -180,5 +193,10 @@ public class UserProfileRepository : IUserProfileRepository
         return value.StartsWith("$2a$", StringComparison.Ordinal)
                || value.StartsWith("$2b$", StringComparison.Ordinal)
                || value.StartsWith("$2y$", StringComparison.Ordinal);
+    }
+
+    private static bool LooksLikeLegacyMd5Hash(string value)
+    {
+        return value.Length == 32 && value.All(Uri.IsHexDigit);
     }
 }
