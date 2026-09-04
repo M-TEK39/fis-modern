@@ -46,8 +46,36 @@ services:
       - TZ=Africa/Johannesburg
       - ApiSettings__BaseUrl=http://fis-api:8080
       - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
+      # Keep Microsoft Identity fallback enabled when its deployment secrets
+      # are supplied through the environment; values are never committed here.
+      - AzureAd__TenantId=${AzureAd__TenantId:-}
+      - AzureAd__ClientId=${AzureAd__ClientId:-}
+      - AzureAd__ClientSecret=${AzureAd__ClientSecret:-}
     expose:
       - "8080"
+    depends_on:
+      fis-api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - fis-network
+
+  # Next.js frontend — migrated routes during Blazor coexistence
+  fis-web-next:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web-next
+    container_name: fis-web-next
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - API_BASE_URL=http://fis-api:8080
+      - MICROSOFT_SIGN_IN_ENABLED=${AzureAd__ClientId:-}
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - TZ=Africa/Johannesburg
+    expose:
+      - "3000"
     depends_on:
       fis-api:
         condition: service_healthy
@@ -71,6 +99,8 @@ services:
       fis-api:
         condition: service_healthy
       fis-web:
+        condition: service_started
+      fis-web-next:
         condition: service_started
     networks:
       - fis-network
@@ -118,6 +148,8 @@ services:
       fis-api:
         condition: service_healthy
       fis-web:
+        condition: service_started
+      fis-web-next:
         condition: service_started
     restart: unless-stopped
     profiles:
