@@ -31,7 +31,11 @@ The Next app is a standalone pnpm package. Keep its dependencies and scripts in 
 
 ## 3. Database and business compatibility
 
-- The legacy SQL Server schema is immutable. No migrations or code may rename, add, remove, or alter tables, columns, types, keys, constraints, indexes, or relationships.
+- The SQL Server schema is immutable. No migrations or code may rename, add, remove, or alter tables, columns, types, keys, constraints, indexes, or relationships.
+- The application must run against both the client's existing legacy schema and databases that also contain the expanded modern objects. Treat the database version as a runtime compatibility concern, not as a deployment prerequisite.
+- Prefer an expanded modern table/column when it exists and contains the authoritative value; fall back to the corresponding legacy table/column when the modern object is absent or has no usable value. Keep the mapping explicit per feature and avoid split-brain writes.
+- Do not add optional modern properties to a statically mapped EF entity when their columns may be absent. Use a guarded, parameterized compatibility projection/update or another existing-provider pattern that selects and writes only objects confirmed to exist.
+- Authentication, authorization, password state, and business workflow must remain valid on both schema shapes. When both credential stores exist, keep their shared password/status state synchronized where the legacy application still depends on it.
 - Before changing a data-backed feature, inspect the existing C# model/repository and the legacy API/data model. Use the existing names and nullability.
 - Keep business rules, authorization boundaries, navigation order, labels, and screen sequencing compatible with the legacy system.
 - Database tooling is for inspection and explicitly authorized compatibility work. Never run a destructive command against a real database as part of normal development.

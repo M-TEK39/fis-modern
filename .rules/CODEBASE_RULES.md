@@ -65,6 +65,8 @@ Do not move code between layers to avoid a reference problem. Do not introduce d
 
 Before a UI module change, trace `backup/sources/GGFIS_v2.0/Main.aspx`, the relevant menu, and the actual page files. Cross-reference the legacy API components/data model and UI controls/datasets. Preserve workflow and screen sequencing; modernize the implementation, not the user's established process.
 
+The backend is a dual-schema compatibility layer during modernization. It must operate against the client's existing legacy tables/fields as well as databases containing expanded modern objects. Use modern objects when available and authoritative, but retain explicit runtime fallbacks to the legacy objects. Never solve the mismatch with a schema migration, a guessed field mapping, or a statically mapped EF property that can make a legacy query fail because an optional column is absent.
+
 ## Git and verification
 
 Inspect status before editing and preserve unrelated changes. Review the final diff for secrets, generated files, accidental schema edits, and route regressions. Run the smallest relevant checks and report any unavailable runtime dependency separately from source/build results. Do not commit or push without an explicit request.

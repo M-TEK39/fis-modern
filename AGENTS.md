@@ -31,13 +31,14 @@ The legacy reference implementation is under `backup/sources/`. Docker and rever
 
 ## Non-negotiable boundaries
 
-- Preserve the existing SQL Server schema exactly. Do not rename, add, remove, or change tables, columns, types, keys, or constraints.
+- Preserve the existing SQL Server schema exactly. Do not rename, add, remove, or change tables, columns, types, keys, or constraints. The app must run against both the client's current legacy schema and databases containing expanded modern objects, using explicit runtime fallbacks from modern fields/tables to their legacy counterparts.
 - Keep business rules and legacy navigation flow intact while modernizing presentation and transport.
 - Keep backend changes in the C# projects and frontend changes in `src/Services/FIS.Web.Next` unless a shared contract genuinely requires another layer.
 - The Next frontend consumes the existing REST API through server-only typed adapters. Browser code must not contain API secrets or bearer tokens.
 - Use Next Server Components by default. Add Client Components only for browser state, events, or APIs that require the browser. Keep mutations in Server Actions or server routes where appropriate.
 - Preserve the existing FIS cookie/session contract. Do not replace it with a new authentication framework as part of a page migration.
 - Treat authorization as server-side enforcement. Never cache authentication, authorization decisions, or protected user-specific data.
+- Treat missing expanded tables/columns as an expected compatibility state. Do not statically map optional columns in a way that makes EF queries fail on the legacy database; use guarded, parameterized compatibility access and keep shared authentication state synchronized when both stores exist.
 - Use pnpm for JavaScript commands and .NET tooling for C# commands.
 - Do not commit generated output, secrets, local environment files, or unrelated worktree changes.
 

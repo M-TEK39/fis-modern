@@ -6,7 +6,7 @@ FIS keeps a legacy-compatible SQL Server schema and business process while movin
 
 Keep the Next app's App Router and Server Component architecture. Fetch protected data through server-only typed REST adapters, forward the existing HttpOnly FIS session cookie, and use Client Components only where browser interaction requires them. Keep Cache Components and instant navigation compatible with authorization freshness: never cache login state, authorization, or protected user-specific responses.
 
-Do not change the database schema, introduce speculative dependencies, or rewrite legacy workflows. Before a module migration, trace its entry point and menu in `backup/sources/GGFIS_v2.0/` and cross-reference the legacy API, controls, and datasets. Keep common styling in the Next app's `app/globals.css` and apply the accessibility rules in `.rules/WEB_DESIGN_RULES.md`.
+Do not change the database schema, introduce speculative dependencies, or rewrite legacy workflows. The backend must run against both the client's current legacy database and databases containing expanded modern tables/fields: prefer modern data when available and authoritative, then fall back through explicit runtime compatibility access to the legacy objects. Before a module migration, trace its entry point and menu in `backup/sources/GGFIS_v2.0/` and cross-reference the legacy API, controls, and datasets. Keep common styling in the Next app's `app/globals.css` and apply the accessibility rules in `.rules/WEB_DESIGN_RULES.md`.
 
 Use pnpm, not npm:
 

@@ -24,6 +24,14 @@ The database is a legacy SQL Server database and is a plug-compatible contract. 
 
 When a requested feature appears to require schema work, stop and report the conflict. Use `src/Tools/DatabaseInspector` to inspect existing objects and the approved migration/seed tools only for explicitly authorized compatibility work.
 
+### Dual-schema compatibility
+
+- The API must work with the client's current legacy database and with a database that has the expanded modern objects applied.
+- Resolve modern-vs-legacy table and column availability at runtime through the existing SQL Server provider. Keep identifiers allow-listed, queries parameterized, and optional columns out of static EF projections when they may not exist.
+- Prefer modern data when it is present and authoritative, then fall back to the exact legacy field/table and preserve its null and type semantics. Do not silently invent a replacement field or change a business rule to fit the modern model.
+- For shared authentication state, update every available credential/status representation needed by the still-supported legacy process; a password change must not leave the legacy login path stale when both stores are present.
+- A missing expanded object is an expected compatibility state, not a 500. A genuinely broken required legacy object remains an actionable dependency error and must be logged without exposing SQL details to the client.
+
 ## API implementation
 
 - Match existing controller routes, response shapes, status codes, and legacy naming unless the request explicitly changes the contract.
