@@ -17,6 +17,10 @@ node_modules
 
 # Local Markdown files
 *.md
+!AGENTS.md
+!CLAUDE.md
+!.rules/
+!.rules/**
 
 # Folders
 images
