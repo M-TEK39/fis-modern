@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
 import {
+  saveAccidentAction,
   saveQueryIncidentAction,
   saveRoadAssistanceAction,
 } from "@/app/call-centre/incident/capture/actions";
@@ -320,6 +321,213 @@ function QueryIncidentForm({
   );
 }
 
+function AccidentIncidentForm({
+  vehicle,
+  sites,
+  notifyLists,
+  error,
+}: Readonly<{
+  vehicle: CallCentreVehicleOption;
+  sites: CallCentreSiteOption[];
+  notifyLists: NotifyListRecord[];
+  error: string;
+}>) {
+  const today = new Date().toISOString().slice(0, 10);
+  const selectedSite = sites[0]?.code ?? "";
+
+  return (
+    <section className="vehicle-form-section" aria-labelledby="accident-form-title">
+      <div className="vehicle-form-section-header">
+        <div>
+          <p className="eyebrow">Accident · {vehicle.displayText}</p>
+          <h2 id="accident-form-title">Capture Accident Details</h2>
+        </div>
+      </div>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      <form action={saveAccidentAction} className="form-stack">
+        <input name="ccVMF" type="hidden" value={vehicle.vmfCode} />
+        <input name="xgg" type="hidden" value={vehicle.fleetNumber ?? ""} />
+        <input name="xgp" type="hidden" value={vehicle.registrationNumber ?? ""} />
+        <input name="xinctype" type="hidden" value="Accident" />
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-transport-officer-name">Trans Officer Name</label>
+            <input id="accident-transport-officer-name" name="xtrsname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-transport-officer-tel">Trans Officer Tel</label>
+            <input id="accident-transport-officer-tel" name="xtrstel" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-transport-officer-fax">Trans Officer Fax</label>
+            <input id="accident-transport-officer-fax" name="xtrsfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-transport-officer-email">Trans Officer Email</label>
+            <input id="accident-transport-officer-email" name="xtrseml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="accident-transport-officer-site">Trans Officer Site</label>
+          <select id="accident-transport-officer-site" name="xtrssite" defaultValue={selectedSite} required>
+            <option value="">Select site</option>
+            {sites.map((site) => (
+              <option key={site.code} value={site.code}>
+                {site.description}{site.departmentNumber ? ` (${site.departmentNumber})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-caller-name">Caller Name</label>
+            <input id="accident-caller-name" name="xcalname" maxLength={40} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-caller-tel">Caller Cell / Tel</label>
+            <input id="accident-caller-tel" name="xcaltel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-caller-fax">Caller Fax</label>
+            <input id="accident-caller-fax" name="xcalfax" maxLength={15} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-caller-email">Caller Email</label>
+            <input id="accident-caller-email" name="xcaleml" maxLength={30} type="email" />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-driver-name">Driver Name</label>
+            <input id="accident-driver-name" name="xdrvname" maxLength={60} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-driver-tel">Driver Cell / Tel</label>
+            <input id="accident-driver-tel" name="xdrvtel" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-driver-persal">Driver Persal</label>
+            <input id="accident-driver-persal" name="xdrvperno" maxLength={15} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-inform-cro">Inform CLO of Change?</label>
+            <select id="accident-inform-cro" name="xcro" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="accident-cro-remarks">Remarks for CLO</label>
+            <input id="accident-cro-remarks" name="xcrem" maxLength={60} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-date">Accident Date</label>
+            <input id="accident-date" name="xincdat" type="date" defaultValue={today} required />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-time">Accident Time</label>
+            <input id="accident-time" name="xinctime" type="time" />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="accident-description">Accident Desc</label>
+          <input id="accident-description" name="xincdesc" maxLength={60} />
+        </div>
+        <div className="field">
+          <label htmlFor="accident-damage-description">GG Damage Desc</label>
+          <input id="accident-damage-description" name="txtDamage" maxLength={60} />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-third-party-reg">Private Party Regno</label>
+            <input id="accident-third-party-reg" name="txtThregno" maxLength={8} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-third-party-name">Private Party Name</label>
+            <input id="accident-third-party-name" name="txtThname" maxLength={30} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-third-party-tel">Private Party Cell / Tel</label>
+            <input id="accident-third-party-tel" name="txtThtel" maxLength={30} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-death">Death?</label>
+            <select id="accident-death" name="txtDeath" defaultValue="?">
+              <option value="?">?</option>
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="accident-injured">Injured?</label>
+            <select id="accident-injured" name="txtInjured" defaultValue="?">
+              <option value="?">?</option>
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-suburb">Suburb (of Accident)</label>
+            <input id="accident-suburb" name="x1town" maxLength={50} />
+          </div>
+          <div className="field">
+            <label htmlFor="accident-town">Town</label>
+            <input id="accident-town" name="x2town" maxLength={50} />
+          </div>
+        </div>
+        <div className="field">
+          <label htmlFor="accident-street">Street Name</label>
+          <input id="accident-street" name="xstreet" maxLength={30} />
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-tow-needed">Need Tow Truck?</label>
+            <select id="accident-tow-needed" name="xtowneed" defaultValue="?" required>
+              <option value="?">?</option>
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="accident-notes">Notes</label>
+            <input id="accident-notes" name="txtNotes" maxLength={55} />
+          </div>
+        </div>
+        <div className="field-grid">
+          <div className="field">
+            <label htmlFor="accident-notify-list">Notify Following People</label>
+            <select id="accident-notify-list" name="xnotc" defaultValue="">
+              <option value="">Select notification list</option>
+              {notifyLists.map((item) => (
+                <option key={item.code} value={item.code}>{item.description ?? item.email ?? item.code}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="accident-call-closed">Call Closed?</label>
+            <select id="accident-call-closed" name="xclosed" defaultValue="N">
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div className="button-row">
+          <button className="button button-primary" type="submit">Submit</button>
+          <Link className="button button-secondary" href="/call-centre/incident/capture">Cancel</Link>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function RoadAssistanceForm({
   vehicle,
   sites,
@@ -568,7 +776,9 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
             <p className="muted-copy">
               {incidentType === "Road_Assistance"
                 ? "The legacy Call_centre and Towing business fields were saved."
-                : "The legacy Call_centre business fields were saved."}
+                : incidentType === "Accident"
+                  ? "The legacy Call_centre and Accident business fields were saved."
+                  : "The legacy Call_centre business fields were saved."}
             </p>
           </section>
         ) : null}
@@ -606,6 +816,14 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 error={error}
               />
             ) : null}
+            {incidentType === "Accident" && vehicle ? (
+              <AccidentIncidentForm
+                vehicle={vehicle}
+                sites={sites}
+                notifyLists={notifyLists}
+                error={error}
+              />
+            ) : null}
             {incidentType === "Road_Assistance" && vehicle ? (
               <RoadAssistanceForm
                 vehicle={vehicle}
@@ -615,7 +833,7 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
                 error={error}
               />
             ) : null}
-            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Road_Assistance" && vehicle ? (
+            {incidentType !== "Query" && incidentType !== "Booking" && incidentType !== "Accident" && incidentType !== "Road_Assistance" && vehicle ? (
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">{incidentType}</p>
                 <h2>This incident branch is next in the capture migration.</h2>

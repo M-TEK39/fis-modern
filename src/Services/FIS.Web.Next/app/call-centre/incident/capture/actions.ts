@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 
 import {
   CallCentreApiError,
+  createAccidentIncident,
+  createAccidentTowing,
   createCallCentreIncident,
   createRoadAssistanceIncident,
 } from "@/lib/api-call-centre";
@@ -11,6 +13,10 @@ import { getSession } from "@/lib/session";
 
 const CAPTURE_PATH = "/call-centre/incident/capture";
 const ROAD_CAPTURE_PATH = "/CallCentre/MNT_road_getdata.aspx";
+const ACCIDENT_CAPTURE_PATH = "/CallCentre/MNT_accident_getdata.aspx";
+const ACCIDENT_SPLIT_PATH = "/CallCentre/MNT_accident_split.aspx";
+const ACCIDENT_TOW_DETAIL_PATH = "/CallCentre/MNT_accident_towdetail.aspx";
+const ACCIDENT_SHOW_DETAIL_PATH = "/CallCentre/MNT_accident_showdetail.aspx";
 const CALL_CENTRE_ROLE = "Call Centre";
 
 function getText(formData: FormData, ...keys: string[]) {
@@ -45,6 +51,23 @@ function redirectRoadWithError(message: string, vmfCode = ""): never {
   redirect(`${ROAD_CAPTURE_PATH}?${params.toString()}`);
 }
 
+function redirectAccidentWithError(
+  message: string,
+  vmfCode = "",
+  path = ACCIDENT_CAPTURE_PATH,
+  callCentreCode = "",
+): never {
+  const params = new URLSearchParams({ error: message, incidentType: "Accident" });
+  if (vmfCode) {
+    params.set("ccVMF", vmfCode);
+  }
+  if (callCentreCode) {
+    params.set("cccode", callCentreCode);
+  }
+
+  redirect(`${path}?${params.toString()}`);
+}
+
 async function authorizeCallCentre(vmfCode: string, incidentType = "", path = CAPTURE_PATH) {
   const session = await getSession();
   if (session.status === "unavailable") {
@@ -57,6 +80,36 @@ async function authorizeCallCentre(vmfCode: string, incidentType = "", path = CA
 
   if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
     redirectWithError("You do not have permission to capture call centre incidents.", vmfCode, incidentType, path);
+  }
+}
+
+async function authorizeAccidentTowing(vmfCode: string, callCentreCode: string) {
+  const session = await getSession();
+  if (session.status === "unavailable") {
+    redirectAccidentWithError(
+      "The sign-in service is temporarily unavailable. Please try again.",
+      vmfCode,
+      ACCIDENT_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
+  }
+
+  if (session.status !== "authenticated") {
+    redirectAccidentWithError(
+      "Your session has expired. Sign in again before continuing.",
+      vmfCode,
+      ACCIDENT_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
+  }
+
+  if (!session.roles.some((role) => role.localeCompare(CALL_CENTRE_ROLE, undefined, { sensitivity: "accent" }) === 0)) {
+    redirectAccidentWithError(
+      "You do not have permission to capture call centre incidents.",
+      vmfCode,
+      ACCIDENT_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
   }
 }
 
@@ -75,6 +128,29 @@ function validateMaxLength(value: string, field: string, maxLength: number, vmfC
 function validateRoadMaxLength(value: string, field: string, maxLength: number, vmfCode: string) {
   if (value.length > maxLength) {
     redirectRoadWithError(`${field} must be ${maxLength} characters or fewer.`, vmfCode);
+  }
+}
+
+function validateAccidentMaxLength(value: string, field: string, maxLength: number, vmfCode: string) {
+  if (value.length > maxLength) {
+    redirectAccidentWithError(`${field} must be ${maxLength} characters or fewer.`, vmfCode);
+  }
+}
+
+function validateAccidentTowMaxLength(
+  value: string,
+  field: string,
+  maxLength: number,
+  vmfCode: string,
+  callCentreCode: string,
+) {
+  if (value.length > maxLength) {
+    redirectAccidentWithError(
+      `${field} must be ${maxLength} characters or fewer.`,
+      vmfCode,
+      ACCIDENT_TOW_DETAIL_PATH,
+      callCentreCode,
+    );
   }
 }
 
@@ -291,4 +367,217 @@ export async function saveRoadAssistanceAction(formData: FormData) {
     code: String(result.callCentreCode),
   });
   redirect(`${ROAD_CAPTURE_PATH}?${params.toString()}`);
+}
+
+export async function saveAccidentAction(formData: FormData) {
+  const vmfCodeText = getText(formData, "ccVMF", "vmfCode");
+  await authorizeCallCentre(vmfCodeText, "Accident", ACCIDENT_CAPTURE_PATH);
+
+  const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
+  if (vmfCode === null) {
+    redirectAccidentWithError("A valid vehicle must be selected before capturing an incident.", vmfCodeText);
+  }
+
+  const incidentType = getText(formData, "xinctype", "incidentType") || "Accident";
+  if (incidentType !== "Accident") {
+    redirectAccidentWithError("This form only captures Accident incidents.", vmfCodeText);
+  }
+
+  const incidentDate = getText(formData, "xincdat", "incidentDate");
+  const incidentTime = getText(formData, "xinctime", "incidentTime");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(incidentDate)) {
+    redirectAccidentWithError("Enter a valid accident date.", vmfCodeText);
+  }
+  if (incidentTime && !/^\d{2}:\d{2}$/.test(incidentTime)) {
+    redirectAccidentWithError("Enter the accident time in HH:mm format.", vmfCodeText);
+  }
+
+  const informCro = getText(formData, "xcro", "informCro") || "N";
+  if (informCro !== "Y" && informCro !== "N") {
+    redirectAccidentWithError("The CLO notification choice is invalid.", vmfCodeText);
+  }
+
+  const callClosed = getText(formData, "xclosed", "callClosed") || "N";
+  if (callClosed !== "Y" && callClosed !== "N") {
+    redirectAccidentWithError("The call closed choice is invalid.", vmfCodeText);
+  }
+
+  const death = getText(formData, "txtDeath", "death") || "?";
+  const injured = getText(formData, "txtInjured", "injured") || "?";
+  if (!["?", "Y", "N"].includes(death) || !["?", "Y", "N"].includes(injured)) {
+    redirectAccidentWithError("The death and injury choices are invalid.", vmfCodeText);
+  }
+
+  const towNeed = getText(formData, "xtowneed", "towNeed");
+  if (towNeed !== "Y" && towNeed !== "N") {
+    redirectAccidentWithError("Choose whether a tow truck is needed.", vmfCodeText);
+  }
+
+  const transportOfficerName = getText(formData, "xtrsname", "transportOfficerName");
+  const transportOfficerTel = getText(formData, "xtrstel", "transportOfficerTel");
+  const transportOfficerFax = getText(formData, "xtrsfax", "transportOfficerFax");
+  const transportOfficerEmail = getText(formData, "xtrseml", "transportOfficerEmail");
+  const callerName = getText(formData, "xcalname", "callerName");
+  const callerTel = getText(formData, "xcaltel", "callerTel");
+  const callerFax = getText(formData, "xcalfax", "callerFax");
+  const callerEmail = getText(formData, "xcaleml", "callerEmail");
+  const driverName = getText(formData, "xdrvname", "driverName");
+  const driverTel = getText(formData, "xdrvtel", "driverTel");
+  const driverPersalno = getText(formData, "xdrvperno", "driverPersalno");
+  const croRemarks = getText(formData, "xcrem", "croRemarks");
+  const accidentDescription = getText(formData, "xincdesc", "accidentDescription");
+  const damageDescription = getText(formData, "txtDamage", "damageDescription");
+  const thirdPartyRegistration = getText(formData, "txtThregno", "thirdPartyRegistration");
+  const thirdPartyOwner = getText(formData, "txtThname", "thirdPartyOwner");
+  const thirdPartyTelephone = getText(formData, "txtThtel", "thirdPartyTelephone");
+  const suburb = getText(formData, "x1town", "suburb");
+  const town = getText(formData, "x2town", "town");
+  const street = getText(formData, "xstreet", "street");
+  const accidentNotes = getText(formData, "txtNotes", "accidentNotes");
+  const occurencePlace = `${suburb} ; ${town}`;
+
+  validateAccidentMaxLength(transportOfficerName, "Transport officer name", 60, vmfCodeText);
+  validateAccidentMaxLength(transportOfficerTel, "Transport officer telephone", 15, vmfCodeText);
+  validateAccidentMaxLength(transportOfficerFax, "Transport officer fax", 15, vmfCodeText);
+  validateAccidentMaxLength(transportOfficerEmail, "Transport officer email", 30, vmfCodeText);
+  validateAccidentMaxLength(callerName, "Caller name", 40, vmfCodeText);
+  validateAccidentMaxLength(callerTel, "Caller telephone", 30, vmfCodeText);
+  validateAccidentMaxLength(callerFax, "Caller fax", 15, vmfCodeText);
+  validateAccidentMaxLength(callerEmail, "Caller email", 30, vmfCodeText);
+  validateAccidentMaxLength(driverName, "Driver name", 60, vmfCodeText);
+  validateAccidentMaxLength(driverTel, "Driver telephone", 30, vmfCodeText);
+  validateAccidentMaxLength(driverPersalno, "Driver personnel number", 15, vmfCodeText);
+  validateAccidentMaxLength(croRemarks, "CLO remarks", 60, vmfCodeText);
+  validateAccidentMaxLength(accidentDescription, "Accident description", 60, vmfCodeText);
+  validateAccidentMaxLength(damageDescription, "Damage description", 60, vmfCodeText);
+  validateAccidentMaxLength(thirdPartyRegistration, "Private party registration", 8, vmfCodeText);
+  validateAccidentMaxLength(thirdPartyOwner, "Private party name", 30, vmfCodeText);
+  validateAccidentMaxLength(thirdPartyTelephone, "Private party telephone", 30, vmfCodeText);
+  validateAccidentMaxLength(suburb, "Suburb", 50, vmfCodeText);
+  validateAccidentMaxLength(town, "Town", 50, vmfCodeText);
+  validateAccidentMaxLength(street, "Street name", 30, vmfCodeText);
+  validateAccidentMaxLength(accidentNotes, "Accident notes", 55, vmfCodeText);
+  if (informCro === "Y" && !croRemarks) {
+    redirectAccidentWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
+  }
+
+  let result: Awaited<ReturnType<typeof createAccidentIncident>>;
+  try {
+    result = await createAccidentIncident({
+      VmfCode: vmfCode,
+      IncidentType: "Accident",
+      TransportOfficerName: transportOfficerName || null,
+      TransportOfficerTel: transportOfficerTel || null,
+      TransportOfficerFax: transportOfficerFax || null,
+      TransportOfficerEmail: transportOfficerEmail || null,
+      TransportOfficerSite: getPositiveInt(formData, "xtrssite", "transportOfficerSite"),
+      CallerName: callerName || transportOfficerName || null,
+      CallerTel: callerName ? callerTel || null : transportOfficerTel || null,
+      CallerFax: callerName ? callerFax || null : transportOfficerFax || null,
+      CallerEmail: callerName ? callerEmail || null : transportOfficerEmail || null,
+      InformCro: informCro,
+      CroRemarks: croRemarks || null,
+      IncidentRemarks: null,
+      NotifyListCode: getPositiveInt(formData, "xnotc", "notifyListCode"),
+      CallClosed: callClosed,
+      IncidentDate: `${incidentDate}T00:00:00`,
+      IncidentTime: incidentTime ? `${incidentDate}T${incidentTime}:00` : null,
+      AccidentDescription: accidentDescription || null,
+      DamageDescription: damageDescription || null,
+      ThirdPartyRegistration: thirdPartyRegistration || null,
+      ThirdPartyOwner: thirdPartyOwner || null,
+      ThirdPartyTelephone: thirdPartyTelephone || null,
+      Death: death,
+      Injured: injured,
+      OccurencePlace: occurencePlace,
+      TowNeed: towNeed,
+      AccidentNotes: accidentNotes || null,
+      DriverName: driverName || transportOfficerName || null,
+      DriverTel: driverName ? driverTel || null : transportOfficerTel || null,
+      DriverPersalno: driverPersalno || null,
+      AccidentDriverName: driverName || null,
+      AccidentDriverTel: driverName ? driverTel || null : null,
+      AccidentDriverEmployNumber: driverPersalno || null,
+    });
+  } catch (error) {
+    redirectAccidentWithError(apiErrorMessage(error), String(vmfCode));
+  }
+
+  const params = new URLSearchParams({
+    xtowneed: towNeed,
+    ccVMF: String(vmfCode),
+    cccode: String(result.callCentreCode),
+    xinctype: "Accident",
+    xgg: getText(formData, "xgg", "ggNumber"),
+    xgp: getText(formData, "xgp", "registrationNumber"),
+    txtDamage: damageDescription,
+    accidentCode: String(result.accidentCode),
+  });
+  redirect(`${ACCIDENT_SPLIT_PATH}?${params.toString()}`);
+}
+
+export async function saveAccidentTowingAction(formData: FormData) {
+  const vmfCodeText = getText(formData, "ccVMF", "vmfCode");
+  const callCentreCodeText = getText(formData, "cccode", "callCentreCode");
+  await authorizeAccidentTowing(vmfCodeText, callCentreCodeText);
+
+  const vmfCode = getPositiveInt(formData, "ccVMF", "vmfCode");
+  const callCentreCode = getPositiveInt(formData, "cccode", "callCentreCode");
+  if (vmfCode === null || callCentreCode === null) {
+    redirectAccidentWithError(
+      "The accident reference is missing. Start the accident capture again.",
+      vmfCodeText,
+      ACCIDENT_TOW_DETAIL_PATH,
+      callCentreCodeText,
+    );
+  }
+
+  const damageDescription = getText(formData, "txtDamage", "damageDescription");
+  const towTruckCode = getPositiveInt(formData, "xtruckcod", "towTruckCode");
+  const contactName = getText(formData, "xconname", "contactPersonName");
+  const contactTel = getText(formData, "xcontel", "contactPersonTel");
+  const contactCell = getText(formData, "xconcell", "contactPersonCell");
+  const location = getText(formData, "xtown", "location");
+  const remarks = getText(formData, "xrem", "remarks");
+  validateAccidentTowMaxLength(damageDescription, "Vehicle problem", 60, vmfCodeText, callCentreCodeText);
+  validateAccidentTowMaxLength(contactName, "Contact person name", 30, vmfCodeText, callCentreCodeText);
+  validateAccidentTowMaxLength(contactTel, "Contact person telephone", 20, vmfCodeText, callCentreCodeText);
+  validateAccidentTowMaxLength(contactCell, "Contact person cell", 10, vmfCodeText, callCentreCodeText);
+  validateAccidentTowMaxLength(location, "Tow location", 50, vmfCodeText, callCentreCodeText);
+  validateAccidentTowMaxLength(remarks, "Towing remarks", 50, vmfCodeText, callCentreCodeText);
+
+  try {
+    const now = new Date().toISOString();
+    const towingCode = await createAccidentTowing({
+      VmfCode: vmfCode,
+      CallRefer: callCentreCode,
+      RequestDate: now,
+      RequestTime: now,
+      Location: location || null,
+      VehicleProblem: damageDescription || null,
+      SiteCode: getPositiveInt(formData, "xtrssite", "transportOfficerSite"),
+      TowTruckCode: towTruckCode,
+      ContactPersonName: contactName || null,
+      ContactPersonTel: contactTel || null,
+      ContactPersonCell: contactCell || null,
+      Remarks: remarks || null,
+    });
+
+    const params = new URLSearchParams({
+      saved: "1",
+      incidentType: "Accident",
+      ccVMF: String(vmfCode),
+      cccode: String(callCentreCode),
+      code: String(callCentreCode),
+      towingCode: String(towingCode),
+    });
+    redirect(`${ACCIDENT_SHOW_DETAIL_PATH}?${params.toString()}`);
+  } catch (error) {
+    redirectAccidentWithError(
+      apiErrorMessage(error),
+      String(vmfCode),
+      ACCIDENT_TOW_DETAIL_PATH,
+      String(callCentreCode),
+    );
+  }
 }
