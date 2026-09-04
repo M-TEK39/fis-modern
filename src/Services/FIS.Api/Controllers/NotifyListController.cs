@@ -1,8 +1,6 @@
-using FIS.Core.Domain.Entities.System;
-using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using FIS.Api.Services;
 
 namespace FIS.Api.Controllers;
 
@@ -11,12 +9,14 @@ namespace FIS.Api.Controllers;
 [Authorize]
 public class NotifyListController : BaseApiController
 {
-    private readonly FisDbContext _context;
+    private readonly NotifyListCompatibilityService _notifyListService;
     private readonly ILogger<NotifyListController> _logger;
 
-    public NotifyListController(FisDbContext context, ILogger<NotifyListController> logger)
+    public NotifyListController(
+        NotifyListCompatibilityService notifyListService,
+        ILogger<NotifyListController> logger)
     {
-        _context = context;
+        _notifyListService = notifyListService;
         _logger = logger;
     }
 
@@ -25,32 +25,8 @@ public class NotifyListController : BaseApiController
     {
         try
         {
-            var query = _context.NotifyLists
-                .AsNoTracking()
-                .Where(x => !x.is_deleted);
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var term = search.Trim();
-                query = query.Where(x =>
-                    (x.Notify_list_desc ?? string.Empty).Contains(term) ||
-                    (x.Notify_email1 ?? string.Empty).Contains(term));
-            }
-
-            var items = await query
-                .OrderBy(x => x.Notify_list_desc)
-                .ThenBy(x => x.Notify_list_code)
-                .Select(x => new NotifyListDto
-                {
-                    Notify_list_code = x.Notify_list_code,
-                    Notify_list_desc = x.Notify_list_desc,
-                    Notify_email1 = x.Notify_email1,
-                    date_created = x.date_created,
-                    date_updated = x.date_updated
-                })
-                .ToListAsync();
-
-            return Ok(items);
+            var items = await _notifyListService.GetAllAsync(search, HttpContext.RequestAborted);
+            return Ok(items.Select(ToDto));
         }
         catch (Exception ex)
         {
@@ -64,20 +40,9 @@ public class NotifyListController : BaseApiController
     {
         try
         {
-            var item = await _context.NotifyLists
-                .AsNoTracking()
-                .Where(x => !x.is_deleted && x.Notify_list_code == id)
-                .Select(x => new NotifyListDto
-                {
-                    Notify_list_code = x.Notify_list_code,
-                    Notify_list_desc = x.Notify_list_desc,
-                    Notify_email1 = x.Notify_email1,
-                    date_created = x.date_created,
-                    date_updated = x.date_updated
-                })
-                .FirstOrDefaultAsync();
+            var item = await _notifyListService.GetByIdAsync(id, HttpContext.RequestAborted);
 
-            return item is null ? NotFound() : Ok(item);
+            return item is null ? NotFound() : Ok(ToDto(item));
         }
         catch (Exception ex)
         {
@@ -91,28 +56,21 @@ public class NotifyListController : BaseApiController
     {
         try
         {
-            var entity = new NotifyList
+            var validation = Validate(request);
+            if (validation is not null)
             {
-                Notify_list_desc = request.Notify_list_desc?.Trim(),
-                Notify_email1 = request.Notify_email1?.Trim(),
-                date_created = DateTime.UtcNow,
-                date_updated = null,
-                created_by_user_code = GetCurrentUserId(),
-                modified_by_user_code = null,
-                is_deleted = false
-            };
+                return BadRequest(validation);
+            }
 
-            _context.NotifyLists.Add(entity);
-            await _context.SaveChangesAsync();
+            var item = await _notifyListService.CreateAsync(
+                request.Notify_list_desc?.Trim(),
+                request.Notify_email1?.Trim(),
+                GetCurrentUserIdOrNull(),
+                HttpContext.RequestAborted);
 
-            return CreatedAtAction(nameof(GetById), new { id = entity.Notify_list_code }, new NotifyListDto
-            {
-                Notify_list_code = entity.Notify_list_code,
-                Notify_list_desc = entity.Notify_list_desc,
-                Notify_email1 = entity.Notify_email1,
-                date_created = entity.date_created,
-                date_updated = entity.date_updated
-            });
+            return item is null
+                ? StatusCode(500, "Error creating notify list record")
+                : CreatedAtAction(nameof(GetById), new { id = item.Notify_list_code }, ToDto(item));
         }
         catch (Exception ex)
         {
@@ -126,29 +84,20 @@ public class NotifyListController : BaseApiController
     {
         try
         {
-            var entity = await _context.NotifyLists
-                .FirstOrDefaultAsync(x => !x.is_deleted && x.Notify_list_code == id);
-
-            if (entity is null)
+            var validation = Validate(request);
+            if (validation is not null)
             {
-                return NotFound();
+                return BadRequest(validation);
             }
 
-            entity.Notify_list_desc = request.Notify_list_desc?.Trim();
-            entity.Notify_email1 = request.Notify_email1?.Trim();
-            entity.date_updated = DateTime.UtcNow;
-            entity.modified_by_user_code = GetCurrentUserId();
+            var item = await _notifyListService.UpdateAsync(
+                id,
+                request.Notify_list_desc?.Trim(),
+                request.Notify_email1?.Trim(),
+                GetCurrentUserIdOrNull(),
+                HttpContext.RequestAborted);
 
-            await _context.SaveChangesAsync();
-
-            return Ok(new NotifyListDto
-            {
-                Notify_list_code = entity.Notify_list_code,
-                Notify_list_desc = entity.Notify_list_desc,
-                Notify_email1 = entity.Notify_email1,
-                date_created = entity.date_created,
-                date_updated = entity.date_updated
-            });
+            return item is null ? NotFound() : Ok(ToDto(item));
         }
         catch (Exception ex)
         {
@@ -162,20 +111,11 @@ public class NotifyListController : BaseApiController
     {
         try
         {
-            var entity = await _context.NotifyLists
-                .FirstOrDefaultAsync(x => !x.is_deleted && x.Notify_list_code == id);
-
-            if (entity is null)
-            {
-                return NotFound();
-            }
-
-            entity.is_deleted = true;
-            entity.date_updated = DateTime.UtcNow;
-            entity.modified_by_user_code = GetCurrentUserId();
-
-            await _context.SaveChangesAsync();
-            return NoContent();
+            var deleted = await _notifyListService.DeleteAsync(
+                id,
+                GetCurrentUserIdOrNull(),
+                HttpContext.RequestAborted);
+            return deleted ? NoContent() : NotFound();
         }
         catch (Exception ex)
         {
@@ -183,6 +123,44 @@ public class NotifyListController : BaseApiController
             return StatusCode(500, "Error deleting notify list record");
         }
     }
+
+    private int? GetCurrentUserIdOrNull()
+    {
+        var claim = User.FindFirst("user_access_code")?.Value;
+        return int.TryParse(claim, out var userId) ? userId : null;
+    }
+
+    private static string? Validate(NotifyListCreateUpdateDto request)
+    {
+        var description = request.Notify_list_desc?.Trim();
+        var email = request.Notify_email1?.Trim();
+
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return "Notification section name is required.";
+        }
+
+        if (description.Length > 40)
+        {
+            return "Notification section name must be 40 characters or fewer.";
+        }
+
+        if (email?.Length > 240)
+        {
+            return "Email address must be 240 characters or fewer.";
+        }
+
+        return null;
+    }
+
+    private static NotifyListDto ToDto(NotifyListRecord item) => new()
+    {
+        Notify_list_code = item.Notify_list_code,
+        Notify_list_desc = item.Notify_list_desc,
+        Notify_email1 = item.Notify_email1,
+        date_created = item.date_created,
+        date_updated = item.date_updated
+    };
 }
 
 public class NotifyListDto
