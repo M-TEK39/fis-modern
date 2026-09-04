@@ -48,26 +48,17 @@ public class CallCentreController : BaseApiController
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var now = DateTime.UtcNow;
             var item = new CallCentre
             {
-                vmf_code = dto.VmfCode,
-                Call_time = dto.CallTime,
-                Call_date = dto.CallDate,
-                Incident_type = dto.IncidentType,
-                Incident_Desc = dto.IncidentDesc,
-                Capture_name = dto.CaptureName,
-                User_access_code = dto.UserAccessCode,
-                Caller_name = dto.CallerName,
-                Driver_name = dto.DriverName,
-                Driver_persalno = dto.DriverPersalno,
-                Driver_Licno = dto.DriverLicno,
-                GG_number = dto.GGNumber,
-                Driver_base_station = dto.DriverBaseStation,
-                Driver_Site = dto.DriverSite,
-                Driver_tel = dto.DriverTel,
-                Driver_cell = dto.DriverCell,
-                date_created = DateTime.UtcNow
+                Call_time = dto.CallTime ?? now,
+                Call_date = dto.CallDate ?? now.Date,
+                Incident_date = dto.IncidentDate ?? now.Date,
+                Incident_time = dto.IncidentTime ?? now,
+                Counter = dto.Counter ?? 1,
+                User_access_code = dto.UserAccessCode ?? GetLegacyUserAccessCode()
             };
+            ApplyFields(item, dto);
 
             var created = await _repository.CreateAsync(item, GetCurrentUserId());
             return CreatedAtAction(nameof(GetById), new { id = created.Call_centre_code }, created);
@@ -91,23 +82,7 @@ public class CallCentreController : BaseApiController
             if (existing == null)
                 return NotFound(new { error = "Call centre record not found", id });
 
-            // Update only provided fields
-            existing.vmf_code = dto.VmfCode;
-            existing.Call_time = dto.CallTime;
-            existing.Call_date = dto.CallDate;
-            existing.Incident_type = dto.IncidentType;
-            existing.Incident_Desc = dto.IncidentDesc;
-            existing.Capture_name = dto.CaptureName;
-            existing.User_access_code = dto.UserAccessCode;
-            existing.Caller_name = dto.CallerName;
-            existing.Driver_name = dto.DriverName;
-            existing.Driver_persalno = dto.DriverPersalno;
-            existing.Driver_Licno = dto.DriverLicno;
-            existing.GG_number = dto.GGNumber;
-            existing.Driver_base_station = dto.DriverBaseStation;
-            existing.Driver_Site = dto.DriverSite;
-            existing.Driver_tel = dto.DriverTel;
-            existing.Driver_cell = dto.DriverCell;
+            ApplyFields(existing, dto);
 
             var updated = await _repository.UpdateAsync(existing, GetCurrentUserId());
             return Ok(updated);
@@ -459,6 +434,52 @@ public class CallCentreController : BaseApiController
     }
 
     #endregion
+
+    private short? GetLegacyUserAccessCode()
+    {
+        var userId = GetCurrentUserId();
+        return userId is > 0 and <= short.MaxValue ? (short)userId : null;
+    }
+
+    private static void ApplyFields(CallCentre target, CallCentreFieldsDto dto)
+    {
+        target.vmf_code = dto.VmfCode;
+        target.Call_time = dto.CallTime ?? target.Call_time;
+        target.Call_date = dto.CallDate ?? target.Call_date;
+        target.Incident_type = dto.IncidentType;
+        target.Incident_Desc = dto.IncidentDesc;
+        target.Capture_name = dto.CaptureName;
+        target.User_access_code = dto.UserAccessCode ?? target.User_access_code;
+        target.Caller_name = dto.CallerName;
+        target.Driver_name = dto.DriverName;
+        target.Driver_persalno = dto.DriverPersalno;
+        target.Driver_Licno = dto.DriverLicno;
+        target.GG_number = dto.GGNumber;
+        target.Driver_base_station = dto.DriverBaseStation;
+        target.Driver_Site = dto.DriverSite;
+        target.Driver_tel = dto.DriverTel;
+        target.Driver_cell = dto.DriverCell;
+        target.Driver_fax = dto.DriverFax;
+        target.Driver_email = dto.DriverEmail;
+        target.Incident_date = dto.IncidentDate ?? target.Incident_date;
+        target.Incident_time = dto.IncidentTime ?? target.Incident_time;
+        target.Caller_tel = dto.CallerTel;
+        target.TrOfficer_name = dto.TransportOfficerName;
+        target.TrOfficer_tel = dto.TransportOfficerTel;
+        target.TrOfficer_Site = dto.TransportOfficerSite;
+        target.Incident_town = dto.IncidentTown;
+        target.Incident_street = dto.IncidentStreet;
+        target.Counter = dto.Counter ?? target.Counter;
+        target.Caller_fax = dto.CallerFax;
+        target.TrOfficer_fax = dto.TransportOfficerFax;
+        target.Caller_email = dto.CallerEmail;
+        target.TrOfficer_email = dto.TransportOfficerEmail;
+        target.Inform_CRO = dto.InformCro;
+        target.CRO_Remarks = dto.CroRemarks;
+        target.Incident_Remarks = dto.IncidentRemarks;
+        target.Notify_list_code = dto.NotifyListCode;
+        target.call_closed = dto.CallClosed;
+    }
 }
 
 #region Call Centre DTOs
@@ -506,27 +527,15 @@ public class CallCentreReportDto
     public DateTime? EndDate { get; set; }
 }
 
-public class CreateCallCentreDto
+public class CreateCallCentreDto : CallCentreFieldsDto
 {
-    public int? VmfCode { get; set; }
-    public DateTime? CallTime { get; set; }
-    public DateTime? CallDate { get; set; }
-    public string? IncidentType { get; set; }
-    public string? IncidentDesc { get; set; }
-    public string? CaptureName { get; set; }
-    public short? UserAccessCode { get; set; }
-    public string? CallerName { get; set; }
-    public string? DriverName { get; set; }
-    public string? DriverPersalno { get; set; }
-    public string? DriverLicno { get; set; }
-    public string? GGNumber { get; set; }
-    public string? DriverBaseStation { get; set; }
-    public short? DriverSite { get; set; }
-    public string? DriverTel { get; set; }
-    public string? DriverCell { get; set; }
 }
 
-public class UpdateCallCentreDto
+public class UpdateCallCentreDto : CallCentreFieldsDto
+{
+}
+
+public abstract class CallCentreFieldsDto
 {
     public int? VmfCode { get; set; }
     public DateTime? CallTime { get; set; }
@@ -544,6 +553,26 @@ public class UpdateCallCentreDto
     public short? DriverSite { get; set; }
     public string? DriverTel { get; set; }
     public string? DriverCell { get; set; }
+    public string? DriverFax { get; set; }
+    public string? DriverEmail { get; set; }
+    public DateTime? IncidentDate { get; set; }
+    public DateTime? IncidentTime { get; set; }
+    public string? CallerTel { get; set; }
+    public string? TransportOfficerName { get; set; }
+    public string? TransportOfficerTel { get; set; }
+    public short? TransportOfficerSite { get; set; }
+    public string? IncidentTown { get; set; }
+    public string? IncidentStreet { get; set; }
+    public short? Counter { get; set; }
+    public string? CallerFax { get; set; }
+    public string? TransportOfficerFax { get; set; }
+    public string? CallerEmail { get; set; }
+    public string? TransportOfficerEmail { get; set; }
+    public string? InformCro { get; set; }
+    public string? CroRemarks { get; set; }
+    public string? IncidentRemarks { get; set; }
+    public int? NotifyListCode { get; set; }
+    public string? CallClosed { get; set; }
 }
 
 #endregion
