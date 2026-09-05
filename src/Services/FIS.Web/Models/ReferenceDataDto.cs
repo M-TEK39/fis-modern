@@ -94,6 +94,7 @@ public record LicenseFeeDto
 public record DriverLicenceDto
 {
     public int licence_code { get; set; }
+    public string? code { get; set; }
     [Required]
     public string? description { get; set; }
 }

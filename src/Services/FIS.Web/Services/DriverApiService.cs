@@ -71,7 +71,7 @@ public class DriverApiService
         try
         {
             AddAuthHeader();
-            var result = await _httpClient.GetFromJsonAsync<List<ApiDriverResponse>>("api/Driver");
+            var result = await _httpClient.GetFromJsonAsync<List<ApiDriverResponse>>("api/site-drivers");
             if (result == null) return new List<DriverDto>();
 
             return result.Select(MapToDto).ToList();
@@ -88,7 +88,7 @@ public class DriverApiService
         try
         {
             AddAuthHeader();
-            var result = await _httpClient.GetFromJsonAsync<ApiDriverResponse>($"api/Driver/{driverCode}");
+            var result = await _httpClient.GetFromJsonAsync<ApiDriverResponse>($"api/site-drivers/{driverCode}");
             return result == null ? null : MapToDto(result);
         }
         catch (Exception ex)
@@ -103,7 +103,7 @@ public class DriverApiService
         try
         {
             AddAuthHeader();
-            var response = await _httpClient.PostAsJsonAsync("api/Driver", MapToRequest(driver));
+            var response = await _httpClient.PostAsJsonAsync("api/site-drivers", MapToRequest(driver));
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -118,7 +118,7 @@ public class DriverApiService
         try
         {
             AddAuthHeader();
-            var response = await _httpClient.PutAsJsonAsync($"api/Driver/{driverCode}", MapToRequest(driver));
+            var response = await _httpClient.PutAsJsonAsync($"api/site-drivers/{driverCode}", MapToRequest(driver));
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -133,7 +133,7 @@ public class DriverApiService
         try
         {
             AddAuthHeader();
-            var response = await _httpClient.DeleteAsync($"api/Driver/{driverCode}");
+            var response = await _httpClient.DeleteAsync($"api/site-drivers/{driverCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

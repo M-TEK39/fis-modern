@@ -5,9 +5,9 @@ namespace FIS.Web.Services;
 
 internal class ApiDriverLicenceTypeResponse
 {
-    public int driver_licence_type_id { get; set; }
-    public string? driver_licence_type_code { get; set; }
-    public string? driver_licence_type_description { get; set; }
+    public int Id { get; set; }
+    public string? Code { get; set; }
+    public string? Description { get; set; }
 }
 
 internal class ApiDriverLicenceResponse
@@ -45,13 +45,14 @@ public class DriverLicenceApiService
         try
         {
             AddAuthHeader();
-            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiDriverLicenceTypeResponse>>("api/driverlicencetype");
+            var apiResponse = await _httpClient.GetFromJsonAsync<List<ApiDriverLicenceTypeResponse>>("api/site-drivers/licence-types");
             if (apiResponse == null) return new List<DriverLicenceDto>();
 
             return apiResponse.Select(item => new DriverLicenceDto
             {
-                licence_code = item.driver_licence_type_id,
-                description = item.driver_licence_type_description
+                licence_code = item.Id,
+                code = item.Code,
+                description = item.Description
             }).ToList();
         }
         catch (Exception ex)
@@ -68,10 +69,11 @@ public class DriverLicenceApiService
             AddAuthHeader();
             var createDto = new
             {
+                code = licence.code,
                 description = licence.description
             };
 
-            var response = await _httpClient.PostAsJsonAsync("api/driverlicence", createDto);
+            var response = await _httpClient.PostAsJsonAsync("api/site-drivers/licence-types", createDto);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -88,11 +90,11 @@ public class DriverLicenceApiService
             AddAuthHeader();
             var updateDto = new
             {
-                licence_code = (short)licenceCode,
+                code = licence.code,
                 description = licence.description
             };
 
-            var response = await _httpClient.PutAsJsonAsync($"api/driverlicence/{licenceCode}", updateDto);
+            var response = await _httpClient.PutAsJsonAsync($"api/site-drivers/licence-types/{licenceCode}", updateDto);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -107,7 +109,7 @@ public class DriverLicenceApiService
         try
         {
             AddAuthHeader();
-            var response = await _httpClient.DeleteAsync($"api/driverlicence/{licenceCode}");
+            var response = await _httpClient.DeleteAsync($"api/site-drivers/licence-types/{licenceCode}");
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

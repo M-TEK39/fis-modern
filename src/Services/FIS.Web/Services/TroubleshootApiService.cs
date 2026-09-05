@@ -33,10 +33,10 @@ public class TroubleshootApiService(HttpClient httpClient, TokenService tokenSer
         await PostAsync<RemoveTripsRequest, object>($"{BasePath}/remove-trips-no-routes", request);
 
     public Task<List<ApproverRankDto>> GetApproverRanksAsync() =>
-        GetListAsync<ApproverRankDto>($"{BasePath}/approver-ranks");
+        GetListAsync<ApproverRankDto>("api/authorisers/ranks");
 
     public async Task<List<ApproverRankDto>> SaveApproverRanksAsync(List<ApproverRankDto> ranks) =>
-        await PostAsync<List<ApproverRankDto>, List<ApproverRankDto>>($"{BasePath}/approver-ranks", ranks)
+        await PostAsync<List<ApproverRankDto>, List<ApproverRankDto>>("api/authorisers/ranks", ranks)
         ?? new List<ApproverRankDto>();
 
     public async Task<List<VehicleDto>> GetVehicleMasterEditAsync(VehicleMasterEditRequest request) =>
