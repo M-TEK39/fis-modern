@@ -175,12 +175,20 @@ public interface IDepartmentRepository
 {
     Task<Department?> GetByIdAsync(int departmentCode);
     Task<Department?> GetByNameAsync(string departmentName);
+    Task<IEnumerable<Department>> GetAllAsync();
     Task<IEnumerable<Department>> GetActiveDepartmentsAsync();
     Task<IEnumerable<Department>> GetByCompanyAsync(int companyCode);
     Task<IEnumerable<Department>> SearchDepartmentsAsync(string searchTerm);
+    Task<DepartmentDeleteCheck> GetDeleteCheckAsync(int departmentCode);
+    Task<bool> HasActiveContractsAsync(int departmentCode);
     Task<Department> CreateAsync(Department department, int currentUserId);
     Task UpdateAsync(Department department, int currentUserId);
     Task DeleteAsync(int departmentCode, int currentUserId);
+}
+
+public sealed record DepartmentDeleteCheck(int SiteCount, int LogsheetCount)
+{
+    public bool CanDelete => SiteCount == 0 && LogsheetCount == 0;
 }
 
 /// <summary>

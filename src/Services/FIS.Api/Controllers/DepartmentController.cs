@@ -99,7 +99,9 @@ public class DepartmentController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var departments = await _departmentRepository.GetActiveDepartmentsAsync();
+            // The legacy maintenance list includes inactive departments as well.
+            // Keep that behavior so older records are not silently omitted.
+            var departments = await _departmentRepository.GetAllAsync();
             var departmentDtos = departments.Select(d => new DepartmentDto
             {
                 DepartmentCode = d.department_code,
@@ -209,7 +211,72 @@ public class DepartmentController : BaseApiController
     [HttpGet("active")]
     public async Task<ActionResult<IEnumerable<DepartmentDto>>> GetActiveDepartments()
     {
-        return await GetDepartments(); // Same as default behavior
+        try
+        {
+            var departments = await _departmentRepository.GetActiveDepartmentsAsync();
+            return Ok(departments.Select(d => new DepartmentDto
+            {
+                DepartmentCode = d.department_code,
+                CompanyCode = d.company_code,
+                Description = d.description,
+                ResponsiblePerson = d.res_person,
+                Address1 = d.address1,
+                Address2 = d.address2,
+                Address3 = d.address3,
+                PostalCode = d.postal_code,
+                Telephone = d.telephone,
+                Fax = d.fax,
+                NetAddress = d.net_address,
+                DepartmentNumber = d.Department_number,
+                CellNumber = d.cell_number,
+                Notes = d.notes,
+                DepartmentAbbr = d.department_abbr,
+                BasInstallationCode = d.bas_installation_code,
+                DeptActive = d.dept_active,
+                CloEmail = d.clo_email,
+                Telephone2 = d.telephone2,
+                Fax2 = d.fax2,
+                FinancialSystemCode = d.financial_system_code,
+                FinancialSystemActive = d.financial_system_active,
+                FinancialSystemActivateDate = d.financial_system_activate_date,
+                DefaultSite = d.default_site,
+                ExportIsActive = d.export_is_active,
+                DateLastExported = d.date_last_exported,
+                ServiceKilometres = d.Service_Kilometres,
+                ServiceYears = d.Service_Years,
+                OverheadPercentage = d.Overhead_Percentage,
+                DateCreated = d.date_created,
+                DateUpdated = d.date_updated,
+                UserAccessCode = d.user_access_code,
+                ModifiedByUserCode = d.modified_by_user_code,
+                Comments = d.comments
+            }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving active departments");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("{id:int}/delete-check")]
+    public async Task<ActionResult<DepartmentDeleteCheck>> GetDeleteCheck(int id)
+    {
+        try
+        {
+            var department = await _departmentRepository.GetByIdAsync(id);
+            if (department is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(await _departmentRepository.GetDeleteCheckAsync(id));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking department dependencies for {DepartmentId}", id);
+            return StatusCode(500, "Internal server error");
+        }
     }
 
     [HttpGet("company/{companyCode}")]
@@ -329,7 +396,9 @@ public class DepartmentController : BaseApiController
 
             var department = new Department
             {
-                company_code = createDepartmentDto.CompanyCode,
+                // The legacy add screen always writes company_code = 1 when
+                // the caller does not provide a company value.
+                company_code = createDepartmentDto.CompanyCode == 0 ? (short)1 : createDepartmentDto.CompanyCode,
                 description = createDepartmentDto.Description,
                 res_person = createDepartmentDto.ResponsiblePerson,
                 address1 = createDepartmentDto.Address1,
@@ -356,7 +425,8 @@ public class DepartmentController : BaseApiController
                 Service_Kilometres = createDepartmentDto.ServiceKilometres,
                 Service_Years = createDepartmentDto.ServiceYears,
                 Overhead_Percentage = createDepartmentDto.OverheadPercentage,
-                user_access_code = createDepartmentDto.UserAccessCode,
+                user_access_code = createDepartmentDto.UserAccessCode ??
+                    (currentUserId > 0 && currentUserId <= short.MaxValue ? (short)currentUserId : null),
                 comments = createDepartmentDto.Comments
             };
 
@@ -422,7 +492,18 @@ public class DepartmentController : BaseApiController
                 return NotFound();
             }
 
-            existingDepartment.company_code = updateDepartmentDto.CompanyCode;
+            if (existingDepartment.dept_active && !updateDepartmentDto.DeptActive &&
+                await _departmentRepository.HasActiveContractsAsync(id))
+            {
+                return Conflict(new
+                {
+                    message = "This department cannot be deactivated while active vehicle contracts are assigned to it."
+                });
+            }
+
+            existingDepartment.company_code = updateDepartmentDto.CompanyCode == 0
+                ? existingDepartment.company_code
+                : updateDepartmentDto.CompanyCode;
             existingDepartment.description = updateDepartmentDto.Description;
             existingDepartment.res_person = updateDepartmentDto.ResponsiblePerson;
             existingDepartment.address1 = updateDepartmentDto.Address1;
@@ -449,7 +530,10 @@ public class DepartmentController : BaseApiController
             existingDepartment.Service_Kilometres = updateDepartmentDto.ServiceKilometres;
             existingDepartment.Service_Years = updateDepartmentDto.ServiceYears;
             existingDepartment.Overhead_Percentage = updateDepartmentDto.OverheadPercentage;
-            existingDepartment.user_access_code = updateDepartmentDto.UserAccessCode;
+            if (updateDepartmentDto.UserAccessCode.HasValue)
+            {
+                existingDepartment.user_access_code = updateDepartmentDto.UserAccessCode;
+            }
             existingDepartment.comments = updateDepartmentDto.Comments;
 
             await _departmentRepository.UpdateAsync(existingDepartment, currentUserId);
@@ -512,6 +596,17 @@ public class DepartmentController : BaseApiController
             if (existingDepartment == null)
             {
                 return NotFound();
+            }
+
+            var deleteCheck = await _departmentRepository.GetDeleteCheckAsync(id);
+            if (!deleteCheck.CanDelete)
+            {
+                return Conflict(new
+                {
+                    message = "This department cannot be deleted until its sites are removed and its logsheets are rectified.",
+                    siteCount = deleteCheck.SiteCount,
+                    logsheetCount = deleteCheck.LogsheetCount
+                });
             }
 
             await _departmentRepository.DeleteAsync(id, currentUserId);
