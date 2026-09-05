@@ -42,7 +42,7 @@ export type MerchantRequest = {
   Merchant_Name: string;
 };
 
-export type ClearanceApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
+export type ClearanceApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "conflict";
 
 export class ClearanceApiError extends Error {
   constructor(
@@ -53,6 +53,21 @@ export class ClearanceApiError extends Error {
     this.name = "ClearanceApiError";
   }
 }
+
+export type MerchantDeleteCheck = {
+  merchantCode: number;
+  merchantName: string | null;
+  clearanceCount: number;
+  canDelete: boolean;
+};
+
+export type ClearanceReportRow = {
+  fleetNumber: string | null;
+  clearanceComment: string | null;
+  merchantName: string | null;
+  clearanceNumber: number | null;
+  clearanceDate: string | null;
+};
 
 function getApiBaseUrl() {
   const value = process.env.API_BASE_URL?.trim() || "http://localhost:5010";
@@ -141,6 +156,10 @@ async function requestApi(path: string, init: RequestInit = {}) {
       throw new ClearanceApiError("not-found", "The requested clearance record was not found.");
     }
 
+    if (response.status === 409) {
+      throw new ClearanceApiError("conflict", "The requested change conflicts with existing clearance records.");
+    }
+
     if (!response.ok) {
       throw new ClearanceApiError("invalid-response", `FIS API returned HTTP ${response.status}.`);
     }
@@ -221,6 +240,39 @@ function mapMerchant(value: unknown): MerchantRecord | null {
   };
 }
 
+function mapMerchantDeleteCheck(value: unknown): MerchantDeleteCheck | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const merchantCode = asNumber(getValue(value, "merchantCode", "Merchant_code", "merchant_code"));
+  const clearanceCount = asNumber(getValue(value, "clearanceCount", "ClearanceCount"));
+  if (merchantCode === null || clearanceCount === null) {
+    return null;
+  }
+
+  return {
+    merchantCode,
+    merchantName: asString(getValue(value, "merchantName", "Merchant_Name", "merchant_name")),
+    clearanceCount,
+    canDelete: Boolean(getValue(value, "canDelete", "CanDelete")),
+  };
+}
+
+function mapReportRow(value: unknown): ClearanceReportRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+    clearanceComment: asString(getValue(value, "clearance_comment", "clearanceComment")),
+    merchantName: asString(getValue(value, "merchant_name", "merchantName")),
+    clearanceNumber: asNumber(getValue(value, "clearance_number", "clearanceNumber")),
+    clearanceDate: asString(getValue(value, "clearance_date", "clearanceDate")),
+  };
+}
+
 export async function lookupClearanceVehicle(identifier: string) {
   const response = await requestApi(`api/clearance/lookup/${encodeURIComponent(identifier)}`);
   return mapVehicle(await readJson(response));
@@ -290,4 +342,37 @@ export async function updateMerchantAgainstApi(merchantCode: number, request: Me
     body: JSON.stringify(request),
   });
   return mapMerchant(await readJson(response));
+}
+
+export async function getMerchantDeleteCheck(merchantCode: number) {
+  const response = await requestApi(`api/merchant/${encodeURIComponent(merchantCode)}/delete-check`);
+  const check = mapMerchantDeleteCheck(await readJson(response));
+  if (!check) {
+    throw new ClearanceApiError("invalid-response", "The FIS API returned an invalid merchant deletion check.");
+  }
+
+  return check;
+}
+
+export async function deleteMerchantAgainstApi(merchantCode: number) {
+  await requestApi(`api/merchant/${encodeURIComponent(merchantCode)}`, { method: "DELETE" });
+}
+
+export async function getClearanceUniversalReport(request: {
+  startDate?: string;
+  endDate?: string;
+  merchantCode?: number;
+}) {
+  const response = await requestApi("api/clearance/reports/universal", {
+    method: "POST",
+    body: JSON.stringify({
+      StartDate: request.startDate ? `${request.startDate}T00:00:00.000Z` : null,
+      EndDate: request.endDate ? `${request.endDate}T00:00:00.000Z` : null,
+      MerchantCode: request.merchantCode && request.merchantCode > 0 ? request.merchantCode : null,
+    }),
+  });
+
+  return getCollection(await readJson(response))
+    .map(mapReportRow)
+    .filter((row): row is ClearanceReportRow => row !== null);
 }

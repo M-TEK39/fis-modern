@@ -7,7 +7,7 @@ type LegacyMerchantDeleteCheckProps = {
 export default function LegacyMerchantDeleteCheckPage({ searchParams }: LegacyMerchantDeleteCheckProps) {
   return (
     <ClearanceMerchantPage
-      deletionBlocked
+      deletionMode
       routePath="/Clearance/MNT_Merchant_Del_Check.aspx"
       searchParams={searchParams}
     />

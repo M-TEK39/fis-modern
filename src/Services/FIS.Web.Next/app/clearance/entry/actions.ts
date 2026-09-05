@@ -7,7 +7,9 @@ import {
   ClearanceApiError,
   createClearanceAgainstApi,
   createMerchantAgainstApi,
+  deleteMerchantAgainstApi,
   deleteClearanceAgainstApi,
+  getMerchantDeleteCheck,
   updateClearanceAgainstApi,
   updateMerchantAgainstApi,
   type ClearanceRequest,
@@ -265,4 +267,38 @@ export async function saveMerchantAction(formData: FormData) {
   revalidatePath("/clearance");
   revalidatePath("/clearance/merchant");
   redirect(`/clearance/merchant?${isUpdate ? "updated" : "saved"}=1`);
+}
+
+export async function deleteMerchantAction(formData: FormData) {
+  const returnPath = getReturnPath(formData).startsWith("/clearance/merchant")
+    ? getReturnPath(formData)
+    : "/clearance/merchant";
+  const access = await authorizeClearance();
+  if (!access.ok) {
+    redirectWithMessage(returnPath, "error", access.message);
+  }
+
+  const merchantCode = Number(getText(formData, "merchantCode"));
+  if (!Number.isInteger(merchantCode) || merchantCode <= 0) {
+    redirectWithMessage(returnPath, "error", "Merchant record is invalid.");
+  }
+
+  try {
+    const check = await getMerchantDeleteCheck(merchantCode);
+    if (!check.canDelete || check.clearanceCount > 0) {
+      redirectWithMessage(
+        returnPath,
+        "error",
+        `Merchant cannot be deleted while ${check.clearanceCount} clearance record${check.clearanceCount === 1 ? " is" : "s are"} linked to it.`,
+      );
+    }
+
+    await deleteMerchantAgainstApi(merchantCode);
+  } catch (error) {
+    redirectWithMessage(returnPath, "error", apiErrorMessage(error, "merchant"));
+  }
+
+  revalidatePath("/clearance");
+  revalidatePath("/clearance/merchant");
+  redirect("/clearance/merchant?deleted=1");
 }

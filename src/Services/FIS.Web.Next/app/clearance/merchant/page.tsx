@@ -2,16 +2,22 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import { saveMerchantAction } from "@/app/clearance/entry/actions";
+import { deleteMerchantAction, saveMerchantAction } from "@/app/clearance/entry/actions";
 import SessionRecovery from "@/app/home/session-recovery";
-import { ClearanceApiError, getMerchants, type MerchantRecord } from "@/lib/api-clearance";
+import {
+  ClearanceApiError,
+  getMerchantDeleteCheck,
+  getMerchants,
+  type MerchantDeleteCheck,
+  type MerchantRecord,
+} from "@/lib/api-clearance";
 import { getSession } from "@/lib/session";
 
 const CLEARANCE_ROLE = "Clearance";
 
 export type ClearanceMerchantPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
-  deletionBlocked?: boolean;
+  deletionMode?: boolean;
   routePath?: string;
 };
 
@@ -128,9 +134,17 @@ function MerchantList({ merchants }: Readonly<{ merchants: MerchantRecord[] }>) 
                   <td>{merchant.merchantCode}</td>
                   <td>{valueOrDash(merchant.merchantName)}</td>
                   <td>
-                    <Link className="button button-secondary button-small" href={`/clearance/merchant?merchantCode=${merchant.merchantCode}`}>
-                      Edit
-                    </Link>
+                    <div className="button-row">
+                      <Link className="button button-secondary button-small" href={`/clearance/merchant?merchantCode=${merchant.merchantCode}`}>
+                        Edit
+                      </Link>
+                      <Link
+                        className="button button-danger button-small"
+                        href={`/Clearance/MNT_Merchant_Del_Check.aspx?code=${merchant.merchantCode}`}
+                      >
+                        Delete
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -144,7 +158,7 @@ function MerchantList({ merchants }: Readonly<{ merchants: MerchantRecord[] }>) 
 
 export default async function ClearanceMerchantPage({
   searchParams,
-  deletionBlocked = false,
+  deletionMode = false,
   routePath = "/clearance/merchant",
 }: ClearanceMerchantPageProps) {
   await connection();
@@ -201,6 +215,17 @@ export default async function ClearanceMerchantPage({
   const query = await searchParams;
   const selectedCode = getQueryInt(getQueryValue(query.merchantCode) ?? getQueryValue(query.cmbMerchant) ?? getQueryValue(query.code));
   const selectedMerchant = selectedCode ? merchants.find((merchant) => merchant.merchantCode === selectedCode) ?? null : null;
+  let deleteCheck: MerchantDeleteCheck | null = null;
+  let deleteCheckError: string | null = null;
+  if (deletionMode && selectedCode) {
+    try {
+      deleteCheck = await getMerchantDeleteCheck(selectedCode);
+    } catch (error) {
+      deleteCheckError = error instanceof ClearanceApiError && error.reason === "unavailable"
+        ? "The merchant deletion check is temporarily unavailable. Please try again."
+        : "The merchant deletion check could not be loaded.";
+    }
+  }
   const saved = getQueryValue(query.saved) === "1";
   const updated = getQueryValue(query.updated) === "1";
   const deleted = getQueryValue(query.deleted) === "1";
@@ -225,23 +250,89 @@ export default async function ClearanceMerchantPage({
         {deleted ? <div className="notice notice-success" role="status">Merchant deleted successfully.</div> : null}
         {errorMessage ? <div className="notice notice-error" role="alert">{errorMessage}</div> : null}
 
-        {deletionBlocked ? (
-          <section className="vehicle-status-maintenance-panel" role="alert">
-            <p className="eyebrow">Deletion unavailable</p>
-            <h2>Merchant deletion is not available in this cutover.</h2>
-            <p>
-              The legacy workflow checks for linked clearance records before deleting a merchant. The current C# API
-              does not expose that check, so no deletion request will be sent.
-            </p>
-            <Link className="button button-secondary" href="/clearance/merchant">
-              Return to Merchant Maintenance
-            </Link>
-          </section>
-        ) : null}
-
-        <MerchantForm merchant={selectedMerchant} />
-        <MerchantList merchants={merchants} />
+        {deletionMode ? (
+          <MerchantDeleteCheckView
+            check={deleteCheck}
+            error={deleteCheckError}
+            merchant={selectedMerchant}
+          />
+        ) : (
+          <>
+            <MerchantForm merchant={selectedMerchant} />
+            <MerchantList merchants={merchants} />
+          </>
+        )}
       </section>
     </main>
+  );
+}
+
+function MerchantDeleteCheckView({
+  check,
+  error,
+  merchant,
+}: Readonly<{
+  check: MerchantDeleteCheck | null;
+  error: string | null;
+  merchant: MerchantRecord | null;
+}>) {
+  if (error) {
+    return (
+      <section className="vehicle-status-maintenance-panel" role="alert">
+        <p className="eyebrow">Deletion check failed</p>
+        <h2>{error}</h2>
+        <Link className="button button-secondary" href="/clearance/merchant">
+          Return to Merchant Maintenance
+        </Link>
+      </section>
+    );
+  }
+
+  if (!check || !merchant) {
+    return (
+      <section className="vehicle-status-maintenance-panel" role="alert">
+        <p className="eyebrow">Merchant not found</p>
+        <h2>Select an existing merchant before deleting.</h2>
+        <Link className="button button-secondary" href="/clearance/merchant">
+          Return to Merchant Maintenance
+        </Link>
+      </section>
+    );
+  }
+
+  if (!check.canDelete || check.clearanceCount > 0) {
+    return (
+      <section className="vehicle-status-maintenance-panel" role="alert">
+        <p className="eyebrow">Clearances for merchant</p>
+        <h2>{valueOrDash(check.merchantName ?? merchant.merchantName)}</h2>
+        <p>
+          {check.clearanceCount} clearance record{check.clearanceCount === 1 ? " is" : "s are"} linked to this merchant.
+          Change the merchant on those clearances before deleting it.
+        </p>
+        <Link className="button button-secondary" href="/clearance/merchant">
+          Return to Merchant Maintenance
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section className="vehicle-status-maintenance-panel" aria-labelledby="merchant-delete-title">
+      <p className="eyebrow">No clearances found</p>
+      <h2 id="merchant-delete-title">Delete {valueOrDash(check.merchantName ?? merchant.merchantName)}?</h2>
+      <p>No clearance records are linked to this merchant. It is safe to delete.</p>
+      <form action={deleteMerchantAction}>
+        <input name="returnPath" type="hidden" value="/clearance/merchant" />
+        <input name="merchantCode" type="hidden" value={check.merchantCode} />
+        <div className="button-row">
+          <button className="button button-danger" type="submit">
+            Delete
+          </button>
+          <Link className="button button-secondary" href="/clearance/merchant">
+            Return without deleting
+          </Link>
+        </div>
+      </form>
+    </section>
   );
 }
