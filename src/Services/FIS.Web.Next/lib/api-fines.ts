@@ -179,6 +179,17 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
@@ -332,24 +343,21 @@ function mapFineReport(value: unknown): FineReport | null {
     return null;
   }
 
-  const columns = rawColumns
-    .filter(isRecord)
-    .map((column) => {
+  const columns = mapPresent(rawColumns, (column) => {
+    if (!isRecord(column)) return null;
       const key = asString(getValue(column, "Key", "key"));
       const header = asString(getValue(column, "Header", "header"));
       return key && header ? { key, header } : null;
-    })
-    .filter((column): column is { key: string; header: string } => column !== null);
+  });
 
-  const rows = rawRows
-    .filter(isRecord)
-    .map((row) => {
+  const rows = mapPresent(rawRows, (row) => {
+    if (!isRecord(row)) return null;
       const mapped: Record<string, string | null> = {};
       for (const [key, value] of Object.entries(row)) {
         mapped[key] = asString(value);
       }
       return mapped;
-    });
+  });
 
   const title = asString(getValue(value, "Title", "title"));
   if (!title || columns.length === 0) {

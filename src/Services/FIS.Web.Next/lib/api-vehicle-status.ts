@@ -130,6 +130,17 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
@@ -292,8 +303,6 @@ export async function changeVehicleStatusAgainstApi(
       asString(getValue(payload, "new_status_description", "newStatusDescription")) || null,
     effectiveDate: asString(getValue(payload, "effective_date", "effectiveDate")) || null,
     locationCode: asNumber(getValue(payload, "location_code", "locationCode")),
-    actionsPerformed: getCollection(getValue(payload, "actions_performed", "actionsPerformed"))
-      .map(asString)
-      .filter(Boolean),
+    actionsPerformed: mapPresent(getCollection(getValue(payload, "actions_performed", "actionsPerformed")), asString),
   } satisfies VehicleStatusChangeResult;
 }

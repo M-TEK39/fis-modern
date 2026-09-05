@@ -162,6 +162,17 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
@@ -249,9 +260,7 @@ export async function getAccidentVehicleOptions(searchType: GarageSearchType, se
   const path = normalizedSearchTerm
     ? `api/vehicles/search?searchTerm=${encodeURIComponent(normalizedSearchTerm)}`
     : "api/vehicles";
-  const vehicles = getCollection(await requestApi(path))
-    .map(mapVehicle)
-    .filter((vehicle): vehicle is VehicleLookup => vehicle !== null);
+  const vehicles = mapPresent(getCollection(await requestApi(path)), mapVehicle);
 
   const normalizedLowerTerm = normalizedSearchTerm.toLowerCase();
   return vehicles
@@ -397,44 +406,41 @@ export async function getGarageAccidentPage(
     requestApi("api/type"),
   ]);
 
-  const vehicles = getCollection(vehiclePayload)
-    .map(mapVehicle)
-    .filter((vehicle): vehicle is VehicleLookup => vehicle !== null);
+  const vehicles = mapPresent(getCollection(vehiclePayload), mapVehicle);
   const vehicleByCode = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
-  const typesByCode = new Map(
-    getCollection(typePayload)
-      .map(mapType)
-      .filter((type): type is TypeLookup => type !== null)
-      .map((type) => [type.code, type.description]),
-  );
+  const typesByCode = new Map<number, string>();
+  for (const type of mapPresent(getCollection(typePayload), mapType)) {
+    typesByCode.set(type.code, type.description);
+  }
 
-  const matchingVehicleCodes = normalizedSearchTerm
-    ? new Set(
-        vehicles
-          .filter((vehicle) => {
-            const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
-            return (value?.trim().toLocaleLowerCase() ?? "") === normalizedSearchTerm.toLocaleLowerCase();
-          })
-          .map((vehicle) => vehicle.vmfCode),
-      )
-    : null;
+  const matchingVehicleCodes = normalizedSearchTerm ? new Set<number>() : null;
+  if (matchingVehicleCodes) {
+    const normalizedLowerTerm = normalizedSearchTerm.toLocaleLowerCase();
+    for (const vehicle of vehicles) {
+      const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
+      if ((value?.trim().toLocaleLowerCase() ?? "") === normalizedLowerTerm) {
+        matchingVehicleCodes.add(vehicle.vmfCode);
+      }
+    }
+  }
 
-  const allRows = getCollection(accidentPayload)
-    .map(mapAccident)
-    .filter((accident): accident is AccidentLookup => accident !== null)
-    .filter((accident) => matchingVehicleCodes === null || (accident.vmfCode !== null && matchingVehicleCodes.has(accident.vmfCode)))
-    .map((accident) => {
+  const allRows = mapPresent(getCollection(accidentPayload), mapAccident).reduce<GarageAccidentRow[]>((rows, accident) => {
+    if (matchingVehicleCodes !== null && (accident.vmfCode === null || !matchingVehicleCodes.has(accident.vmfCode))) {
+      return rows;
+    }
+
       const vehicle = accident.vmfCode === null ? undefined : vehicleByCode.get(accident.vmfCode);
       const vehicleNumber = searchType === "GG" ? vehicle?.fleetNumber : vehicle?.registrationNumber;
 
-      return {
+      rows.push({
         accidentCode: accident.accidentCode,
         vehicleNumber: vehicleNumber ?? null,
         hireType: vehicle?.typeCode === null || vehicle?.typeCode === undefined ? null : typesByCode.get(vehicle.typeCode) ?? null,
         accidentDate: accident.accidentDate,
         reference: accident.reference,
-      } satisfies GarageAccidentRow;
-    })
+      });
+      return rows;
+    }, [])
     .toSorted((left, right) => (right.accidentDate ?? "").localeCompare(left.accidentDate ?? ""));
 
   const totalRecords = allRows.length;

@@ -128,6 +128,17 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
 function toVehicleSnapshot(value: unknown): VehicleSnapshotRow | null {
   if (!isRecord(value)) {
     return null;
@@ -298,27 +309,29 @@ export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleRep
     throw new VehicleApiError("invalid-response", "The FIS API returned an unexpected vehicle collection.");
   }
 
-  const vehicles = getCollection(payload)
-    .map(toVehicleSnapshot)
-    .filter((vehicle): vehicle is VehicleSnapshotRow => vehicle !== null);
-  const vehiclesByFleetNumber = new Map(
-    vehicles
-      .filter((vehicle): vehicle is VehicleSnapshotRow & { fleetNumber: string } => Boolean(vehicle.fleetNumber))
-      .map((vehicle) => [vehicle.fleetNumber.trim().toLocaleLowerCase(), vehicle] as const),
-  );
+  const vehicles = mapPresent(getCollection(payload), toVehicleSnapshot);
+  const vehiclesByFleetNumber = new Map<string, VehicleSnapshotRow>();
+  for (const vehicle of vehicles) {
+    if (vehicle.fleetNumber) {
+      vehiclesByFleetNumber.set(vehicle.fleetNumber.trim().toLocaleLowerCase(), vehicle);
+    }
+  }
 
-  return vehicles
-    .filter((vehicle) => Boolean(vehicle.renumberedTo))
-    .map((vehicle) => {
+  return vehicles.reduce<RenumberedVehicleReportRow[]>((rows, vehicle) => {
+    if (!vehicle.renumberedTo) {
+      return rows;
+    }
+
       const replacement = vehiclesByFleetNumber.get(vehicle.renumberedTo!.trim().toLocaleLowerCase());
 
-      return {
+      rows.push({
         oldVmfCode: vehicle.vmfCode,
         oldFleetNumber: vehicle.fleetNumber,
         oldStatusDescription: vehicle.statusDescription,
         newFleetNumber: vehicle.renumberedTo,
         newStatusDescription: replacement?.statusDescription ?? null,
-      } satisfies RenumberedVehicleReportRow;
-    })
+      });
+      return rows;
+    }, [])
     .sort((left, right) => (left.oldFleetNumber ?? "").localeCompare(right.oldFleetNumber ?? ""));
 }

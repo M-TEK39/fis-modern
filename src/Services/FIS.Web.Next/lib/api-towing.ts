@@ -117,6 +117,17 @@ function getCollection(value: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
@@ -220,9 +231,7 @@ function mapSite(value: unknown): TowingSite | null {
 }
 
 function mapTowingCollection(value: unknown) {
-  return getCollection(value)
-    .map(mapTowing)
-    .filter((item): item is TowingRecord => item !== null);
+  return mapPresent(getCollection(value), mapTowing);
 }
 
 export async function getTowings() {
@@ -238,9 +247,8 @@ export async function getTowing(towingCode: number) {
 export async function searchTowingVehicles(searchType: TowingSearchType, searchTerm: string) {
   const response = await requestApi(`api/VehicleLookup?keyword=${encodeURIComponent(searchTerm)}`);
   const values = getCollection(await readJson(response));
-  return values
-    .filter(isRecord)
-    .map((value) => {
+  const vehicles = mapPresent(values, (value) => {
+    if (!isRecord(value)) return null;
       const vmfCode = asNumber(getValue(value, "VmfCode", "vmfCode", "vmf_code"));
       if (vmfCode === null) return null;
       return {
@@ -248,9 +256,8 @@ export async function searchTowingVehicles(searchType: TowingSearchType, searchT
         fleetNumber: asString(getValue(value, "FleetNumber", "fleetNumber", "fleet_number")),
         registrationNumber: asString(getValue(value, "RegistrationNumber", "registrationNumber", "registration_number")),
       };
-    })
-    .filter((vehicle): vehicle is { vmfCode: number; fleetNumber: string | null; registrationNumber: string | null } => vehicle !== null)
-    .filter((vehicle) => {
+  });
+  return vehicles.filter((vehicle) => {
       const value = searchType === "GG" ? vehicle.fleetNumber : vehicle.registrationNumber;
       return value?.toLocaleLowerCase().includes(searchTerm.trim().toLocaleLowerCase()) === true;
     });

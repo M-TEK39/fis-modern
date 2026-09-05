@@ -122,6 +122,17 @@ function getCollection(payload: unknown) {
   return [];
 }
 
+function mapPresent<T>(values: readonly unknown[], mapper: (value: unknown) => T | null) {
+  const result: T[] = [];
+  for (const value of values) {
+    const mapped = mapper(value);
+    if (mapped !== null) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
 async function fetchApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
@@ -172,20 +183,17 @@ async function readJson(response: Response) {
 }
 
 function mapMakes(payload: unknown) {
-  return getCollection(payload)
-    .filter(isRecord)
-    .map((item) => {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
       const code = asNumber(getValue(item, "make_code", "makeCode"));
       const name = asString(getValue(item, "make_description", "makeDescription", "make_name", "makeName"));
       return code !== null && name ? { code, name } : null;
-    })
-    .filter((item): item is VehicleMakeOption => item !== null);
+  });
 }
 
 function mapModels(payload: unknown) {
-  return getCollection(payload)
-    .filter(isRecord)
-    .map((item) => {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
       const code = asNumber(getValue(item, "model_code", "modelCode"));
       const makeCode = asNumber(getValue(item, "make_code", "makeCode"));
       const name = asString(getValue(item, "model_description", "modelDescription", "model_name", "modelName"));
@@ -193,25 +201,21 @@ function mapModels(payload: unknown) {
       return code !== null && makeCode !== null && name
         ? { code, makeCode, name, typeCode }
         : null;
-    })
-    .filter((item): item is VehicleModelOption => item !== null);
+  });
 }
 
 function mapLocations(payload: unknown) {
-  return getCollection(payload)
-    .filter(isRecord)
-    .map((item) => {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
       const code = asNumber(getValue(item, "locationId", "location_id", "locationCode", "location_code"));
       const name = asString(getValue(item, "locationName", "location_name", "description"));
       return code !== null && name ? { code, name } : null;
-    })
-    .filter((item): item is VehicleLocationOption => item !== null);
+  });
 }
 
 function mapSearchResults(payload: unknown) {
-  return getCollection(payload)
-    .filter(isRecord)
-    .map((item) => {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
       const vmfCode = asNumber(getValue(item, "vmf_code", "vmfCode"));
       if (vmfCode === null) {
         return null;
@@ -225,8 +229,7 @@ function mapSearchResults(payload: unknown) {
         engineNumber: asString(getValue(item, "engine_number_1", "engineNumber1", "engine_number")) || null,
         invoiceNumber: asString(getValue(item, "invoice_number", "invoiceNumber")) || null,
       } satisfies VehicleSearchResult;
-    })
-    .filter((item): item is VehicleSearchResult => item !== null);
+  });
 }
 
 export async function getVehicleCreateReferenceData(): Promise<VehicleCreateReferenceData> {
