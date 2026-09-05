@@ -229,12 +229,7 @@ public class UserProfileController : BaseApiController
                 userId, dto.FirstName, dto.LastName);
 
             var username = dto.UserName?.Trim();
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                return BadRequest(new { message = "Username is required" });
-            }
-
-            if (username.Length > 255)
+            if (username is not null && username.Length > 255)
             {
                 return BadRequest(new { message = "Username must be 255 characters or fewer" });
             }
@@ -244,11 +239,14 @@ public class UserProfileController : BaseApiController
                 return BadRequest(new { message = "First name and last name are required" });
             }
 
-            var duplicateUsername = await _context.UserAccessOlds
-                .AnyAsync(user => user.name != null && user.name.ToLower() == username.ToLower());
-            if (duplicateUsername)
+            if (!string.IsNullOrWhiteSpace(username))
             {
-                return Conflict(new { message = $"User profile already exists for username: {username}" });
+                var duplicateUsername = await _context.UserAccessOlds
+                    .AnyAsync(user => user.name != null && user.name.ToLower() == username.ToLower());
+                if (duplicateUsername)
+                {
+                    return Conflict(new { message = $"User profile already exists for username: {username}" });
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(dto.Email))
