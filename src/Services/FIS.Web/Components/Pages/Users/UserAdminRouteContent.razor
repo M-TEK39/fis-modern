@@ -17,9 +17,6 @@
 
 @switch (RouteKey)
 {
-    case UserAdminRoutes.Edit:
-        <UserAdminEditContent />
-        break;
     case UserAdminRoutes.ResetLogin:
         <UserAdminResetLoginContent />
         break;
@@ -54,7 +51,6 @@
 
     private static string GetRouteTitle(string routeKey) => routeKey switch
     {
-        UserAdminRoutes.Edit => "Update or Modify User Details",
         UserAdminRoutes.ResetLogin => "Reset User Password Counter",
         UserAdminRoutes.Deactivate => "Delete (or De-Activate) User",
         UserAdminRoutes.ViewUsers => "View User Details",

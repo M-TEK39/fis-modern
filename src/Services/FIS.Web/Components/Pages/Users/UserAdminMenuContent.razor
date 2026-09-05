@@ -15,8 +15,8 @@
             </div>
             <div class="menu-item">
                 <a class="menu-item-link"
-                   href="@UserAdminNavigation.GetLink(Navigation, UserAdminRoutes.Edit)"
-                   @onclick="() => NavigateTo(UserAdminRoutes.Edit)"
+                   href="/users/edit"
+                   @onclick="NavigateToEdit"
                    @onclick:preventDefault="true">2)  Update or Modify User Details</a>
             </div>
             <div class="menu-item">
@@ -63,5 +63,10 @@
     private void NavigateToAdd()
     {
         Navigation.NavigateTo("/users/add");
+    }
+
+    private void NavigateToEdit()
+    {
+        Navigation.NavigateTo("/users/edit");
     }
 }

@@ -52,7 +52,7 @@
                 {
                         <tr>
                             <td class="actions-column">
-                                <button class="btn-icon btn-icon-edit" type="button" @onclick="@(() => NavigateTo(UserAdminNavigation.GetLink(Navigation, UserAdminRoutes.Edit, GetUserKey(row))))" title="Edit User Details">
+                                <button class="btn-icon btn-icon-edit" type="button" @onclick="@(() => NavigateTo(GetEditLink(row)))" title="Edit User Details">
                                     <i class="bx bx-edit"></i>
                                 </button>
                             </td>
@@ -145,6 +145,9 @@
 
     private static string GetUserKey(UserSummaryDto row) =>
         string.IsNullOrWhiteSpace(row.UserName) ? "unknown" : row.UserName;
+
+    private string GetEditLink(UserSummaryDto row) =>
+        $"/users/edit?Username={Uri.EscapeDataString(GetUserKey(row))}&Alphabet={Uri.EscapeDataString(_selectedAlphabet)}";
 
     private void PreviousPage()
     {

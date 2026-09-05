@@ -3,7 +3,6 @@ namespace FIS.Web.Components.Pages.Users;
 public static class UserAdminRoutes
 {
     public const string Menu = "menu";
-    public const string Edit = "edit";
     public const string ResetLogin = "reset-login";
     public const string Deactivate = "deactivate";
     public const string ViewUsers = "view-users";
@@ -26,7 +25,6 @@ public static class UserAdminRoutes
 
         return path switch
         {
-            "/users/edit" => Edit,
             "/users/reset-login" => ResetLogin,
             "/users/deactivate" => Deactivate,
             "/users/view" => ViewUsers,
