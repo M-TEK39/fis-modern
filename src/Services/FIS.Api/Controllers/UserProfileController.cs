@@ -1,6 +1,8 @@
 using FIS.Core.Application.Interfaces;
+using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Auth;
 using FIS.Data.SqlServer;
+using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
@@ -152,6 +154,49 @@ public class UserProfileController : BaseApiController
     }
 
     /// <summary>
+    /// Get legacy position lookup values used by User Administration.
+    /// The Positions table is part of the client schema and may be absent from
+    /// a partial backup, so active profile codes remain a safe fallback.
+    /// </summary>
+    [HttpGet("positions")]
+    public async Task<ActionResult<IEnumerable<UserPositionDto>>> GetPositions()
+    {
+        try
+        {
+            var positionNames = await GetLookupNamesAsync("Positions", "Position_Code", "Position_Name");
+            if (positionNames.Count > 0)
+            {
+                return Ok(positionNames
+                    .Where(pair => pair.Key >= byte.MinValue && pair.Key <= byte.MaxValue)
+                    .OrderBy(pair => pair.Value)
+                    .Select(pair => new UserPositionDto
+                    {
+                        PositionCode = (byte)pair.Key,
+                        PositionName = pair.Value
+                    }));
+            }
+
+            var existingCodes = (await _repository.GetAllActiveAsync())
+                .Where(user => user.Position_Code.HasValue)
+                .Select(user => user.Position_Code!.Value)
+                .Distinct()
+                .OrderBy(code => code)
+                .Select(code => new UserPositionDto
+                {
+                    PositionCode = code,
+                    PositionName = $"Position ({code})"
+                });
+
+            return Ok(existingCodes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving legacy user positions");
+            return StatusCode(500, "Error retrieving user positions");
+        }
+    }
+
+    /// <summary>
     /// Search user profiles
     /// </summary>
     [HttpGet("search")]
@@ -183,10 +228,34 @@ public class UserProfileController : BaseApiController
             _logger.LogInformation("User {UserId} creating user profile for {FirstName} {LastName}",
                 userId, dto.FirstName, dto.LastName);
 
+            var username = dto.UserName?.Trim();
+            if (string.IsNullOrWhiteSpace(username))
+            {
+                return BadRequest(new { message = "Username is required" });
+            }
+
+            if (username.Length > 255)
+            {
+                return BadRequest(new { message = "Username must be 255 characters or fewer" });
+            }
+
+            if (string.IsNullOrWhiteSpace(dto.FirstName) || string.IsNullOrWhiteSpace(dto.LastName))
+            {
+                return BadRequest(new { message = "First name and last name are required" });
+            }
+
+            var duplicateUsername = await _context.UserAccessOlds
+                .AnyAsync(user => user.name != null && user.name.ToLower() == username.ToLower());
+            if (duplicateUsername)
+            {
+                return Conflict(new { message = $"User profile already exists for username: {username}" });
+            }
+
             if (!string.IsNullOrWhiteSpace(dto.Email))
             {
-                var existing = await _repository.GetByEmailAsync(dto.Email);
-                if (existing != null)
+                var duplicateEmail = await _context.UserAccessOlds
+                    .AnyAsync(user => user.E_Mail != null && user.E_Mail.ToLower() == dto.Email.Trim().ToLower());
+                if (duplicateEmail)
                 {
                     return Conflict(new { message = $"User profile already exists for email: {dto.Email}" });
                 }
@@ -194,6 +263,7 @@ public class UserProfileController : BaseApiController
 
             var userProfile = new UserAccessOld
             {
+                name = username,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 E_Mail = dto.Email,
@@ -206,16 +276,21 @@ public class UserProfileController : BaseApiController
                 passport_number = dto.PassportNumber,
                 Cellphone_Number = dto.CellphoneNumber,
                 Fax_Number = dto.FaxNumber,
+                approver_code_at_gfleet = dto.ApproverCodeAtGfleet,
                 // user_access_old1.password is char(32) and the legacy login
                 // contract stores the uppercase MD5 digest, not BCrypt.
-                password = string.IsNullOrWhiteSpace(dto.Password) ? null : HashLegacyPassword(dto.Password),
+                password = HashLegacyPassword(string.IsNullOrWhiteSpace(dto.Password)
+                    ? GenerateInitialPassword()
+                    : dto.Password),
                 user_status = "Active",
-                AccessLevel = dto.AccessLevel ?? 1
+                AccessLevel = dto.AccessLevel ?? 0
             };
 
             var created = await _repository.CreateAsync(userProfile, userId);
             _logger.LogInformation("User profile created with code {UserAccessCode} for {FirstName} {LastName}",
                 created.user_access_code, created.FirstName, created.LastName);
+
+            await TryMirrorExpandedUserAsync(created.user_access_code, created.E_Mail, created.telephone);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -257,8 +332,11 @@ public class UserProfileController : BaseApiController
             existing.passport_number = dto.PassportNumber ?? existing.passport_number;
             existing.Cellphone_Number = dto.CellphoneNumber ?? existing.Cellphone_Number;
             existing.Fax_Number = dto.FaxNumber ?? existing.Fax_Number;
+            existing.approver_code_at_gfleet = dto.ApproverCodeAtGfleet ?? existing.approver_code_at_gfleet;
+            existing.AccessLevel = dto.AccessLevel ?? existing.AccessLevel;
 
             await _repository.UpdateAsync(existing, userId);
+            await TryMirrorExpandedUserAsync(existing.user_access_code, existing.E_Mail, existing.telephone);
 
             _logger.LogInformation("User profile {UserAccessCode} updated by user {UserId}", userAccessCode, userId);
             return Ok(new { message = "User profile updated successfully", userAccessCode });
@@ -366,6 +444,7 @@ public class UserProfileController : BaseApiController
             PassportNumber = u.passport_number,
             CellphoneNumber = u.Cellphone_Number,
             FaxNumber = u.Fax_Number,
+            ApproverCodeAtGfleet = u.approver_code_at_gfleet,
             UserStatus = u.user_status,
             AccessLevel = u.AccessLevel,
             UserActive = u.user_active,
@@ -440,6 +519,52 @@ public class UserProfileController : BaseApiController
     {
         return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
     }
+
+    private static string GenerateInitialPassword()
+    {
+        return $"FIS-{Convert.ToHexString(RandomNumberGenerator.GetBytes(18))}!a1";
+    }
+
+    private async Task TryMirrorExpandedUserAsync(short userAccessCode, string? email, string? telephone)
+    {
+        try
+        {
+            var modernUser = await _context.Users
+                .FirstOrDefaultAsync(user => user.user_access_code == userAccessCode);
+
+            if (modernUser is null)
+            {
+                _context.Users.Add(new User
+                {
+                    user_access_code = userAccessCode,
+                    email = email,
+                    tel_no = telephone
+                });
+            }
+            else
+            {
+                modernUser.email = email;
+                modernUser.tel_no = telephone;
+                _context.Users.Update(modernUser);
+            }
+
+            await _context.SaveChangesAsync();
+        }
+        catch (SqlException ex) when (ex.Number is 207 or 208)
+        {
+            _logger.LogInformation(
+                ex,
+                "Expanded TS_Users mirror is unavailable; legacy user_access_old1 remains authoritative for user_access_code {UserAccessCode}",
+                userAccessCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Expanded TS_Users mirror failed; retaining successful legacy user_access_old1 write for user_access_code {UserAccessCode}",
+                userAccessCode);
+        }
+    }
 }
 
 #region DTOs
@@ -462,6 +587,7 @@ public class UserProfileDto
     public int? PassportNumber { get; set; }
     public int? CellphoneNumber { get; set; }
     public int? FaxNumber { get; set; }
+    public int? ApproverCodeAtGfleet { get; set; }
     public string? UserStatus { get; set; }
     public long AccessLevel { get; set; }
     public bool UserActive { get; set; }
@@ -470,6 +596,7 @@ public class UserProfileDto
 
 public class CreateUserProfileDto
 {
+    public string? UserName { get; set; }
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string? Email { get; set; }
@@ -482,6 +609,7 @@ public class CreateUserProfileDto
     public int? PassportNumber { get; set; }
     public int? CellphoneNumber { get; set; }
     public int? FaxNumber { get; set; }
+    public int? ApproverCodeAtGfleet { get; set; }
     public string Password { get; set; } = string.Empty;
     public long? AccessLevel { get; set; }
 }
@@ -500,6 +628,14 @@ public class UpdateUserProfileDto
     public int? PassportNumber { get; set; }
     public int? CellphoneNumber { get; set; }
     public int? FaxNumber { get; set; }
+    public int? ApproverCodeAtGfleet { get; set; }
+    public long? AccessLevel { get; set; }
+}
+
+public class UserPositionDto
+{
+    public byte PositionCode { get; set; }
+    public string PositionName { get; set; } = string.Empty;
 }
 
 public class CredentialsDto
