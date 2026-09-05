@@ -15,6 +15,10 @@ import type {
 
 const PAGE_SIZE = 12;
 const initialActionState: VehicleAuthorizationActionState = { status: "idle" };
+const AMOUNT_FORMATTER = new Intl.NumberFormat("en-ZA", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 type QueueKind = "rejected" | "awaiting" | "authorized";
 
@@ -55,9 +59,7 @@ function getYear(value: string | null) {
 }
 
 function formatAmount(value: number | null) {
-  return value === null
-    ? "-"
-    : new Intl.NumberFormat("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+  return value === null ? "-" : AMOUNT_FORMATTER.format(value);
 }
 
 function isAwaiting(vehicle: VehicleAuthorization) {

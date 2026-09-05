@@ -88,11 +88,12 @@ function buildPageHref(query: Record<string, string | string[] | undefined>, pag
   return `/contracts/maintenance${queryString ? `?${queryString}` : ""}`;
 }
 
+const HIDDEN_FILTERS = ["status", "siteCode", "stillCurrent", "startDateFrom", "startDateTo"] as const;
+
 function SearchForm({ searchType, searchQuery, query }: Readonly<{ searchType: "GG" | "GP"; searchQuery: string; query: Record<string, string | string[] | undefined> }>) {
-  const hiddenFilters = ["status", "siteCode", "stillCurrent", "startDateFrom", "startDateTo"];
   return (
     <form className="vehicle-status-maintenance-panel" method="get">
-      {hiddenFilters.map((key) => {
+      {HIDDEN_FILTERS.map((key) => {
         const value = getQueryValue(query[key]);
         return value ? <input key={key} name={key} type="hidden" value={value} /> : null;
       })}

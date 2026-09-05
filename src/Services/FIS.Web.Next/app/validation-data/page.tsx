@@ -6,6 +6,22 @@ import { hasVehicleManagementPermission } from "@/app/drivers/access";
 import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
 
+const VALIDATION_LINKS = [
+  ["Organisation Departments", "/validation-data/departments"],
+  ["Organisation Sites", "/validation-data/sites"],
+  ["Vehicle Makes", "/validation-data/makes"],
+  ["Vehicle Models", "/validation-data/models"],
+  ["Vehicle Types", "/reference-data?tab=types"],
+  ["Vehicle Classes", "/validation-data/classes"],
+  ["Fuel Types", "/reference-data?tab=fueltypes"],
+  ["Units of Measure", "/reference-data?tab=units"],
+  ["License Types", "/reference-data?tab=licenses"],
+  ["License Fees", "/validation-data/license-fees"],
+  ["Driver Licenses", "/validation-data/driver-licenses"],
+  ["Extra Codes", "/validation-data/extras"],
+  ["Loss Descriptions", "/validation-data/loss-types"],
+] as const;
+
 function AccessRestricted() {
   return (
     <section className="vehicle-status-card" role="alert">
@@ -25,22 +41,6 @@ export default async function ValidationDataPage() {
   if (session.status === "unavailable") return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">Service unavailable</p><h2>Validation Data could not be opened.</h2><p className="muted-copy">Retry when the FIS API is available.</p></section></main>;
   if (!hasVehicleManagementPermission(session.accessLevel)) return <main className="page-shell vehicle-page-shell"><AccessRestricted /></main>;
 
-  const links = [
-    ["Organisation Departments", "/validation-data/departments"],
-    ["Organisation Sites", "/validation-data/sites"],
-    ["Vehicle Makes", "/validation-data/makes"],
-    ["Vehicle Models", "/validation-data/models"],
-    ["Vehicle Types", "/reference-data?tab=types"],
-    ["Vehicle Classes", "/validation-data/classes"],
-    ["Fuel Types", "/reference-data?tab=fueltypes"],
-    ["Units of Measure", "/reference-data?tab=units"],
-    ["License Types", "/reference-data?tab=licenses"],
-    ["License Fees", "/validation-data/license-fees"],
-    ["Driver Licenses", "/validation-data/driver-licenses"],
-    ["Extra Codes", "/validation-data/extras"],
-    ["Loss Descriptions", "/validation-data/loss-types"],
-  ] as const;
-
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="validation-data-title">
@@ -53,7 +53,7 @@ export default async function ValidationDataPage() {
           <Link className="button button-secondary" href="/home">Home</Link>
         </header>
         <div className="vehicle-menu-tiles">
-          {links.map(([label, href]) => (
+          {VALIDATION_LINKS.map(([label, href]) => (
             <section className="vehicle-menu-tile" key={href}>
               <div className="vehicle-menu-body">
                 <Link className="vehicle-menu-link" href={href}>{label}</Link>

@@ -8,6 +8,14 @@ import { AuctionApiError, getAuction, type AuctionRecord } from "@/lib/api-aucti
 import { getSession } from "@/lib/session";
 
 const REPORTS_ROLE = "Reports";
+const REASON_OPTIONS = [
+  "Old & Obsolete",
+  "Obsolete",
+  "Old & Uneconomical",
+  "Uneconomical",
+  "Stolen & Recovered",
+  "Accident",
+] as const;
 
 export type AuctionDetailPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -36,15 +44,6 @@ function dateInputValue(value: string | null | undefined) {
 }
 
 function AuctionForm({ auction, routePath, updated, error }: Readonly<{ auction: AuctionRecord; routePath: string; updated: boolean; error?: string }>) {
-  const reasonOptions = [
-    "Old & Obsolete",
-    "Obsolete",
-    "Old & Uneconomical",
-    "Uneconomical",
-    "Stolen & Recovered",
-    "Accident",
-  ];
-
   return (
     <form className="vehicle-status-maintenance-panel" action={saveAuctionMaintenanceAction}>
       <input name="auctionCode" type="hidden" value={auction.auctionCode} />
@@ -102,7 +101,7 @@ function AuctionForm({ auction, routePath, updated, error }: Readonly<{ auction:
         <div className="form-field">
           <label className="form-label" htmlFor="auction-reason">Sold Reason</label>
           <select className="form-select" id="auction-reason" name="reasonSold" defaultValue={auction.reasonSold ?? "Old & Obsolete"} required>
-            {reasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+          {REASON_OPTIONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
           </select>
         </div>
         <div className="form-field">
