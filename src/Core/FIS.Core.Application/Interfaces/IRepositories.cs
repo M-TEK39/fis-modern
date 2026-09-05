@@ -281,9 +281,15 @@ public interface IModelRepository
     Task<IEnumerable<Model>> GetModelsByMakeAsync(short makeCode);
     Task<IEnumerable<Model>> GetModelsByEngineTypeAsync(string engineType);
     Task<IEnumerable<Model>> SearchModelsAsync(string searchTerm);
+    Task<ModelDeleteCheck> GetDeleteCheckAsync(short modelCode);
     Task<Model> CreateAsync(Model model, int currentUserId);
     Task<Model> UpdateAsync(Model model, int currentUserId);
     Task DeleteAsync(short modelCode, int currentUserId);
+}
+
+public sealed record ModelDeleteCheck(int VehicleCount)
+{
+    public bool CanDelete => VehicleCount == 0;
 }
 
 /// <summary>

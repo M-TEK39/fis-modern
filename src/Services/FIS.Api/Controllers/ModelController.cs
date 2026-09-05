@@ -154,6 +154,29 @@ public class ModelController : BaseApiController
     }
 
     /// <summary>
+    /// Checks whether a model can be deleted without orphaning vehicles.
+    /// </summary>
+    [HttpGet("{modelCode:int}/delete-check")]
+    public async Task<ActionResult<ModelDeleteCheck>> GetDeleteCheck(short modelCode)
+    {
+        try
+        {
+            var model = await _modelRepository.GetByIdAsync(modelCode);
+            if (model == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(await _modelRepository.GetDeleteCheckAsync(modelCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking model deletion for code {ModelCode}", modelCode);
+            return StatusCode(500, "An error occurred while checking whether the model can be deleted");
+        }
+    }
+
+    /// <summary>
     /// Create a new model
     /// </summary>
     [HttpPost]
@@ -184,6 +207,7 @@ public class ModelController : BaseApiController
                 licence_code = createDto.licence_code,
                 maint_trigger_code = createDto.maint_trigger_code,
                 class_code = createDto.class_code,
+                type_code = createDto.type_code,
                 model_description = createDto.model_description,
                 engine_type = createDto.engine_type,
                 engine_capacity = createDto.engine_capacity,
@@ -202,7 +226,7 @@ public class ModelController : BaseApiController
             var createdModel = await _modelRepository.CreateAsync(model, currentUserId);
             _logger.LogInformation("Created new model with code {ModelCode}", createdModel.model_code);
 
-            var responseDto = MapToDto(createdModel);
+            var responseDto = MapToDto(createdModel, make.make_description);
             return CreatedAtAction(
                 nameof(GetModel),
                 new { modelCode = createdModel.model_code },
@@ -258,6 +282,7 @@ public class ModelController : BaseApiController
                 licence_code = updateDto.licence_code,
                 maint_trigger_code = updateDto.maint_trigger_code,
                 class_code = updateDto.class_code,
+                type_code = updateDto.type_code,
                 model_description = updateDto.model_description,
                 engine_type = updateDto.engine_type,
                 engine_capacity = updateDto.engine_capacity,
@@ -318,19 +343,20 @@ public class ModelController : BaseApiController
     /// Maps a Model entity to ModelResponseDto
     /// Breaks circular reference by excluding navigation properties
     /// </summary>
-    private ModelResponseDto MapToDto(Model model)
+    private static ModelResponseDto MapToDto(Model model, string? makeDescription = null)
     {
         return new ModelResponseDto
         {
             model_code = model.model_code,
             model_description = model.model_description,
             make_code = model.make_code,
-            make_description = model.Make?.make_description ?? string.Empty,
+            make_description = makeDescription ?? model.Make?.make_description ?? string.Empty,
             unit_of_measure_code = model.unit_of_measure_code,
             fuel_type_code = model.fuel_type_code,
             licence_code = model.licence_code,
             maint_trigger_code = model.maint_trigger_code,
             class_code = model.class_code,
+            type_code = model.type_code,
             engine_type = model.engine_type,
             engine_capacity = model.engine_capacity,
             rated_power = model.rated_power,
@@ -342,7 +368,12 @@ public class ModelController : BaseApiController
             licence_fee_code = model.licence_fee_code,
             gvm = model.gvm,
             transmission = model.transmission,
-            wesbank_kilos_per_litre = model.wesbank_kilos_per_litre
+            wesbank_kilos_per_litre = model.wesbank_kilos_per_litre,
+            date_created = model.date_created,
+            date_updated = model.date_updated,
+            created_by_user_code = model.created_by_user_code,
+            modified_by_user_code = model.modified_by_user_code,
+            is_deleted = model.is_deleted
         };
     }
 }

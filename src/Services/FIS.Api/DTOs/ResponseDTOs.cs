@@ -32,6 +32,7 @@ namespace FIS.Api.DTOs
         public short licence_code { get; set; }
         public short? maint_trigger_code { get; set; }
         public short class_code { get; set; }
+        public short? type_code { get; set; }
         public string? engine_type { get; set; }
         public short? engine_capacity { get; set; }
         public short? rated_power { get; set; }
