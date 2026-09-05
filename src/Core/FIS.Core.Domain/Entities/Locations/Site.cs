@@ -73,8 +73,32 @@ public class Site
     [Column("financial_system_active")]
     public bool? financial_system_active { get; set; }
 
+    [Column("financial_system_activate_date")]
+    public DateTime? financial_system_activate_date { get; set; }
+
+    [Column("export_is_active")]
+    public bool? export_is_active { get; set; }
+
+    [Column("date_last_exported")]
+    public DateTime? date_last_exported { get; set; }
+
+    [Column("Service_Kilometres")]
+    public int Service_Kilometres { get; set; }
+
+    [Column("Service_Years")]
+    public byte Service_Years { get; set; }
+
+    [Column("Overhead_Percentage")]
+    public decimal Overhead_Percentage { get; set; }
+
     [Column("province_code")]
     public byte? province_code { get; set; }
+
+    [Column("notes")]
+    public string? notes { get; set; }
+
+    [Column("user_access_code")]
+    public int? user_access_code { get; set; }
 
     [Column("date_created")]
     public DateTime date_created { get; set; }

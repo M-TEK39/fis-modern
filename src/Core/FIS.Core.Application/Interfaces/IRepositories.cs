@@ -163,9 +163,16 @@ public interface ISiteRepository
     Task<Site?> GetByNameAsync(string siteName);
     Task<IEnumerable<Site>> GetActiveSitesAsync();
     Task<IEnumerable<Site>> SearchSitesAsync(string searchTerm);
+    Task<SiteDeleteCheck> GetDeleteCheckAsync(int siteCode);
+    Task<bool> HasActiveContractsAsync(int siteCode);
     Task<Site> CreateAsync(Site site, int currentUserId);
     Task UpdateAsync(Site site, int currentUserId);
     Task DeleteAsync(int siteCode, int currentUserId);
+}
+
+public sealed record SiteDeleteCheck(int ContractCount)
+{
+    public bool CanDelete => ContractCount == 0;
 }
 
 /// <summary>
