@@ -308,16 +308,19 @@ export async function validateSession(): Promise<SessionState> {
       passwordChangeRequiredValue?.toLowerCase() ?? "",
     );
     const accessLevel = claims.find((claim) => claim.type === "access_level")?.value;
-    const roles = claims
-      .filter(
-        (claim) =>
-          claim.type === "role" ||
-          claim.type === "roles" ||
-          claim.type?.endsWith("/role") === true,
-      )
-      .flatMap((claim) => claim.value?.split(",") ?? [])
-      .map((role) => role.trim())
-      .filter((role) => role.length > 0);
+    const roles: string[] = [];
+    for (const claim of claims) {
+      if (claim.type !== "role" && claim.type !== "roles" && claim.type?.endsWith("/role") !== true) {
+        continue;
+      }
+
+      for (const role of claim.value?.split(",") ?? []) {
+        const trimmedRole = role.trim();
+        if (trimmedRole) {
+          roles.push(trimmedRole);
+        }
+      }
+    }
 
     return { status: "authenticated", email, userAccessCode, accessLevel, roles, passwordChangeRequired };
   } catch (error) {
