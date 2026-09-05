@@ -566,9 +566,15 @@ public interface IDriverLicenceRepository
     Task<DriverLicence?> GetByDescriptionAsync(string description);
     Task<IEnumerable<DriverLicence>> GetAllAsync();
     Task<IEnumerable<DriverLicence>> SearchAsync(string searchTerm);
+    Task<DriverLicenceDeleteCheck> GetDeleteCheckAsync(short licenceCode);
     Task<DriverLicence> CreateAsync(DriverLicence driverLicence, int currentUserId);
     Task UpdateAsync(DriverLicence driverLicence, int currentUserId);
     Task DeleteAsync(short licenceCode, int currentUserId);
+}
+
+public sealed record DriverLicenceDeleteCheck(int ModelCount)
+{
+    public bool CanDelete => ModelCount == 0;
 }
 
 /// <summary>

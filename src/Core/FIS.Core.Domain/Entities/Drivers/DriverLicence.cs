@@ -13,7 +13,7 @@ public class DriverLicence
     public short licence_code { get; set; }
 
     [Column("description")]
-    [StringLength(255)]
+    [StringLength(30)]
     public string? description { get; set; }
 
     // Global audit fields
