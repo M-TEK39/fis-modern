@@ -115,10 +115,12 @@ public sealed class AuthorisersController : BaseApiController
                     var rankCode = ReadInt(reader, "RankCode");
                     if (rankCode.HasValue)
                     {
+                        var description = ReadString(reader, "Description");
                         result.Add(new AuthoriserRankDto
                         {
                             Id = rankCode.Value,
-                            Description = ReadString(reader, "Description")
+                            RankName = description,
+                            Description = description
                         });
                     }
                 }
@@ -132,6 +134,75 @@ public sealed class AuthorisersController : BaseApiController
         {
             _logger.LogWarning(ex, "Unable to retrieve authoriser ranks; returning an empty lookup");
             return Ok(Array.Empty<AuthoriserRankDto>());
+        }
+    }
+
+    [HttpPost("ranks")]
+    public async Task<ActionResult<IEnumerable<AuthoriserRankDto>>> SaveRanks([FromBody] List<AuthoriserRankDto> ranks)
+    {
+        try
+        {
+            if (ranks is null)
+            {
+                return BadRequest(new { message = "At least one rank is required." });
+            }
+
+            var savedRanks = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, RanksTable);
+                EnsureRankTable(schema);
+
+                foreach (var rank in ranks)
+                {
+                    var description = rank.RankName ?? rank.Description;
+                    ValidateRank(description, schema);
+
+                    if (rank.Id <= 0)
+                    {
+                        var columns = new List<string> { "description" };
+                        var values = new List<(string Name, object? Value)> { ("@description", description!.Trim()) };
+                        AddOptionalRankInsertFields(schema, columns, values, GetCurrentUserId());
+
+                        await using var insertCommand = connection.CreateCommand();
+                        insertCommand.CommandText = $"INSERT INTO [dbo].[{RanksTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[rank_code] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                        AddParameters(insertCommand, values);
+                        await insertCommand.ExecuteScalarAsync();
+                        continue;
+                    }
+
+                    if (!await RankExistsAsync(connection, rank.Id))
+                    {
+                        continue;
+                    }
+
+                    var assignments = new List<string> { "[description] = @description" };
+                    var updateValues = new List<(string Name, object? Value)> { ("@description", description!.Trim()) };
+                    if (schema.Has("is_deleted"))
+                    {
+                        assignments.Add("[is_deleted] = @isDeleted");
+                        updateValues.Add(("@isDeleted", false));
+                    }
+                    AddOptionalRankUpdateFields(schema, assignments, updateValues, GetCurrentUserId());
+
+                    await using var updateCommand = connection.CreateCommand();
+                    updateCommand.CommandText = $"UPDATE [dbo].[{RanksTable}] SET {string.Join(", ", assignments)} WHERE [rank_code] = @id";
+                    AddParameters(updateCommand, updateValues);
+                    AddParameter(updateCommand, "@id", rank.Id);
+                    await updateCommand.ExecuteNonQueryAsync();
+                }
+
+                return await ReadRanksAsync(connection, schema);
+            });
+
+            return Ok(savedRanks);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, "saving authoriser ranks");
         }
     }
 
@@ -376,6 +447,103 @@ public sealed class AuthorisersController : BaseApiController
         }
     }
 
+    private static void EnsureRankTable(TableSchema schema)
+    {
+        if (!schema.Has("rank_code") || !schema.Has("description"))
+        {
+            throw new InvalidOperationException("The dbo.ranks table is missing one or more required legacy columns.");
+        }
+    }
+
+    private static void ValidateRank(string? description, TableSchema schema)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            throw new ArgumentException("The rank description is required.");
+        }
+
+        var maxLength = schema.Has("is_deleted") ? 255 : 50;
+        if (description.Trim().Length > maxLength)
+        {
+            throw new ArgumentException($"The rank description must be {maxLength} characters or fewer.");
+        }
+    }
+
+    private static async Task<bool> RankExistsAsync(DbConnection connection, int id)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT 1 FROM [dbo].[{RanksTable}] WHERE [rank_code] = @id";
+        AddParameter(command, "@id", id);
+        return await command.ExecuteScalarAsync() is not null;
+    }
+
+    private static async Task<List<AuthoriserRankDto>> ReadRanksAsync(DbConnection connection, TableSchema schema)
+    {
+        var activePredicate = schema.Has("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT [rank_code] AS [RankCode], [description] AS [Description] FROM [dbo].[{RanksTable}] WHERE {activePredicate} ORDER BY [description], [rank_code]";
+
+        var result = new List<AuthoriserRankDto>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var rankCode = ReadInt(reader, "RankCode");
+            if (rankCode.HasValue)
+            {
+                var description = ReadString(reader, "Description");
+                result.Add(new AuthoriserRankDto
+                {
+                    Id = rankCode.Value,
+                    RankName = description,
+                    Description = description
+                });
+            }
+        }
+
+        return result;
+    }
+
+    private static void AddOptionalRankInsertFields(
+        TableSchema schema,
+        ICollection<string> columns,
+        ICollection<(string Name, object? Value)> values,
+        int currentUserId)
+    {
+        if (schema.Has("date_created"))
+        {
+            columns.Add("date_created");
+            values.Add(("@dateCreated", DateTime.UtcNow));
+        }
+        if (schema.Has("created_by_user_code"))
+        {
+            columns.Add("created_by_user_code");
+            values.Add(("@createdByUserCode", currentUserId));
+        }
+        if (schema.Has("is_deleted"))
+        {
+            columns.Add("is_deleted");
+            values.Add(("@isDeleted", false));
+        }
+    }
+
+    private static void AddOptionalRankUpdateFields(
+        TableSchema schema,
+        ICollection<string> assignments,
+        ICollection<(string Name, object? Value)> values,
+        int currentUserId)
+    {
+        if (schema.Has("date_updated"))
+        {
+            assignments.Add("[date_updated] = @dateUpdated");
+            values.Add(("@dateUpdated", DateTime.UtcNow));
+        }
+        if (schema.Has("modified_by_user_code"))
+        {
+            assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
+            values.Add(("@modifiedByUserCode", currentUserId));
+        }
+    }
+
     private static string BuildApproverSelect(TableSchema schema)
     {
         var persal = schema.Has("PersalNumber") ? "CAST([PersalNumber] AS nvarchar(50))" : "CAST(NULL AS nvarchar(50))";
@@ -581,6 +749,14 @@ public sealed class AuthorisersController : BaseApiController
         command.Parameters.Add(parameter);
     }
 
+    private static void AddParameters(DbCommand command, IEnumerable<(string Name, object? Value)> values)
+    {
+        foreach (var (name, value) in values)
+        {
+            AddParameter(command, name, value);
+        }
+    }
+
     private static int? ReadInt(DbDataReader reader, string name)
     {
         var value = reader[name];
@@ -650,5 +826,6 @@ public sealed class AuthoriserDto : CreateAuthoriserDto
 public sealed class AuthoriserRankDto
 {
     public int Id { get; set; }
+    public string? RankName { get; set; }
     public string? Description { get; set; }
 }

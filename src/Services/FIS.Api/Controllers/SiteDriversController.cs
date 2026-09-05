@@ -129,6 +129,154 @@ public sealed class SiteDriversController : BaseApiController
         }
     }
 
+    [HttpPost("licence-types")]
+    public async Task<ActionResult<SiteDriverLicenceTypeDto>> CreateLicenceType([FromBody] SiteDriverLicenceTypeWriteDto dto)
+    {
+        try
+        {
+            var created = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, LicenceTypesTable);
+                EnsureLicenceTypeTable(schema);
+                ValidateLicenceType(dto, schema);
+
+                var columns = new List<string>
+                {
+                    "driver_licence_type_code",
+                    "driver_licence_type_description"
+                };
+                var values = new List<(string Name, object? Value)>
+                {
+                    ("@code", NullIfWhiteSpace(dto.Code)),
+                    ("@description", dto.Description!.Trim())
+                };
+                AddOptionalLicenceTypeInsertFields(schema, columns, values, GetCurrentUserId());
+
+                await using var command = connection.CreateCommand();
+                command.CommandText = $"INSERT INTO [dbo].[{LicenceTypesTable}] ({string.Join(", ", columns.Select(QuoteIdentifier))}) OUTPUT INSERTED.[driver_licence_type_id] VALUES ({string.Join(", ", values.Select(item => item.Name))})";
+                AddParameters(command, values);
+
+                var id = Convert.ToInt32(await command.ExecuteScalarAsync());
+                return await ReadLicenceTypeByIdAsync(connection, schema, id);
+            });
+
+            return created is null
+                ? StatusCode(500, new { message = "The driver licence type was created but could not be reloaded." })
+                : CreatedAtAction(nameof(GetLicenceTypes), created);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, "creating a driver licence type");
+        }
+    }
+
+    [HttpPut("licence-types/{id:int}")]
+    public async Task<ActionResult<SiteDriverLicenceTypeDto>> UpdateLicenceType(int id, [FromBody] SiteDriverLicenceTypeWriteDto dto)
+    {
+        try
+        {
+            var updated = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, LicenceTypesTable);
+                EnsureLicenceTypeTable(schema);
+                ValidateLicenceType(dto, schema);
+
+                if (await ReadLicenceTypeByIdAsync(connection, schema, id) is null)
+                {
+                    return null;
+                }
+
+                var assignments = new List<string>
+                {
+                    "[driver_licence_type_description] = @description"
+                };
+                var values = new List<(string Name, object? Value)>
+                {
+                    ("@description", dto.Description!.Trim())
+                };
+
+                // An omitted code must not erase a legacy code that the current
+                // Blazor form does not edit. The code remains available through
+                // the read DTO and can be updated when a caller supplies it.
+                if (schema.Has("driver_licence_type_code") && !string.IsNullOrWhiteSpace(dto.Code))
+                {
+                    assignments.Add("[driver_licence_type_code] = @code");
+                    values.Add(("@code", dto.Code.Trim()));
+                }
+                AddOptionalLicenceTypeUpdateFields(schema, assignments, values, GetCurrentUserId());
+
+                await using var command = connection.CreateCommand();
+                command.CommandText = $"UPDATE [dbo].[{LicenceTypesTable}] SET {string.Join(", ", assignments)} WHERE [driver_licence_type_id] = @id";
+                AddParameters(command, values);
+                AddParameter(command, "@id", id);
+                await command.ExecuteNonQueryAsync();
+
+                return await ReadLicenceTypeByIdAsync(connection, schema, id);
+            });
+
+            return updated is null
+                ? NotFound(new { message = $"Driver licence type not found with code: {id}" })
+                : Ok(updated);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, $"updating driver licence type {id}");
+        }
+    }
+
+    [HttpDelete("licence-types/{id:int}")]
+    public async Task<ActionResult> DeleteLicenceType(int id)
+    {
+        try
+        {
+            var deleted = await WithConnectionAsync(async connection =>
+            {
+                var schema = await ReadTableSchemaAsync(connection, LicenceTypesTable);
+                EnsureLicenceTypeTable(schema);
+
+                if (await ReadLicenceTypeByIdAsync(connection, schema, id) is null)
+                {
+                    return false;
+                }
+
+                await using var command = connection.CreateCommand();
+                if (schema.Has("is_deleted"))
+                {
+                    var assignments = new List<string> { "[is_deleted] = @isDeleted" };
+                    var values = new List<(string Name, object? Value)> { ("@isDeleted", true) };
+                    AddOptionalLicenceTypeUpdateFields(schema, assignments, values, GetCurrentUserId());
+                    command.CommandText = $"UPDATE [dbo].[{LicenceTypesTable}] SET {string.Join(", ", assignments)} WHERE [driver_licence_type_id] = @id";
+                    AddParameters(command, values);
+                }
+                else
+                {
+                    // The legacy table is NonActivateableEntityBase in the old
+                    // API, so deletion is intentionally a physical delete there.
+                    // SQL Server still protects rows referenced by site_drivers.
+                    command.CommandText = $"DELETE FROM [dbo].[{LicenceTypesTable}] WHERE [driver_licence_type_id] = @id";
+                }
+
+                AddParameter(command, "@id", id);
+                await command.ExecuteNonQueryAsync();
+                return true;
+            });
+
+            return deleted ? NoContent() : NotFound(new { message = $"Driver licence type not found with code: {id}" });
+        }
+        catch (Exception ex)
+        {
+            return HandleFailure(ex, $"deleting driver licence type {id}");
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<DriverDto>> CreateDriver([FromBody] CreateDriverDto dto)
     {
@@ -275,6 +423,104 @@ public sealed class SiteDriversController : BaseApiController
         "driver_licence_ExpiryDate",
         "driver_active"
     ];
+
+    private static void EnsureLicenceTypeTable(TableSchema schema)
+    {
+        string[] requiredColumns =
+        [
+            "driver_licence_type_id",
+            "driver_licence_type_code",
+            "driver_licence_type_description"
+        ];
+        if (requiredColumns.Any(column => !schema.Has(column)))
+        {
+            throw new InvalidOperationException("The dbo.driver_licence_types table is missing one or more required legacy columns.");
+        }
+    }
+
+    private static void ValidateLicenceType(SiteDriverLicenceTypeWriteDto dto, TableSchema schema)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Description))
+        {
+            throw new ArgumentException("The driver licence type description is required.");
+        }
+
+        var codeLength = schema.Has("is_deleted") ? 50 : 3;
+        var descriptionLength = schema.Has("is_deleted") ? 255 : 100;
+        if (dto.Code?.Trim().Length > codeLength)
+        {
+            throw new ArgumentException($"The driver licence type code must be {codeLength} characters or fewer.");
+        }
+        if (dto.Description.Trim().Length > descriptionLength)
+        {
+            throw new ArgumentException($"The driver licence type description must be {descriptionLength} characters or fewer.");
+        }
+    }
+
+    private static void AddOptionalLicenceTypeInsertFields(
+        TableSchema schema,
+        ICollection<string> columns,
+        ICollection<(string Name, object? Value)> values,
+        int currentUserId)
+    {
+        if (schema.Has("date_created"))
+        {
+            columns.Add("date_created");
+            values.Add(("@dateCreated", DateTime.UtcNow));
+        }
+        if (schema.Has("created_by_user_code"))
+        {
+            columns.Add("created_by_user_code");
+            values.Add(("@createdByUserCode", currentUserId));
+        }
+        if (schema.Has("is_deleted"))
+        {
+            columns.Add("is_deleted");
+            values.Add(("@isDeleted", false));
+        }
+    }
+
+    private static void AddOptionalLicenceTypeUpdateFields(
+        TableSchema schema,
+        ICollection<string> assignments,
+        ICollection<(string Name, object? Value)> values,
+        int currentUserId)
+    {
+        if (schema.Has("date_updated"))
+        {
+            assignments.Add("[date_updated] = @dateUpdated");
+            values.Add(("@dateUpdated", DateTime.UtcNow));
+        }
+        if (schema.Has("modified_by_user_code"))
+        {
+            assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
+            values.Add(("@modifiedByUserCode", currentUserId));
+        }
+    }
+
+    private static string BuildLicenceTypeSelect(TableSchema schema)
+    {
+        return $"SELECT [driver_licence_type_id] AS [Id], [driver_licence_type_code] AS [Code], [driver_licence_type_description] AS [Description] FROM [dbo].[{LicenceTypesTable}]";
+    }
+
+    private static async Task<SiteDriverLicenceTypeDto?> ReadLicenceTypeByIdAsync(DbConnection connection, TableSchema schema, int id)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = $"{BuildLicenceTypeSelect(schema)} WHERE [driver_licence_type_id] = @id";
+        AddParameter(command, "@id", id);
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+        {
+            return null;
+        }
+
+        return new SiteDriverLicenceTypeDto
+        {
+            Id = ReadInt(reader, "Id") ?? 0,
+            Code = ReadString(reader, "Code"),
+            Description = ReadString(reader, "Description")
+        };
+    }
 
     private async Task<T> WithConnectionAsync<T>(Func<DbConnection, Task<T>> operation)
     {
@@ -549,6 +795,12 @@ public sealed class SiteDriversController : BaseApiController
 public sealed class SiteDriverLicenceTypeDto
 {
     public int Id { get; set; }
+    public string? Code { get; set; }
+    public string? Description { get; set; }
+}
+
+public sealed class SiteDriverLicenceTypeWriteDto
+{
     public string? Code { get; set; }
     public string? Description { get; set; }
 }
