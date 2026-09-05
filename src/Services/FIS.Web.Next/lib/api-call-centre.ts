@@ -21,11 +21,43 @@ export type CallCentreSiteOption = {
 export type CallCentreIncidentRecord = {
   code: number;
   vmfCode: number | null;
+  callTime: string | null;
+  callDate: string | null;
+  incidentType: string | null;
   incidentDescription: string | null;
+  captureName: string | null;
+  userAccessCode: number | null;
+  callerName: string | null;
+  driverName: string | null;
+  driverPersalNumber: string | null;
+  driverLicenceNumber: string | null;
+  ggNumber: string | null;
+  driverBaseStation: string | null;
+  driverSite: number | null;
+  driverTel: string | null;
+  driverCell: string | null;
+  driverFax: string | null;
+  driverEmail: string | null;
+  incidentDate: string | null;
+  incidentTime: string | null;
+  callerTel: string | null;
+  callerEmail: string | null;
+  transportOfficerFax: string | null;
+  transportOfficerEmail: string | null;
   incidentTown: string | null;
-  transportOfficerSite: number | null;
+  incidentStreet: string | null;
   transportOfficerName: string | null;
   transportOfficerTel: string | null;
+  transportOfficerSite: number | null;
+  counter: number | null;
+  callerFax: string | null;
+  croNotification: string | null;
+  croRemarks: string | null;
+  incidentRemarks: string | null;
+  notifyListCode: number | null;
+  callClosed: string | null;
+  dateCreated: string | null;
+  dateUpdated: string | null;
 };
 
 export type TowTruckOption = {
@@ -58,6 +90,45 @@ export type CreateCallCentreRequest = {
   IncidentRemarks: string | null;
   NotifyListCode: number | null;
   CallClosed: string;
+};
+
+export type UpdateCallCentreRequest = {
+  VmfCode: number | null;
+  CallTime: string | null;
+  CallDate: string | null;
+  IncidentType: string | null;
+  IncidentDesc: string | null;
+  CaptureName: string | null;
+  UserAccessCode: number | null;
+  CallerName: string | null;
+  DriverName: string | null;
+  DriverPersalno: string | null;
+  DriverLicno: string | null;
+  GGNumber: string | null;
+  DriverBaseStation: string | null;
+  DriverSite: number | null;
+  DriverTel: string | null;
+  DriverCell: string | null;
+  DriverFax: string | null;
+  DriverEmail: string | null;
+  IncidentDate: string | null;
+  IncidentTime: string | null;
+  CallerTel: string | null;
+  TransportOfficerName: string | null;
+  TransportOfficerTel: string | null;
+  TransportOfficerSite: number | null;
+  IncidentTown: string | null;
+  IncidentStreet: string | null;
+  Counter: number | null;
+  CallerFax: string | null;
+  TransportOfficerFax: string | null;
+  CallerEmail: string | null;
+  TransportOfficerEmail: string | null;
+  InformCro: string | null;
+  CroRemarks: string | null;
+  IncidentRemarks: string | null;
+  NotifyListCode: number | null;
+  CallClosed: string | null;
 };
 
 export type CreateRoadAssistanceRequest = CreateCallCentreRequest & {
@@ -344,11 +415,43 @@ function mapCallCentreIncident(value: unknown): CallCentreIncidentRecord | null 
   return {
     code,
     vmfCode: asNumber(getValue(value, "vmf_code", "VmfCode", "vmfCode")),
+    callTime: asString(getValue(value, "Call_time", "callTime")),
+    callDate: asString(getValue(value, "Call_date", "callDate")),
+    incidentType: asString(getValue(value, "Incident_type", "incidentType")),
     incidentDescription: asString(getValue(value, "Incident_Desc", "incidentDesc", "incidentDescription")),
+    captureName: asString(getValue(value, "Capture_name", "captureName")),
+    userAccessCode: asNumber(getValue(value, "User_access_code", "userAccessCode")),
+    callerName: asString(getValue(value, "Caller_name", "callerName")),
+    driverName: asString(getValue(value, "Driver_name", "driverName")),
+    driverPersalNumber: asString(getValue(value, "Driver_persalno", "driverPersalno")),
+    driverLicenceNumber: asString(getValue(value, "Driver_Licno", "driverLicno")),
+    ggNumber: asString(getValue(value, "GG_number", "ggNumber")),
+    driverBaseStation: asString(getValue(value, "Driver_base_station", "driverBaseStation")),
+    driverSite: asNumber(getValue(value, "Driver_Site", "driverSite")),
+    driverTel: asString(getValue(value, "Driver_tel", "driverTel")),
+    driverCell: asString(getValue(value, "Driver_cell", "driverCell")),
+    driverFax: asString(getValue(value, "Driver_fax", "driverFax")),
+    driverEmail: asString(getValue(value, "Driver_email", "driverEmail")),
+    incidentDate: asString(getValue(value, "Incident_date", "incidentDate")),
+    incidentTime: asString(getValue(value, "Incident_time", "incidentTime")),
+    callerTel: asString(getValue(value, "Caller_tel", "callerTel")),
+    callerEmail: asString(getValue(value, "Caller_email", "callerEmail")),
+    transportOfficerFax: asString(getValue(value, "TrOfficer_fax", "transportOfficerFax")),
+    transportOfficerEmail: asString(getValue(value, "TrOfficer_email", "transportOfficerEmail")),
     incidentTown: asString(getValue(value, "Incident_town", "incidentTown")),
-    transportOfficerSite: asNumber(getValue(value, "TrOfficer_Site", "transportOfficerSite")),
+    incidentStreet: asString(getValue(value, "Incident_street", "incidentStreet")),
     transportOfficerName: asString(getValue(value, "TrOfficer_name", "transportOfficerName")),
     transportOfficerTel: asString(getValue(value, "TrOfficer_tel", "transportOfficerTel")),
+    transportOfficerSite: asNumber(getValue(value, "TrOfficer_Site", "transportOfficerSite")),
+    counter: asNumber(getValue(value, "Counter", "counter")),
+    callerFax: asString(getValue(value, "Caller_fax", "callerFax")),
+    croNotification: asString(getValue(value, "Inform_CRO", "informCro")),
+    croRemarks: asString(getValue(value, "CRO_Remarks", "croRemarks")),
+    incidentRemarks: asString(getValue(value, "Incident_Remarks", "incidentRemarks")),
+    notifyListCode: asNumber(getValue(value, "Notify_list_code", "notifyListCode")),
+    callClosed: asString(getValue(value, "call_closed", "callClosed")),
+    dateCreated: asString(getValue(value, "date_created", "dateCreated")),
+    dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
   };
 }
 
@@ -378,6 +481,20 @@ export async function getCallCentreIncident(callCentreCode: number) {
   }
 
   return incident;
+}
+
+export async function updateCallCentreIncident(callCentreCode: number, request: UpdateCallCentreRequest) {
+  const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}`, {
+    method: "PUT",
+    body: JSON.stringify(request),
+  });
+  const payload = await readJson(response);
+  const updated = mapCallCentreIncident(payload);
+  if (!updated) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid updated call centre record.");
+  }
+
+  return updated;
 }
 
 export async function getCallCentreSites() {
