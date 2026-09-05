@@ -31,7 +31,7 @@ export default async function ValidationDataPage() {
     ["Vehicle Makes", "/validation-data/makes"],
     ["Vehicle Models", "/validation-data/models"],
     ["Vehicle Types", "/reference-data?tab=types"],
-    ["Vehicle Classes", "/reference-data?tab=classes"],
+    ["Vehicle Classes", "/validation-data/classes"],
     ["Fuel Types", "/reference-data?tab=fueltypes"],
     ["Units of Measure", "/reference-data?tab=units"],
     ["License Types", "/reference-data?tab=licenses"],
