@@ -55,6 +55,25 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("types")]
+    public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetAccidentTypes()
+    {
+        try
+        {
+            var rows = await ExecuteReportQueryAsync("""
+                SELECT [acc_type_code], [acc_type_description]
+                FROM [dbo].[acc_type]
+                ORDER BY [acc_type_code]
+                """);
+            return Ok(rows);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident types");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("vehicle/{vmfCode}")]
     public async Task<ActionResult<IEnumerable<Accident>>> GetByVehicle(int vmfCode)
     {
