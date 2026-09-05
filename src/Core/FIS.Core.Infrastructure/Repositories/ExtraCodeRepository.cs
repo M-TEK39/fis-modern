@@ -93,9 +93,11 @@ public sealed class ExtraCodeRepository : IExtraCodeRepository
         try
         {
             var transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var extrasColumns = await GetTableColumnsAsync(connection, "dbo", "extras", transaction);
+            var vehicleColumns = await GetTableColumnsAsync(connection, "dbo", "vehicle_master", transaction);
             var canInspectDependencies =
-                await TableHasColumnsAsync(connection, "dbo", "extras", ["extra_code", "vmf_code"], transaction) &&
-                await TableHasColumnsAsync(connection, "dbo", "vehicle_master", ["vmf_code", "fleet_number"], transaction);
+                new[] { "extra_code", "vmf_code" }.All(extrasColumns.Contains) &&
+                new[] { "vmf_code", "fleet_number" }.All(vehicleColumns.Contains);
 
             if (!canInspectDependencies)
             {
@@ -104,12 +106,15 @@ public sealed class ExtraCodeRepository : IExtraCodeRepository
 
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
-            command.CommandText = """
+            var activeExtraPredicate = extrasColumns.Contains("is_deleted")
+                ? " AND ([extra].[is_deleted] = 0 OR [extra].[is_deleted] IS NULL)"
+                : string.Empty;
+            command.CommandText = $"""
                 SELECT DISTINCT [vehicle].[fleet_number]
                 FROM [dbo].[extras] AS [extra]
                 INNER JOIN [dbo].[vehicle_master] AS [vehicle]
                     ON [vehicle].[vmf_code] = [extra].[vmf_code]
-                WHERE [extra].[extra_code] = @extraCode
+                WHERE [extra].[extra_code] = @extraCode{activeExtraPredicate}
                 ORDER BY [vehicle].[fleet_number]
                 """;
             AddParameter(command, "@extraCode", DbType.Int16, extraCode);
@@ -474,11 +479,10 @@ public sealed class ExtraCodeRepository : IExtraCodeRepository
     private static string GetNotDeletedFilter(IReadOnlySet<string> columns)
         => columns.Contains("is_deleted") ? "([is_deleted] = 0 OR [is_deleted] IS NULL)" : "1 = 1";
 
-    private static async Task<bool> TableHasColumnsAsync(
+    private static async Task<HashSet<string>> GetTableColumnsAsync(
         DbConnection connection,
         string schema,
         string table,
-        IReadOnlyList<string> requiredColumns,
         DbTransaction? transaction)
     {
         await using var command = connection.CreateCommand();
@@ -499,7 +503,7 @@ public sealed class ExtraCodeRepository : IExtraCodeRepository
             columns.Add(Convert.ToString(reader.GetValue(0)) ?? string.Empty);
         }
 
-        return requiredColumns.All(columns.Contains);
+        return columns;
     }
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
