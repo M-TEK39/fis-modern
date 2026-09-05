@@ -261,6 +261,16 @@ public class UserProfileController : BaseApiController
                 }
             }
 
+            if (dto.SaIdNumber.HasValue)
+            {
+                var duplicateId = await _context.UserAccessOlds
+                    .AnyAsync(user => user.sa_id_number == dto.SaIdNumber);
+                if (duplicateId)
+                {
+                    return Conflict(new { message = "A user profile already exists for this ID number" });
+                }
+            }
+
             var userProfile = new UserAccessOld
             {
                 name = username,
@@ -318,6 +328,29 @@ public class UserProfileController : BaseApiController
             var existing = await _repository.GetByIdAsync(userAccessCode);
             if (existing == null)
                 return NotFound(new { message = $"User profile not found with code: {userAccessCode}" });
+
+            if (!string.IsNullOrWhiteSpace(dto.Email))
+            {
+                var duplicateEmail = await _context.UserAccessOlds
+                    .AnyAsync(user => user.user_access_code != userAccessCode
+                        && user.E_Mail != null
+                        && user.E_Mail.ToLower() == dto.Email.Trim().ToLower());
+                if (duplicateEmail)
+                {
+                    return Conflict(new { message = $"User profile already exists for email: {dto.Email}" });
+                }
+            }
+
+            if (dto.SaIdNumber.HasValue)
+            {
+                var duplicateId = await _context.UserAccessOlds
+                    .AnyAsync(user => user.user_access_code != userAccessCode
+                        && user.sa_id_number == dto.SaIdNumber);
+                if (duplicateId)
+                {
+                    return Conflict(new { message = "A user profile already exists for this ID number" });
+                }
+            }
 
             // Update allowed fields
             existing.FirstName = dto.FirstName ?? existing.FirstName;
