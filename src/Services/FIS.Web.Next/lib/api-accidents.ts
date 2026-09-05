@@ -222,6 +222,8 @@ export type AccidentDriverReportRow = {
 
 export type AccidentVehicleReportMode = "registration" | "fleet";
 
+export type AccidentPrivateVehicleReportMode = "third-party" | "description";
+
 export type AccidentVehicleReportRow = {
   accidentCode: number;
   registrationNumber: string | null;
@@ -658,6 +660,17 @@ export async function getAccidentVehicleReport(
     mode,
   });
   return mapPresent(getCollection(await requestApi(`api/accidents/reports/vehicle?${query.toString()}`)), mapAccidentVehicleReportRow);
+}
+
+export async function getAccidentPrivateVehicleReport(
+  searchTerm: string,
+  mode: AccidentPrivateVehicleReportMode,
+) {
+  const query = new URLSearchParams({
+    searchTerm: searchTerm.trim(),
+    mode,
+  });
+  return mapPresent(getCollection(await requestApi(`api/accidents/reports/private-vehicle?${query.toString()}`)), mapAccidentVehicleReportRow);
 }
 
 export async function updateAccidentAgainstApi(request: AccidentUpdateRequest) {
