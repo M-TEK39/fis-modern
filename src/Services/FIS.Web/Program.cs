@@ -339,11 +339,6 @@ builder.Services.AddHttpClient<ClassApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<FineApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<RegistrationApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
@@ -460,11 +455,6 @@ builder.Services.AddHttpClient<LeaseContractTermsApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddHttpClient<JobCardApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-builder.Services.AddHttpClient<TrafficDeptApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
