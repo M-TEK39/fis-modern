@@ -262,26 +262,6 @@ public class TrackingApiService(HttpClient httpClient, TokenService tokenService
            ?? new TrackingReportDto();
 }
 
-public class TowingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TowingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/towing";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-    public async Task<TowingReportDto> GetRequestReportAsync(TowingRequestReportRequestDto request)
-        => await PostAsync<TowingRequestReportRequestDto, TowingReportDto>($"{BasePath}/reports/request", request)
-           ?? new TowingReportDto();
-    public async Task<TowingReportDto> GetAllTowtrucksReportAsync()
-        => await GetAsync<TowingReportDto>($"{BasePath}/reports/towtruck/all")
-           ?? new TowingReportDto();
-    public async Task<TowingReportDto> GetFirmDateReportAsync(TowingFirmDateReportRequestDto request)
-        => await PostAsync<TowingFirmDateReportRequestDto, TowingReportDto>($"{BasePath}/reports/firm-date", request)
-           ?? new TowingReportDto();
-}
-
 public class AuctionApiService(HttpClient httpClient, TokenService tokenService, ILogger<AuctionApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/auction";
