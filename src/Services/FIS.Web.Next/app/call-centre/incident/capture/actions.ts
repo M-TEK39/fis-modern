@@ -313,8 +313,9 @@ export async function saveQueryIncidentAction(formData: FormData) {
     redirectWithError("The call closed choice is invalid.", String(vmfCode));
   }
 
+  let code: Awaited<ReturnType<typeof createCallCentreIncident>>;
   try {
-    const code = await createCallCentreIncident({
+    code = await createCallCentreIncident({
       VmfCode: vmfCode,
       IncidentType: incidentType,
       TransportOfficerName: transportOfficerName || null,
@@ -333,14 +334,15 @@ export async function saveQueryIncidentAction(formData: FormData) {
       CallClosed: callClosed,
     });
 
-    const params = new URLSearchParams({ saved: "1" });
-    if (code !== null) {
-      params.set("code", String(code));
-    }
-    redirect(`${CAPTURE_PATH}?${params.toString()}`);
   } catch (error) {
     redirectWithError(apiErrorMessage(error), String(vmfCode));
   }
+
+  const params = new URLSearchParams({ saved: "1" });
+  if (code !== null) {
+    params.set("code", String(code));
+  }
+  redirect(`${CAPTURE_PATH}?${params.toString()}`);
 }
 
 export async function saveRoadAssistanceAction(formData: FormData) {
@@ -684,8 +686,9 @@ export async function saveHiJackAction(formData: FormData) {
     redirectHiJackWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
   }
 
+  let result: Awaited<ReturnType<typeof createHiJackIncident>>;
   try {
-    const result = await createHiJackIncident({
+    result = await createHiJackIncident({
       VmfCode: vmfCode,
       IncidentType: "Hi-Jack",
       TransportOfficerName: transportOfficerName || null,
@@ -712,16 +715,17 @@ export async function saveHiJackAction(formData: FormData) {
       IncidentDesc: incidentDescription || null,
     });
 
-    const params = new URLSearchParams({
-      saved: "1",
-      incidentType: "Hi-Jack",
-      ccVMF: String(vmfCode),
-      code: String(result.callCentreCode),
-    });
-    redirect(`${HIJACK_SHOW_DETAIL_PATH}?${params.toString()}`);
   } catch (error) {
     redirectHiJackWithError(apiErrorMessage(error), String(vmfCode));
   }
+
+  const params = new URLSearchParams({
+    saved: "1",
+    incidentType: "Hi-Jack",
+    ccVMF: String(vmfCode),
+    code: String(result.callCentreCode),
+  });
+  redirect(`${HIJACK_SHOW_DETAIL_PATH}?${params.toString()}`);
 }
 
 export async function saveLossAction(formData: FormData) {
@@ -808,8 +812,9 @@ export async function saveLossAction(formData: FormData) {
     redirectLossWithError("Remarks for the CLO are required when informing the CLO.", String(vmfCode));
   }
 
+  let result: Awaited<ReturnType<typeof createLossIncident>>;
   try {
-    const result = await createLossIncident({
+    result = await createLossIncident({
       VmfCode: vmfCode,
       IncidentType: "Loss_Theft",
       TransportOfficerName: transportOfficerName || null,
@@ -837,20 +842,21 @@ export async function saveLossAction(formData: FormData) {
       TowNeed: towNeed,
     });
 
-    const params = new URLSearchParams({
-      xtowneed: towNeed,
-      ccVMF: String(vmfCode),
-      cccode: String(result.callCentreCode),
-      xinctype: "Loss_Theft",
-      xgg: getText(formData, "xgg", "ggNumber"),
-      xgp: getText(formData, "xgp", "registrationNumber"),
-      txtDamage: "",
-      lossCode: String(result.lossCode),
-    });
-    redirect(`${LOSS_SPLIT_PATH}?${params.toString()}`);
   } catch (error) {
     redirectLossWithError(apiErrorMessage(error), String(vmfCode));
   }
+
+  const params = new URLSearchParams({
+    xtowneed: towNeed,
+    ccVMF: String(vmfCode),
+    cccode: String(result.callCentreCode),
+    xinctype: "Loss_Theft",
+    xgg: getText(formData, "xgg", "ggNumber"),
+    xgp: getText(formData, "xgp", "registrationNumber"),
+    txtDamage: "",
+    lossCode: String(result.lossCode),
+  });
+  redirect(`${LOSS_SPLIT_PATH}?${params.toString()}`);
 }
 
 export async function saveLossTowingAction(formData: FormData) {
@@ -884,9 +890,10 @@ export async function saveLossTowingAction(formData: FormData) {
   validateLossTowMaxLength(location, "Tow location", 50, vmfCodeText, callCentreCodeText);
   validateLossTowMaxLength(remarks, "Towing remarks", 50, vmfCodeText, callCentreCodeText);
 
+  let towingCode: Awaited<ReturnType<typeof createLossTowing>>;
   try {
     const now = new Date().toISOString();
-    const towingCode = await createLossTowing({
+    towingCode = await createLossTowing({
       VmfCode: vmfCode,
       CallRefer: callCentreCode,
       RequestDate: now,
@@ -901,15 +908,6 @@ export async function saveLossTowingAction(formData: FormData) {
       Remarks: remarks || null,
     });
 
-    const params = new URLSearchParams({
-      saved: "1",
-      incidentType: "Loss_Theft",
-      ccVMF: String(vmfCode),
-      cccode: String(callCentreCode),
-      code: String(callCentreCode),
-      towingCode: String(towingCode),
-    });
-    redirect(`${LOSS_SHOW_DETAIL_PATH}?${params.toString()}`);
   } catch (error) {
     redirectLossWithError(
       apiErrorMessage(error),
@@ -918,6 +916,16 @@ export async function saveLossTowingAction(formData: FormData) {
       String(callCentreCode),
     );
   }
+
+  const params = new URLSearchParams({
+    saved: "1",
+    incidentType: "Loss_Theft",
+    ccVMF: String(vmfCode),
+    cccode: String(callCentreCode),
+    code: String(callCentreCode),
+    towingCode: String(towingCode),
+  });
+  redirect(`${LOSS_SHOW_DETAIL_PATH}?${params.toString()}`);
 }
 
 export async function saveAccidentTowingAction(formData: FormData) {
@@ -950,9 +958,10 @@ export async function saveAccidentTowingAction(formData: FormData) {
   validateAccidentTowMaxLength(location, "Tow location", 50, vmfCodeText, callCentreCodeText);
   validateAccidentTowMaxLength(remarks, "Towing remarks", 50, vmfCodeText, callCentreCodeText);
 
+  let towingCode: Awaited<ReturnType<typeof createAccidentTowing>>;
   try {
     const now = new Date().toISOString();
-    const towingCode = await createAccidentTowing({
+    towingCode = await createAccidentTowing({
       VmfCode: vmfCode,
       CallRefer: callCentreCode,
       RequestDate: now,
@@ -967,15 +976,6 @@ export async function saveAccidentTowingAction(formData: FormData) {
       Remarks: remarks || null,
     });
 
-    const params = new URLSearchParams({
-      saved: "1",
-      incidentType: "Accident",
-      ccVMF: String(vmfCode),
-      cccode: String(callCentreCode),
-      code: String(callCentreCode),
-      towingCode: String(towingCode),
-    });
-    redirect(`${ACCIDENT_SHOW_DETAIL_PATH}?${params.toString()}`);
   } catch (error) {
     redirectAccidentWithError(
       apiErrorMessage(error),
@@ -984,4 +984,14 @@ export async function saveAccidentTowingAction(formData: FormData) {
       String(callCentreCode),
     );
   }
+
+  const params = new URLSearchParams({
+    saved: "1",
+    incidentType: "Accident",
+    ccVMF: String(vmfCode),
+    cccode: String(callCentreCode),
+    code: String(callCentreCode),
+    towingCode: String(towingCode),
+  });
+  redirect(`${ACCIDENT_SHOW_DETAIL_PATH}?${params.toString()}`);
 }

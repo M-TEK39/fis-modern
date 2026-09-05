@@ -217,9 +217,16 @@ export async function deleteSiteAction(formData: FormData) {
   const checkPath = `/Validation/MNT_Site_Del_Check.aspx?code=${siteCode ?? ""}`;
   if (!access.ok) redirect(`${checkPath}&error=${encodeURIComponent(access.message)}`);
   if (!siteCode) redirect("/validation-data/sites?error=Site%20code%20is%20required.");
+  let dependencies: Awaited<ReturnType<typeof getSiteDeleteCheck>>;
   try {
-    const dependencies = await getSiteDeleteCheck(siteCode);
-    if (!dependencies.canDelete) redirect(`${checkPath}&error=${encodeURIComponent("Contracts issued to this site must be changed before deleting it.")}`);
+    dependencies = await getSiteDeleteCheck(siteCode);
+  } catch (error) {
+    redirect(`${checkPath}&error=${encodeURIComponent(apiErrorMessage(error, "checked"))}`);
+  }
+  if (!dependencies.canDelete) {
+    redirect(`${checkPath}&error=${encodeURIComponent("Contracts issued to this site must be changed before deleting it.")}`);
+  }
+  try {
     await deleteSite(siteCode);
   } catch (error) {
     redirect(`${checkPath}&error=${encodeURIComponent(apiErrorMessage(error, "deleted"))}`);
