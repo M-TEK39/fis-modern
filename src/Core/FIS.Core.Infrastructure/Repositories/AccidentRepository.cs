@@ -147,6 +147,20 @@ public sealed class AccidentRepository : IAccidentRepository
         "notes"
     ];
 
+    private static readonly string[] PeriodReportColumns =
+    [
+        "accident_code",
+        "vmf_code",
+        "occurence_date",
+        "file_close_date",
+        "driver_name",
+        "transoffic_name",
+        "Call_Refer",
+        "cost_of_repair",
+        "driver_site_code",
+        "acc_type_code"
+    ];
+
     private readonly FisDbContext _context;
 
     public AccidentRepository(FisDbContext context)
@@ -276,6 +290,168 @@ public sealed class AccidentRepository : IAccidentRepository
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription)
         => GetVehicleReportCoreAsync(searchTerm, searchByDescription ? "description" : "third_party_regno", containsSearch: true);
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The period report query is composed only from allowlisted schema metadata and fixed SQL fragments; report filters are parameterized.")]
+    public async Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
+        string departmentNumber,
+        DateTime startDate,
+        DateTime endDate,
+        bool closed)
+    {
+        var accidentColumns = await GetAvailableColumnsAsync(TableName);
+        var requiredAccidentColumns = PeriodReportColumns
+            .Where(column => column is "accident_code" or "vmf_code" or "occurence_date" or "file_close_date")
+            .ToArray();
+        if (requiredAccidentColumns.Any(column => !accidentColumns.Contains(column)))
+        {
+            return Array.Empty<AccidentPeriodReportRow>();
+        }
+
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        if (!vehicleColumns.Contains("vmf_code"))
+        {
+            return Array.Empty<AccidentPeriodReportRow>();
+        }
+
+        var siteColumns = await GetAvailableColumnsAsync("site");
+        var typeColumns = await GetAvailableColumnsAsync("type");
+        var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
+        var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
+        var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
+        var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
+        if (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)
+        {
+            return Array.Empty<AccidentPeriodReportRow>();
+        }
+
+        var typeJoinAvailable = vehicleColumns.Contains("type_code") && typeColumns.Contains("type_code");
+        var accidentTypeJoinAvailable = accidentColumns.Contains("acc_type_code") && accidentTypeColumns.Contains("acc_type_code");
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var projection = new[]
+            {
+                GetPeriodVehicleProjection(vehicleColumns, "registration_number"),
+                GetPeriodVehicleProjection(vehicleColumns, "fleet_number"),
+                GetProjection(accidentColumns, "occurence_date", "a"),
+                siteDepartmentAvailable
+                    ? "[s].[Department_number] AS [department_number]"
+                    : "CAST(NULL AS nvarchar(50)) AS [department_number]",
+                siteJoinAvailable && siteColumns.Contains("description")
+                    ? "[s].[description] AS [site_description]"
+                    : "CAST(NULL AS nvarchar(255)) AS [site_description]",
+                typeJoinAvailable && typeColumns.Contains("type_description")
+                    ? "[t].[type_description] AS [hire_type]"
+                    : "CAST(NULL AS nvarchar(255)) AS [hire_type]",
+                accidentTypeJoinAvailable && accidentTypeColumns.Contains("acc_type_description")
+                    ? "[at].[acc_type_description] AS [accident_description]"
+                    : "CAST(NULL AS nvarchar(255)) AS [accident_description]",
+                GetProjection(accidentColumns, "driver_name", "a"),
+                GetProjection(accidentColumns, "transoffic_name", "a"),
+                GetProjection(accidentColumns, "Call_Refer", "a"),
+                GetProjection(accidentColumns, "cost_of_repair", "a"),
+                GetProjection(accidentColumns, "file_close_date", "a")
+            };
+            var joins = new List<string>
+            {
+                "INNER JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [a].[vmf_code]"
+            };
+            if (siteJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[site] AS [s] ON [s].[site_code] = [a].[driver_site_code]");
+            }
+
+            if (typeJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[type] AS [t] ON [t].[type_code] = [v].[type_code]");
+            }
+
+            if (accidentTypeJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[acc_type] AS [at] ON [at].[acc_type_code] = [a].[acc_type_code]");
+            }
+
+            var conditions = new List<string>
+            {
+                GetActiveFilter(accidentColumns, "a"),
+                GetActiveFilter(vehicleColumns, "v"),
+                "[a].[occurence_date] >= @startDate",
+                "[a].[occurence_date] <= @endDate",
+                closed ? "[a].[file_close_date] IS NOT NULL" : "[a].[file_close_date] IS NULL"
+            };
+            if (normalizedDepartmentNumber.Length > 0)
+            {
+                conditions.Add("[s].[Department_number] LIKE @departmentNumber");
+            }
+
+            var orderColumns = new List<string>();
+            if (siteDepartmentAvailable)
+            {
+                orderColumns.Add("[s].[Department_number]");
+            }
+
+            if (vehicleColumns.Contains("fleet_number"))
+            {
+                orderColumns.Add("[v].[fleet_number]");
+            }
+
+            orderColumns.Add("[a].[accident_code]");
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [a]
+                {string.Join(Environment.NewLine, joins)}
+                WHERE {string.Join(" AND ", conditions)}
+                ORDER BY {string.Join(", ", orderColumns)}
+                """;
+            AddParameter(command, "@startDate", DbType.Date, startDate.Date);
+            AddParameter(command, "@endDate", DbType.Date, endDate.Date);
+            if (normalizedDepartmentNumber.Length > 0)
+            {
+                AddParameter(command, "@departmentNumber", DbType.String, $"%{normalizedDepartmentNumber}%");
+            }
+
+            var results = new List<AccidentPeriodReportRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new AccidentPeriodReportRow
+                {
+                    registration_number = ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                    occurence_date = ReadDateTime(reader, "occurence_date"),
+                    department_number = ReadString(reader, "department_number") ?? string.Empty,
+                    site_description = ReadString(reader, "site_description") ?? string.Empty,
+                    hire_type = ReadString(reader, "hire_type") ?? string.Empty,
+                    accident_description = ReadString(reader, "accident_description") ?? string.Empty,
+                    driver_name = ReadString(reader, "driver_name") ?? string.Empty,
+                    transoffic_name = ReadString(reader, "transoffic_name") ?? string.Empty,
+                    call_refer = ReadDecimal(reader, "Call_Refer"),
+                    cost_of_repair = ReadDecimal(reader, "cost_of_repair"),
+                    file_close_date = ReadDateTime(reader, "file_close_date")
+                });
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     [SuppressMessage(
         "Security",
@@ -1094,6 +1270,13 @@ public sealed class AccidentRepository : IAccidentRepository
         => joinAvailable && columns.Contains(column)
             ? $"[v].[{column}] AS [__vehicle_{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [__vehicle_{column}]";
+
+    private static string GetPeriodVehicleProjection(
+        IReadOnlySet<string> columns,
+        string column)
+        => columns.Contains(column)
+            ? $"[v].[{column}] AS [{column}]"
+            : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
 
     private static string GetActiveFilter(IReadOnlySet<string> columns, string alias)
     {

@@ -8,6 +8,11 @@ public interface IAccidentRepository
     Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(string searchTerm, bool searchById);
     Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet);
     Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription);
+    Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
+        string departmentNumber,
+        DateTime startDate,
+        DateTime endDate,
+        bool closed);
     Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<AccidentClaimsSummary> GetClaimsSummaryAsync();
     Task<IEnumerable<AccidentReport>> GetRecentReportsAsync(int limit = 10);
@@ -78,6 +83,22 @@ public class AccidentVehicleReportRow
     public string z181 { get; set; } = "";
     public DateTime? file_close_date { get; set; }
     public string notes { get; set; } = "";
+}
+
+public class AccidentPeriodReportRow
+{
+    public string registration_number { get; set; } = "";
+    public string fleet_number { get; set; } = "";
+    public DateTime? occurence_date { get; set; }
+    public string department_number { get; set; } = "";
+    public string site_description { get; set; } = "";
+    public string hire_type { get; set; } = "";
+    public string accident_description { get; set; } = "";
+    public string driver_name { get; set; } = "";
+    public string transoffic_name { get; set; } = "";
+    public decimal? call_refer { get; set; }
+    public decimal? cost_of_repair { get; set; }
+    public DateTime? file_close_date { get; set; }
 }
 
 /// <summary>

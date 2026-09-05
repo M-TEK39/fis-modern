@@ -203,6 +203,39 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/period")]
+    public async Task<ActionResult<IEnumerable<AccidentPeriodReportRow>>> GetPeriodReport(
+        [FromQuery] string? departmentNumber,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
+        [FromQuery] string status = "open")
+    {
+        if (endDate < startDate)
+        {
+            return BadRequest(new { error = "End date must be on or after start date." });
+        }
+
+        var normalizedStatus = status.Trim().ToLowerInvariant();
+        if (normalizedStatus is not ("open" or "closed" or "close"))
+        {
+            return BadRequest(new { error = "Status must be open or closed." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetPeriodReportAsync(
+                departmentNumber ?? string.Empty,
+                startDate,
+                endDate,
+                normalizedStatus is "closed" or "close"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident period report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,
