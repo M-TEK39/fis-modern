@@ -187,10 +187,12 @@ public class UserApiService
         return new UserSummaryDto
         {
             UserAccessCode = profile.UserAccessCode,
-            UserName = profile.FirstName,
+            UserName = profile.UserName ?? profile.FirstName,
             Email = profile.Email,
             FirstName = profile.FirstName,
             LastName = profile.LastName,
+            SiteName = profile.SiteName ?? profile.SiteCode?.ToString(),
+            Position = profile.PositionName ?? profile.PositionCode?.ToString(),
             Telephone = profile.Telephone,
             LastLoginDate = profile.LastLogOn?.ToString("yyyy-MM-dd HH:mm"),
             AccessLevel = profile.AccessLevel

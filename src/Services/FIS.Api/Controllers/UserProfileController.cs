@@ -1,7 +1,12 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Auth;
+using FIS.Data.SqlServer;
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -17,13 +22,16 @@ namespace FIS.Api.Controllers;
 public class UserProfileController : BaseApiController
 {
     private readonly IUserProfileRepository _repository;
+    private readonly FisDbContext _context;
     private readonly ILogger<UserProfileController> _logger;
 
     public UserProfileController(
         IUserProfileRepository repository,
+        FisDbContext context,
         ILogger<UserProfileController> logger)
     {
         _repository = repository;
+        _context = context;
         _logger = logger;
     }
 
@@ -84,13 +92,42 @@ public class UserProfileController : BaseApiController
         {
             _logger.LogInformation("Fetching all active user profiles");
             var users = await _repository.GetAllActiveAsync();
-            var dtos = users.Select(MapToDto);
+            var dtos = users.Select(user => MapToDto(user));
             return Ok(dtos);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching active user profiles");
             return StatusCode(500, "Error retrieving user profiles");
+        }
+    }
+
+    /// <summary>
+    /// Get the active user rows used by the legacy User Administration grid.
+    /// This endpoint keeps the legacy role boundary while the generic profile
+    /// endpoint remains available to non-admin workflows such as approver lookup.
+    /// </summary>
+    [HttpGet("administration")]
+    [Authorize(Roles = "User Administration")]
+    public async Task<ActionResult<IEnumerable<UserProfileDto>>> GetForAdministration([FromQuery] string? alphabet)
+    {
+        try
+        {
+            var selectedAlphabet = NormalizeAlphabet(alphabet);
+            var users = (await _repository.GetAllActiveAsync())
+                .Where(user => string.IsNullOrWhiteSpace(user.LastName)
+                    || user.LastName.StartsWith(selectedAlphabet, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            var siteNames = await GetLookupNamesAsync("site", "Site_code", "description");
+            var positionNames = await GetLookupNamesAsync("Positions", "Position_Code", "Position_Name");
+
+            return Ok(users.Select(user => MapToDto(user, siteNames, positionNames)));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching User Administration rows for alphabet {Alphabet}", alphabet);
+            return StatusCode(500, "Error retrieving user administration rows");
         }
     }
 
@@ -104,7 +141,7 @@ public class UserProfileController : BaseApiController
         {
             _logger.LogInformation("Fetching user profiles for site {SiteCode}", siteCode);
             var users = await _repository.GetBySiteAsync(siteCode);
-            var dtos = users.Select(MapToDto);
+            var dtos = users.Select(user => MapToDto(user));
             return Ok(dtos);
         }
         catch (Exception ex)
@@ -124,7 +161,7 @@ public class UserProfileController : BaseApiController
         {
             _logger.LogInformation("Searching user profiles with term: {SearchTerm}", term);
             var users = await _repository.SearchAsync(term);
-            var dtos = users.Select(MapToDto);
+            var dtos = users.Select(user => MapToDto(user));
             return Ok(dtos);
         }
         catch (Exception ex)
@@ -302,17 +339,27 @@ public class UserProfileController : BaseApiController
         }
     }
 
-    private UserProfileDto MapToDto(UserAccessOld u)
+    private UserProfileDto MapToDto(
+        UserAccessOld u,
+        IReadOnlyDictionary<int, string>? siteNames = null,
+        IReadOnlyDictionary<int, string>? positionNames = null)
     {
         return new UserProfileDto
         {
             UserAccessCode = u.user_access_code,
+            UserName = u.name,
             FirstName = u.FirstName,
             LastName = u.LastName,
             Email = u.E_Mail,
             Telephone = u.telephone,
             SiteCode = u.Site_code,
+            SiteName = u.Site_code is short siteCode && siteNames?.TryGetValue(siteCode, out var siteName) == true
+                ? siteName
+                : null,
             PositionCode = u.Position_Code,
+            PositionName = u.Position_Code is byte positionCode && positionNames?.TryGetValue(positionCode, out var positionName) == true
+                ? positionName
+                : null,
             PersalNumber = u.Persal_Number,
             ContractNumber = u.Contract_Number,
             SaIdNumber = u.sa_id_number,
@@ -326,6 +373,69 @@ public class UserProfileController : BaseApiController
         };
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The table and column identifiers are fixed by the two internal call sites; no request value is interpolated.")]
+    private async Task<Dictionary<int, string>> GetLookupNamesAsync(
+        string tableName,
+        string codeColumn,
+        string nameColumn)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT [{codeColumn}], [{nameColumn}] FROM [dbo].[{tableName}]";
+
+            var names = new Dictionary<int, string>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                if (reader.IsDBNull(0) || reader.IsDBNull(1))
+                {
+                    continue;
+                }
+
+                var name = reader.GetValue(1).ToString()?.Trim();
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    names[Convert.ToInt32(reader.GetValue(0))] = name;
+                }
+            }
+
+            return names;
+        }
+        catch (DbException ex)
+        {
+            // Site and Positions are legacy lookup tables, but an incomplete
+            // client backup must not hide the user rows themselves.
+            _logger.LogWarning(ex, "Unable to load legacy user lookup table {TableName}", tableName);
+            return new Dictionary<int, string>();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static string NormalizeAlphabet(string? alphabet)
+    {
+        var value = alphabet?.Trim();
+        return value?.Length == 1 && value[0] is >= 'A' and <= 'Z'
+            ? value
+            : "A";
+    }
+
     private static string HashLegacyPassword(string password)
     {
         return Convert.ToHexString(MD5.HashData(Encoding.UTF8.GetBytes(password)));
@@ -337,12 +447,15 @@ public class UserProfileController : BaseApiController
 public class UserProfileDto
 {
     public short UserAccessCode { get; set; }
+    public string? UserName { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Email { get; set; }
     public string? Telephone { get; set; }
     public short? SiteCode { get; set; }
+    public string? SiteName { get; set; }
     public byte? PositionCode { get; set; }
+    public string? PositionName { get; set; }
     public int? PersalNumber { get; set; }
     public int? ContractNumber { get; set; }
     public int? SaIdNumber { get; set; }

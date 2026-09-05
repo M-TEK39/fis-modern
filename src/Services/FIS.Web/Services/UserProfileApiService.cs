@@ -67,12 +67,15 @@ public class UserProfileApiService
 public class UserProfileDto
 {
     public short UserAccessCode { get; set; }
+    public string? UserName { get; set; }
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? Email { get; set; }
     public string? Telephone { get; set; }
     public short? SiteCode { get; set; }
+    public string? SiteName { get; set; }
     public byte? PositionCode { get; set; }
+    public string? PositionName { get; set; }
     public int? PersalNumber { get; set; }
     public int? ContractNumber { get; set; }
     public int? SaIdNumber { get; set; }
