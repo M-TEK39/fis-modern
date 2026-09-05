@@ -1,1 +1,1 @@
-export { default } from "@/app/change-password-question/page";
+export { default } from "@/app/change-password/page";

@@ -17,7 +17,7 @@ function SubmitButton() {
   );
 }
 
-export default function ForgotPasswordForm() {
+export default function ForgotPasswordForm({ initialIdentifier = "" }: { initialIdentifier?: string }) {
   const [state, formAction] = useActionState<ForgotPasswordActionState, FormData>(forgotPasswordAction, initialState);
 
   return (
@@ -44,6 +44,7 @@ export default function ForgotPasswordForm() {
           type="text"
           autoComplete="username"
           placeholder="Enter your account identifier"
+          defaultValue={initialIdentifier}
           required
         />
       </div>
