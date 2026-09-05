@@ -184,7 +184,12 @@ export async function updateSiteAction(
   formData: FormData,
 ): Promise<SiteActionState> {
   const access = await authorizeSiteMaintenance();
-  const siteCode = getOptionalInteger(formData, "siteCode", "Site code", 32767);
+  let siteCode: number | null;
+  try {
+    siteCode = getOptionalInteger(formData, "siteCode", "Site code", 32767);
+  } catch (error) {
+    return { status: "error", message: error instanceof SiteValidationError ? error.message : "Site code is invalid." };
+  }
   const returnPath = siteCode ? `/Validation/MNT_Site_Edit.aspx?cmbSite=${siteCode}` : "/validation-data/sites";
   if (!access.ok) redirect(`${returnPath}&error=${encodeURIComponent(access.message)}`);
   if (!siteCode) return { status: "error", message: "Site code is required." };
@@ -199,7 +204,12 @@ export async function updateSiteAction(
 
 export async function deleteSiteAction(formData: FormData) {
   const access = await authorizeSiteMaintenance();
-  const siteCode = getOptionalInteger(formData, "siteCode", "Site code", 32767);
+  let siteCode: number | null;
+  try {
+    siteCode = getOptionalInteger(formData, "siteCode", "Site code", 32767);
+  } catch (error) {
+    redirect(`/validation-data/sites?error=${encodeURIComponent(error instanceof Error ? error.message : "Site code is invalid.")}`);
+  }
   const checkPath = `/Validation/MNT_Site_Del_Check.aspx?code=${siteCode ?? ""}`;
   if (!access.ok) redirect(`${checkPath}&error=${encodeURIComponent(access.message)}`);
   if (!siteCode) redirect("/validation-data/sites?error=Site%20code%20is%20required.");

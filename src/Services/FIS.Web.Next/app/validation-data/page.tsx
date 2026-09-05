@@ -27,7 +27,7 @@ export default async function ValidationDataPage() {
 
   const links = [
     ["Organisation Departments", "/validation-data/departments"],
-    ["Organisation Sites", "/reference-data?tab=sites"],
+    ["Organisation Sites", "/validation-data/sites"],
     ["Vehicle Makes", "/validation-data/makes"],
     ["Vehicle Models", "/validation-data/models"],
     ["Vehicle Types", "/reference-data?tab=types"],
