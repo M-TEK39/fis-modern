@@ -291,6 +291,9 @@ public sealed class AccidentRepository : IAccidentRepository
     public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription)
         => GetVehicleReportCoreAsync(searchTerm, searchByDescription ? "description" : "third_party_regno", containsSearch: true);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode)
+        => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, flagMode: mode);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -460,10 +463,11 @@ public sealed class AccidentRepository : IAccidentRepository
     private async Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportCoreAsync(
         string searchTerm,
         string searchColumn,
-        bool containsSearch)
+        bool containsSearch,
+        string? flagMode = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
-        if (normalizedSearchTerm.Length == 0)
+        if (flagMode is null && normalizedSearchTerm.Length == 0)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -473,10 +477,17 @@ public sealed class AccidentRepository : IAccidentRepository
         var siteColumns = await GetAvailableColumnsAsync("site");
         var locationColumns = await GetAvailableColumnsAsync("location");
         var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
-        var searchAvailable = containsSearch
+        var searchAvailable = flagMode is null && (containsSearch
             ? accidentColumns.Contains(searchColumn)
-            : vehicleColumns.Contains(searchColumn);
-        if (!searchAvailable)
+            : vehicleColumns.Contains(searchColumn));
+        var flagAvailable = flagMode is not null && accidentColumns.Contains("Flag_gg_hq");
+        if (flagMode is not null && !flagAvailable)
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        var hasFilter = searchAvailable || flagAvailable;
+        if (!hasFilter)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -535,10 +546,17 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 GetActiveFilter(accidentColumns, "a"),
                 GetActiveFilter(vehicleColumns, "v"),
-                containsSearch
-                    ? $"[a].[{searchColumn}] LIKE @searchTerm"
-                    : $"[v].[{searchColumn}] = @searchTerm"
             };
+            if (flagMode is not null)
+            {
+                conditions.Add(GetNewAccidentFlagFilter(flagMode));
+            }
+            else
+            {
+                conditions.Add(containsSearch
+                    ? $"[a].[{searchColumn}] LIKE @searchTerm"
+                    : $"[v].[{searchColumn}] = @searchTerm");
+            }
             var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : "vmf_code";
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
@@ -547,7 +565,10 @@ public sealed class AccidentRepository : IAccidentRepository
                 WHERE {string.Join(" AND ", conditions)}
                 ORDER BY [v].[{orderColumn}], [a].[accident_code]
                 """;
-            AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
+            if (flagMode is null)
+            {
+                AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
+            }
 
             var results = new List<AccidentVehicleReportRow>();
             await using var reader = await command.ExecuteReaderAsync();
@@ -1277,6 +1298,16 @@ public sealed class AccidentRepository : IAccidentRepository
         => columns.Contains(column)
             ? $"[v].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
+
+    private static string GetNewAccidentFlagFilter(string mode)
+        => mode switch
+        {
+            "call" => "[a].[Flag_gg_hq] = 'C'",
+            "garage" => "[a].[Flag_gg_hq] = 'Y'",
+            "confirm" => "[a].[Flag_gg_hq] = 'X'",
+            "all" => "ISNULL([a].[Flag_gg_hq], 'N') <> 'N'",
+            _ => "1 = 0"
+        };
 
     private static string GetActiveFilter(IReadOnlySet<string> columns, string alias)
     {
