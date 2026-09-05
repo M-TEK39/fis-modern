@@ -26,7 +26,7 @@ const LEGACY_SETTINGS_REDIRECTS: Readonly<Record<string, string>> = {
   "users/deactivate": "/users/deactivate",
   "users/view": "/users/view",
   "users/view-users": "/users/view",
-  "users/change-password-question": "/users/change-password-question",
+  "users/change-password-question": "/change-password-question",
   "users/reset-password": "/users/force-password-change",
   "users/forgot-password": "/users/admin/forgot-password",
 };

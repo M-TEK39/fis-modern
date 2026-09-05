@@ -385,6 +385,59 @@ export async function changePasswordAgainstApi(
   }
 }
 
+export async function changePasswordQuestionAgainstApi(
+  username: string,
+  currentPassword: string,
+  newPassword: string,
+  confirmNewPassword: string,
+  securityQuestion: string,
+  securityAnswer: string,
+  email: string,
+): Promise<ChangePasswordResult> {
+  const cookieHeader = await getForwardedAuthCookieHeader();
+  if (!cookieHeader) {
+    return { ok: false, reason: "unauthorized" };
+  }
+
+  try {
+    const response = await fetchApi("api/auth/change-password-question", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        cookie: cookieHeader,
+      },
+      body: JSON.stringify({
+        username,
+        oldPassword: currentPassword,
+        newPassword,
+        confirmNewPassword,
+        securityQuestion,
+        securityAnswer,
+        email,
+      }),
+    });
+    const payload = await readJson<ApiMutationPayload>(response);
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        reason: response.status === 401 || response.status === 403 ? "unauthorized" : response.status >= 500 ? "unavailable" : "invalid-response",
+        message: payload?.message,
+      };
+    }
+
+    if (payload?.success !== true) {
+      return { ok: false, reason: "invalid-response", message: payload?.message };
+    }
+
+    return { ok: true, message: payload.message };
+  } catch (error) {
+    console.error("FIS API change-password-question request failed", error instanceof Error ? error.message : "unknown error");
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
 export async function refreshAgainstApi() {
   const cookieStore = await cookies();
   const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value;

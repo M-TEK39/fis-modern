@@ -398,6 +398,11 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<ChangePasswordResponse>> ChangePasswordQuestion([FromBody] ChangePasswordQuestionRequest request)
     {
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
         try
         {
             if (!_passwordService.IsPasswordStrong(request.NewPassword, out var passwordError))
