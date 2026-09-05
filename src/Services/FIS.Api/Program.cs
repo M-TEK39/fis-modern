@@ -198,6 +198,7 @@ builder.Services.AddScoped<NotifyListCompatibilityService>();
 builder.Services.AddScoped<TowTruckCompatibilityService>();
 builder.Services.AddScoped<AccidentCompatibilityService>();
 builder.Services.AddScoped<LossCompatibilityService>();
+builder.Services.AddScoped<CallCentreEditCompatibilityService>();
 
 // Register lightweight PDF service.
 builder.Services.AddScoped<IPdfGenerationService, PdfGenerationService>();

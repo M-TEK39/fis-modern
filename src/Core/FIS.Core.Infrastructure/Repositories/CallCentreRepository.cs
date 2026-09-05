@@ -73,20 +73,7 @@ public class CallCentreRepository : ICallCentreRepository
     private static readonly string[] RequiredColumns =
     [
         "Call_centre_code",
-        "vmf_code",
-        "Call_time",
-        "Call_date",
-        "Capture_name",
-        "User_access_code",
-        "Caller_name",
-        "Driver_name",
-        "Driver_persalno",
-        "Driver_Licno",
-        "GG_number",
-        "Driver_base_station",
-        "Driver_Site",
-        "Driver_tel",
-        "Driver_cell"
+        "vmf_code"
     ];
 
     private readonly FisDbContext _context;

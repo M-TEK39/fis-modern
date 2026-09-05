@@ -19,6 +19,7 @@ public class CallCentreController : BaseApiController
     private readonly ITowingRepository _towingRepository;
     private readonly AccidentCompatibilityService _accidentService;
     private readonly LossCompatibilityService _lossService;
+    private readonly CallCentreEditCompatibilityService _editCompatibilityService;
     private readonly FisDbContext _context;
     private readonly ILogger<CallCentreController> _logger;
 
@@ -27,6 +28,7 @@ public class CallCentreController : BaseApiController
         ITowingRepository towingRepository,
         AccidentCompatibilityService accidentService,
         LossCompatibilityService lossService,
+        CallCentreEditCompatibilityService editCompatibilityService,
         FisDbContext context,
         ILogger<CallCentreController> logger)
     {
@@ -34,6 +36,7 @@ public class CallCentreController : BaseApiController
         _towingRepository = towingRepository;
         _accidentService = accidentService;
         _lossService = lossService;
+        _editCompatibilityService = editCompatibilityService;
         _context = context;
         _logger = logger;
     }
@@ -485,6 +488,64 @@ public class CallCentreController : BaseApiController
         {
             _logger.LogError(ex, "Error updating call centre record {Id}", id);
             return StatusCode(500, new { error = "Failed to update call centre record", message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id}/edit-details")]
+    public async Task<ActionResult<CallCentreEditDetails>> GetEditDetails(short id)
+    {
+        try
+        {
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { error = "Call centre record not found", id });
+            }
+
+            return Ok(await _editCompatibilityService.GetAsync(id, HttpContext.RequestAborted));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading child edit details for call centre record {Id}", id);
+            return StatusCode(500, new { error = "Failed to load call centre edit details." });
+        }
+    }
+
+    [HttpPut("{id}/edit-details")]
+    public async Task<ActionResult<CallCentre>> UpdateEditDetails(
+        short id,
+        [FromBody] UpdateCallCentreEditDetailsDto dto)
+    {
+        if (!ModelState.IsValid || dto.CallCentre is null)
+        {
+            return BadRequest(ModelState);
+        }
+
+        await using var transaction = await _context.Database.BeginTransactionAsync(HttpContext.RequestAborted);
+        try
+        {
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { error = "Call centre record not found", id });
+            }
+
+            ApplyFields(existing, dto.CallCentre);
+            var updated = await _repository.UpdateAsync(existing, GetCurrentUserId());
+            await _editCompatibilityService.UpdateAsync(
+                id,
+                dto.ChildUpdates ?? new CallCentreEditUpdate(),
+                GetCurrentUserId(),
+                HttpContext.RequestAborted);
+
+            await transaction.CommitAsync(HttpContext.RequestAborted);
+            return Ok(updated);
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(HttpContext.RequestAborted);
+            _logger.LogError(ex, "Error updating complete call centre edit workflow for record {Id}", id);
+            return StatusCode(500, new { error = "Failed to update call centre edit details." });
         }
     }
 
@@ -1093,6 +1154,12 @@ public class CreateCallCentreDto : CallCentreFieldsDto
 
 public class UpdateCallCentreDto : CallCentreFieldsDto
 {
+}
+
+public class UpdateCallCentreEditDetailsDto
+{
+    public UpdateCallCentreDto? CallCentre { get; set; }
+    public CallCentreEditUpdate? ChildUpdates { get; set; }
 }
 
 public class CreateRoadAssistanceDto : CallCentreFieldsDto
