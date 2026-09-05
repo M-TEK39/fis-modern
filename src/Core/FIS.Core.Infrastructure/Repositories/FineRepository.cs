@@ -183,8 +183,13 @@ public class FineRepository : IFineRepository
         return fine;
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the fine code is parameterized.")]
     public async Task DeleteAsync(int fineCode, int currentUserId)
     {
+        var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -196,7 +201,29 @@ public class FineRepository : IFineRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = "DELETE FROM [dbo].[Fines] WHERE [Fine_code] = @fineCode";
+            if (availableColumns.Contains("is_deleted"))
+            {
+                var assignments = new List<string> { "[is_deleted] = @isDeleted" };
+                AddParameter(command, "@isDeleted", DbType.Boolean, true);
+                if (availableColumns.Contains("date_updated"))
+                {
+                    assignments.Add("[date_updated] = @dateUpdated");
+                    AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+                }
+
+                if (availableColumns.Contains("modified_by_user_code"))
+                {
+                    assignments.Add("[modified_by_user_code] = @modifiedByUser");
+                    AddParameter(command, "@modifiedByUser", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                }
+
+                command.CommandText = $"UPDATE [dbo].[Fines] SET {string.Join(", ", assignments)} WHERE [Fine_code] = @fineCode";
+            }
+            else
+            {
+                command.CommandText = "DELETE FROM [dbo].[Fines] WHERE [Fine_code] = @fineCode";
+            }
+
             AddParameter(command, "@fineCode", DbType.Int32, fineCode);
             await command.ExecuteNonQueryAsync();
         }

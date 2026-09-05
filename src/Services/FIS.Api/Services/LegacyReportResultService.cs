@@ -1,9 +1,12 @@
 using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Api.Services;
 
@@ -1249,6 +1252,24 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private Task<LegacyReportResultDto> BuildFinesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
+        var mode = GetString(filters, "mode")?.Trim().ToLowerInvariant();
+        return mode switch
+        {
+            "one-vehicle" => BuildFineDetailReportAsync(filters, "Fines Report on ONE Vehicle", "fines/RPT_one_num_report_Fines.aspx", cancellationToken),
+            "appear-date" => BuildFineDetailReportAsync(filters, "Due Date To Appear In Court Report", "fines/RPT_app_date_report_Fines.aspx", cancellationToken),
+            "fine-detail" => BuildFineDetailReportAsync(filters, "Fine Detail", "fines/RPT_letter_report_Fines.aspx", cancellationToken),
+            "reissue-submission" => BuildFineReissueReportAsync(filters, cancellationToken),
+            "traffic-dept-detail" => BuildTrafficDeptReportAsync(cancellationToken),
+            "dept-site-period" => BuildFineSummaryReportAsync(filters, "Fines Report for a Department (or Site)", "fines/RPT_dept_period_report_Fines.aspx", cancellationToken),
+            "vehicle-period" => BuildFineSummaryReportAsync(filters, "Fines Report per Vehicle", "fines/RPT_finepervehicle_report.aspx", cancellationToken),
+            "metro-period" => BuildFineSummaryReportAsync(filters, "Fines Report per Metro", "fines/RPT_metro_report.aspx", cancellationToken),
+            "all" => BuildFineSummaryReportAsync(filters, "A List of all Fines", "fines/RPT_FinesAll.aspx", cancellationToken),
+            _ => Task.FromResult(CreateFinesMenuResult())
+        };
+    }
+
+    private static LegacyReportResultDto CreateFinesMenuResult()
+    {
         var rows = new[]
         {
             new { Section = "One Vehicle Fines Reports", Sequence = "1", Report = "Fines Report on ONE Vehicle", Target = "fines/RPT_one_num_main_Fines.htm" },
@@ -1259,7 +1280,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             new { Section = "Navigation", Sequence = "R", Report = "Return To Main Page", Target = "FISReports/FIS_Report.aspx" }
         };
 
-        return Task.FromResult(CreateDynamicResult(
+        return CreateDynamicResult(
             "Fines Reports",
             "Fines/RPTFines.aspx",
             false,
@@ -1268,7 +1289,396 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Section", row => row.Section),
             Column("Sequence", row => row.Sequence),
             Column("Report", row => row.Report),
-            Column("Target", row => row.Target)));
+            Column("Target", row => row.Target));
+    }
+
+    private async Task<LegacyReportResultDto> BuildFineDetailReportAsync(
+        IDictionary<string, string?> filters,
+        string title,
+        string legacyTarget,
+        CancellationToken cancellationToken)
+    {
+        var fineColumns = await GetReportTableColumnsAsync("Fines", cancellationToken);
+        var trafficDeptColumns = await GetReportTableColumnsAsync("Traffic_Dept", cancellationToken);
+        var predicates = BuildFineLivePredicates(fineColumns);
+        var parameters = new List<ReportParameter>();
+        var mode = GetString(filters, "mode")?.Trim().ToLowerInvariant();
+
+        if (mode == "fine-detail")
+        {
+            var fineCode = GetInt(filters, "fineCode") ?? GetInt(filters, "FCode");
+            if (fineCode.HasValue)
+            {
+                predicates.Add("f.[Fine_code] = @fineCode");
+                parameters.Add(new("@fineCode", DbType.Int32, fineCode.Value));
+            }
+        }
+        else if (mode == "appear-date")
+        {
+            var appearDate = GetDate(filters, "appearDate") ?? GetDate(filters, "date") ?? GetDate(filters, "xdat");
+            if (appearDate.HasValue)
+            {
+                predicates.Add("f.[Appear_date] = @appearDate");
+                parameters.Add(new("@appearDate", DbType.DateTime2, appearDate.Value.Date));
+            }
+        }
+        else
+        {
+            var vmfCode = GetInt(filters, "vmf") ?? GetInt(filters, "vmfCode");
+            if (vmfCode.HasValue)
+            {
+                predicates.Add("f.[vmf_code] = @vmfCode");
+                parameters.Add(new("@vmfCode", DbType.Int32, vmfCode.Value));
+            }
+        }
+
+        var sql = $"{BuildFineDetailSelect(fineColumns, trafficDeptColumns)} WHERE {string.Join(" AND ", predicates)} ORDER BY f.[Offence_date], f.[Receive_gg_date] DESC";
+        return await ExecuteFineReportQueryAsync(title, legacyTarget, sql, parameters, cancellationToken);
+    }
+
+    private async Task<LegacyReportResultDto> BuildFineReissueReportAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var fineColumns = await GetReportTableColumnsAsync("Fines", cancellationToken);
+        var predicates = BuildFineLivePredicates(fineColumns);
+        var parameters = new List<ReportParameter>();
+        var vmfCode = GetInt(filters, "vmf") ?? GetInt(filters, "vmfCode");
+        if (vmfCode.HasValue)
+        {
+            predicates.Add("f.[vmf_code] = @vmfCode");
+            parameters.Add(new("@vmfCode", DbType.Int32, vmfCode.Value));
+        }
+
+        var sql = $"{BuildFineReissueSelect(fineColumns)} WHERE {string.Join(" AND ", predicates)} ORDER BY f.[Offence_date], f.[Receive_gg_date] DESC";
+        return await ExecuteFineReportQueryAsync(
+            "Submission to Re-Issue a Traffic Fine",
+            "fines/RPT_letter_main_Fines.aspx",
+            sql,
+            parameters,
+            cancellationToken);
+    }
+
+    private async Task<LegacyReportResultDto> BuildTrafficDeptReportAsync(CancellationToken cancellationToken)
+    {
+        var trafficDeptColumns = await GetReportTableColumnsAsync("Traffic_Dept", cancellationToken);
+        var predicates = trafficDeptColumns.Contains("is_deleted")
+            ? "WHERE [is_deleted] = 0"
+            : string.Empty;
+        var sql = $"{BuildTrafficDeptSelect(trafficDeptColumns)} {predicates} ORDER BY [Traf_name]";
+        return await ExecuteFineReportQueryAsync(
+            "Traffic Dept Information",
+            "fines/RPT_traffic_all_report.aspx",
+            sql,
+            Array.Empty<ReportParameter>(),
+            cancellationToken);
+    }
+
+    private async Task<LegacyReportResultDto> BuildFineSummaryReportAsync(
+        IDictionary<string, string?> filters,
+        string title,
+        string legacyTarget,
+        CancellationToken cancellationToken)
+    {
+        var fineColumns = await GetReportTableColumnsAsync("Fines", cancellationToken);
+        var predicates = BuildFineLivePredicates(fineColumns);
+        var parameters = new List<ReportParameter>();
+        var mode = GetString(filters, "mode")?.Trim().ToLowerInvariant();
+
+        var startDate = GetDate(filters, "from") ?? GetDate(filters, "startDate") ?? GetDate(filters, "BDAT");
+        var endDate = GetDate(filters, "to") ?? GetDate(filters, "endDate") ?? GetDate(filters, "EDAT");
+        if (startDate.HasValue)
+        {
+            predicates.Add("f.[Offence_date] >= @startDate");
+            parameters.Add(new("@startDate", DbType.DateTime2, startDate.Value.Date));
+        }
+        if (endDate.HasValue)
+        {
+            predicates.Add("f.[Offence_date] <= @endDate");
+            parameters.Add(new("@endDate", DbType.DateTime2, endDate.Value.Date));
+        }
+
+        if (mode == "dept-site-period")
+        {
+            var siteCode = GetShort(filters, "site") ?? GetShort(filters, "siteCode");
+            if (siteCode.HasValue)
+            {
+                predicates.Add("f.[Site_code] = @siteCode");
+                parameters.Add(new("@siteCode", DbType.Int16, siteCode.Value));
+            }
+
+            var department = GetString(filters, "dept") ?? GetString(filters, "department");
+            if (!string.IsNullOrWhiteSpace(department))
+            {
+                predicates.Add("s.[Department_number] LIKE @department");
+                parameters.Add(new("@department", DbType.String, $"%{department.Trim()}%"));
+            }
+        }
+        else if (mode == "vehicle-period")
+        {
+            var vmfCode = GetInt(filters, "vmf") ?? GetInt(filters, "vmfCode");
+            if (vmfCode.HasValue)
+            {
+                predicates.Add("f.[vmf_code] = @vmfCode");
+                parameters.Add(new("@vmfCode", DbType.Int32, vmfCode.Value));
+            }
+        }
+        else if (mode == "metro-period")
+        {
+            var issuer = GetString(filters, "issuer") ?? GetString(filters, "offenceIssuer");
+            if (!string.IsNullOrWhiteSpace(issuer))
+            {
+                predicates.Add("f.[Offence_issuer] = @issuer");
+                parameters.Add(new("@issuer", DbType.String, issuer.Trim()));
+            }
+        }
+
+        var sql = $"{BuildFineSummarySelect()} WHERE {string.Join(" AND ", predicates)} ORDER BY s.[Department_number], v.[fleet_number], f.[Offence_date] DESC";
+        return await ExecuteFineReportQueryAsync(title, legacyTarget, sql, parameters, cancellationToken);
+    }
+
+    private static string BuildFineDetailSelect(
+        IReadOnlySet<string> fineColumns,
+        IReadOnlySet<string> trafficDeptColumns)
+    {
+        return $"""
+            SELECT
+                f.[Fine_code] AS [Fine Code],
+                f.[vmf_code] AS [VMF Code],
+                v.[fleet_number] AS [GG Number],
+                v.[registration_number] AS [Prov Reg Number],
+                vt.[type_description] AS [Hire Type],
+                f.[Offence_date] AS [Date of Offence],
+                f.[Offence_reference] AS [Reference Number],
+                f.[Offence_issuer] AS [Issued By],
+                td.[Traf_name] AS [Traffic Dept],
+                f.[Fine_amount] AS [Amount of Fine],
+                f.[Pay_due_date] AS [Due Date of Payment],
+                f.[Appear_date] AS [Due Date to Appear in Court],
+                {OptionalReportColumn(fineColumns, "f", "Document_type", "Document Type")},
+                f.[Receive_gg_date] AS [Date Received at GMT],
+                f.[Issuer_notify_date] AS [Date of Notification to Issuer],
+                f.[Notify_dept_date] AS [Date of Notification to Dept],
+                s.[description] AS [Dept],
+                s.[Department_number] AS [Dept Code],
+                s.[res_person] AS [Dept Responsible Person],
+                s.[telephone] AS [Dept Telephone],
+                s.[fax] AS [Dept Fax],
+                s.[net_address] AS [Dept Email],
+                s.[address1] AS [Dept Address1],
+                s.[address2] AS [Dept Address2],
+                s.[address3] AS [Dept Address3],
+                s.[postal_code] AS [Dept Postal Code],
+                {OptionalReportColumn(fineColumns, "f", "Dept_person_name", "Name of Responsable Person at Dept")},
+                {OptionalReportColumn(fineColumns, "f", "Dept_person_id", "ID of Responsable Person at Dept")},
+                f.[Offence_name] AS [Name of Offender],
+                f.[Fine_pay_date] AS [Date Fine Paid],
+                f.[Withdraw_date] AS [Date Withdrawn],
+                {OptionalReportColumn(fineColumns, "f", "Traffic_dept_code", "Traffic Dept Code", "smallint")},
+                td.[Traf_res_person] AS [Traffic Dept Responsible Person],
+                td.[Traf_post_address1] AS [Traffic Dept Postal Address1],
+                td.[Traf_post_address2] AS [Traffic Dept Postal Address2],
+                td.[Traf_post_code] AS [Traffic Dept Postal Code],
+                td.[Traf_telephone] AS [Traffic Dept Telephone],
+                td.[Traf_fax] AS [Traffic Dept Fax],
+                {OptionalReportColumn(trafficDeptColumns, "td", "Traf_cell", "Traffic Dept Cell")},
+                td.[Traf_email] AS [Traffic Dept Email]
+            FROM [dbo].[Fines] f
+            INNER JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = f.[vmf_code]
+            INNER JOIN [dbo].[site] s ON s.[Site_code] = f.[Site_code]
+            LEFT JOIN [dbo].[type] vt ON vt.[type_code] = v.[type_code]
+            LEFT JOIN [dbo].[Traffic_Dept] td ON {(fineColumns.Contains("Traffic_dept_code") ? "f.[Traffic_dept_code] = td.[Traffic_dept_code]" : "1 = 0")}
+            """;
+    }
+
+    private static string BuildFineReissueSelect(IReadOnlySet<string> fineColumns)
+    {
+        return $"""
+            SELECT
+                f.[Fine_code] AS [Fine Code],
+                f.[Offence_date] AS [Offence Date],
+                {OptionalReportColumn(fineColumns, "f", "Document_type", "Doc Type")},
+                f.[Receive_gg_date] AS [Date at GMT],
+                v.[registration_number] AS [GP Number],
+                v.[fleet_number] AS [GG Number],
+                vt.[type_description] AS [Hire Type]
+            FROM [dbo].[Fines] f
+            INNER JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = f.[vmf_code]
+            LEFT JOIN [dbo].[type] vt ON vt.[type_code] = v.[type_code]
+            """;
+    }
+
+    private static string BuildFineSummarySelect()
+    {
+        return """
+            SELECT
+                v.[registration_number] AS [Prov Reg Number],
+                v.[fleet_number] AS [GG Number],
+                f.[Offence_date] AS [Offence Date],
+                f.[Offence_reference] AS [Reference],
+                f.[Offence_issuer] AS [Issuer],
+                f.[Fine_amount] AS [Fine Amount],
+                s.[Department_number] AS [Dept / Site Number],
+                s.[description] AS [Dept / Site]
+            FROM [dbo].[Fines] f
+            INNER JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = f.[vmf_code]
+            INNER JOIN [dbo].[site] s ON s.[Site_code] = f.[Site_code]
+            """;
+    }
+
+    private static string BuildTrafficDeptSelect(IReadOnlySet<string> trafficDeptColumns)
+    {
+        return $"""
+            SELECT
+                [Traffic_dept_code] AS [Traffic Dept Code],
+                [Traf_name] AS [Traffic Dept Name],
+                [Traf_res_person] AS [Responsable Person],
+                [Traf_post_address1] AS [Postal Address1],
+                [Traf_post_address2] AS [Postal Address2],
+                [Traf_post_code] AS [Postal Code],
+                [Traf_telephone] AS [Telephone],
+                [Traf_fax] AS [Fax],
+                {OptionalReportColumn(trafficDeptColumns, "", "Traf_cell", "Cell")},
+                [Traf_email] AS [Email]
+            FROM [dbo].[Traffic_Dept]
+            """;
+    }
+
+    private static List<string> BuildFineLivePredicates(IReadOnlySet<string> fineColumns)
+        => new List<string>
+        {
+            fineColumns.Contains("is_deleted") ? "f.[is_deleted] = 0" : "1 = 1"
+        };
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The SQL is assembled only from fixed report templates and allowlisted runtime column projections; all report values are parameters.")]
+    private async Task<LegacyReportResultDto> ExecuteFineReportQueryAsync(
+        string title,
+        string legacyTarget,
+        string sql,
+        IReadOnlyList<ReportParameter> parameters,
+        CancellationToken cancellationToken)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = sql;
+            foreach (var parameter in parameters)
+            {
+                AddReportParameter(command, parameter.Name, parameter.Type, parameter.Value);
+            }
+
+            var columns = new List<LegacyReportColumnDto>();
+            var rows = new List<Dictionary<string, string?>>(capacity: 128);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                var header = reader.GetName(index);
+                columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
+            }
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                foreach (var column in columns)
+                {
+                    row[column.Key] = FormatValue(reader[column.Key]);
+                }
+                rows.Add(row);
+            }
+
+            return new LegacyReportResultDto
+            {
+                ReportKey = "fines",
+                Title = title,
+                LegacyTarget = legacyTarget,
+                IsApproximate = false,
+                Columns = columns,
+                Rows = rows,
+                TotalCount = rows.Count
+            };
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<HashSet<string>> GetReportTableColumnsAsync(string tableName, CancellationToken cancellationToken)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [COLUMN_NAME]
+                FROM [INFORMATION_SCHEMA].[COLUMNS]
+                WHERE [TABLE_SCHEMA] = @schema
+                  AND [TABLE_NAME] = @table
+                """;
+            AddReportParameter(command, "@schema", DbType.String, "dbo");
+            AddReportParameter(command, "@table", DbType.String, tableName);
+
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                columns.Add(reader.GetString(0));
+            }
+
+            return columns;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static string OptionalReportColumn(
+        IReadOnlySet<string> availableColumns,
+        string tableAlias,
+        string column,
+        string alias,
+        string sqlType = "nvarchar(255)")
+    {
+        var qualifiedColumn = string.IsNullOrWhiteSpace(tableAlias)
+            ? $"[{column}]"
+            : $"{tableAlias}.[{column}]";
+        return availableColumns.Contains(column)
+            ? $"{qualifiedColumn} AS [{alias}]"
+            : $"CAST(NULL AS {sqlType}) AS [{alias}]";
+    }
+
+    private static void AddReportParameter(DbCommand command, string name, DbType type, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
     }
 
     private Task<LegacyReportResultDto> BuildLossesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
@@ -3170,6 +3580,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         Func<IDictionary<string, string?>, IReadOnlyList<LegacyStoredProcedureParameter>>? BuildStoredProcedureParameters = null);
 
     private sealed record LegacyStoredProcedureParameter(string Name, object? Value, DbType DbType);
+    private sealed record ReportParameter(string Name, DbType Type, object? Value);
     private sealed record LegacyProjectionColumn(string Header, Func<object, object?> Selector);
     private sealed record CaptureActivityRow(string Module, string RecordId, string? GgNumber, string? GpNumber, short? SiteCode, int? CapturedByUserCode, DateTime DateCaptured, string? Description);
     private sealed record VehicleLogCompositeRow(

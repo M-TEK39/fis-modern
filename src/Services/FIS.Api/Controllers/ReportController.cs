@@ -5,6 +5,7 @@ using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using System.Text.Json;
 
 namespace FIS.Api.Controllers;
@@ -50,6 +51,11 @@ public class ReportController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<LegacyReportResultDto>> GetDynamicLegacyReport(string reportKey, CancellationToken cancellationToken)
     {
+        if (IsFineReportKey(reportKey) && !HasReportsRole())
+        {
+            return Forbid();
+        }
+
         try
         {
             var filters = Request.Query
@@ -1946,6 +1952,32 @@ public class ReportController : BaseApiController
     }
 
     #endregion
+
+    private static bool IsFineReportKey(string reportKey)
+        => reportKey.Equals("fines", StringComparison.OrdinalIgnoreCase)
+            || reportKey.StartsWith("fines-", StringComparison.OrdinalIgnoreCase)
+            || reportKey.Equals("appear-date", StringComparison.OrdinalIgnoreCase)
+            || reportKey.Equals("reissue-submission", StringComparison.OrdinalIgnoreCase)
+            || reportKey.Equals("traffic-dept-detail", StringComparison.OrdinalIgnoreCase)
+            || reportKey.Equals("dept-site-period", StringComparison.OrdinalIgnoreCase);
+
+    private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        var roleClaims = User.Claims
+            .Where(claim => claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+
+        return roleClaims.Any(role => expectedRoles.Any(expected => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)));
+    }
 
     private static string? GetParameterString(Dictionary<string, object> parameters, string key)
 {

@@ -150,8 +150,13 @@ public class TrafficDeptRepository : ITrafficDeptRepository
         return dept;
     }
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The DELETE or soft-delete statement is selected from fixed compatibility branches and the department code is parameterized.")]
     public async Task DeleteAsync(short deptCode, int currentUserId)
     {
+        var availableColumns = await GetAvailableColumnsAsync();
         var connection = _context.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)
@@ -163,7 +168,29 @@ public class TrafficDeptRepository : ITrafficDeptRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            command.CommandText = "DELETE FROM [dbo].[Traffic_Dept] WHERE [Traffic_dept_code] = @deptCode";
+            if (availableColumns.Contains("is_deleted"))
+            {
+                var assignments = new List<string> { "[is_deleted] = @isDeleted" };
+                AddParameter(command, "@isDeleted", DbType.Boolean, true);
+                if (availableColumns.Contains("date_updated"))
+                {
+                    assignments.Add("[date_updated] = @dateUpdated");
+                    AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+                }
+
+                if (availableColumns.Contains("modified_by_user_code"))
+                {
+                    assignments.Add("[modified_by_user_code] = @modifiedByUser");
+                    AddParameter(command, "@modifiedByUser", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                }
+
+                command.CommandText = $"UPDATE [dbo].[Traffic_Dept] SET {string.Join(", ", assignments)} WHERE [Traffic_dept_code] = @deptCode";
+            }
+            else
+            {
+                command.CommandText = "DELETE FROM [dbo].[Traffic_Dept] WHERE [Traffic_dept_code] = @deptCode";
+            }
+
             AddParameter(command, "@deptCode", DbType.Int16, deptCode);
             await command.ExecuteNonQueryAsync();
         }
