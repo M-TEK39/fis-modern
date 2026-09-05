@@ -238,17 +238,28 @@ public sealed class AccidentRepository : IAccidentRepository
             "@createdByUserCode",
             DbType.Int32,
             currentUserId > 0 ? currentUserId : null);
+        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
         AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
 
         accident.accident_code = await ExecuteInsertAsync(values);
         accident.date_created = now;
+        accident.date_updated = now;
         accident.created_by_user_code = currentUserId > 0 ? currentUserId : null;
         accident.modified_by_user_code = null;
         accident.is_deleted = false;
         return accident;
     }
 
-    public async Task<Accident> UpdateAsync(Accident accident, int currentUserId)
+    public Task<Accident> UpdateAsync(Accident accident, int currentUserId)
+        => UpdateCoreAsync(accident, currentUserId, preserveReferences: true);
+
+    public Task<Accident> UpdateHqAsync(Accident accident, int currentUserId)
+        => UpdateCoreAsync(accident, currentUserId, preserveReferences: false);
+
+    private async Task<Accident> UpdateCoreAsync(
+        Accident accident,
+        int currentUserId,
+        bool preserveReferences)
     {
         ArgumentNullException.ThrowIfNull(accident);
 
@@ -258,12 +269,15 @@ public sealed class AccidentRepository : IAccidentRepository
         var availableColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
         var now = DateTime.UtcNow;
 
-        // These references are assigned by the legacy workflow and are not
-        // editable on the original garage screen.
         accident.vmf_code = existing.vmf_code;
-        accident.gg_reference = existing.gg_reference;
-        accident.hq_reference = existing.hq_reference;
-        accident.sa_reference = existing.sa_reference;
+        if (preserveReferences)
+        {
+            // These references are assigned by the legacy workflow and are
+            // not editable on the original garage screen.
+            accident.gg_reference = existing.gg_reference;
+            accident.hq_reference = existing.hq_reference;
+            accident.sa_reference = existing.sa_reference;
+        }
         accident.date_created = existing.date_created;
         accident.created_by_user_code = existing.created_by_user_code;
         accident.is_deleted = existing.is_deleted;

@@ -380,6 +380,22 @@ ORDER BY vm.fleet_number";
         }
     }
 
+    [HttpPut("hq/{id}")]
+    public async Task<ActionResult<Accident>> UpdateHq(int id, [FromBody] Accident item)
+    {
+        try
+        {
+            if (id != item.accident_code)
+                return BadRequest();
+            return Ok(await _repository.UpdateHqAsync(item, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
+    }
+
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {

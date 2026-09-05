@@ -12,6 +12,7 @@ public interface IAccidentRepository
     Task<AccidentStatistics> GetStatisticsAsync(DateTime? fromDate = null, DateTime? toDate = null);
     Task<Accident> CreateAsync(Accident accident, int currentUserId);
     Task<Accident> UpdateAsync(Accident accident, int currentUserId);
+    Task<Accident> UpdateHqAsync(Accident accident, int currentUserId);
     Task DeleteAsync(int accidentCode, int currentUserId);
 }
 
