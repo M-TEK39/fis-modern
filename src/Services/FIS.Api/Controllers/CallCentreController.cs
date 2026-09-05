@@ -1,3 +1,5 @@
+using System.Data;
+using System.Data.Common;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Api.Services;
@@ -789,6 +791,150 @@ public class CallCentreController : BaseApiController
     }
 
     /// <summary>
+    /// Get the legacy per-access audit rows for one Call_centre record.
+    /// Call_Centre_Counter is present in the original database but its audit
+    /// columns are only present in the expanded schema, so the projection is
+    /// resolved at runtime in the same way as the Call_centre repository.
+    /// </summary>
+    [HttpGet("reports/data-access/{callCentreCode:int}")]
+    public async Task<ActionResult<CallCentreDataAccessReportDto>> GetReportDataAccessDetail(int callCentreCode)
+    {
+        if (callCentreCode <= 0 || callCentreCode > short.MaxValue)
+        {
+            return BadRequest(new { error = "A valid Call Centre reference is required." });
+        }
+
+        try
+        {
+            var call = await _repository.GetByIdAsync((short)callCentreCode);
+            if (call == null)
+            {
+                return NotFound(new { error = "Call centre record not found." });
+            }
+
+            var access = await ReadLegacyAccessRowsAsync((short)callCentreCode);
+            return Ok(new CallCentreDataAccessReportDto
+            {
+                CallCentreCode = (short)callCentreCode,
+                AccessTableAvailable = access.Available,
+                Entries = access.Entries
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading data access detail for call centre record {CallCentreCode}", callCentreCode);
+            return StatusCode(500, new { error = "Failed to load data access detail." });
+        }
+    }
+
+    private async Task<(bool Available, List<CallCentreDataAccessEntryDto> Entries)> ReadLegacyAccessRowsAsync(short callCentreCode)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(HttpContext.RequestAborted);
+        }
+
+        try
+        {
+            await using var columnsCommand = connection.CreateCommand();
+            columnsCommand.CommandText = """
+                SELECT [COLUMN_NAME]
+                FROM [INFORMATION_SCHEMA].[COLUMNS]
+                WHERE [TABLE_SCHEMA] = @schema
+                  AND [TABLE_NAME] = @table
+                """;
+            AddDbParameter(columnsCommand, "@schema", DbType.String, "dbo");
+            AddDbParameter(columnsCommand, "@table", DbType.String, "Call_Centre_Counter");
+
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using (var reader = await columnsCommand.ExecuteReaderAsync(HttpContext.RequestAborted))
+            {
+                while (await reader.ReadAsync(HttpContext.RequestAborted))
+                {
+                    columns.Add(reader.GetString(0));
+                }
+            }
+
+            if (!columns.Contains("Call_Center_code"))
+            {
+                return (false, new List<CallCentreDataAccessEntryDto>());
+            }
+
+            var counterProjection = columns.Contains("CounterCC")
+                ? "[CounterCC] AS [CounterCC]"
+                : "CAST(NULL AS smallint) AS [CounterCC]";
+            var dataCaptureProjection = columns.Contains("DataCapture_id")
+                ? "[DataCapture_id] AS [DataCapture_id]"
+                : "CAST(NULL AS smallint) AS [DataCapture_id]";
+            var dateProjection = columns.Contains("DataCapture_date")
+                ? "[DataCapture_date] AS [DataCapture_date]"
+                : "CAST(NULL AS datetime2) AS [DataCapture_date]";
+            var timeProjection = columns.Contains("DataCapture_time")
+                ? "[DataCapture_time] AS [DataCapture_time]"
+                : "CAST(NULL AS datetime2) AS [DataCapture_time]";
+            var orderBy = columns.Contains("Call_Centre_Counter_code")
+                ? "ORDER BY [Call_Centre_Counter_code]"
+                : columns.Contains("DataCapture_date")
+                    ? $"ORDER BY [DataCapture_date]{(columns.Contains("DataCapture_time") ? ", [DataCapture_time]" : string.Empty)}"
+                    : "ORDER BY (SELECT 1)";
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT {counterProjection}, {dataCaptureProjection}, {dateProjection}, {timeProjection}
+                FROM [dbo].[Call_Centre_Counter]
+                WHERE [Call_Center_code] = @callCentreCode
+                {orderBy}
+                """;
+            AddDbParameter(command, "@callCentreCode", DbType.Int16, callCentreCode);
+
+            var entries = new List<CallCentreDataAccessEntryDto>();
+            await using var dataReader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
+            while (await dataReader.ReadAsync(HttpContext.RequestAborted))
+            {
+                entries.Add(new CallCentreDataAccessEntryDto
+                {
+                    Counter = ReadNullableInt16(dataReader, "CounterCC"),
+                    DataCaptureId = ReadNullableInt16(dataReader, "DataCapture_id"),
+                    DataCaptureDate = ReadNullableDateTime(dataReader, "DataCapture_date"),
+                    DataCaptureTime = ReadNullableDateTime(dataReader, "DataCapture_time")
+                });
+            }
+
+            return (true, entries);
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static void AddDbParameter(DbCommand command, string name, DbType type, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static short? ReadNullableInt16(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToInt16(reader.GetValue(ordinal));
+    }
+
+    private static DateTime? ReadNullableDateTime(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
+    }
+
+    /// <summary>
     /// Generate open calls report
     /// </summary>
     [HttpGet("reports/open-calls")]
@@ -924,6 +1070,21 @@ public class CallCentreReportDto
     public DateTime GeneratedDate { get; set; }
     public DateTime? StartDate { get; set; }
     public DateTime? EndDate { get; set; }
+}
+
+public class CallCentreDataAccessReportDto
+{
+    public short CallCentreCode { get; set; }
+    public bool AccessTableAvailable { get; set; }
+    public List<CallCentreDataAccessEntryDto> Entries { get; set; } = new();
+}
+
+public class CallCentreDataAccessEntryDto
+{
+    public short? Counter { get; set; }
+    public short? DataCaptureId { get; set; }
+    public DateTime? DataCaptureDate { get; set; }
+    public DateTime? DataCaptureTime { get; set; }
 }
 
 public class CreateCallCentreDto : CallCentreFieldsDto

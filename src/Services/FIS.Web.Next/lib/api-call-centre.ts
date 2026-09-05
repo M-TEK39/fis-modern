@@ -60,6 +60,13 @@ export type CallCentreIncidentRecord = {
   dateUpdated: string | null;
 };
 
+export type CallCentreDataAccessEntry = {
+  counter: number | null;
+  dataCaptureId: number | null;
+  dataCaptureDate: string | null;
+  dataCaptureTime: string | null;
+};
+
 export type TowTruckOption = {
   code: number;
   area: string | null;
@@ -455,6 +462,16 @@ function mapCallCentreIncident(value: unknown): CallCentreIncidentRecord | null 
   };
 }
 
+function mapDataAccessEntry(value: unknown): CallCentreDataAccessEntry | null {
+  if (!isRecord(value)) return null;
+  return {
+    counter: asNumber(getValue(value, "Counter", "counter")),
+    dataCaptureId: asNumber(getValue(value, "DataCaptureId", "dataCaptureId")),
+    dataCaptureDate: asString(getValue(value, "DataCaptureDate", "dataCaptureDate")),
+    dataCaptureTime: asString(getValue(value, "DataCaptureTime", "dataCaptureTime")),
+  };
+}
+
 export async function searchCallCentreVehicles(searchTerm: string) {
   const response = await requestApi(`api/VehicleLookup?keyword=${encodeURIComponent(searchTerm)}&limit=20`);
   return getCollection(await readJson(response))
@@ -483,6 +500,13 @@ export async function getCallCentreIncident(callCentreCode: number) {
   return incident;
 }
 
+export async function getCallCentreIncidents() {
+  const response = await requestApi("api/CallCentre");
+  return getCollection(await readJson(response))
+    .map(mapCallCentreIncident)
+    .filter((incident): incident is CallCentreIncidentRecord => incident !== null);
+}
+
 export async function updateCallCentreIncident(callCentreCode: number, request: UpdateCallCentreRequest) {
   const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}`, {
     method: "PUT",
@@ -495,6 +519,22 @@ export async function updateCallCentreIncident(callCentreCode: number, request: 
   }
 
   return updated;
+}
+
+export async function getCallCentreDataAccess(callCentreCode: number) {
+  const response = await requestApi(`api/CallCentre/reports/data-access/${encodeURIComponent(callCentreCode)}`);
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid data access report.");
+  }
+
+  const entries = getCollection(getValue(payload, "Entries", "entries"))
+    .map(mapDataAccessEntry)
+    .filter((entry): entry is CallCentreDataAccessEntry => entry !== null);
+  return {
+    accessTableAvailable: Boolean(getValue(payload, "AccessTableAvailable", "accessTableAvailable")),
+    entries,
+  };
 }
 
 export async function getCallCentreSites() {
