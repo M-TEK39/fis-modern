@@ -444,11 +444,6 @@ builder.Services.AddHttpClient<ThirdPartyApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<BookingApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<LeaseContractTermsApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
