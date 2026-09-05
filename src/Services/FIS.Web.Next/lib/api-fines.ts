@@ -89,6 +89,27 @@ export type FineSite = {
   description: string | null;
 };
 
+export type FineReportMode =
+  | "one-vehicle"
+  | "appear-date"
+  | "fine-detail"
+  | "reissue-submission"
+  | "traffic-dept-detail"
+  | "dept-site-period"
+  | "vehicle-period"
+  | "metro-period"
+  | "all";
+
+export type FineReport = {
+  title: string;
+  legacyTarget: string | null;
+  isApproximate: boolean;
+  approximationReason: string | null;
+  columns: Array<{ key: string; header: string }>;
+  rows: Array<Record<string, string | null>>;
+  totalCount: number;
+};
+
 export type FineApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
 export class FineApiError extends Error {
@@ -300,6 +321,52 @@ function mapTrafficDept(value: unknown): TrafficDeptRecord | null {
   };
 }
 
+function mapFineReport(value: unknown): FineReport | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const rawColumns = getValue(value, "Columns", "columns");
+  const rawRows = getValue(value, "Rows", "rows");
+  if (!Array.isArray(rawColumns) || !Array.isArray(rawRows)) {
+    return null;
+  }
+
+  const columns = rawColumns
+    .filter(isRecord)
+    .map((column) => {
+      const key = asString(getValue(column, "Key", "key"));
+      const header = asString(getValue(column, "Header", "header"));
+      return key && header ? { key, header } : null;
+    })
+    .filter((column): column is { key: string; header: string } => column !== null);
+
+  const rows = rawRows
+    .filter(isRecord)
+    .map((row) => {
+      const mapped: Record<string, string | null> = {};
+      for (const [key, value] of Object.entries(row)) {
+        mapped[key] = asString(value);
+      }
+      return mapped;
+    });
+
+  const title = asString(getValue(value, "Title", "title"));
+  if (!title || columns.length === 0) {
+    return null;
+  }
+
+  return {
+    title,
+    legacyTarget: asString(getValue(value, "LegacyTarget", "legacyTarget")),
+    isApproximate: getValue(value, "IsApproximate", "isApproximate") === true,
+    approximationReason: asString(getValue(value, "ApproximationReason", "approximationReason")),
+    columns,
+    rows,
+    totalCount: asNumber(getValue(value, "TotalCount", "totalCount")) ?? rows.length,
+  };
+}
+
 function mapSite(value: unknown): FineSite | null {
   if (!isRecord(value)) {
     return null;
@@ -393,6 +460,26 @@ export async function getTrafficDepts() {
     .map(mapTrafficDept)
     .filter((dept): dept is TrafficDeptRecord => dept !== null)
     .toSorted((left, right) => (left.name ?? "").localeCompare(right.name ?? ""));
+}
+
+export async function getFineReport(
+  mode: FineReportMode,
+  filters: Record<string, string | number | undefined> = {},
+) {
+  const params = new URLSearchParams({ mode });
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && String(value).trim() !== "") {
+      params.set(key, String(value));
+    }
+  }
+
+  const response = await requestApi(`api/report/dynamic/fines?${params.toString()}`);
+  const report = mapFineReport(await readJson(response));
+  if (!report) {
+    throw new FineApiError("invalid-response", "The FIS API returned an invalid fines report.");
+  }
+
+  return report;
 }
 
 export async function getTrafficDept(code: number) {
