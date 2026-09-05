@@ -3,6 +3,7 @@ using FIS.Core.Domain.Entities;
 using FIS.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -28,6 +29,7 @@ public class TowingController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Towing>>> GetAll()
     {
+        if (!HasTowingRole()) return Forbid();
         try { return Ok(await _repository.GetAllAsync()); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
@@ -35,6 +37,7 @@ public class TowingController : BaseApiController
     [HttpGet("{id}")]
     public async Task<ActionResult<Towing>> GetById(short id)
     {
+        if (!HasTowingRole()) return Forbid();
         try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
@@ -42,6 +45,7 @@ public class TowingController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<Towing>> Create([FromBody] Towing item)
     {
+        if (!HasTowingRole()) return Forbid();
         try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.Towing_code }, created); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
@@ -49,6 +53,7 @@ public class TowingController : BaseApiController
     [HttpPut("{id}")]
     public async Task<ActionResult<Towing>> Update(short id, [FromBody] Towing item)
     {
+        if (!HasTowingRole()) return Forbid();
         try { if (id != item.Towing_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
@@ -56,6 +61,7 @@ public class TowingController : BaseApiController
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
+        if (!HasTowingRole()) return Forbid();
         try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
@@ -79,6 +85,7 @@ public class TowingController : BaseApiController
     [HttpGet("tow-trucks/{id}")]
     public async Task<ActionResult<TowTruckOption>> GetTowTruck(short id)
     {
+        if (!HasTowingRole()) return Forbid();
         try
         {
             var towTruck = await _towTruckService.GetByIdAsync(id, HttpContext.RequestAborted);
@@ -94,6 +101,7 @@ public class TowingController : BaseApiController
     [HttpPost("tow-trucks")]
     public async Task<ActionResult<TowTruckOption>> CreateTowTruck([FromBody] TowTruckRequestDto request)
     {
+        if (!HasTowingRole()) return Forbid();
         try
         {
             var towTruck = await _towTruckService.CreateAsync(
@@ -112,6 +120,7 @@ public class TowingController : BaseApiController
     [HttpPut("tow-trucks/{id}")]
     public async Task<ActionResult<TowTruckOption>> UpdateTowTruck(short id, [FromBody] TowTruckRequestDto request)
     {
+        if (!HasTowingRole()) return Forbid();
         try
         {
             var towTruck = await _towTruckService.UpdateAsync(
@@ -131,6 +140,7 @@ public class TowingController : BaseApiController
     [HttpDelete("tow-trucks/{id}")]
     public async Task<ActionResult> DeleteTowTruck(short id)
     {
+        if (!HasTowingRole()) return Forbid();
         try
         {
             return await _towTruckService.DeleteAsync(id, GetCurrentUserId(), HttpContext.RequestAborted)
@@ -145,11 +155,15 @@ public class TowingController : BaseApiController
     }
 
     [HttpGet("menu")]
-    public ActionResult<TowingMenuDto> GetMenu() => Ok(new TowingMenuDto { Options = new List<string> { "Request", "Towtruck Data", "Reports", "Help" } });
+    public ActionResult<TowingMenuDto> GetMenu()
+        => HasTowingRole()
+            ? Ok(new TowingMenuDto { Options = new List<string> { "Request", "Towtruck Data", "Reports", "Help" } })
+            : Forbid();
 
     [HttpPost("request")]
     public async Task<ActionResult<TowingRequestResultDto>> CreateRequest([FromBody] TowingRequestDto request)
     {
+        if (!HasTowingRole()) return Forbid();
         try
         {
             var item = new Towing
@@ -238,11 +252,15 @@ public class TowingController : BaseApiController
     #region Reports
 
     [HttpGet("reports/menu")]
-    public ActionResult<TowingReportMenuDto> GetReportsMenu() => Ok(new TowingReportMenuDto { Reports = new List<string> { "Request Report", "All Towtrucks", "Firm/Date Report" } });
+    public ActionResult<TowingReportMenuDto> GetReportsMenu()
+        => HasReportsRole()
+            ? Ok(new TowingReportMenuDto { Reports = new List<string> { "Request Report", "All Towtrucks", "Firm/Date Report" } })
+            : Forbid();
 
     [HttpPost("reports/request")]
     public async Task<ActionResult<TowingReportDto>> GetReportRequest([FromBody] TowingRequestReportDto request)
     {
+        if (!HasReportsRole()) return Forbid();
         var data = (await GetLiveItemsAsync())
             .Where(item => IsWithinInclusiveDateRange(item.Tow_request_date, request.StartDate, request.EndDate))
             .OrderByDescending(item => item.Tow_request_date)
@@ -255,6 +273,7 @@ public class TowingController : BaseApiController
     [HttpGet("reports/towtruck/all")]
     public async Task<ActionResult<TowingReportDto>> GetReportAllTowtrucks()
     {
+        if (!HasReportsRole()) return Forbid();
         var data = (await GetLiveItemsAsync())
             .Where(item => !string.IsNullOrWhiteSpace(item.Tow_location_start) ||
                            !string.IsNullOrWhiteSpace(item.Keys) ||
@@ -269,6 +288,7 @@ public class TowingController : BaseApiController
     [HttpPost("reports/firm-date")]
     public async Task<ActionResult<TowingReportDto>> GetReportFirmDate([FromBody] TowingFirmDateReportDto request)
     {
+        if (!HasReportsRole()) return Forbid();
         var firm = request.FirmName?.Trim();
         var query = (await GetLiveItemsAsync())
             .Where(item => IsWithinInclusiveDateRange(item.Tow_request_date, request.StartDate, request.EndDate));
@@ -296,6 +316,26 @@ public class TowingController : BaseApiController
         => (await _repository.GetAllAsync())
             .Where(item => !item.is_deleted)
             .ToList();
+
+    private bool HasTowingRole() => HasAnyRole("Towing");
+
+    private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        var roleClaims = User.Claims
+            .Where(claim => claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+
+        return roleClaims.Any(role => expectedRoles.Any(expected => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)));
+    }
 
     private static bool IsWithinInclusiveDateRange(DateTime? candidate, DateTime startDate, DateTime endDate)
     {
