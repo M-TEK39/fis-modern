@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -254,10 +255,12 @@ async function HomeContent({ searchParams, routePath }: HomePageProps) {
       </p>
 
       <p className="acrobat-link">
-        <a href="http://www.adobe.com/products/acrobat/readstep2.html">
-          <img
+        <a href="https://www.adobe.com/products/acrobat/readstep2.html">
+          <Image
             alt="Get Adobe Acrobat Reader"
             src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS_DYgKcoBKX3I4tNr5qigAUGIx5LCEipaAZg&s"
+            width={88}
+            height={31}
           />
         </a>
       </p>
