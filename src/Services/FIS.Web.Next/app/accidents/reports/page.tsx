@@ -13,7 +13,7 @@ const reportEntries = [
   { label: "1) One Vehicle Accidents", target: "Accident/RPT_one_num_main_accident.htm", href: "/accidents/reports/one-vehicle", available: true },
   { label: "2) Private Vehicle Accidents", target: "Accident/RPT_one_prnum_main_accident.htm", href: "/accidents/reports/private-vehicle", available: true },
   { label: "3) Private Vehicle Accidents (Capture under Description of Accident)", target: "Accident/RPT_one_prnumc_main_accident.htm", href: "/accidents/reports/private-vehicle/description", available: true },
-  { label: "4) All Accidents - ALL DETAIL", target: "Accident/RPT_all_main_accident.htm", available: false },
+  { label: "4) All Accidents - ALL DETAIL", target: "Accident/RPT_all_main_accident.htm", href: "/accidents/reports/all", available: true },
   { label: "5) All Accidents - GARAGE DETAIL", target: "Accident/RPT_allgar_main_accident.htm", available: false },
   { label: "6) Report on New Accident's", target: "Accident/RPT_flagnew_main_accident.htm", href: "/accidents/reports/new-accidents", available: true },
   { label: "7) Report for a Department/Site, for a Period", target: "Accident/RPT_dept_period_main_accident.aspx", available: false },
@@ -52,7 +52,7 @@ async function AccidentReportsContent() {
     <>
       <div className="notice notice-warning" role="status">
         <span aria-hidden="true">!</span>
-        <span>The one-vehicle, private-vehicle, new-accident, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
+        <span>The one-vehicle, all-detail, private-vehicle, new-accident, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
       </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (

@@ -226,6 +226,8 @@ export type AccidentPrivateVehicleReportMode = "third-party" | "description";
 
 export type AccidentNewAccidentReportMode = "all" | "call" | "garage" | "confirm";
 
+export type AccidentAllReportDateMode = "2002-current" | "1999-2001" | "before-1999";
+
 export type AccidentPeriodReportStatus = "open" | "closed";
 
 export type AccidentVehicleReportRow = {
@@ -695,6 +697,11 @@ export async function getAccidentPrivateVehicleReport(
 export async function getAccidentNewAccidentsReport(mode: AccidentNewAccidentReportMode) {
   const query = new URLSearchParams({ mode });
   return mapPresent(getCollection(await requestApi(`api/accidents/reports/new-accidents?${query.toString()}`)), mapAccidentVehicleReportRow);
+}
+
+export async function getAccidentAllReport(mode: AccidentAllReportDateMode) {
+  const query = new URLSearchParams({ mode });
+  return mapPresent(getCollection(await requestApi(`api/accidents/reports/all?${query.toString()}`)), mapAccidentVehicleReportRow);
 }
 
 function mapAccidentPeriodReportRow(value: unknown): AccidentPeriodReportRow | null {
