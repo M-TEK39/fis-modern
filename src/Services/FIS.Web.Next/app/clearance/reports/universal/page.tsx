@@ -63,7 +63,7 @@ function ReportResults({ rows }: Readonly<{ rows: ClearanceReportRow[] }>) {
           <table className="vehicle-table">
             <caption className="sr-only">Universal clearance report</caption>
             <thead><tr><th scope="col">Fleet Number</th><th scope="col">Clearance Comment</th><th scope="col">Merchant Name</th><th scope="col">Clearance Number</th><th scope="col">Clearance Date</th></tr></thead>
-            <tbody>{rows.map((row, index) => <tr key={`${row.fleetNumber ?? "row"}-${row.clearanceNumber ?? "number"}-${index}`}><td>{valueOrDash(row.fleetNumber)}</td><td>{valueOrDash(row.clearanceComment)}</td><td>{valueOrDash(row.merchantName)}</td><td>{valueOrDash(row.clearanceNumber)}</td><td>{formatDate(row.clearanceDate)}</td></tr>)}</tbody>
+            <tbody>{rows.map((row) => <tr key={row.clearanceCode ?? `${row.fleetNumber ?? "row"}-${row.clearanceNumber ?? "number"}-${row.clearanceDate ?? "date"}`}><td>{valueOrDash(row.fleetNumber)}</td><td>{valueOrDash(row.clearanceComment)}</td><td>{valueOrDash(row.merchantName)}</td><td>{valueOrDash(row.clearanceNumber)}</td><td>{formatDate(row.clearanceDate)}</td></tr>)}</tbody>
           </table>
         </div>
       )}

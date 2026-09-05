@@ -9,6 +9,7 @@ import { getSession } from "@/lib/session";
 const ACCIDENTS_ROLE = "Accidents";
 
 type HelpEntry = {
+  id?: string;
   term: string;
   description: string;
 };
@@ -22,7 +23,7 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
     term: "GG/ GP Number",
     description: "Registration number of the vehicle that has been involved in the accident.",
   },
-  { term: "Submit", description: "Submits the information to the database." },
+  { id: "submit-maintenance", term: "Submit", description: "Submits the information to the database." },
   { term: "MOD", description: "Allows a user to edit or modify previous entries in the system." },
   {
     term: "Add",
@@ -90,7 +91,7 @@ const HELP_ENTRIES: readonly HelpEntry[] = [
     description: "Indicates whether all required documentation has been received.",
   },
   { term: "Notes", description: "Any additional information relevant to this matter." },
-  { term: "Submit", description: "Submits the data to the database." },
+  { id: "submit-data", term: "Submit", description: "Submits the data to the database." },
 ];
 
 function hasRole(roles: readonly string[], role: string) {
@@ -192,8 +193,8 @@ async function AccidentHelpContent() {
               </tr>
             </thead>
             <tbody>
-              {HELP_ENTRIES.map((entry, index) => (
-                <tr key={`${entry.term}-${index}`}>
+              {HELP_ENTRIES.map((entry) => (
+                <tr key={entry.id ?? entry.term}>
                   <th scope="row">{entry.term}</th>
                   <td>{entry.description}</td>
                 </tr>

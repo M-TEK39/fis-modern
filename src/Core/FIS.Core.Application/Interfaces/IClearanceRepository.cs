@@ -33,6 +33,7 @@ namespace FIS.Core.Application.Interfaces
 
     public class ClearanceReportRow
     {
+        public int? clearance_code { get; set; }
         public string? fleet_number { get; set; }
         public string? clearance_comment { get; set; }
         public string? merchant_name { get; set; }

@@ -125,6 +125,7 @@ export type UpdateCallCentreEditDetailsRequest = {
 };
 
 export type CallCentreDataAccessEntry = {
+  counterCode: number | null;
   counter: number | null;
   dataCaptureId: number | null;
   dataCaptureDate: string | null;
@@ -529,6 +530,7 @@ function mapCallCentreIncident(value: unknown): CallCentreIncidentRecord | null 
 function mapDataAccessEntry(value: unknown): CallCentreDataAccessEntry | null {
   if (!isRecord(value)) return null;
   return {
+    counterCode: asNumber(getValue(value, "CallCentreCounterCode", "callCentreCounterCode")),
     counter: asNumber(getValue(value, "Counter", "counter")),
     dataCaptureId: asNumber(getValue(value, "DataCaptureId", "dataCaptureId")),
     dataCaptureDate: asString(getValue(value, "DataCaptureDate", "dataCaptureDate")),

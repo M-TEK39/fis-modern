@@ -47,6 +47,10 @@ function valueOrDash(value: string | number | null | undefined) {
   return value === null || value === undefined || String(value).trim() === "" ? "-" : String(value);
 }
 
+function reportRowKey(row: Record<string, string | null>, fallback: string) {
+  return row.__rowKey ?? row["Fine Code"] ?? row["Offence Date"] ?? fallback;
+}
+
 function normalizeMode(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? "";
 }
@@ -159,10 +163,10 @@ function ReportResults({ report, detail, previewPath }: Readonly<{ report: FineR
   if (report.rows.length === 0) return <section className="vehicle-empty-state" aria-live="polite"><p className="eyebrow">No records found</p><h2>No fines matched the selected filters.</h2><p className="muted-copy">Try a different vehicle, date range, department, or issuer.</p></section>;
 
   if (detail) {
-    return <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-detail-results-title"><div className="vehicle-form-section-header"><div><p className="eyebrow">Report results</p><h2 id="fine-detail-results-title">{report.title}</h2></div></div>{report.rows.map((row, index) => <article className="vehicle-status-maintenance-panel" key={`${row["Fine Code"] ?? "fine"}-${index}`}><h3>Fine {valueOrDash(row["Fine Code"])}</h3><div className="vehicle-table-wrapper"><table className="vehicle-table"><caption className="sr-only">Fine detail</caption><tbody>{report.columns.map((column) => <tr key={column.key}><th scope="row">{column.header}</th><td>{valueOrDash(row[column.key])}</td></tr>)}</tbody></table></div></article>)}</section>;
+    return <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-detail-results-title"><div className="vehicle-form-section-header"><div><p className="eyebrow">Report results</p><h2 id="fine-detail-results-title">{report.title}</h2></div></div>{report.rows.map((row) => <article className="vehicle-status-maintenance-panel" key={reportRowKey(row, "fine")}><h3>Fine {valueOrDash(row["Fine Code"])}</h3><div className="vehicle-table-wrapper"><table className="vehicle-table"><caption className="sr-only">Fine detail</caption><tbody>{report.columns.map((column) => <tr key={column.key}><th scope="row">{column.header}</th><td>{valueOrDash(row[column.key])}</td></tr>)}</tbody></table></div></article>)}</section>;
   }
 
-  return <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-report-results-title"><div className="vehicle-form-section-header"><div><p className="eyebrow">Report results</p><h2 id="fine-report-results-title">{report.title}</h2></div><span className="form-hint">{report.totalCount} record(s)</span></div><div className="vehicle-table-wrapper"><table className="vehicle-table"><caption className="sr-only">{report.title}</caption><thead><tr>{report.columns.map((column) => <th key={column.key} scope="col">{column.header}</th>)}{previewPath ? <th scope="col">Action</th> : null}</tr></thead><tbody>{report.rows.map((row, index) => <tr key={`${row["Fine Code"] ?? row["Offence Date"] ?? "row"}-${index}`}>{report.columns.map((column) => <td key={column.key}>{valueOrDash(row[column.key])}</td>)}{previewPath ? <td><Link className="button button-secondary button-small" href={`${previewPath}?run=1&fineCode=${encodeURIComponent(row["Fine Code"] ?? "")}`}>Show</Link></td> : null}</tr>)}</tbody></table></div></section>;
+  return <section className="vehicle-status-maintenance-panel" aria-labelledby="fine-report-results-title"><div className="vehicle-form-section-header"><div><p className="eyebrow">Report results</p><h2 id="fine-report-results-title">{report.title}</h2></div><span className="form-hint">{report.totalCount} record(s)</span></div><div className="vehicle-table-wrapper"><table className="vehicle-table"><caption className="sr-only">{report.title}</caption><thead><tr>{report.columns.map((column) => <th key={column.key} scope="col">{column.header}</th>)}{previewPath ? <th scope="col">Action</th> : null}</tr></thead><tbody>{report.rows.map((row) => <tr key={reportRowKey(row, "row")}>{report.columns.map((column) => <td key={column.key}>{valueOrDash(row[column.key])}</td>)}{previewPath ? <td><Link className="button button-secondary button-small" href={`${previewPath}?run=1&fineCode=${encodeURIComponent(row["Fine Code"] ?? "")}`}>Show</Link></td> : null}</tr>)}</tbody></table></div></section>;
 }
 
 function ApiUnavailable({ path }: Readonly<{ path: string }>) {

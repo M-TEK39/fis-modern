@@ -1512,6 +1512,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         return """
             SELECT
+                f.[Fine_code] AS [__RowKey],
                 v.[registration_number] AS [Prov Reg Number],
                 v.[fleet_number] AS [GG Number],
                 f.[Offence_date] AS [Offence Date],
@@ -1581,15 +1582,27 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             var columns = new List<LegacyReportColumnDto>();
             var rows = new List<Dictionary<string, string?>>(capacity: 128);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            var rowKeyOrdinal = -1;
             for (var index = 0; index < reader.FieldCount; index++)
             {
                 var header = reader.GetName(index);
-                columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
+                if (string.Equals(header, "__RowKey", StringComparison.Ordinal))
+                {
+                    rowKeyOrdinal = index;
+                }
+                else
+                {
+                    columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
+                }
             }
 
             while (await reader.ReadAsync(cancellationToken))
             {
                 var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                if (rowKeyOrdinal >= 0)
+                {
+                    row["__rowKey"] = FormatValue(reader[rowKeyOrdinal]);
+                }
                 foreach (var column in columns)
                 {
                     row[column.Key] = FormatValue(reader[column.Key]);

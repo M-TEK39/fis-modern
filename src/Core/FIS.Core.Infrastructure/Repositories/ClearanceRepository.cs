@@ -168,7 +168,8 @@ public class ClearanceRepository : IClearanceRepository
             }
 
             command.CommandText = $"""
-                SELECT v.[fleet_number],
+                SELECT c.[clearance_code],
+                       v.[fleet_number],
                        c.[clearance_comment],
                        m.[Merchant_Name],
                        c.[clearance_number],
@@ -186,6 +187,7 @@ public class ClearanceRepository : IClearanceRepository
             {
                 results.Add(new ClearanceReportRow
                 {
+                    clearance_code = ReadInt32(reader, "clearance_code"),
                     fleet_number = ReadString(reader, "fleet_number"),
                     clearance_comment = ReadString(reader, "clearance_comment"),
                     merchant_name = ReadString(reader, "Merchant_Name"),

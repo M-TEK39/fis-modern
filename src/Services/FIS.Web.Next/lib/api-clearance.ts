@@ -62,6 +62,7 @@ export type MerchantDeleteCheck = {
 };
 
 export type ClearanceReportRow = {
+  clearanceCode: number | null;
   fleetNumber: string | null;
   clearanceComment: string | null;
   merchantName: string | null;
@@ -265,6 +266,7 @@ function mapReportRow(value: unknown): ClearanceReportRow | null {
   }
 
   return {
+    clearanceCode: asNumber(getValue(value, "clearance_code", "clearanceCode")),
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
     clearanceComment: asString(getValue(value, "clearance_comment", "clearanceComment")),
     merchantName: asString(getValue(value, "merchant_name", "merchantName")),

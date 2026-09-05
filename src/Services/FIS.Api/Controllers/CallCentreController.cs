@@ -960,6 +960,9 @@ public class CallCentreController : BaseApiController
             var counterProjection = columns.Contains("CounterCC")
                 ? "[CounterCC] AS [CounterCC]"
                 : "CAST(NULL AS smallint) AS [CounterCC]";
+            var counterCodeProjection = columns.Contains("Call_Centre_Counter_code")
+                ? "[Call_Centre_Counter_code] AS [Call_Centre_Counter_code]"
+                : "CAST(NULL AS smallint) AS [Call_Centre_Counter_code]";
             var dataCaptureProjection = columns.Contains("DataCapture_id")
                 ? "[DataCapture_id] AS [DataCapture_id]"
                 : "CAST(NULL AS smallint) AS [DataCapture_id]";
@@ -977,7 +980,7 @@ public class CallCentreController : BaseApiController
 
             await using var command = connection.CreateCommand();
             command.CommandText = $"""
-                SELECT {counterProjection}, {dataCaptureProjection}, {dateProjection}, {timeProjection}
+                SELECT {counterCodeProjection}, {counterProjection}, {dataCaptureProjection}, {dateProjection}, {timeProjection}
                 FROM [dbo].[Call_Centre_Counter]
                 WHERE [Call_Center_code] = @callCentreCode
                 {orderBy}
@@ -990,6 +993,7 @@ public class CallCentreController : BaseApiController
             {
                 entries.Add(new CallCentreDataAccessEntryDto
                 {
+                    CallCentreCounterCode = ReadNullableInt16(dataReader, "Call_Centre_Counter_code"),
                     Counter = ReadNullableInt16(dataReader, "CounterCC"),
                     DataCaptureId = ReadNullableInt16(dataReader, "DataCapture_id"),
                     DataCaptureDate = ReadNullableDateTime(dataReader, "DataCapture_date"),
@@ -1176,6 +1180,7 @@ public class CallCentreDataAccessReportDto
 
 public class CallCentreDataAccessEntryDto
 {
+    public short? CallCentreCounterCode { get; set; }
     public short? Counter { get; set; }
     public short? DataCaptureId { get; set; }
     public DateTime? DataCaptureDate { get; set; }
