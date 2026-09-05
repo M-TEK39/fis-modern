@@ -22,7 +22,7 @@ namespace FIS.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-[AllowAnonymous]
+[Authorize]
 public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
@@ -58,6 +58,7 @@ public class AuthController : ControllerBase
     /// <param name="request">Login credentials</param>
     /// <returns>JWT token and user information</returns>
     [HttpPost("login")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -211,6 +212,7 @@ public class AuthController : ControllerBase
     /// </summary>
     /// <returns>New JWT token</returns>
     [HttpPost("refresh")]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public ActionResult<LoginResponse> RefreshToken()
@@ -554,9 +556,6 @@ public class AuthController : ControllerBase
     [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<UserAdminResponse>> ResetLogin([FromBody] ResetLoginRequest request)
     {
-        // AuthController also exposes anonymous login and recovery actions. Keep this
-        // explicit guard because the controller-level AllowAnonymous metadata must
-        // not make an administrator-only mutation callable by any signed-in user.
         if (User.Identity?.IsAuthenticated != true)
         {
             return Unauthorized();
