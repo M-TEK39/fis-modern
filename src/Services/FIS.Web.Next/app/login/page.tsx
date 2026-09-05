@@ -28,13 +28,27 @@ function LoginFallback() {
   );
 }
 
-async function LoginContent() {
-  const session = await getSession();
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function getQueryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+async function LoginContent({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
+  const [query, session] = await Promise.all([searchParams, getSession()]);
   const microsoftSignInUrl = process.env.MICROSOFT_SIGN_IN_URL?.trim() || "/api/auth/microsoft/sign-in";
   const microsoftSignInEnabled = Boolean(process.env.MICROSOFT_SIGN_IN_ENABLED?.trim());
+  const microsoftSignInFailed = getQueryValue(query.error) === "microsoft-sign-in";
 
   return (
     <>
+      {microsoftSignInFailed ? (
+        <div className="notice notice-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>Microsoft sign-in could not be completed. Use your FIS credentials or try again.</span>
+        </div>
+      ) : null}
+
       {session.status === "unavailable" ? (
         <div className="notice notice-info" role="status">
           <span aria-hidden="true">i</span>
@@ -92,7 +106,7 @@ async function LoginContent() {
   );
 }
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: Readonly<{ searchParams: SearchParams }>) {
   return (
     <main className="page-shell">
       <section className="auth-card" aria-labelledby="login-page-title">
@@ -101,7 +115,7 @@ export default function LoginPage() {
           Sign in to Fleet Information System
         </h1>
         <Suspense fallback={<LoginFallback />}>
-          <LoginContent />
+          <LoginContent searchParams={searchParams} />
         </Suspense>
       </section>
     </main>
