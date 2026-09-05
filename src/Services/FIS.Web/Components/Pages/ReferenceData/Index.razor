@@ -1,10 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_Site.aspx"
-@page "/Validation/MNT_SiteAdd.aspx"
-@page "/Validation/MNT_Site_Edit.aspx"
-@page "/Validation/MNT_Site_Update.aspx"
-@page "/Validation/MNT_Site_Del.aspx"
-@page "/Validation/MNT_Site_Del_Check.aspx"
 @page "/Validation/MNT_Class.aspx"
 @page "/Validation/MNT_Class_Add.aspx"
 @page "/Validation/MNT_Class_Edit.aspx"
@@ -32,7 +26,6 @@
 @using FIS.Web.Services
 @using FIS.Web.Components.Pages.ReferenceData
 @inject NavigationManager Navigation
-@inject ReferenceDataApiService RefDataService
 
 <PageTitle>Reference Data Management - Fleet Information System</PageTitle>
 
@@ -67,10 +60,6 @@
         <button class="tab @(_activeTab == "licenses" ? "active" : "")" @onclick='() => SetActiveTab("licenses")'>
             <i class="bx bx-id-card"></i>
             License Types
-        </button>
-        <button class="tab @(_activeTab == "sites" ? "active" : "")" @onclick='() => SetActiveTab("sites")'>
-            <i class="bx bx-map-pin"></i>
-            Sites
         </button>
         <button class="tab @(_activeTab == "licensefees" ? "active" : "")" @onclick='() => SetActiveTab("licensefees")'>
             <i class="bx bx-dollar-circle"></i>
@@ -110,10 +99,6 @@
         else if (_activeTab == "licenses")
         {
             <LicenseTypesTab />
-        }
-        else if (_activeTab == "sites")
-        {
-            <SitesTab />
         }
         else if (_activeTab == "licensefees")
         {
@@ -169,7 +154,6 @@
         Row("Vehicle", "Vehicle Classes", "/reference-data?tab=classes"),
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
-        Row("Organisation", "Sites", "/reference-data?tab=sites"),
         Row("Licence", "License Fees", "/reference-data?tab=licensefees"),
         Row("Licence", "Drivers Licenses", "/reference-data?tab=driverlicenses"),
         Row("Vehicle", "Extras", "/reference-data?tab=extras"),
@@ -185,7 +169,7 @@
         var allowed = new HashSet<string>
         {
             "types", "fueltypes", "classes", "units", "licenses",
-            "sites", "licensefees", "driverlicenses", "extras", "losstypes"
+            "licensefees", "driverlicenses", "extras", "losstypes"
         };
 
         if (allowed.Contains(requested))
@@ -199,12 +183,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_site.aspx" => "sites",
-            "validation/mnt_siteadd.aspx" => "sites",
-            "validation/mnt_site_edit.aspx" => "sites",
-            "validation/mnt_site_update.aspx" => "sites",
-            "validation/mnt_site_del.aspx" => "sites",
-            "validation/mnt_site_del_check.aspx" => "sites",
             "validation/mnt_class.aspx" => "classes",
             "validation/mnt_class_add.aspx" => "classes",
             "validation/mnt_class_edit.aspx" => "classes",
