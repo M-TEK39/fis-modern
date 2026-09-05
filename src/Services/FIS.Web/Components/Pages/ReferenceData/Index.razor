@@ -1,8 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_Licence_Fees.aspx"
-@page "/Validation/MNT_Licence_Fee_Add.aspx"
-@page "/Validation/MNT_Licence_Fee_Edit.aspx"
-@page "/Validation/MNT_Licence_Fee_Update.aspx"
 @page "/Validation/MNT_DriversLicence.aspx"
 @page "/Validation/MNT_Driverslicence_Add.aspx"
 @page "/Validation/MNT_DriversLicence_Edit.aspx"
@@ -51,10 +47,6 @@
             <i class="bx bx-id-card"></i>
             License Types
         </button>
-        <button class="tab @(_activeTab == "licensefees" ? "active" : "")" @onclick='() => SetActiveTab("licensefees")'>
-            <i class="bx bx-dollar-circle"></i>
-            License Fees
-        </button>
         <button class="tab @(_activeTab == "driverlicenses" ? "active" : "")" @onclick='() => SetActiveTab("driverlicenses")'>
             <i class="bx bx-id-card"></i>
             Drivers Licenses
@@ -85,10 +77,6 @@
         else if (_activeTab == "licenses")
         {
             <LicenseTypesTab />
-        }
-        else if (_activeTab == "licensefees")
-        {
-            <LicenseFeesTab />
         }
         else if (_activeTab == "driverlicenses")
         {
@@ -139,7 +127,6 @@
         Row("Vehicle", "Fuel Types", "/reference-data?tab=fueltypes"),
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
-        Row("Licence", "License Fees", "/reference-data?tab=licensefees"),
         Row("Licence", "Drivers Licenses", "/reference-data?tab=driverlicenses"),
         Row("Vehicle", "Extras", "/reference-data?tab=extras"),
         Row("Operational", "Loss Types", "/reference-data?tab=losstypes")
@@ -154,7 +141,7 @@
         var allowed = new HashSet<string>
         {
             "types", "fueltypes", "units", "licenses",
-            "licensefees", "driverlicenses", "extras", "losstypes"
+            "driverlicenses", "extras", "losstypes"
         };
 
         if (allowed.Contains(requested))
@@ -168,10 +155,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_licence_fees.aspx" => "licensefees",
-            "validation/mnt_licence_fee_add.aspx" => "licensefees",
-            "validation/mnt_licence_fee_edit.aspx" => "licensefees",
-            "validation/mnt_licence_fee_update.aspx" => "licensefees",
             "validation/mnt_driverslicence.aspx" => "driverlicenses",
             "validation/mnt_driverslicence_add.aspx" => "driverlicenses",
             "validation/mnt_driverslicence_edit.aspx" => "driverlicenses",
