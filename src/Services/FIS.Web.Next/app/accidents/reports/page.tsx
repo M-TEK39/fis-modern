@@ -10,7 +10,7 @@ import { getSession } from "@/lib/session";
 const ACCIDENTS_ROLE = "Accidents";
 
 const reportEntries = [
-  { label: "1) One Vehicle Accidents", target: "Accident/RPT_one_num_main_accident.htm", available: false },
+  { label: "1) One Vehicle Accidents", target: "Accident/RPT_one_num_main_accident.htm", href: "/accidents/reports/one-vehicle", available: true },
   { label: "2) Private Vehicle Accidents", target: "Accident/RPT_one_prnum_main_accident.htm", available: false },
   { label: "3) Private Vehicle Accidents (Capture under Description of Accident)", target: "Accident/RPT_one_prnumc_main_accident.htm", available: false },
   { label: "4) All Accidents - ALL DETAIL", target: "Accident/RPT_all_main_accident.htm", available: false },
@@ -52,7 +52,7 @@ async function AccidentReportsContent() {
     <>
       <div className="notice notice-warning" role="status">
         <span aria-hidden="true">!</span>
-        <span>Only the driver report has a complete legacy source reference in this repository snapshot. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
+        <span>The one-vehicle and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
       </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (

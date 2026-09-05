@@ -220,6 +220,56 @@ export type AccidentDriverReportRow = {
   costOfRepair: number | null;
 };
 
+export type AccidentVehicleReportMode = "registration" | "fleet";
+
+export type AccidentVehicleReportRow = {
+  accidentCode: number;
+  registrationNumber: string | null;
+  fleetNumber: string | null;
+  locationDescription: string | null;
+  accidentDate: string | null;
+  accidentTime: string | null;
+  accidentPlace: string | null;
+  financialYear: string | null;
+  dateUpdated: string | null;
+  notifiedGarage: string | null;
+  notifiedGarageDate: string | null;
+  notifiedTripAuthority: string | null;
+  notifiedTripAuthorityDate: string | null;
+  description: string | null;
+  accidentTypeDescription: string | null;
+  tripAuthority: string | null;
+  driverName: string | null;
+  driverEmployNumber: string | null;
+  departmentNumber: string | null;
+  transportOfficerName: string | null;
+  transportOfficerTelephone: string | null;
+  hqReference: string | null;
+  ggReference: string | null;
+  saReference: string | null;
+  caseNumber: string | null;
+  costOfRepair: number | null;
+  damageDescription: string | null;
+  driverFault: string | null;
+  death: string | null;
+  injured: string | null;
+  thirdPartyRegistration: string | null;
+  thirdPartyOwner: string | null;
+  thirdPartyClaim: number | null;
+  privateDamagePaymentDate: string | null;
+  insuranceClaim: string | null;
+  claimReceived: string | null;
+  claimAgainstDepartment: number | null;
+  claimDecision: string | null;
+  claimRejectReason: string | null;
+  writeOffAmount: number | null;
+  writeOffDate: string | null;
+  letterhead: string | null;
+  z181: string | null;
+  fileCloseDate: string | null;
+  notes: string | null;
+};
+
 export class AccidentApiError extends Error {
   constructor(
     public readonly reason: AccidentApiErrorReason,
@@ -538,6 +588,76 @@ export async function getAccidentDriverReport(
     mode,
   });
   return mapPresent(getCollection(await requestApi(`api/accidents/reports/driver?${query.toString()}`)), mapAccidentDriverReportRow);
+}
+
+function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const accidentCode = asNumber(getValue(value, "accident_code", "accidentCode"));
+  if (accidentCode === null) {
+    return null;
+  }
+
+  return {
+    accidentCode,
+    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+    locationDescription: asString(getValue(value, "location_description", "locationDescription")),
+    accidentDate: asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate")),
+    accidentTime: asString(getValue(value, "occurence_time", "occurrence_time", "occurenceTime")),
+    accidentPlace: asString(getValue(value, "occurence_place", "occurrence_place", "occurencePlace")),
+    financialYear: asString(getValue(value, "fin_year", "financialYear")),
+    dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
+    notifiedGarage: asString(getValue(value, "Flag_gg_hq", "flag_gg_hq", "notifiedGarage")),
+    notifiedGarageDate: asString(getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "notifiedGarageDate")),
+    notifiedTripAuthority: asString(getValue(value, "Flag_trip_author", "flag_trip_author", "notifiedTripAuthority")),
+    notifiedTripAuthorityDate: asString(getValue(value, "flag_trip_auth_date", "Flag_trip_auth_date", "notifiedTripAuthorityDate")),
+    description: asString(getValue(value, "description")),
+    accidentTypeDescription: asString(getValue(value, "accident_type_description", "accidentTypeDescription")),
+    tripAuthority: asString(getValue(value, "trip_author", "tripAuthority")),
+    driverName: asString(getValue(value, "driver_name", "driverName")),
+    driverEmployNumber: asString(getValue(value, "driver_employ_number", "driverEmployNumber")),
+    departmentNumber: asString(getValue(value, "department_number", "departmentNumber")),
+    transportOfficerName: asString(getValue(value, "transoffic_name", "transportOfficerName")),
+    transportOfficerTelephone: asString(getValue(value, "transoffic_tel", "transportOfficerTelephone")),
+    hqReference: asString(getValue(value, "hq_reference", "hqReference")),
+    ggReference: asString(getValue(value, "gg_reference", "ggReference")),
+    saReference: asString(getValue(value, "sa_reference", "saReference")),
+    caseNumber: asString(getValue(value, "case_number", "caseNumber")),
+    costOfRepair: asNumber(getValue(value, "cost_of_repair", "costOfRepair")),
+    damageDescription: asString(getValue(value, "damage_description", "damageDescription")),
+    driverFault: asString(getValue(value, "driver_fault", "driverFault")),
+    death: asString(getValue(value, "death")),
+    injured: asString(getValue(value, "Injured", "injured")),
+    thirdPartyRegistration: asString(getValue(value, "third_party_regno", "thirdPartyRegistration")),
+    thirdPartyOwner: asString(getValue(value, "third_party_owner", "thirdPartyOwner")),
+    thirdPartyClaim: asNumber(getValue(value, "third_party_claim", "thirdPartyClaim")),
+    privateDamagePaymentDate: asString(getValue(value, "priv_dampay_date", "privateDamagePaymentDate")),
+    insuranceClaim: asString(getValue(value, "insurance_claim", "insuranceClaim")),
+    claimReceived: asString(getValue(value, "th_claim_receive", "claimReceived")),
+    claimAgainstDepartment: asNumber(getValue(value, "claim_against_dept", "claimAgainstDepartment")),
+    claimDecision: asString(getValue(value, "th_claim_accept_reject", "claimDecision")),
+    claimRejectReason: asString(getValue(value, "th_claim_reject_reason", "claimRejectReason")),
+    writeOffAmount: asNumber(getValue(value, "write_off_amount", "writeOffAmount")),
+    writeOffDate: asString(getValue(value, "write_off_date", "writeOffDate")),
+    letterhead: asString(getValue(value, "letterhead")),
+    z181: asString(getValue(value, "z181")),
+    fileCloseDate: asString(getValue(value, "file_close_date", "fileCloseDate")),
+    notes: asString(getValue(value, "notes")),
+  };
+}
+
+export async function getAccidentVehicleReport(
+  searchTerm: string,
+  mode: AccidentVehicleReportMode,
+) {
+  const query = new URLSearchParams({
+    searchTerm: searchTerm.trim(),
+    mode,
+  });
+  return mapPresent(getCollection(await requestApi(`api/accidents/reports/vehicle?${query.toString()}`)), mapAccidentVehicleReportRow);
 }
 
 export async function updateAccidentAgainstApi(request: AccidentUpdateRequest) {
