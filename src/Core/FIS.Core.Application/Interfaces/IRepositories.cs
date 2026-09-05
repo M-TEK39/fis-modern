@@ -71,6 +71,7 @@ public interface IContractRepository
     Task<IEnumerable<Contract>> GetAllAsync();
     Task<ContractPage> GetPageAsync(ContractPageQuery query);
     Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(string searchTerm);
+    Task<ContractVehicleLookup?> GetVehicleForContractAsync(int vmfCode);
     Task<Contract?> GetActiveContractByVehicleAsync(int vmfCode);
     Task<bool> HasActiveContractAsync(int vmfCode);
     Task<Contract> CreateAsync(Contract contract, int currentUserId);
@@ -104,7 +105,8 @@ public sealed record ContractVehicleLookup(
     string? RegistrationNumber,
     string? ChassisNumber,
     string? EngineNumber,
-    string? InvoiceNumber);
+    string? InvoiceNumber,
+    short? VehicleStatusCode = null);
 
 /// <summary>
 /// Repository interface for user operations

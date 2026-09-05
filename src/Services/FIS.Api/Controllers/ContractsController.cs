@@ -966,18 +966,102 @@ public class ContractsController : BaseApiController
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
 
-            // Update contract assignment
-            if (request.NewVmfCode.HasValue)
-                contract.vmf_code = request.NewVmfCode.Value;
+            if (contract.still_current != "Y" || (contract.contract_status_code.HasValue && contract.contract_status_code != 3))
+                return BadRequest(new { error = "Only an active contract can be reassigned." });
 
-            if (request.NewSiteCode.HasValue)
-                contract.site_code = request.NewSiteCode.Value;
+            if (request.NewSiteCode is not > 0)
+                return BadRequest(new { error = "Select a different destination site." });
 
-            contract.Notes = $"{contract.Notes}\nReassigned: {request.Reason}";
+            if (request.NewSiteCode.Value == contract.site_code)
+                return BadRequest(new { error = "Select a different destination site." });
 
-            await _contractRepository.UpdateAsync(contract, currentUserId);
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new { error = "A reason is required when reassigning a contract." });
 
-            return Ok(new { message = "Contract reassigned successfully", contractId });
+            var effectiveDate = request.StartDate?.Date ?? DateTime.Now.Date;
+            if (effectiveDate < contract.start_date.Date)
+                return BadRequest(new { error = "The effective reassignment date cannot precede the current contract start date." });
+
+            var startOdometer = request.StartOdometer ?? contract.start_odometer;
+            if (startOdometer < 0)
+                return BadRequest(new { error = "Start odometer cannot be negative." });
+
+            // The legacy ReassignExisting workflow closes the current record and
+            // inserts a new effective record. Keep both operations atomic and
+            // preserve every legacy contract field on the new record.
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await _contractRepository.EndContractAsync(
+                contractId,
+                effectiveDate,
+                currentUserId,
+                startOdometer);
+
+            var reassignedContract = new Contract
+            {
+                vmf_code = contract.vmf_code,
+                site_code = request.NewSiteCode.Value,
+                start_date = effectiveDate,
+                start_time = effectiveDate,
+                end_date = null,
+                end_time = null,
+                start_odometer = startOdometer,
+                end_odometer = 0,
+                still_current = "Y",
+                contract_type = contract.contract_type,
+                Driver_id = contract.Driver_id,
+                Authorisation = contract.Authorisation,
+                Driver_name = contract.Driver_name,
+                Notes = $"{contract.Notes}\nReassigned: {request.Reason.Trim()}",
+                target_return_date = contract.target_return_date,
+                user_code = currentUserId is >= short.MinValue and <= short.MaxValue ? (short)currentUserId : contract.user_code,
+                Charged_Until = contract.Charged_Until,
+                bas_objective_code = contract.bas_objective_code,
+                bas_responsibility_code = contract.bas_responsibility_code,
+                relief_for_contract = contract.relief_for_contract,
+                locked_for_transfer = contract.locked_for_transfer,
+                hours_used = contract.hours_used,
+                bas_project_number = contract.bas_project_number,
+                journal_detail_code = contract.journal_detail_code,
+                parent_contract_code = contract.parent_contract_code,
+                contract_group_code = contract.contract_group_code,
+                bas_fund_code = contract.bas_fund_code,
+                monthly_km = contract.monthly_km,
+                contract_status_code = 3,
+                contract_status_date = effectiveDate,
+                vehicle_assessment_code = contract.vehicle_assessment_code,
+                approver_code = contract.approver_code,
+                site_driver_code = contract.site_driver_code,
+                collector_firstname = contract.collector_firstname,
+                collector_surname = contract.collector_surname,
+                collector_sa_id = contract.collector_sa_id,
+                collector_passportnumber = contract.collector_passportnumber,
+                collector_office_number = contract.collector_office_number,
+                collector_cellphone_number = contract.collector_cellphone_number,
+                collector_office = contract.collector_office,
+                collector_designation = contract.collector_designation,
+                relief_vehicle_option = contract.relief_vehicle_option,
+                lease_contract_period = contract.lease_contract_period,
+                contract_estimated_overall_km = contract.contract_estimated_overall_km,
+                intended_start_date = contract.intended_start_date,
+                intended_start_time = contract.intended_start_time,
+                reassigned_from_contract_code = contractId,
+                date_created = DateTime.UtcNow,
+                date_updated = DateTime.UtcNow,
+                created_by_user_code = currentUserId,
+                modified_by_user_code = currentUserId
+            };
+
+            var created = await _contractRepository.CreateAsync(reassignedContract, currentUserId);
+            await transaction.CommitAsync();
+
+            await _auditLog.LogAsync(contractId, "Reassigned", currentUserId,
+                oldStatus: contract.contract_status_code, newStatus: 7,
+                notes: request.Reason);
+            await _auditLog.LogAsync(created.contract_code, "Reassigned", currentUserId,
+                oldStatus: null, newStatus: 3,
+                notes: request.Reason);
+
+            return Ok(new { message = "Contract reassigned successfully", contractId, newContractCode = created.contract_code });
         }
         catch (Exception ex)
         {
@@ -1004,6 +1088,28 @@ public class ContractsController : BaseApiController
             if (parentContract == null)
                 return NotFound(new { error = "Parent contract not found" });
 
+            if (parentContract.still_current != "Y" || (parentContract.contract_status_code.HasValue && parentContract.contract_status_code != 3))
+                return BadRequest(new { error = "Relief can only be created for an active contract." });
+
+            if (parentContract.relief_vehicle_option != true)
+                return BadRequest(new { error = "This contract is not opted in for a relief vehicle." });
+
+            if (request.ReliefVmfCode <= 0)
+                return BadRequest(new { error = "Select a valid relief vehicle." });
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+                return BadRequest(new { error = "A reason is required when creating a relief contract." });
+
+            var reliefVehicle = await _contractRepository.GetVehicleForContractAsync(request.ReliefVmfCode);
+            if (reliefVehicle == null)
+                return NotFound(new { error = "Relief vehicle not found" });
+
+            if (reliefVehicle.VehicleStatusCode.HasValue && reliefVehicle.VehicleStatusCode != 1)
+                return BadRequest(new { error = "The selected relief vehicle is not in service." });
+
+            if (await _contractRepository.GetActiveContractByVehicleAsync(request.ReliefVmfCode) != null)
+                return Conflict(new { error = "The selected vehicle already has an active contract." });
+
             // Create relief contract linked to parent
             var reliefContract = new Contract
             {
@@ -1012,14 +1118,20 @@ public class ContractsController : BaseApiController
                 start_date = DateTime.Now,
                 start_time = DateTime.Now,
                 start_odometer = request.StartOdometer ?? 0,
+                end_odometer = 0,
                 still_current = "Y",
-                contract_type = "R", // Relief
+                contract_type = "F", // Legacy relief contract type
                 relief_for_contract = contractId,
                 parent_contract_code = contractId,
+                relief_vehicle_option = false,
                 Notes = $"Relief for contract {contractId}: {request.Reason}",
                 target_return_date = request.TargetReturnDate,
+                contract_status_code = 3,
+                contract_status_date = DateTime.Now,
                 date_created = DateTime.Now,
-                created_by_user_code = currentUserId
+                created_by_user_code = currentUserId,
+                modified_by_user_code = currentUserId,
+                date_updated = DateTime.Now
             };
 
             var created = await _contractRepository.CreateAsync(reliefContract, currentUserId);
@@ -1727,23 +1839,24 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            // Get vehicles without active contracts
-            var allVehicles = await _vehicleRepository.GetAvailableVehiclesAsync();
+            var candidates = await _contractRepository.SearchVehiclesForContractsAsync(query ?? string.Empty);
+            var results = new List<ReliefVehicleSearchResultDto>();
+            foreach (var vehicle in candidates)
+            {
+                if (vehicle.VehicleStatusCode.HasValue && vehicle.VehicleStatusCode != 1)
+                    continue;
 
-            var results = allVehicles
-                .Where(v => string.IsNullOrEmpty(query) ||
-                           (v.fleet_number?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false) ||
-                           (v.registration_number?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
-                .Select(v => new ReliefVehicleSearchResultDto
+                if (await _contractRepository.GetActiveContractByVehicleAsync(vehicle.VmfCode) != null)
+                    continue;
+
+                results.Add(new ReliefVehicleSearchResultDto
                 {
-                    VmfCode = v.vmf_code,
-                    FleetNumber = v.fleet_number ?? string.Empty,
-                    RegistrationNumber = v.registration_number,
-                    MakeCode = null, // Make is accessed through Model relationship
-                    ModelCode = v.model_code,
+                    VmfCode = vehicle.VmfCode,
+                    FleetNumber = vehicle.FleetNumber ?? string.Empty,
+                    RegistrationNumber = vehicle.RegistrationNumber,
                     IsAvailable = true
-                })
-                .ToList();
+                });
+            }
 
             return Ok(results);
         }
@@ -1997,6 +2110,8 @@ public class ContractReassignDto
 {
     public int? NewVmfCode { get; set; }
     public short? NewSiteCode { get; set; }
+    public DateTime? StartDate { get; set; }
+    public int? StartOdometer { get; set; }
     [Required]
     public string Reason { get; set; } = string.Empty;
 }

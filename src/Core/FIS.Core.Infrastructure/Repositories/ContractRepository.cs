@@ -166,7 +166,8 @@ public class ContractRepository : IContractRepository
                 GetOptionalProjection(availableColumns, "registration_number", "v"),
                 GetOptionalProjection(availableColumns, "chassis_number", "v"),
                 GetOptionalProjection(availableColumns, "engine_number_1", "v"),
-                GetOptionalProjection(availableColumns, "invoice_number", "v")
+                GetOptionalProjection(availableColumns, "invoice_number", "v"),
+                GetOptionalProjection(availableColumns, "vehicle_status_code", "v")
             };
             command.CommandText = $"SELECT TOP (50) {string.Join(", ", projection)} FROM [dbo].[{VehicleTableName}] AS [v] WHERE {predicate} ORDER BY {orderBy}";
             AddParameter(command, "@searchTerm", DbType.String, $"%{searchTerm.Trim().ToLowerInvariant()}%");
@@ -181,10 +182,53 @@ public class ContractRepository : IContractRepository
                     ReadStringIfAvailable(reader, availableColumns, "registration_number"),
                     ReadStringIfAvailable(reader, availableColumns, "chassis_number"),
                     ReadStringIfAvailable(reader, availableColumns, "engine_number_1"),
-                    ReadStringIfAvailable(reader, availableColumns, "invoice_number")));
+                    ReadStringIfAvailable(reader, availableColumns, "invoice_number"),
+                    ReadInt16IfAvailable(reader, availableColumns, "vehicle_status_code")));
             }
 
             return results;
+        }
+        finally
+        {
+            if (shouldClose) await connection.CloseAsync();
+        }
+    }
+
+    public async Task<ContractVehicleLookup?> GetVehicleForContractAsync(int vmfCode)
+    {
+        var availableColumns = await GetAvailableColumnsAsync(VehicleTableName, RequiredVehicleColumns);
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose) await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var projection = new[]
+            {
+                "[v].[vmf_code] AS [vmf_code]",
+                GetOptionalProjection(availableColumns, "fleet_number", "v"),
+                GetOptionalProjection(availableColumns, "registration_number", "v"),
+                GetOptionalProjection(availableColumns, "chassis_number", "v"),
+                GetOptionalProjection(availableColumns, "engine_number_1", "v"),
+                GetOptionalProjection(availableColumns, "invoice_number", "v"),
+                GetOptionalProjection(availableColumns, "vehicle_status_code", "v")
+            };
+            command.CommandText = $"SELECT TOP (1) {string.Join(", ", projection)} FROM [dbo].[{VehicleTableName}] AS [v] WHERE [v].[vmf_code] = @vmfCode";
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync()) return null;
+
+            return new ContractVehicleLookup(
+                ReadInt32(reader, "vmf_code") ?? 0,
+                ReadStringIfAvailable(reader, availableColumns, "fleet_number"),
+                ReadStringIfAvailable(reader, availableColumns, "registration_number"),
+                ReadStringIfAvailable(reader, availableColumns, "chassis_number"),
+                ReadStringIfAvailable(reader, availableColumns, "engine_number_1"),
+                ReadStringIfAvailable(reader, availableColumns, "invoice_number"),
+                ReadInt16IfAvailable(reader, availableColumns, "vehicle_status_code"));
         }
         finally
         {

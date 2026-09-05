@@ -85,6 +85,13 @@ export type ContractVehicleSearchResult = {
   invoiceNumber: string | null;
 };
 
+export type ReliefVehicleSearchResult = {
+  vmfCode: number;
+  fleetNumber: string | null;
+  registrationNumber: string | null;
+  isAvailable: boolean;
+};
+
 export type HireContractRequest = {
   VmfCode: number;
   SiteCode: number;
@@ -123,6 +130,20 @@ export type ContractHistoryBackdatingRequest = {
   EndDate: string | null;
   StartOdometer: number | null;
   EndOdometer: number | null;
+};
+
+export type ContractReassignRequest = {
+  NewSiteCode: number;
+  StartDate: string | null;
+  StartOdometer: number | null;
+  Reason: string;
+};
+
+export type ReliefVehicleRequest = {
+  ReliefVmfCode: number;
+  StartOdometer: number | null;
+  TargetReturnDate: string | null;
+  Reason: string;
 };
 
 export type ContractApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
@@ -275,6 +296,19 @@ function mapVehicleSearchResult(value: unknown): ContractVehicleSearchResult | n
       };
 }
 
+function mapReliefVehicleSearchResult(value: unknown): ReliefVehicleSearchResult | null {
+  if (!isRecord(value)) return null;
+  const vmfCode = asNumber(getValue(value, "vmfCode", "vmf_code"));
+  return vmfCode === null
+    ? null
+    : {
+        vmfCode,
+        fleetNumber: asString(getValue(value, "fleetNumber", "fleet_number")),
+        registrationNumber: asString(getValue(value, "registrationNumber", "registration_number")),
+        isAvailable: asBoolean(getValue(value, "isAvailable", "is_available")),
+      };
+}
+
 async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) throw new ContractApiError("unauthorized", "No FIS access cookie is available.");
@@ -379,6 +413,13 @@ export async function searchContractVehicles(query: string) {
     .filter((item): item is ContractVehicleSearchResult => item !== null);
 }
 
+export async function searchReliefVehicles(query: string) {
+  const payload = await readJson(await requestApi(`api/contracts/relief/search?query=${encodeURIComponent(query)}`));
+  return getCollection(payload)
+    .map(mapReliefVehicleSearchResult)
+    .filter((item): item is ReliefVehicleSearchResult => item !== null && item.isAvailable);
+}
+
 export async function hireContractAgainstApi(request: HireContractRequest) {
   return readJson(await requestApi("api/contracts/hire", { method: "POST", body: JSON.stringify(request) }));
 }
@@ -400,6 +441,14 @@ export async function extendContractAgainstApi(contractCode: number, newTargetRe
 
 export async function closeContractAgainstApi(contractCode: number, request: CloseContractRequest) {
   return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/close`, request);
+}
+
+export async function reassignContractAgainstApi(contractCode: number, request: ContractReassignRequest) {
+  return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/reassign`, request);
+}
+
+export async function createReliefContractAgainstApi(contractCode: number, request: ReliefVehicleRequest) {
+  return postContractAction(`api/contracts/${encodeURIComponent(contractCode)}/relief`, request);
 }
 
 export async function updateContractHistoryAgainstApi(contractCode: number, request: ContractHistoryBackdatingRequest) {

@@ -8,8 +8,10 @@ import {
   ContractApiError,
   editContractAgainstApi,
   extendContractAgainstApi,
+  createReliefContractAgainstApi,
   hireContractAgainstApi,
   postContractAction,
+  reassignContractAgainstApi,
   updateContractHistoryAgainstApi,
   type CloseContractRequest,
   type EditContractRequest,
@@ -91,6 +93,28 @@ function hasContractAccess(accessLevel: string | undefined, roles: readonly stri
 
 function hasContractApproverRole(roles: readonly string[]) {
   return roles.some((role) => ["contracts approver", "contracts_approver", "back dating contract (approver)", "admin", "administrator"].includes(role.trim().toLowerCase()));
+}
+
+function hasContractLoadAndManageRole(roles: readonly string[]) {
+  return roles.some((role) => [
+    "contract (load and manage)",
+    "contracts (load and manage)",
+    "contract_load_and_manage",
+    "contracts_load_and_manage",
+    "admin",
+    "administrator",
+  ].includes(role.trim().toLowerCase()));
+}
+
+function hasContractCancelAndCloseRole(roles: readonly string[]) {
+  return roles.some((role) => [
+    "contract (cancel and close)",
+    "contracts (cancel and close)",
+    "contract_cancel_and_close",
+    "contracts_cancel_and_close",
+    "admin",
+    "administrator",
+  ].includes(role.trim().toLowerCase()));
 }
 
 function hasContractHistoryBackdatingRole(roles: readonly string[]) {
@@ -203,6 +227,36 @@ export async function editContractAction(formData: FormData) {
   redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}updated=1`);
 }
 
+export async function createReliefContractAction(formData: FormData) {
+  const contractId = getContractId(formData);
+  const returnPath = getReturnPath(formData, `/contracts/detail?contractId=${contractId}`);
+  const access = await authorizeContractRole(
+    hasContractLoadAndManageRole,
+    "You do not have permission to create relief contracts.",
+  );
+  if (!access.ok) redirectError(returnPath, access.message);
+
+  const reliefVmfCode = getRequiredInteger(formData, "reliefVmfCode", "Relief vehicle");
+  if (reliefVmfCode <= 0) redirectError(returnPath, "Select a valid relief vehicle.");
+
+  try {
+    await createReliefContractAgainstApi(contractId, {
+      ReliefVmfCode: reliefVmfCode,
+      StartOdometer: getInteger(formData, "startOdometer", "Start odometer"),
+      TargetReturnDate: getOptionalDate(formData, "targetReturnDate", "Target return date"),
+      Reason: getOptionalText(formData, "reason", "Reason", 1000) ?? "Assign as relief vehicle",
+    });
+  } catch (error) {
+    redirectError(returnPath, error instanceof ContractValidationError ? error.message : apiErrorMessage(error, "created"));
+  }
+
+  revalidatePath("/contracts");
+  revalidatePath("/contracts/maintenance");
+  revalidatePath("/contracts/detail");
+  revalidatePath("/contracts/relief-vehicle-search");
+  redirect(`${returnPath}${returnPath.includes("?") ? "&" : "?"}success=relief-created`);
+}
+
 export async function updateContractHistoryAction(formData: FormData) {
   const contractId = getContractId(formData);
   const returnPath = getReturnPath(formData, `/contracts/backdating-history?contractId=${contractId}`);
@@ -243,6 +297,20 @@ export async function runContractAction(formData: FormData) {
     );
     if (!approverAccess.ok) redirectError(returnPath, approverAccess.message);
   }
+  if (["extend", "reassign", "relief"].includes(action)) {
+    const managerAccess = await authorizeContractRole(
+      hasContractLoadAndManageRole,
+      "You do not have permission to manage active vehicle contracts.",
+    );
+    if (!managerAccess.ok) redirectError(returnPath, managerAccess.message);
+  }
+  if (["close", "cancel"].includes(action)) {
+    const closeAccess = await authorizeContractRole(
+      hasContractCancelAndCloseRole,
+      "You do not have permission to cancel or close vehicle contracts.",
+    );
+    if (!closeAccess.ok) redirectError(returnPath, closeAccess.message);
+  }
 
   let operation = "updated";
   try {
@@ -279,6 +347,18 @@ export async function runContractAction(formData: FormData) {
         await extendContractAgainstApi(contractId, getRequiredDate(formData, "newTargetReturnDate", "New target return date"));
         operation = "extended";
         break;
+      case "reassign": {
+        const newSiteCode = getRequiredInteger(formData, "newSiteCode", "Destination site");
+        if (newSiteCode <= 0) throw new ContractValidationError("Destination site must be a positive whole number.");
+        await reassignContractAgainstApi(contractId, {
+          NewSiteCode: newSiteCode,
+          StartDate: getRequiredDate(formData, "reassignStartDate", "Effective start date"),
+          StartOdometer: getRequiredInteger(formData, "reassignStartOdometer", "Start odometer"),
+          Reason: getOptionalText(formData, "reassignReason", "Reassignment reason", 1000) ?? "Reassigned from contract detail.",
+        });
+        operation = "reassigned";
+        break;
+      }
       case "close": {
         const request: CloseContractRequest = {
           EndDate: getRequiredDate(formData, "endDate", "End date"),
