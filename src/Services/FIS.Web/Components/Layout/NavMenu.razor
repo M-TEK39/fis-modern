@@ -32,10 +32,20 @@
                         @foreach (var item in group.Items.Where(CanView))
                         {
                             <li class="@GetItemClasses(item)">
-                                <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
-                                    <i class="@item.Icon" aria-hidden="true"></i>
-                                    <span class="legacy-label">@item.Title</span>
-                                </NavLink>
+                                @if (item.ForceLoad)
+                                {
+                                    <a class="legacy-link" href="@item.Href">
+                                        <i class="@item.Icon" aria-hidden="true"></i>
+                                        <span class="legacy-label">@item.Title</span>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <NavLink class="legacy-link" ActiveClass="active" href="@item.Href" Match="@item.Match">
+                                        <i class="@item.Icon" aria-hidden="true"></i>
+                                        <span class="legacy-label">@item.Title</span>
+                                    </NavLink>
+                                }
                             </li>
                         }
                     </ul>
@@ -51,7 +61,8 @@
         string Href,
         string Icon,
         long? RequiredPermission = null,
-        NavLinkMatch Match = NavLinkMatch.Prefix);
+        NavLinkMatch Match = NavLinkMatch.Prefix,
+        bool ForceLoad = false);
     private sealed record NavGroup(string Id, string Title, string Icon, IReadOnlyList<NavItem> Items);
 
     private static readonly IReadOnlyList<NavGroup> NavigationGroups =
@@ -70,7 +81,7 @@
             new("Full Maintenance Lease", "/full-maintenance-lease", "bx bx-cog", LegacyPermissionBits.ContractManagement),
             new("Workshop", "/workshop", "bx bx-wrench", LegacyPermissionBits.Workshop),
             new("Job Cards", "/job-cards", "bx bx-id-card", LegacyPermissionBits.Workshop),
-            new("Validation Data", "/validation-data", "bx bx-check-shield", LegacyPermissionBits.VehicleManagement)
+            new("Validation Data", "/validation-data", "bx bx-check-shield", LegacyPermissionBits.VehicleManagement, ForceLoad: true)
         ]),
         new("trips-hire", "Trips & Hire", "bx bx-navigation",
         [

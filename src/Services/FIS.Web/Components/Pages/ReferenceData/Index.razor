@@ -1,11 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_department.aspx"
-@page "/Validation/MNT_Department_Add.aspx"
-@page "/Validation/MNT_Department_Edit.aspx"
-@page "/Validation/MNT_DepartmentEdit.aspx"
-@page "/Validation/MNT_Department_Update.aspx"
-@page "/Validation/MNT_Department_Del.aspx"
-@page "/Validation/MNT_Department_Del_Check.aspx"
 @page "/Validation/MNT_make.aspx"
 @page "/Validation/MNT_Make_Add.aspx"
 @page "/Validation/MNT_Make_Edit.aspx"
@@ -52,7 +45,6 @@
 @using FIS.Web.Components.Pages.ReferenceData
 @inject NavigationManager Navigation
 @inject ReferenceDataApiService RefDataService
-@inject DepartmentApiService DepartmentService
 
 <PageTitle>Reference Data Management - Fleet Information System</PageTitle>
 
@@ -95,10 +87,6 @@
         <button class="tab @(_activeTab == "models" ? "active" : "")" @onclick='() => SetActiveTab("models")'>
             <i class="bx bx-cog"></i>
             Vehicle Models
-        </button>
-        <button class="tab @(_activeTab == "departments" ? "active" : "")" @onclick='() => SetActiveTab("departments")'>
-            <i class="bx bx-buildings"></i>
-            Departments
         </button>
         <button class="tab @(_activeTab == "sites" ? "active" : "")" @onclick='() => SetActiveTab("sites")'>
             <i class="bx bx-map-pin"></i>
@@ -150,10 +138,6 @@
         else if (_activeTab == "models")
         {
             <ModelsTab />
-        }
-        else if (_activeTab == "departments")
-        {
-            <DepartmentsTab />
         }
         else if (_activeTab == "sites")
         {
@@ -215,7 +199,6 @@
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
         Row("Vehicle", "Vehicle Models", "/reference-data?tab=models"),
-        Row("Organisation", "Departments", "/reference-data?tab=departments"),
         Row("Organisation", "Sites", "/reference-data?tab=sites"),
         Row("Licence", "License Fees", "/reference-data?tab=licensefees"),
         Row("Licence", "Drivers Licenses", "/reference-data?tab=driverlicenses"),
@@ -232,7 +215,7 @@
         var allowed = new HashSet<string>
         {
             "makes", "types", "fueltypes", "classes", "units", "licenses", "models",
-            "departments", "sites", "licensefees", "driverlicenses", "extras", "losstypes"
+            "sites", "licensefees", "driverlicenses", "extras", "losstypes"
         };
 
         if (allowed.Contains(requested))
@@ -246,13 +229,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_department.aspx" => "departments",
-            "validation/mnt_department_add.aspx" => "departments",
-            "validation/mnt_department_edit.aspx" => "departments",
-            "validation/mnt_departmentedit.aspx" => "departments",
-            "validation/mnt_department_update.aspx" => "departments",
-            "validation/mnt_department_del.aspx" => "departments",
-            "validation/mnt_department_del_check.aspx" => "departments",
             "validation/mnt_make.aspx" => "makes",
             "validation/mnt_make_add.aspx" => "makes",
             "validation/mnt_make_edit.aspx" => "makes",
