@@ -109,6 +109,7 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
   const searchType = getSearchType(getQueryValue(query.type) ?? getQueryValue(query.Radio1));
   const searchTerm = (getQueryValue(query.q) ?? getQueryValue(query.txtGGNum) ?? "").trim();
   const initialVehicleCode = getInitialVehicleCode(getQueryValue(query.vmfCode) ?? getQueryValue(query.vmf));
+  const today = new Date().toISOString().slice(0, 10);
 
   let vehicleOptions;
   try {
@@ -132,6 +133,7 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
         initialSearchTerm={searchTerm}
         initialSearchType={searchType}
         initialVehicleCode={initialVehicleCode}
+        today={today}
         vehicleOptions={vehicleOptions}
       />
       <div className="vehicle-footer-actions">

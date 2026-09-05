@@ -108,6 +108,7 @@ export default async function VehicleCreatePage() {
 
   try {
     const referenceData = await getVehicleCreateReferenceData();
+    const today = new Date().toISOString().slice(0, 10);
 
     return (
       <main className="page-shell vehicle-page-shell">
@@ -122,7 +123,7 @@ export default async function VehicleCreatePage() {
               Vehicle Master
             </Link>
           </header>
-          <VehicleCreateClient referenceData={referenceData} />
+          <VehicleCreateClient referenceData={referenceData} today={today} />
           <div className="vehicle-footer-actions">
             <Link className="button button-secondary" href="/vehicles">
               Back to Vehicle Master

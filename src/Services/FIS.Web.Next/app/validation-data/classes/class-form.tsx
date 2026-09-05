@@ -17,9 +17,18 @@ type ClassFormProps = {
 };
 
 const initialState: ClassActionState = { status: "idle" };
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-ZA", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "Africa/Johannesburg",
+});
 
 function inputValue(value: string | number | null | undefined) {
   return value === null || value === undefined ? "" : String(value);
+}
+
+function formatDateTime(value: string | null | undefined) {
+  return value ? DATE_TIME_FORMATTER.format(new Date(value)) : "-";
 }
 
 function Field({ id, label, required = false, children }: Readonly<{ id: string; label: string; required?: boolean; children: ReactNode }>) {
@@ -73,8 +82,8 @@ export default function ClassForm({ action, classRecord, mode }: ClassFormProps)
           <div className="vehicle-form-section-header"><div><p className="eyebrow">Audit</p><h2 id="class-audit-title">Record history</h2></div></div>
           <dl className="status-maintenance-details">
             <div><dt>Class code</dt><dd>{classRecord.classCode}</dd></div>
-            <div><dt>Created</dt><dd>{classRecord.dateCreated ? new Date(classRecord.dateCreated).toLocaleString() : "-"}</dd></div>
-            <div><dt>Last updated</dt><dd>{classRecord.dateUpdated ? new Date(classRecord.dateUpdated).toLocaleString() : "-"}</dd></div>
+            <div><dt>Created</dt><dd>{formatDateTime(classRecord.dateCreated)}</dd></div>
+            <div><dt>Last updated</dt><dd>{formatDateTime(classRecord.dateUpdated)}</dd></div>
           </dl>
         </section>
       ) : null}

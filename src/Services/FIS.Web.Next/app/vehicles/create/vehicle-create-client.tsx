@@ -18,6 +18,7 @@ const initialSearchStatus: SearchVehicleActionState = { status: "idle", results:
 
 type VehicleCreateClientProps = {
   referenceData: VehicleCreateReferenceData;
+  today: string;
 };
 
 function Field({
@@ -110,7 +111,7 @@ function QuickSearch() {
   );
 }
 
-export default function VehicleCreateClient({ referenceData }: VehicleCreateClientProps) {
+export default function VehicleCreateClient({ referenceData, today }: VehicleCreateClientProps) {
   const [state, formAction] = useActionState<CreateVehicleActionState, FormData>(
     createVehicleAction,
     initialActionState,
@@ -237,7 +238,7 @@ export default function VehicleCreateClient({ referenceData }: VehicleCreateClie
           </Field>
 
           <Field id="takeOnDate" label="Take-on date" required>
-            <input id="takeOnDate" name="takeOnDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
+            <input id="takeOnDate" name="takeOnDate" type="date" defaultValue={today} required />
           </Field>
 
           <Field id="takeOnOdo" label="Take-on odometer (KM)" required>
@@ -253,7 +254,7 @@ export default function VehicleCreateClient({ referenceData }: VehicleCreateClie
           </Field>
 
           <Field id="purchaseDate" label="Purchase date" required>
-            <input id="purchaseDate" name="purchaseDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required />
+            <input id="purchaseDate" name="purchaseDate" type="date" defaultValue={today} required />
           </Field>
 
           <Field id="purchaseAmount" label="Purchase amount (R)" required>

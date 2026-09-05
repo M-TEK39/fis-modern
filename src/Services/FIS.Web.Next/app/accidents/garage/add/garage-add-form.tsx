@@ -18,6 +18,7 @@ type GarageAddFormProps = {
   initialVehicleCode: number | null;
   initialSearchTerm: string;
   initialSearchType: GarageSearchType;
+  today: string;
 };
 
 function Field({
@@ -56,9 +57,9 @@ export default function GarageAddForm({
   initialVehicleCode,
   initialSearchTerm,
   initialSearchType,
+  today,
 }: GarageAddFormProps) {
   const [state, formAction] = useActionState(createGarageAccidentAction, initialActionState);
-  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <form action={formAction} className="vehicle-create-form">
