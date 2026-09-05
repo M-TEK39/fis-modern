@@ -32,12 +32,13 @@ export type UserAdminApiErrorReason = "unauthorized" | "unavailable" | "invalid-
 
 export type UserAdminMutationResult =
   | { ok: true; message?: string }
-  | { ok: false; reason: UserAdminApiErrorReason; message?: string };
+  | { ok: false; reason: UserAdminApiErrorReason | "not-found" | "rejected"; message?: string };
 
 export class UserAdminApiError extends Error {
   constructor(
     public readonly reason: UserAdminApiErrorReason,
     message: string,
+    public readonly status?: number,
   ) {
     super(message);
     this.name = "UserAdminApiError";
@@ -139,9 +140,20 @@ async function requestApi(path: string, init: RequestInit = {}) {
     }
 
     if (!response.ok) {
+      let message = `FIS API returned HTTP ${response.status}.`;
+      try {
+        const payload = await response.clone().json();
+        if (isRecord(payload)) {
+          message = asString(getValue(payload, "message", "Message", "error")) ?? message;
+        }
+      } catch {
+        // Keep the status-based message when the error body is not JSON.
+      }
+
       throw new UserAdminApiError(
         response.status >= 500 ? "unavailable" : "invalid-response",
-        `FIS API returned HTTP ${response.status}.`,
+        message,
+        response.status,
       );
     }
 
@@ -214,8 +226,12 @@ export async function getUserAdminProfiles(alphabet: string) {
 }
 
 export async function resetUserLogin(username: string): Promise<UserAdminMutationResult> {
+  return runUserAdminMutation("api/auth/reset-login", username);
+}
+
+async function runUserAdminMutation(path: string, username: string): Promise<UserAdminMutationResult> {
   try {
-    const response = await requestApi("api/auth/reset-login", {
+    const response = await requestApi(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ username }),
@@ -234,10 +250,26 @@ export async function resetUserLogin(username: string): Promise<UserAdminMutatio
     return { ok: false, reason: "invalid-response", message };
   } catch (error) {
     if (error instanceof UserAdminApiError) {
-      return { ok: false, reason: error.reason };
+      return {
+        ok: false,
+        reason: error.status === 404 ? "not-found" : error.status === 400 ? "rejected" : error.reason,
+        message: error.message,
+      };
     }
 
-    console.error("FIS API reset-login request failed", error instanceof Error ? error.message : "unknown error");
+    console.error("FIS API user administration mutation failed", error instanceof Error ? error.message : "unknown error");
     return { ok: false, reason: "unavailable" };
   }
+}
+
+export async function deactivateUser(username: string): Promise<UserAdminMutationResult> {
+  return runUserAdminMutation("api/auth/deactivate-user", username);
+}
+
+export async function deactivateExpiredPassword(username: string): Promise<UserAdminMutationResult> {
+  return runUserAdminMutation("api/auth/deactivate-expired", username);
+}
+
+export async function activateUser(username: string): Promise<UserAdminMutationResult> {
+  return runUserAdminMutation("api/auth/activate-user", username);
 }

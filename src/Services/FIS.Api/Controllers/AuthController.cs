@@ -1006,6 +1006,16 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<UserAdminResponse>> ActivateUser([FromBody] ActivateUserRequest request)
     {
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        if (!User.IsInRole("User Administration"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var profile = await ResolveUserProfileAsync(request.Username);
@@ -1066,6 +1076,16 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<UserAdminResponse>> DeactivateUser([FromBody] DeactivateExpiredPasswordRequest request)
     {
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        if (!User.IsInRole("User Administration"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var profile = await ResolveUserProfileAsync(request.Username);
@@ -1123,6 +1143,16 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<UserAdminResponse>> DeactivateExpiredPassword([FromBody] DeactivateExpiredPasswordRequest request)
     {
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        if (!User.IsInRole("User Administration"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var profile = await ResolveUserProfileAsync(request.Username);
