@@ -314,6 +314,20 @@ public class FisDbContext : DbContext
             entity.HasIndex(e => e.expires_at).HasDatabaseName("IX_fis_session_tokens_expires_at");
         });
 
+        // Job-card reads include ExtraCode through EF. Keep that relationship
+        // safe for the original extra_codes table; the maintenance repository
+        // negotiates these expanded fields explicitly when they are present.
+        modelBuilder.Entity<ExtraCode>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity

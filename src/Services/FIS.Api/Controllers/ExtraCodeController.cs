@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.ReferenceData;
 using Microsoft.AspNetCore.Authorization;
@@ -21,67 +22,75 @@ public class ExtraCodeController : BaseApiController
         _repository = repository;
     }
 
-    /// <summary>
-    /// Get all extra codes
-    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ExtraCodeDto>>> GetAll()
     {
         try
         {
-            _logger.LogInformation("Getting all extra codes");
-            var codes = await _repository.GetAllAsync();
-            var dtos = codes.Select(MapToDto);
-            return Ok(dtos);
+            return Ok((await _repository.GetAllAsync()).Select(MapToDto));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting all extra codes");
+            _logger.LogError(ex, "Error retrieving extra codes");
             return StatusCode(500, "Error retrieving extra codes");
         }
     }
 
-    /// <summary>
-    /// Get extra code by code
-    /// </summary>
-    [HttpGet("{code}")]
+    [HttpGet("{code:int}")]
     public async Task<ActionResult<ExtraCodeDto>> GetByCode(short code)
     {
         try
         {
-            _logger.LogInformation("Getting extra code {Code}", code);
             var extraCode = await _repository.GetByIdAsync(code);
-
-            if (extraCode == null)
-                return NotFound(new { message = $"Extra code {code} not found" });
-
-            return Ok(MapToDto(extraCode));
+            return extraCode is null
+                ? NotFound(new { message = $"Extra code {code} not found" })
+                : Ok(MapToDto(extraCode));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting extra code {Code}", code);
+            _logger.LogError(ex, "Error retrieving extra code {Code}", code);
             return StatusCode(500, "Error retrieving extra code");
         }
     }
 
-    /// <summary>
-    /// Create new extra code
-    /// </summary>
+    [HttpGet("{code:int}/delete-check")]
+    public async Task<ActionResult<ExtraCodeDeleteCheck>> GetDeleteCheck(short code)
+    {
+        try
+        {
+            if (await _repository.GetByIdAsync(code) is null)
+            {
+                return NotFound(new { message = $"Extra code {code} not found" });
+            }
+
+            return Ok(await _repository.GetDeleteCheckAsync(code));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking extra code dependencies for {Code}", code);
+            return StatusCode(500, "Error checking extra code dependencies");
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<ExtraCodeDto>> Create([FromBody] CreateExtraCodeDto request)
     {
         try
         {
-            _logger.LogInformation("Creating extra code: {Description}", request.Description);
-
-            var code = new ExtraCode
+            var validationError = ValidateDescription(request.Description);
+            if (validationError is not null)
             {
-                extra_description = request.Description,
-                category_type_code = request.CategoryTypeCode
-            };
+                return BadRequest(new { message = validationError });
+            }
 
-            var created = await _repository.CreateAsync(code, GetCurrentUserId());
-            return Ok(MapToDto(created));
+            var created = await _repository.CreateAsync(new ExtraCode
+            {
+                extra_description = request.Description!.Trim(),
+                category_type_code = request.CategoryTypeCode,
+                specific = request.Specific,
+                Additional = request.Additional
+            }, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetByCode), new { code = created.extra_code }, MapToDto(created));
         }
         catch (Exception ex)
         {
@@ -90,26 +99,32 @@ public class ExtraCodeController : BaseApiController
         }
     }
 
-    /// <summary>
-    /// Update existing extra code
-    /// </summary>
-    [HttpPut("{code}")]
+    [HttpPut("{code:int}")]
     public async Task<ActionResult<ExtraCodeDto>> Update(short code, [FromBody] UpdateExtraCodeDto request)
     {
         try
         {
-            _logger.LogInformation("Updating extra code {Code}", code);
+            var validationError = ValidateDescription(request.Description);
+            if (validationError is not null)
+            {
+                return BadRequest(new { message = validationError });
+            }
 
             if (code != request.ExtraCode)
-                return BadRequest("Code mismatch");
+            {
+                return BadRequest(new { message = "Extra code does not match the route." });
+            }
 
             var existing = await _repository.GetByIdAsync(code);
-            if (existing == null)
+            if (existing is null)
+            {
                 return NotFound(new { message = $"Extra code {code} not found" });
+            }
 
-            existing.extra_description = request.Description;
+            existing.extra_description = request.Description!.Trim();
             existing.category_type_code = request.CategoryTypeCode;
-
+            existing.specific = request.Specific;
+            existing.Additional = request.Additional;
             await _repository.UpdateAsync(existing, GetCurrentUserId());
             return Ok(MapToDto(existing));
         }
@@ -120,22 +135,34 @@ public class ExtraCodeController : BaseApiController
         }
     }
 
-    /// <summary>
-    /// Delete extra code
-    /// </summary>
-    [HttpDelete("{code}")]
+    [HttpDelete("{code:int}")]
     public async Task<ActionResult> Delete(short code)
     {
         try
         {
-            _logger.LogInformation("Deleting extra code {Code}", code);
-
-            var existing = await _repository.GetByIdAsync(code);
-            if (existing == null)
+            if (await _repository.GetByIdAsync(code) is null)
+            {
                 return NotFound(new { message = $"Extra code {code} not found" });
+            }
+
+            var deleteCheck = await _repository.GetDeleteCheckAsync(code);
+            if (!deleteCheck.CheckAvailable)
+            {
+                return StatusCode(503, new { message = "Extra dependencies could not be verified, so the extra was not deleted." });
+            }
+
+            if (!deleteCheck.CanDelete)
+            {
+                return Conflict(new
+                {
+                    message = "Remove this extra from the linked vehicle data before deleting it.",
+                    vehicleCount = deleteCheck.VehicleCount,
+                    fleetNumbers = deleteCheck.FleetNumbers
+                });
+            }
 
             await _repository.DeleteAsync(code, GetCurrentUserId());
-            return Ok(new { message = "Extra code deleted successfully", code });
+            return NoContent();
         }
         catch (Exception ex)
         {
@@ -145,37 +172,77 @@ public class ExtraCodeController : BaseApiController
     }
 
     private static ExtraCodeDto MapToDto(ExtraCode code)
-    {
-        return new ExtraCodeDto
+        => new()
         {
             ExtraCode = code.extra_code,
             Description = code.extra_description,
-            CategoryTypeCode = code.category_type_code
+            CategoryTypeCode = code.category_type_code,
+            Specific = code.specific,
+            Additional = code.Additional,
+            DateCreated = code.date_created == DateTime.MinValue ? null : code.date_created,
+            DateUpdated = code.date_updated,
+            CreatedByUserCode = code.created_by_user_code,
+            ModifiedByUserCode = code.modified_by_user_code,
+            IsDeleted = code.is_deleted
         };
-    }
-}
 
-#region Extra Code DTOs
+    private static string? ValidateDescription(string? description)
+        => string.IsNullOrWhiteSpace(description) || description.Trim().Length > 50
+            ? "Extra description is required and must be 50 characters or fewer."
+            : null;
+}
 
 public class ExtraCodeDto
 {
+    [JsonPropertyName("extra_code")]
     public short ExtraCode { get; set; }
+
+    [JsonPropertyName("extra_description")]
     public string? Description { get; set; }
+
+    [JsonPropertyName("category_type_code")]
     public int? CategoryTypeCode { get; set; }
+
+    [JsonPropertyName("specific")]
+    public int? Specific { get; set; }
+
+    [JsonPropertyName("Additional")]
+    public int? Additional { get; set; }
+
+    [JsonPropertyName("date_created")]
+    public DateTime? DateCreated { get; set; }
+
+    [JsonPropertyName("date_updated")]
+    public DateTime? DateUpdated { get; set; }
+
+    [JsonPropertyName("created_by_user_code")]
+    public int? CreatedByUserCode { get; set; }
+
+    [JsonPropertyName("modified_by_user_code")]
+    public int? ModifiedByUserCode { get; set; }
+
+    [JsonPropertyName("is_deleted")]
+    public bool IsDeleted { get; set; }
 }
 
 public class CreateExtraCodeDto
 {
+    [JsonPropertyName("extra_code")]
     public short ExtraCode { get; set; }
+
+    [JsonPropertyName("extra_description")]
     public string? Description { get; set; }
+
+    [JsonPropertyName("category_type_code")]
     public int? CategoryTypeCode { get; set; }
+
+    [JsonPropertyName("specific")]
+    public int? Specific { get; set; }
+
+    [JsonPropertyName("additional")]
+    public int? Additional { get; set; }
 }
 
-public class UpdateExtraCodeDto
+public class UpdateExtraCodeDto : CreateExtraCodeDto
 {
-    public short ExtraCode { get; set; }
-    public string? Description { get; set; }
-    public int? CategoryTypeCode { get; set; }
 }
-
-#endregion

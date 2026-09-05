@@ -607,9 +607,18 @@ public interface IExtraCodeRepository
     Task<IEnumerable<ExtraCode>> GetAllAsync();
     Task<IEnumerable<ExtraCode>> SearchAsync(string searchTerm);
     Task<IEnumerable<ExtraCode>> GetByCategoryAsync(int categoryTypeCode);
+    Task<ExtraCodeDeleteCheck> GetDeleteCheckAsync(short extraCode);
     Task<ExtraCode> CreateAsync(ExtraCode extraCode, int currentUserId);
     Task UpdateAsync(ExtraCode extraCode, int currentUserId);
     Task DeleteAsync(short extraCode, int currentUserId);
+}
+
+public sealed record ExtraCodeDeleteCheck(
+    int VehicleCount,
+    IReadOnlyList<string> FleetNumbers,
+    bool CheckAvailable = true)
+{
+    public bool CanDelete => CheckAvailable && VehicleCount == 0;
 }
 
 /// <summary>
