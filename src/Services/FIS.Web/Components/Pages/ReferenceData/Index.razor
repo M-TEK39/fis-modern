@@ -1,10 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_model.aspx"
-@page "/Validation/MNT_Model_Add.aspx"
-@page "/Validation/MNT_Model_Edit.aspx"
-@page "/Validation/MNT_Model_Update.aspx"
-@page "/Validation/MNT_Model_Del.aspx"
-@page "/Validation/MNT_Model_Del_Check.aspx"
 @page "/Validation/MNT_Site.aspx"
 @page "/Validation/MNT_SiteAdd.aspx"
 @page "/Validation/MNT_Site_Edit.aspx"
@@ -48,7 +42,7 @@
             <i class="bx bx-data"></i>
             Reference Data Management
         </h1>
-        <p class="page-description">Manage vehicle makes, models, types, and fuel types</p>
+        <p class="page-description">Manage vehicle makes, types, and fuel types</p>
     </div>
 </div>
 
@@ -73,10 +67,6 @@
         <button class="tab @(_activeTab == "licenses" ? "active" : "")" @onclick='() => SetActiveTab("licenses")'>
             <i class="bx bx-id-card"></i>
             License Types
-        </button>
-        <button class="tab @(_activeTab == "models" ? "active" : "")" @onclick='() => SetActiveTab("models")'>
-            <i class="bx bx-cog"></i>
-            Vehicle Models
         </button>
         <button class="tab @(_activeTab == "sites" ? "active" : "")" @onclick='() => SetActiveTab("sites")'>
             <i class="bx bx-map-pin"></i>
@@ -120,10 +110,6 @@
         else if (_activeTab == "licenses")
         {
             <LicenseTypesTab />
-        }
-        else if (_activeTab == "models")
-        {
-            <ModelsTab />
         }
         else if (_activeTab == "sites")
         {
@@ -183,7 +169,6 @@
         Row("Vehicle", "Vehicle Classes", "/reference-data?tab=classes"),
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
-        Row("Vehicle", "Vehicle Models", "/reference-data?tab=models"),
         Row("Organisation", "Sites", "/reference-data?tab=sites"),
         Row("Licence", "License Fees", "/reference-data?tab=licensefees"),
         Row("Licence", "Drivers Licenses", "/reference-data?tab=driverlicenses"),
@@ -199,7 +184,7 @@
 
         var allowed = new HashSet<string>
         {
-            "types", "fueltypes", "classes", "units", "licenses", "models",
+            "types", "fueltypes", "classes", "units", "licenses",
             "sites", "licensefees", "driverlicenses", "extras", "losstypes"
         };
 
@@ -214,12 +199,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_model.aspx" => "models",
-            "validation/mnt_model_add.aspx" => "models",
-            "validation/mnt_model_edit.aspx" => "models",
-            "validation/mnt_model_update.aspx" => "models",
-            "validation/mnt_model_del.aspx" => "models",
-            "validation/mnt_model_del_check.aspx" => "models",
             "validation/mnt_site.aspx" => "sites",
             "validation/mnt_siteadd.aspx" => "sites",
             "validation/mnt_site_edit.aspx" => "sites",
