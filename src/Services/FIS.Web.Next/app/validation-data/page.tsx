@@ -29,7 +29,7 @@ export default async function ValidationDataPage() {
     ["Organisation Departments", "/validation-data/departments"],
     ["Organisation Sites", "/reference-data?tab=sites"],
     ["Vehicle Makes", "/validation-data/makes"],
-    ["Vehicle Models", "/reference-data?tab=models"],
+    ["Vehicle Models", "/validation-data/models"],
     ["Vehicle Types", "/reference-data?tab=types"],
     ["Vehicle Classes", "/reference-data?tab=classes"],
     ["Fuel Types", "/reference-data?tab=fueltypes"],
