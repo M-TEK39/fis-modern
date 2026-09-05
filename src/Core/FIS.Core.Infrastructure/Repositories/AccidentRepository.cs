@@ -297,6 +297,9 @@ public sealed class AccidentRepository : IAccidentRepository
     public Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode)
         => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, dateRangeMode: mode);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode)
+        => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, garageMode: mode);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -468,10 +471,11 @@ public sealed class AccidentRepository : IAccidentRepository
         string searchColumn,
         bool containsSearch,
         string? flagMode = null,
-        string? dateRangeMode = null)
+        string? dateRangeMode = null,
+        string? garageMode = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
-        if (flagMode is null && dateRangeMode is null && normalizedSearchTerm.Length == 0)
+        if (flagMode is null && dateRangeMode is null && garageMode is null && normalizedSearchTerm.Length == 0)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -496,7 +500,13 @@ public sealed class AccidentRepository : IAccidentRepository
             return Array.Empty<AccidentVehicleReportRow>();
         }
 
-        var hasFilter = searchAvailable || flagAvailable || dateAvailable;
+        var garageColumnAvailable = vehicleColumns.Contains("location_code");
+        if ((garageMode is "jhb" or "pta") && !garageColumnAvailable)
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null;
         if (!hasFilter)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -565,6 +575,10 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 conditions.Add(GetAllAccidentDateFilter(dateRangeMode));
             }
+            else if (garageMode is not null)
+            {
+                conditions.Add(GetGarageFilter(garageMode));
+            }
             else
             {
                 conditions.Add(containsSearch
@@ -581,12 +595,13 @@ public sealed class AccidentRepository : IAccidentRepository
                 """;
             if (flagMode is null)
             {
-                if (dateRangeMode is null)
+                if (dateRangeMode is null && garageMode is null)
                 {
                     AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
                 }
 
                 AddDateRangeParameters(command, dateRangeMode);
+                AddGarageParameters(command, garageMode);
             }
 
             var results = new List<AccidentVehicleReportRow>();
@@ -1351,6 +1366,23 @@ public sealed class AccidentRepository : IAccidentRepository
             case "2002-current":
                 AddParameter(command, "@currentStartDate", DbType.Date, new DateTime(2002, 1, 1));
                 break;
+        }
+    }
+
+    private static string GetGarageFilter(string mode)
+        => mode switch
+        {
+            "jhb" => "[v].[location_code] = @garageCode",
+            "pta" => "[v].[location_code] = @garageCode",
+            "all" => "1 = 1",
+            _ => "1 = 0"
+        };
+
+    private static void AddGarageParameters(DbCommand command, string? mode)
+    {
+        if (mode is "jhb" or "pta")
+        {
+            AddParameter(command, "@garageCode", DbType.Int32, mode == "jhb" ? 1 : 2);
         }
     }
 

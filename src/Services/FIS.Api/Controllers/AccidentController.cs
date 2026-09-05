@@ -160,6 +160,33 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/garage-detail")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetGarageAccidentsReport(
+        [FromQuery] string mode = "jhb")
+    {
+        var normalizedMode = mode.Trim().ToLowerInvariant() switch
+        {
+            "jhb" or "radiojhb" => "jhb",
+            "pta" or "radiopta" => "pta",
+            "all" or "radioall" => "all",
+            _ => string.Empty
+        };
+        if (normalizedMode.Length == 0)
+        {
+            return BadRequest(new { error = "Mode must be jhb, pta, or all." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetGarageAccidentsReportAsync(normalizedMode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving garage accident report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/driver")]
     public async Task<ActionResult<IEnumerable<AccidentDriverReportRow>>> GetDriverReport(
         [FromQuery] string searchTerm,

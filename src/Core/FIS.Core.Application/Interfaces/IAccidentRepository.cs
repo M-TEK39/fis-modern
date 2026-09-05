@@ -10,6 +10,7 @@ public interface IAccidentRepository
     Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription);
     Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode);
+    Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
