@@ -320,7 +320,7 @@ public sealed class SiteDriversController : BaseApiController
 
     private static void EnsureDriverTable(TableSchema schema)
     {
-        if (DriverColumns.Any(column => !schema.Has(column)))
+        if (!schema.Has("site_driver_code") || DriverColumns.Any(column => !schema.Has(column)))
         {
             throw new InvalidOperationException("The dbo.site_drivers table is missing one or more required legacy columns.");
         }
