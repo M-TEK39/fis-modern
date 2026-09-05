@@ -36,7 +36,7 @@ export default async function ValidationDataPage() {
     ["Units of Measure", "/reference-data?tab=units"],
     ["License Types", "/reference-data?tab=licenses"],
     ["License Fees", "/validation-data/license-fees"],
-    ["Driver Licenses", "/reference-data?tab=driverlicenses"],
+    ["Driver Licenses", "/validation-data/driver-licenses"],
     ["Loss Types", "/reference-data?tab=losstypes"],
   ] as const;
 
