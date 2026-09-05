@@ -328,6 +328,19 @@ public class FisDbContext : DbContext
             entity.Ignore(e => e.ModifiedByUser);
         });
 
+        // LossType reads and writes negotiate these expanded fields at runtime
+        // because the original Loss_type table only has its code and description.
+        modelBuilder.Entity<LossType>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity

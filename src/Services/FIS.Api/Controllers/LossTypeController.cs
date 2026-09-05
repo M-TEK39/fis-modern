@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.ReferenceData;
 using Microsoft.AspNetCore.Authorization;
@@ -21,66 +22,72 @@ public class LossTypeController : BaseApiController
         _repository = repository;
     }
 
-    /// <summary>
-    /// Get all loss types
-    /// </summary>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<LossTypeDto>>> GetAll()
     {
         try
         {
-            _logger.LogInformation("Getting all loss types");
-            var types = await _repository.GetAllAsync();
-            var dtos = types.Select(MapToDto);
-            return Ok(dtos);
+            return Ok((await _repository.GetAllAsync()).Select(MapToDto));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting all loss types");
+            _logger.LogError(ex, "Error retrieving loss types");
             return StatusCode(500, "Error retrieving loss types");
         }
     }
 
-    /// <summary>
-    /// Get loss type by code
-    /// </summary>
-    [HttpGet("{code}")]
+    [HttpGet("{code:int}")]
     public async Task<ActionResult<LossTypeDto>> GetByCode(short code)
     {
         try
         {
-            _logger.LogInformation("Getting loss type {Code}", code);
             var lossType = await _repository.GetByIdAsync(code);
-
-            if (lossType == null)
-                return NotFound(new { message = $"Loss type with code {code} not found" });
-
-            return Ok(MapToDto(lossType));
+            return lossType is null
+                ? NotFound(new { message = $"Loss type with code {code} not found" })
+                : Ok(MapToDto(lossType));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting loss type {Code}", code);
+            _logger.LogError(ex, "Error retrieving loss type {Code}", code);
             return StatusCode(500, "Error retrieving loss type");
         }
     }
 
-    /// <summary>
-    /// Create new loss type
-    /// </summary>
+    [HttpGet("{code:int}/delete-check")]
+    public async Task<ActionResult<LossTypeDeleteCheck>> GetDeleteCheck(short code)
+    {
+        try
+        {
+            if (await _repository.GetByIdAsync(code) is null)
+            {
+                return NotFound(new { message = $"Loss type with code {code} not found" });
+            }
+
+            return Ok(await _repository.GetDeleteCheckAsync(code));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking loss type dependencies for {Code}", code);
+            return StatusCode(500, "Error checking loss type dependencies");
+        }
+    }
+
     [HttpPost]
     public async Task<ActionResult<LossTypeDto>> Create([FromBody] CreateLossTypeDto request)
     {
         try
         {
-            _logger.LogInformation("Creating loss type: {Description}", request.Description);
-
-            var lossType = new LossType
+            var validationError = ValidateDescription(request.Description);
+            if (validationError is not null)
             {
-                loss_description = request.Description
-            };
+                return BadRequest(new { message = validationError });
+            }
 
-            var created = await _repository.CreateAsync(lossType, GetCurrentUserId());
-            return Ok(MapToDto(created));
+            var created = await _repository.CreateAsync(new LossType
+            {
+                loss_description = request.Description!.Trim()
+            }, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetByCode), new { code = created.loss_type_code }, MapToDto(created));
         }
         catch (Exception ex)
         {
@@ -89,25 +96,29 @@ public class LossTypeController : BaseApiController
         }
     }
 
-    /// <summary>
-    /// Update existing loss type
-    /// </summary>
-    [HttpPut("{code}")]
+    [HttpPut("{code:int}")]
     public async Task<ActionResult<LossTypeDto>> Update(short code, [FromBody] UpdateLossTypeDto request)
     {
         try
         {
-            _logger.LogInformation("Updating loss type {Code}", code);
+            var validationError = ValidateDescription(request.Description);
+            if (validationError is not null)
+            {
+                return BadRequest(new { message = validationError });
+            }
 
-            if (code != request.LossTypeCode)
-                return BadRequest("Code mismatch");
+            if (code != request.LossTypeCode && code != request.LossCode)
+            {
+                return BadRequest(new { message = "Loss type code does not match the route." });
+            }
 
             var existing = await _repository.GetByIdAsync(code);
-            if (existing == null)
+            if (existing is null)
+            {
                 return NotFound(new { message = $"Loss type with code {code} not found" });
+            }
 
-            existing.loss_description = request.Description;
-
+            existing.loss_description = request.Description!.Trim();
             await _repository.UpdateAsync(existing, GetCurrentUserId());
             return Ok(MapToDto(existing));
         }
@@ -118,22 +129,34 @@ public class LossTypeController : BaseApiController
         }
     }
 
-    /// <summary>
-    /// Delete loss type
-    /// </summary>
-    [HttpDelete("{code}")]
+    [HttpDelete("{code:int}")]
     public async Task<ActionResult> Delete(short code)
     {
         try
         {
-            _logger.LogInformation("Deleting loss type {Code}", code);
-
-            var existing = await _repository.GetByIdAsync(code);
-            if (existing == null)
+            if (await _repository.GetByIdAsync(code) is null)
+            {
                 return NotFound(new { message = $"Loss type with code {code} not found" });
+            }
+
+            var deleteCheck = await _repository.GetDeleteCheckAsync(code);
+            if (!deleteCheck.CheckAvailable)
+            {
+                return StatusCode(503, new { message = "Loss type dependencies could not be verified, so the loss type was not deleted." });
+            }
+
+            if (!deleteCheck.CanDelete)
+            {
+                return Conflict(new
+                {
+                    message = "Delete or change the linked loss records before deleting this loss description.",
+                    lossCount = deleteCheck.LossCount,
+                    losses = deleteCheck.Losses
+                });
+            }
 
             await _repository.DeleteAsync(code, GetCurrentUserId());
-            return Ok(new { message = "Loss type deleted successfully", code });
+            return NoContent();
         }
         catch (Exception ex)
         {
@@ -143,33 +166,63 @@ public class LossTypeController : BaseApiController
     }
 
     private static LossTypeDto MapToDto(LossType type)
-    {
-        return new LossTypeDto
+        => new()
         {
             LossTypeCode = type.loss_type_code,
-            Description = type.loss_description
+            LossCode = type.loss_type_code,
+            Description = type.loss_description,
+            DateCreated = type.date_created == DateTime.MinValue ? null : type.date_created,
+            DateUpdated = type.date_updated,
+            CreatedByUserCode = type.created_by_user_code,
+            ModifiedByUserCode = type.modified_by_user_code,
+            IsDeleted = type.is_deleted
         };
-    }
-}
 
-#region Loss Type DTOs
+    private static string? ValidateDescription(string? description)
+        => string.IsNullOrWhiteSpace(description) || description.Trim().Length > 30
+            ? "Loss description is required and must be 30 characters or fewer."
+            : null;
+}
 
 public class LossTypeDto
 {
+    [JsonPropertyName("loss_type_code")]
     public short LossTypeCode { get; set; }
+
+    [JsonPropertyName("loss_code")]
+    public short LossCode { get; set; }
+
+    [JsonPropertyName("loss_description")]
     public string? Description { get; set; }
+
+    [JsonPropertyName("date_created")]
+    public DateTime? DateCreated { get; set; }
+
+    [JsonPropertyName("date_updated")]
+    public DateTime? DateUpdated { get; set; }
+
+    [JsonPropertyName("created_by_user_code")]
+    public int? CreatedByUserCode { get; set; }
+
+    [JsonPropertyName("modified_by_user_code")]
+    public int? ModifiedByUserCode { get; set; }
+
+    [JsonPropertyName("is_deleted")]
+    public bool IsDeleted { get; set; }
 }
 
 public class CreateLossTypeDto
 {
+    [JsonPropertyName("loss_type_code")]
     public short LossTypeCode { get; set; }
+
+    [JsonPropertyName("loss_code")]
+    public short LossCode { get; set; }
+
+    [JsonPropertyName("loss_description")]
     public string? Description { get; set; }
 }
 
-public class UpdateLossTypeDto
+public class UpdateLossTypeDto : CreateLossTypeDto
 {
-    public short LossTypeCode { get; set; }
-    public string? Description { get; set; }
 }
-
-#endregion

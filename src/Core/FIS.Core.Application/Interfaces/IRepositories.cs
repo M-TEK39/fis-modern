@@ -632,7 +632,21 @@ public interface ILossTypeRepository
     Task<IEnumerable<LossType>> SearchAsync(string searchTerm);
     Task<LossType> CreateAsync(LossType lossType, int currentUserId);
     Task UpdateAsync(LossType lossType, int currentUserId);
+    Task<LossTypeDeleteCheck> GetDeleteCheckAsync(short lossTypeCode);
     Task DeleteAsync(short lossTypeCode, int currentUserId);
+}
+
+public sealed record LossTypeDeleteDependency(
+    string? FleetNumber,
+    DateTime? LossDate,
+    string? LossReference);
+
+public sealed record LossTypeDeleteCheck(
+    int LossCount,
+    IReadOnlyList<LossTypeDeleteDependency> Losses,
+    bool CheckAvailable = true)
+{
+    public bool CanDelete => CheckAvailable && LossCount == 0;
 }
 
 /// <summary>
