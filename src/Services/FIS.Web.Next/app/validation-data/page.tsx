@@ -38,7 +38,7 @@ export default async function ValidationDataPage() {
     ["License Fees", "/validation-data/license-fees"],
     ["Driver Licenses", "/validation-data/driver-licenses"],
     ["Extra Codes", "/validation-data/extras"],
-    ["Loss Types", "/reference-data?tab=losstypes"],
+    ["Loss Descriptions", "/validation-data/loss-types"],
   ] as const;
 
   return (
