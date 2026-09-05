@@ -259,9 +259,15 @@ public interface IMakeRepository
     Task<Make?> GetByNameAsync(string makeName);
     Task<IEnumerable<Make>> GetAllMakesAsync();
     Task<IEnumerable<Make>> SearchMakesAsync(string searchTerm);
+    Task<MakeDeleteCheck> GetDeleteCheckAsync(short makeCode);
     Task<Make> CreateAsync(Make make, int currentUserId);
     Task<Make> UpdateAsync(Make make, int currentUserId);
     Task DeleteAsync(short makeCode, int currentUserId);
+}
+
+public sealed record MakeDeleteCheck(int ModelCount)
+{
+    public bool CanDelete => ModelCount == 0;
 }
 
 /// <summary>

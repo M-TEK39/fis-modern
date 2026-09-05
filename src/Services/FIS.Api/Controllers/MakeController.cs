@@ -103,6 +103,26 @@ public class MakeController : BaseApiController
         }
     }
 
+    [HttpGet("{makeCode:int}/delete-check")]
+    public async Task<ActionResult<MakeDeleteCheck>> GetDeleteCheck(short makeCode)
+    {
+        try
+        {
+            var make = await _makeRepository.GetByIdAsync(makeCode);
+            if (make is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(await _makeRepository.GetDeleteCheckAsync(makeCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking make dependencies for {MakeCode}", makeCode);
+            return StatusCode(500, "An error occurred while checking make dependencies");
+        }
+    }
+
     /// <summary>
     /// Get make by name
     /// </summary>
@@ -233,6 +253,16 @@ public class MakeController : BaseApiController
             if (existingMake == null)
             {
                 return NotFound();
+            }
+
+            var deleteCheck = await _makeRepository.GetDeleteCheckAsync(makeCode);
+            if (!deleteCheck.CanDelete)
+            {
+                return Conflict(new
+                {
+                    message = "This make cannot be deleted while models are linked to it.",
+                    modelCount = deleteCheck.ModelCount
+                });
             }
 
             await _makeRepository.DeleteAsync(makeCode, GetCurrentUserId());
