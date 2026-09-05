@@ -1,5 +1,4 @@
 ﻿@inherits LayoutComponentBase
-@using FIS.Web.Components.Pages.Users
 @using FIS.Web.Services
 @inject NavigationManager Navigation
 @inject TokenService TokenService
@@ -98,8 +97,7 @@
             return;
         }
 
-        _suppressBody = UserAdminRoutes.IsUserAdminPath(path)
-            || path == "/change-password"
+        _suppressBody = path == "/change-password"
             || path == "/change-password-question";
     }
 

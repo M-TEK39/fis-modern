@@ -4,14 +4,12 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using FIS.Web.Components.Pages.ChangePassword
 @using FIS.Web.Components.Pages.ChangePasswordQuestion
-@using FIS.Web.Components.Pages.Users
 @using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Services
 @inject AuthApiService AuthService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserProfileApiService UserProfileApiService
-@inject UserAccessContextService UserAccessContextService
 @inject NotificationApiService NotificationApiService
 @implements IDisposable
 
@@ -290,10 +288,6 @@
                         </div>
                     </div>
                 }
-                else if (_activeSection == "user-admin")
-                {
-                    <UserAdminRouteContent RouteKey="@GetUserAdminRouteKey()" />
-                }
                 else if (_activeSection == "passwords")
                 {
                     <ChangePasswordContent />
@@ -347,8 +341,6 @@
     private short? _profileSiteCode;
     private short? _profileUserAccessCode;
     private string _avatarText = "AU";
-    private bool _canAccessUserAdmin;
-    private long _accessLevel;
     private string? _notificationError;
     private IReadOnlyList<NotificationListItemDto> _notifications = Array.Empty<NotificationListItemDto>();
     private CancellationTokenSource? _notificationRefreshCts;
@@ -360,13 +352,11 @@
     private readonly IReadOnlyList<SettingsSection> _settingsSections =
     [
         new("profile", "Profile", "bx bx-user"),
-        new("user-admin", "User Admin", "bx bx-user-circle"),
         new("passwords", "Change Password", "bx bx-key"),
         new("passwords-question", "Password & Question", "bx bx-shield"),
     ];
 
-    private IEnumerable<SettingsSection> VisibleSettingsSections =>
-        _settingsSections.Where(section => section.Id != "user-admin" || _canAccessUserAdmin);
+    private IEnumerable<SettingsSection> VisibleSettingsSections => _settingsSections;
 
     protected override async Task OnInitializedAsync()
     {
@@ -409,11 +399,6 @@
         _profileFirstName = firstNameClaim ?? string.Empty;
         _profileLastName = lastNameClaim ?? string.Empty;
 
-        _accessLevel = await UserAccessContextService.EnsureAccessLevelAsync(
-            userAccessCode > 0 ? userAccessCode : null,
-            firstNameClaim);
-        _canAccessUserAdmin = (_accessLevel & LegacyPermissionBits.UserAdministration) == LegacyPermissionBits.UserAdministration;
-
         if (userAccessCode > 0)
         {
             var profile = await UserProfileApiService.GetByUserAccessCodeAsync(userAccessCode);
@@ -434,10 +419,6 @@
         _userDisplayName = BuildDisplayName(_profileFirstName, _profileLastName, _userEmail);
         _avatarText = GetAvatarText(_profileFirstName, _profileLastName, _userEmail);
 
-        if (!_canAccessUserAdmin && _activeSection == "user-admin")
-        {
-            _activeSection = "profile";
-        }
     }
 
     private static string BuildDisplayName(string? firstName, string? lastName, string? email)
@@ -620,12 +601,6 @@
 
     private void SetActiveSection(string sectionId)
     {
-        if (sectionId == "user-admin" && !_canAccessUserAdmin)
-        {
-            _activeSection = "profile";
-            return;
-        }
-
         _activeSection = sectionId;
     }
 
@@ -669,17 +644,17 @@
             var settings = settingsValue.ToString();
             if (!string.IsNullOrWhiteSpace(settings))
             {
-                if (settings.StartsWith("users", StringComparison.OrdinalIgnoreCase))
-                {
-                    _activeSection = _canAccessUserAdmin ? "user-admin" : "profile";
-                }
-                else if (settings.Equals("passwords", StringComparison.OrdinalIgnoreCase))
+                if (settings.Equals("passwords", StringComparison.OrdinalIgnoreCase))
                 {
                     _activeSection = "passwords";
                 }
                 else if (settings.Equals("passwords-question", StringComparison.OrdinalIgnoreCase))
                 {
                     _activeSection = "passwords-question";
+                }
+                else
+                {
+                    return;
                 }
 
                 _showSettings = true;
@@ -691,15 +666,6 @@
 
         if (path == "/")
         {
-            return;
-        }
-
-        if (UserAdminRoutes.IsUserAdminPath(path))
-        {
-            _activeSection = _canAccessUserAdmin ? "user-admin" : "profile";
-            _showSettings = true;
-            _showNotifications = false;
-            _showUserMenu = false;
             return;
         }
 
@@ -719,33 +685,6 @@
             _showNotifications = false;
             _showUserMenu = false;
         }
-    }
-
-    private string GetUserAdminRouteKey()
-    {
-        if (!_canAccessUserAdmin)
-        {
-            return UserAdminRoutes.Menu;
-        }
-
-        var uri = new Uri(Navigation.Uri);
-        var query = QueryHelpers.ParseQuery(uri.Query);
-        if (query.TryGetValue("settings", out var settingsValue))
-        {
-            var settings = settingsValue.ToString();
-            if (!string.IsNullOrWhiteSpace(settings)
-                && settings.StartsWith("users", StringComparison.OrdinalIgnoreCase))
-            {
-                return UserAdminRoutes.FromPath("/" + settings.TrimStart('/'));
-            }
-        }
-
-        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-        var path = "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
-
-        return UserAdminRoutes.IsUserAdminPath(path)
-            ? UserAdminRoutes.FromPath(path)
-            : UserAdminRoutes.Menu;
     }
 
     private async Task HandleLogout()
