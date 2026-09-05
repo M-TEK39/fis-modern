@@ -1,10 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_Class.aspx"
-@page "/Validation/MNT_Class_Add.aspx"
-@page "/Validation/MNT_Class_Edit.aspx"
-@page "/Validation/MNT_Class_Update.aspx"
-@page "/Validation/MNT_Class_Del.aspx"
-@page "/Validation/MNT_Class_Del_Check.aspx"
 @page "/Validation/MNT_Licence_Fees.aspx"
 @page "/Validation/MNT_Licence_Fee_Add.aspx"
 @page "/Validation/MNT_Licence_Fee_Edit.aspx"
@@ -49,10 +43,6 @@
             <i class="bx bx-gas-pump"></i>
             Fuel Types
         </button>
-        <button class="tab @(_activeTab == "classes" ? "active" : "")" @onclick='() => SetActiveTab("classes")'>
-            <i class="bx bx-layer"></i>
-            Vehicle Classes
-        </button>
         <button class="tab @(_activeTab == "units" ? "active" : "")" @onclick='() => SetActiveTab("units")'>
             <i class="bx bx-ruler"></i>
             Units of Measure
@@ -87,10 +77,6 @@
         else if (_activeTab == "fueltypes")
         {
             <FuelTypesTab />
-        }
-        else if (_activeTab == "classes")
-        {
-            <ClassesTab />
         }
         else if (_activeTab == "units")
         {
@@ -151,7 +137,6 @@
     [
         Row("Vehicle", "Vehicle Types", "/reference-data?tab=types"),
         Row("Vehicle", "Fuel Types", "/reference-data?tab=fueltypes"),
-        Row("Vehicle", "Vehicle Classes", "/reference-data?tab=classes"),
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
         Row("Licence", "License Fees", "/reference-data?tab=licensefees"),
@@ -168,7 +153,7 @@
 
         var allowed = new HashSet<string>
         {
-            "types", "fueltypes", "classes", "units", "licenses",
+            "types", "fueltypes", "units", "licenses",
             "licensefees", "driverlicenses", "extras", "losstypes"
         };
 
@@ -183,12 +168,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_class.aspx" => "classes",
-            "validation/mnt_class_add.aspx" => "classes",
-            "validation/mnt_class_edit.aspx" => "classes",
-            "validation/mnt_class_update.aspx" => "classes",
-            "validation/mnt_class_del.aspx" => "classes",
-            "validation/mnt_class_del_check.aspx" => "classes",
             "validation/mnt_licence_fees.aspx" => "licensefees",
             "validation/mnt_licence_fee_add.aspx" => "licensefees",
             "validation/mnt_licence_fee_edit.aspx" => "licensefees",
