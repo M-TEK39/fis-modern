@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -27,9 +28,9 @@ export default function ResetPasswordForm({ token }: { token: string }) {
           <span aria-hidden="true">i</span>
           <span>{state.message}</span>
         </div>
-        <a className="button button-primary button-wide" href="/login">
+        <Link className="button button-primary button-wide" href="/login">
           Continue to sign in
-        </a>
+        </Link>
       </>
     );
   }

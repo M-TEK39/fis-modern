@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useFormStatus } from "react-dom";
 
 const SECURITY_QUESTIONS = [
@@ -91,7 +92,7 @@ export default function ChangePasswordQuestionForm({
       <p className="muted-copy">Use at least 8 characters with uppercase, lowercase, a number, and a special character.</p>
       <div className="button-row">
         <SubmitButton />
-        <a className="button button-secondary" href="/home">Cancel</a>
+        <Link className="button button-secondary" href="/home">Cancel</Link>
       </div>
     </form>
   );

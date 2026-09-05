@@ -1,62 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function SessionRecovery({ returnPath = "/home" }: { returnPath?: string }) {
   const router = useRouter();
+  const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  async function refreshSession() {
+    setPending(true);
+    setFailed(false);
 
-    async function refresh() {
-      try {
-        const response = await fetch("/api/auth/refresh", {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { accept: "application/json" },
-        });
+    try {
+      const response = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
 
-        if (!response.ok) {
-          throw new Error("Session refresh failed");
-        }
-
-        if (!cancelled) {
-          router.replace(returnPath);
-          router.refresh();
-        }
-      } catch {
-        if (!cancelled) {
-          setFailed(true);
-        }
+      if (!response.ok) {
+        throw new Error("Session refresh failed");
       }
+
+      router.replace(returnPath);
+      router.refresh();
+    } catch {
+      setFailed(true);
+    } finally {
+      setPending(false);
     }
-
-    void refresh();
-    return () => {
-      cancelled = true;
-    };
-  }, [returnPath, router]);
-
-  if (failed) {
-    return (
-      <>
-        <div className="notice notice-error" role="alert">
-          <span aria-hidden="true">!</span>
-          <span>Your session could not be refreshed. Please sign in again.</span>
-        </div>
-        <a className="button button-primary" href="/login">
-          Return to sign in
-        </a>
-      </>
-    );
   }
 
   return (
-    <div className="loading-card" aria-live="polite" aria-busy="true">
-      <span className="spinner" aria-hidden="true" />
-      <p>Refreshing your session...</p>
+    <div className="form-stack" aria-live="polite">
+      {failed ? (
+        <div className="notice notice-error" role="alert">
+          <span aria-hidden="true">!</span>
+          <span>Your session could not be refreshed. Please try again or sign in again.</span>
+        </div>
+      ) : null}
+      <div className="loading-card" aria-busy={pending}>
+        {pending ? <span className="spinner" aria-hidden="true" /> : null}
+        <p>{pending ? "Refreshing your session..." : "Your session has expired."}</p>
+      </div>
+      <div className="button-row">
+        <button className="button button-primary" type="button" onClick={() => void refreshSession()} disabled={pending}>
+          {pending ? "Retrying..." : "Try again"}
+        </button>
+        <Link className="button button-secondary" href="/login">
+          Return to sign in
+        </Link>
+      </div>
     </div>
   );
 }

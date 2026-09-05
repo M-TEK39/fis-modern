@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
@@ -33,9 +34,9 @@ function EntryUnavailable() {
         <p className="eyebrow">API unavailable</p>
         <h2>Your vehicle workflow could not be opened.</h2>
         <p className="muted-copy">Retry when the FIS API is available.</p>
-        <a className="button button-primary" href="/login">
+        <Link className="button button-primary" href="/login">
           Sign in
-        </a>
+        </Link>
       </section>
     </main>
   );

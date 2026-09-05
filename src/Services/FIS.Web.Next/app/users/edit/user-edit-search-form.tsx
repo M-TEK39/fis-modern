@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { UserAdminProfile } from "@/lib/api-user-admin";
 
 type UserChoice = Pick<UserAdminProfile, "userAccessCode" | "userName" | "firstName" | "lastName">;
@@ -42,7 +44,7 @@ export default function UserEditSearchForm({
       </div>
       <div className="button-row">
         <button className="button button-primary" type="submit">Edit</button>
-        <a className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Back to Menu</a>
+        <Link className="button button-secondary" href="/UserAdmin/UserAdminMenu.aspx">Back to Menu</Link>
       </div>
     </form>
   );

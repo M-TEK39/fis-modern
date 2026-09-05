@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <main className="page-shell">
@@ -14,9 +16,9 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
           <button className="button button-primary" type="button" onClick={() => reset()}>
             Try again
           </button>
-          <a className="button button-secondary" href="/login">
+          <Link className="button button-secondary" href="/login">
             Return to sign in
-          </a>
+          </Link>
         </div>
       </section>
     </main>
