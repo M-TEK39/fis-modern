@@ -21,13 +21,14 @@ docker/                            Dockerfiles, Compose, and nginx
 
 The root guardrails are `AGENTS.md` and `CLAUDE.md`. Detailed rules live in `.rules/`. Keep these files tracked and do not replace them with links to another checkout.
 
-## Ownership and placement
+## Architecture and placement
+
+No application project is off-limits by blanket policy. A feature or compatibility fix may span the Next frontend, API, Core, Data, Docker, and remaining Blazor project. Keep each concern in its owning layer and review the complete execution path when a contract crosses layers.
 
 - Put Next routes, layouts, actions, server adapters, and styles under `src/Services/FIS.Web.Next`.
 - Put reusable Next UI in that app's `components/` directory; keep route-specific composition next to its route.
 - Put shared frontend types beside the adapter or feature that owns them unless an existing shared contract requires otherwise.
-- Put API endpoints and transport DTOs in `src/Services/FIS.Api`.
-- Put business behavior in Core and SQL Server access in Data.
+- Put API endpoints and transport DTOs in `src/Services/FIS.Api`; put business behavior in Core and SQL Server access in Data. Update those layers together when the slice requires it.
 - Put deployment changes in `docker/` and preserve the existing service names and network topology unless the task requires a routing change.
 - Do not edit generated `bin/`, `obj/`, `.next/`, `dist/`, or build cache output.
 
@@ -51,7 +52,7 @@ Use the solution's existing project references and .NET 8 conventions:
 dotnet build FIS.sln --no-restore
 ```
 
-Do not move code between layers to avoid a reference problem. Do not introduce database schema changes, a second API style, or a second authentication contract.
+Do not bypass layer boundaries to avoid a reference problem. Do not introduce database schema changes, a second API style, or a second authentication contract.
 
 ## Docker and nginx
 

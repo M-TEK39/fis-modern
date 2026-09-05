@@ -27,7 +27,7 @@ backup/sources/                    legacy reference code; do not treat as a writ
 docker/                            containers and nginx routing
 ```
 
-The Next app is a standalone pnpm package. Keep its dependencies and scripts in `src/Services/FIS.Web.Next/package.json`; do not add workspace, monorepo, or alternate data-layer infrastructure.
+The Next app is currently a standalone pnpm package. Keep its dependencies and scripts in `src/Services/FIS.Web.Next/package.json`; if a slice genuinely requires shared workspace or data-layer infrastructure, make that change explicit and update every affected contract rather than working around it in the wrong layer.
 
 ## 3. Database and business compatibility
 
@@ -52,7 +52,7 @@ The Next app is a standalone pnpm package. Keep its dependencies and scripts in 
 
 ## 5. C# rules
 
-- Keep HTTP concerns in `src/Services/FIS.Api`; keep domain and application behavior in their existing layers.
+- Keep HTTP concerns in `src/Services/FIS.Api` and domain/application behavior in their existing layers, while allowing a complete cross-layer change when the real execution path requires it.
 - Use async I/O, cancellation tokens where the surrounding contract supports them, structured logging, and consistent problem responses.
 - Validate input at the API boundary, enforce authorization on the server, and avoid logging credentials, tokens, or personal data.
 - Use EF Core/SQL Server conventions already present in the solution. Do not introduce a second persistence strategy for convenience.
