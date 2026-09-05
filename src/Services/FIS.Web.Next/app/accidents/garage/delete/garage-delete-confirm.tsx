@@ -78,7 +78,7 @@ export default function GarageDeleteConfirm({ accident }: Readonly<{ accident: A
         <SummaryField label="HQ reference" value={valueOrDash(accident.hqReference)} />
         <SummaryField label="GG reference" value={valueOrDash(accident.ggReference)} />
         <SummaryField label="SA reference" value={valueOrDash(accident.saReference)} />
-        <SummaryField label="Claim amount" value={valueOrDash(accident.claimAmount)} />
+        <SummaryField label="Claim amount" value={valueOrDash(accident.claimAgainstDepartment)} />
         <SummaryField label="Excess amount" value={valueOrDash(accident.excessAmount)} />
       </dl>
 

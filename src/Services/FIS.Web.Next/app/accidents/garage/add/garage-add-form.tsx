@@ -9,7 +9,13 @@ import {
   createGarageAccidentAction,
   type GarageAddActionState,
 } from "@/app/accidents/garage/add/actions";
-import type { AccidentVehicleOption, GarageSearchType } from "@/lib/api-accidents";
+import GarageLegacyFields from "@/app/accidents/garage/garage-legacy-fields";
+import type {
+  AccidentSiteOption,
+  AccidentTypeOption,
+  AccidentVehicleOption,
+  GarageSearchType,
+} from "@/lib/api-accidents";
 
 const initialActionState: GarageAddActionState = { status: "idle" };
 
@@ -19,6 +25,8 @@ type GarageAddFormProps = {
   initialSearchTerm: string;
   initialSearchType: GarageSearchType;
   today: string;
+  sites: readonly AccidentSiteOption[];
+  accidentTypes: readonly AccidentTypeOption[];
 };
 
 function Field({
@@ -58,6 +66,8 @@ export default function GarageAddForm({
   initialSearchTerm,
   initialSearchType,
   today,
+  sites,
+  accidentTypes,
 }: GarageAddFormProps) {
   const [state, formAction] = useActionState(createGarageAccidentAction, initialActionState);
 
@@ -69,15 +79,6 @@ export default function GarageAddForm({
           <span>{state.message}</span>
         </div>
       ) : null}
-
-      <div className="notice notice-info" role="note">
-        <span aria-hidden="true">i</span>
-        <span>
-          This slice persists only fields exposed by the current C# Accident API. Legacy controls for accident
-          category, kilometre reading, site, document flags, damage descriptions, and third-party details remain
-          deferred until the backend contract supports their persistence.
-        </span>
-      </div>
 
       <section className="vehicle-form-section" aria-labelledby="garage-add-vehicle-title">
         <div className="vehicle-form-section-header">
@@ -141,6 +142,8 @@ export default function GarageAddForm({
         </div>
       </section>
 
+      <GarageLegacyFields sites={sites} accidentTypes={accidentTypes} />
+
       <section className="vehicle-form-section" aria-labelledby="garage-add-reference-title">
         <div className="vehicle-form-section-header">
           <div>
@@ -154,12 +157,12 @@ export default function GarageAddForm({
               id="ggReference"
               name="ggReference"
               type="text"
-              maxLength={60}
+              maxLength={20}
               readOnly
             />
           </Field>
           <Field id="hqReference" label="HQ reference">
-            <input id="hqReference" name="hqReference" type="text" maxLength={60} />
+            <input id="hqReference" name="hqReference" type="text" maxLength={20} />
           </Field>
         </div>
       </section>
@@ -172,9 +175,6 @@ export default function GarageAddForm({
           </div>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="claimAmount" label="Claim amount">
-            <input id="claimAmount" name="claimAmount" type="number" min="0" step="0.01" defaultValue="0" />
-          </Field>
           <Field id="excessAmount" label="Excess amount">
             <input id="excessAmount" name="excessAmount" type="number" min="0" step="0.01" defaultValue="0" />
           </Field>

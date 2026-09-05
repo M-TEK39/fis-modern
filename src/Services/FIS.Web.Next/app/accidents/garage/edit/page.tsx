@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { logoutAction } from "@/app/actions/auth";
 import SessionRecovery from "@/app/home/session-recovery";
 import GarageEditForm from "@/app/accidents/garage/edit/garage-edit-form";
-import { AccidentApiError, getAccidentForEdit } from "@/lib/api-accidents";
+import { AccidentApiError, getAccidentForEdit, getAccidentReferenceData } from "@/lib/api-accidents";
 import { getSession } from "@/lib/session";
 
 const ACCIDENTS_ROLE = "Accidents";
@@ -87,18 +87,25 @@ async function GarageEditContent({ searchParams }: GarageEditPageProps) {
   }
 
   try {
-    const accident = await getAccidentForEdit(accidentId);
+    const [accident, referenceData] = await Promise.all([
+      getAccidentForEdit(accidentId),
+      getAccidentReferenceData(),
+    ]);
     return (
       <>
         <header className="vehicle-page-header">
           <div>
             <p className="eyebrow">Accident maintenance</p>
             <h1 id="garage-edit-title">Edit garage accident #{accident.accidentCode}</h1>
-            <p>Update the supported accident fields, then return to the garage search.</p>
+            <p>Update the accident record, then return to the garage search.</p>
           </div>
           <Link className="button button-secondary" href="/accidents">Accident Menu</Link>
         </header>
-        <GarageEditForm accident={accident} />
+        <GarageEditForm
+          accident={accident}
+          sites={referenceData.sites}
+          accidentTypes={referenceData.accidentTypes}
+        />
         <div className="vehicle-footer-actions">
           <Link className="button button-secondary" href="/accidents/garage">Back to Search</Link>
           <Link className="button button-secondary" href="/home">Home</Link>

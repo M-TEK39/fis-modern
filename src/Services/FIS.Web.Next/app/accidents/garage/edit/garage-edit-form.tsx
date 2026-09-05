@@ -9,12 +9,19 @@ import {
   updateGarageAccidentAction,
   type GarageEditActionState,
 } from "@/app/accidents/garage/edit/actions";
-import type { AccidentEditRecord } from "@/lib/api-accidents";
+import GarageLegacyFields from "@/app/accidents/garage/garage-legacy-fields";
+import type {
+  AccidentEditRecord,
+  AccidentSiteOption,
+  AccidentTypeOption,
+} from "@/lib/api-accidents";
 
 const initialActionState: GarageEditActionState = { status: "idle" };
 
 type GarageEditFormProps = {
   accident: AccidentEditRecord;
+  sites: readonly AccidentSiteOption[];
+  accidentTypes: readonly AccidentTypeOption[];
 };
 
 function Field({
@@ -59,7 +66,7 @@ function vehicleLabel(accident: AccidentEditRecord) {
   );
 }
 
-export default function GarageEditForm({ accident }: GarageEditFormProps) {
+export default function GarageEditForm({ accident, sites, accidentTypes }: GarageEditFormProps) {
   const [state, formAction] = useActionState(updateGarageAccidentAction, initialActionState);
 
   return (
@@ -72,15 +79,6 @@ export default function GarageEditForm({ accident }: GarageEditFormProps) {
           <span>{state.message}</span>
         </div>
       ) : null}
-
-      <div className="notice notice-info" role="note">
-        <span aria-hidden="true">i</span>
-        <span>
-          This slice updates only fields exposed by the current C# Accident API. Legacy category, kilometre,
-          site, document, damage, third-party, and case-number controls remain deferred until the backend contract
-          supports their persistence.
-        </span>
-      </div>
 
       <section className="vehicle-form-section" aria-labelledby="garage-edit-vehicle-title">
         <div className="vehicle-form-section-header">
@@ -174,10 +172,16 @@ export default function GarageEditForm({ accident }: GarageEditFormProps) {
         </div>
         <div className="vehicle-create-grid">
           <Field id="hqReference" label="HQ reference">
-            <input id="hqReference" name="hqReference" type="text" maxLength={60} defaultValue={accident.hqReference ?? ""} />
+            <input id="hqReference" name="hqReference" type="text" maxLength={20} defaultValue={accident.hqReference ?? ""} readOnly />
           </Field>
         </div>
       </section>
+
+      <GarageLegacyFields
+        values={accident}
+        sites={sites}
+        accidentTypes={accidentTypes}
+      />
 
       <section className="vehicle-form-section" aria-labelledby="garage-edit-claims-title">
         <div className="vehicle-form-section-header">
@@ -187,16 +191,6 @@ export default function GarageEditForm({ accident }: GarageEditFormProps) {
           </div>
         </div>
         <div className="vehicle-create-grid">
-          <Field id="claimAmount" label="Claim amount">
-            <input
-              id="claimAmount"
-              name="claimAmount"
-              type="number"
-              min="0"
-              step="0.01"
-              defaultValue={accident.claimAmount ?? ""}
-            />
-          </Field>
           <Field id="excessAmount" label="Excess amount">
             <input
               id="excessAmount"

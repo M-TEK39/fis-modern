@@ -8,6 +8,7 @@ import SessionRecovery from "@/app/home/session-recovery";
 import GarageAddForm from "@/app/accidents/garage/add/garage-add-form";
 import {
   AccidentApiError,
+  getAccidentReferenceData,
   getAccidentVehicleOptions,
   type GarageSearchType,
 } from "@/lib/api-accidents";
@@ -113,7 +114,44 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
 
   let vehicleOptions;
   try {
-    vehicleOptions = await getAccidentVehicleOptions(searchType, searchTerm);
+    const [loadedVehicles, referenceData] = await Promise.all([
+      getAccidentVehicleOptions(searchType, searchTerm),
+      getAccidentReferenceData(),
+    ]);
+    vehicleOptions = loadedVehicles;
+    if (vehicleOptions.length === 0) {
+      return <NoVehicles searchTerm={searchTerm} />;
+    }
+
+    return (
+      <>
+        <GarageAddForm
+          accidentTypes={referenceData.accidentTypes}
+          initialSearchTerm={searchTerm}
+          initialSearchType={searchType}
+          initialVehicleCode={initialVehicleCode}
+          sites={referenceData.sites}
+          today={today}
+          vehicleOptions={vehicleOptions}
+        />
+        <div className="vehicle-footer-actions">
+          <Link className="button button-secondary" href="/accidents/garage">
+            Back to Search
+          </Link>
+          <Link className="button button-secondary" href="/accidents">
+            Accident Menu
+          </Link>
+          <Link className="button button-secondary" href="/home">
+            Home
+          </Link>
+          <form action={logoutAction}>
+            <button className="button button-secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+      </>
+    );
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized") {
       return <SessionRecovery returnPath="/accidents/garage/add" />;
@@ -122,38 +160,6 @@ async function GarageAddContent({ searchParams }: GarageAddPageProps) {
     console.error("FIS garage accident vehicle options failed", error instanceof Error ? error.message : "unknown error");
     return <ApiUnavailable />;
   }
-
-  if (vehicleOptions.length === 0) {
-    return <NoVehicles searchTerm={searchTerm} />;
-  }
-
-  return (
-    <>
-      <GarageAddForm
-        initialSearchTerm={searchTerm}
-        initialSearchType={searchType}
-        initialVehicleCode={initialVehicleCode}
-        today={today}
-        vehicleOptions={vehicleOptions}
-      />
-      <div className="vehicle-footer-actions">
-        <Link className="button button-secondary" href="/accidents/garage">
-          Back to Search
-        </Link>
-        <Link className="button button-secondary" href="/accidents">
-          Accident Menu
-        </Link>
-        <Link className="button button-secondary" href="/home">
-          Home
-        </Link>
-        <form action={logoutAction}>
-          <button className="button button-secondary" type="submit">
-            Sign out
-          </button>
-        </form>
-      </div>
-    </>
-  );
 }
 
 export default async function GarageAddPage({ searchParams }: GarageAddPageProps) {

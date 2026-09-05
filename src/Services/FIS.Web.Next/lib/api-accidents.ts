@@ -32,7 +32,70 @@ export type AccidentVehicleOption = {
   registrationNumber: string | null;
 };
 
-export type CreateAccidentRequest = {
+export type AccidentSiteOption = {
+  siteCode: number;
+  departmentNumber: string | null;
+  description: string | null;
+};
+
+export type AccidentTypeOption = {
+  typeCode: number;
+  description: string;
+};
+
+type AccidentLegacyWriteFields = {
+  call_refer: number | null;
+  captured_person: string | null;
+  fin_year: string | null;
+  garage: string | null;
+  driver_telno: string | null;
+  driver_site_code: number | null;
+  transoffic_name: string | null;
+  transoffic_tel: string | null;
+  accident_km: number | null;
+  acc_type_code: number | null;
+  flag_gg_hq: string | null;
+  flag_gg_hq_date: string | null;
+  file_close_date: string | null;
+  case_number: string | null;
+  reporting_authority: string | null;
+  cost_of_repair: number | null;
+  damage_description: string | null;
+  death: string | null;
+  injured: string | null;
+  third_party_regno: string | null;
+  third_party_owner: string | null;
+  third_party_tel: string | null;
+  third_party_claim: number | null;
+  SecondThirdPartyRegNo: string | null;
+  th_claim_receive: string | null;
+  claim_against_dept: number | null;
+  letterhead: string | null;
+  z181: string | null;
+  part3: string | null;
+  statement: string | null;
+  sketch: string | null;
+  iddoc: string | null;
+  drivelic: string | null;
+  docs_acc_relieve: string | null;
+  flag_case_num: string | null;
+  trip_author: string | null;
+  flag_trip_author: string | null;
+  flag_trip_auth_date: string | null;
+  driver_fault: string | null;
+  attorney_insure: string | null;
+  insurance_claim: string | null;
+  priv_dampay_date: string | null;
+  th_claim_accept_reject: string | null;
+  th_claim_reject_reason: string | null;
+  write_off_amount: number | null;
+  write_off_date: string | null;
+  occurence_place: string | null;
+  tow_need: string | null;
+  notes: string | null;
+};
+
+export type CreateAccidentRequest = AccidentLegacyWriteFields & {
   vmf_code: number;
   description: string;
   driver_name: string | null;
@@ -67,11 +130,60 @@ export type AccidentEditRecord = {
   createdByUserCode: number | null;
   modifiedByUserCode: number | null;
   isDeleted: boolean;
+  callRefer: number | null;
+  capturedPerson: string | null;
+  finYear: string | null;
+  garage: string | null;
+  driverTelno: string | null;
+  driverSiteCode: number | null;
+  transportOfficerName: string | null;
+  transportOfficerTel: string | null;
+  accidentKm: number | null;
+  accidentTypeCode: number | null;
+  flagGgHq: string | null;
+  flagGgHqDate: string | null;
+  fileCloseDate: string | null;
+  caseNumber: string | null;
+  reportingAuthority: string | null;
+  costOfRepair: number | null;
+  damageDescription: string | null;
+  death: string | null;
+  injured: string | null;
+  thirdPartyRegistration: string | null;
+  thirdPartyOwner: string | null;
+  thirdPartyTelephone: string | null;
+  thirdPartyClaim: number | null;
+  secondThirdPartyRegNo: string | null;
+  claimReceived: string | null;
+  claimAgainstDepartment: number | null;
+  letterhead: string | null;
+  z181: string | null;
+  part3: string | null;
+  statement: string | null;
+  sketch: string | null;
+  iddoc: string | null;
+  drivelic: string | null;
+  documentsAccidentRelieve: string | null;
+  flagCaseNumber: string | null;
+  tripAuthor: string | null;
+  flagTripAuthor: string | null;
+  flagTripAuthDate: string | null;
+  driverFault: string | null;
+  attorneyInsure: string | null;
+  insuranceClaim: string | null;
+  privateDamagePaymentDate: string | null;
+  thirdPartyClaimDecision: string | null;
+  thirdPartyClaimRejectReason: string | null;
+  writeOffAmount: number | null;
+  writeOffDate: string | null;
+  occurencePlace: string | null;
+  towNeed: string | null;
+  notes: string | null;
   vehicleFleetNumber: string | null;
   vehicleRegistrationNumber: string | null;
 };
 
-export type AccidentUpdateRequest = {
+export type AccidentUpdateRequest = AccidentLegacyWriteFields & {
   accident_code: number;
   vmf_code: number;
   posting_month_code: number | null;
@@ -291,7 +403,11 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
 
   const accidentCode = asNumber(getValue(value, "accident_code", "accidentCode"));
   const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
-  const dateCreated = asString(getValue(value, "date_created", "dateCreated"));
+  const dateCreated =
+    asString(getValue(value, "date_created", "dateCreated")) ??
+    asString(getValue(value, "date_updated", "dateUpdated")) ??
+    asString(getValue(value, "reported_date", "reportedDate")) ??
+    asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate"));
   if (accidentCode === null || vmfCode === null || !dateCreated) {
     throw new AccidentApiError("invalid-response", "The FIS API returned an incomplete accident record.");
   }
@@ -319,6 +435,57 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
     createdByUserCode: asNumber(getValue(value, "created_by_user_code", "createdByUserCode")),
     modifiedByUserCode: asNumber(getValue(value, "modified_by_user_code", "modifiedByUserCode")),
     isDeleted: getValue(value, "is_deleted", "isDeleted") === true,
+    callRefer: asNumber(getValue(value, "Call_Refer", "call_Refer", "callRefer")),
+    capturedPerson: asString(getValue(value, "captured_person", "capturedPerson")),
+    finYear: asString(getValue(value, "fin_year", "finYear")),
+    garage: asString(getValue(value, "garage")),
+    driverTelno: asString(getValue(value, "driver_telno", "driverTelno")),
+    driverSiteCode: asNumber(getValue(value, "driver_site_code", "driverSiteCode")),
+    transportOfficerName: asString(getValue(value, "transoffic_name", "transofficName")),
+    transportOfficerTel: asString(getValue(value, "transoffic_tel", "transofficTel")),
+    accidentKm: asNumber(getValue(value, "accident_km", "accidentKm")),
+    accidentTypeCode: asNumber(getValue(value, "acc_type_code", "accTypeCode")),
+    flagGgHq: asString(getValue(value, "Flag_gg_hq", "flag_gg_hq", "flagGgHq")),
+    flagGgHqDate: asString(getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "flagGgHqDate")),
+    fileCloseDate: asString(getValue(value, "file_close_date", "fileCloseDate")),
+    caseNumber: asString(getValue(value, "case_number", "caseNumber")),
+    reportingAuthority: asString(getValue(value, "reporting_authority", "reportingAuthority")),
+    costOfRepair: asNumber(getValue(value, "cost_of_repair", "costOfRepair")),
+    damageDescription: asString(getValue(value, "damage_description", "damageDescription")),
+    death: asString(getValue(value, "death")),
+    injured: asString(getValue(value, "injured")),
+    thirdPartyRegistration: asString(getValue(value, "third_party_regno", "thirdPartyRegno")),
+    thirdPartyOwner: asString(getValue(value, "third_party_owner", "thirdPartyOwner")),
+    thirdPartyTelephone: asString(getValue(value, "third_party_tel", "thirdPartyTel")),
+    thirdPartyClaim: asNumber(getValue(value, "third_party_claim", "thirdPartyClaim")),
+    secondThirdPartyRegNo: asString(getValue(value, "SecondThirdPartyRegNo", "secondThirdPartyRegNo")),
+    claimReceived: asString(getValue(value, "th_claim_receive", "claimReceived")),
+    claimAgainstDepartment:
+      asNumber(getValue(value, "claim_amount", "claimAmount")) ??
+      asNumber(getValue(value, "claim_against_dept", "claimAgainstDepartment")),
+    letterhead: asString(getValue(value, "letterhead")),
+    z181: asString(getValue(value, "z181", "Z181")),
+    part3: asString(getValue(value, "part3")),
+    statement: asString(getValue(value, "statement")),
+    sketch: asString(getValue(value, "sketch")),
+    iddoc: asString(getValue(value, "iddoc")),
+    drivelic: asString(getValue(value, "drivelic")),
+    documentsAccidentRelieve: asString(getValue(value, "docs_acc_relieve", "documentsAccidentRelieve")),
+    flagCaseNumber: asString(getValue(value, "flag_case_num", "flagCaseNumber")),
+    tripAuthor: asString(getValue(value, "trip_author", "tripAuthor")),
+    flagTripAuthor: asString(getValue(value, "Flag_trip_author", "flag_trip_author", "flagTripAuthor")),
+    flagTripAuthDate: asString(getValue(value, "flag_trip_auth_date", "flagTripAuthDate")),
+    driverFault: asString(getValue(value, "driver_fault", "driverFault")),
+    attorneyInsure: asString(getValue(value, "attorney_insure", "attorneyInsure")),
+    insuranceClaim: asString(getValue(value, "insurance_claim", "insuranceClaim")),
+    privateDamagePaymentDate: asString(getValue(value, "priv_dampay_date", "privateDamagePaymentDate")),
+    thirdPartyClaimDecision: asString(getValue(value, "th_claim_accept_reject", "thirdPartyClaimDecision")),
+    thirdPartyClaimRejectReason: asString(getValue(value, "th_claim_reject_reason", "thirdPartyClaimRejectReason")),
+    writeOffAmount: asNumber(getValue(value, "write_off_amount", "writeOffAmount")),
+    writeOffDate: asString(getValue(value, "write_off_date", "writeOffDate")),
+    occurencePlace: asString(getValue(value, "occurence_place", "occurrence_place", "occurencePlace")),
+    towNeed: asString(getValue(value, "Tow_need", "tow_need", "towNeed")),
+    notes: asString(getValue(value, "notes")),
     vehicleFleetNumber: vehicleRecord
       ? asString(getValue(vehicleRecord, "fleet_number", "fleetNumber"))
       : null,
@@ -362,6 +529,53 @@ function mapType(value: unknown): TypeLookup | null {
   const code = asNumber(getValue(value, "type_code", "typeCode"));
   const description = asString(getValue(value, "type_description", "typeDescription"));
   return code !== null && description ? { code, description } : null;
+}
+
+function mapAccidentSite(value: unknown): AccidentSiteOption | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const siteCode = asNumber(getValue(value, "siteCode", "SiteCode", "Site_code", "site_code"));
+  if (siteCode === null) {
+    return null;
+  }
+
+  return {
+    siteCode,
+    departmentNumber: asString(getValue(value, "departmentNumber", "DepartmentNumber", "Department_number")),
+    description: asString(getValue(value, "description", "Description")),
+  };
+}
+
+function mapAccidentType(value: unknown): AccidentTypeOption | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const typeCode = asNumber(getValue(value, "acc_type_code", "accTypeCode", "typeCode", "code"));
+  const description = asString(
+    getValue(value, "acc_type_description", "accTypeDescription", "typeDescription", "description"),
+  );
+  return typeCode !== null && description ? { typeCode, description } : null;
+}
+
+export async function getAccidentReferenceData() {
+  const [sitePayload, typePayload] = await Promise.all([
+    requestApi("api/site"),
+    requestApi("api/accidents/types"),
+  ]);
+
+  return {
+    sites: mapPresent(getCollection(sitePayload), mapAccidentSite).toSorted((left, right) =>
+      `${left.departmentNumber ?? ""} ${left.description ?? ""}`.localeCompare(
+        `${right.departmentNumber ?? ""} ${right.description ?? ""}`,
+      ),
+    ),
+    accidentTypes: mapPresent(getCollection(typePayload), mapAccidentType).toSorted((left, right) =>
+      left.description.localeCompare(right.description),
+    ),
+  };
 }
 
 type AccidentLookup = {
