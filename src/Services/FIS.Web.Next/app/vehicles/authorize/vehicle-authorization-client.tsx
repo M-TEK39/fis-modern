@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useEffectEvent, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -299,22 +299,22 @@ function ReviewModal({
   const canReview = canReviewVehicle(vehicle, currentUserAccessCode);
   const actionable = isAwaiting(vehicle) && canReview;
 
-  useEffect(() => {
-    setComment("");
-    setRejectionReason("");
-    setFormError(null);
-  }, [vehicle.tempVmfCode]);
+  const handleEscape = useEffectEvent(() => {
+    if (!pending) {
+      onClose();
+    }
+  });
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !pending) {
-        onClose();
+      if (event.key === "Escape") {
+        handleEscape();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, pending]);
+  }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
