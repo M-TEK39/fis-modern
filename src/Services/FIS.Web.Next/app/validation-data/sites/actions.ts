@@ -80,10 +80,14 @@ function getNullableBoolean(formData: FormData, key: string) {
   return value === "true";
 }
 
-function getOptionalDate(formData: FormData, key: string, label: string) {
+function getOptionalDate(formData: FormData, key: string, label: string, originalKey?: string) {
   const value = getText(formData, key);
   if (!value) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new SiteValidationError(`${label} is invalid.`);
+  const original = originalKey ? getText(formData, originalKey) : "";
+  if (original && original.slice(0, 10) === value && !Number.isNaN(Date.parse(original))) {
+    return original;
+  }
   const [year, month, day] = value.split("-").map(Number);
   const parsed = new Date(Date.UTC(year, month - 1, day));
   if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
@@ -129,9 +133,9 @@ function buildInput(formData: FormData, mode: "create" | "update"): SiteWriteInp
     siteActive,
     financialSystemCode: getOptionalInteger(formData, "financialSystemCode", "Financial system code", 255),
     financialSystemActive: getNullableBoolean(formData, "financialSystemActive"),
-    financialSystemActivateDate: getOptionalDate(formData, "financialSystemActivateDate", "Financial system activation date"),
+    financialSystemActivateDate: getOptionalDate(formData, "financialSystemActivateDate", "Financial system activation date", "financialSystemActivateDateOriginal"),
     exportIsActive: getNullableBoolean(formData, "exportIsActive"),
-    dateLastExported: getOptionalDate(formData, "dateLastExported", "Last exported date"),
+    dateLastExported: getOptionalDate(formData, "dateLastExported", "Last exported date", "dateLastExportedOriginal"),
     serviceKilometres: getNonNegativeInteger(formData, "serviceKilometres", "Service kilometres", 2_147_483_647),
     serviceYears: getNonNegativeInteger(formData, "serviceYears", "Service years", 255),
     overheadPercentage: getDecimal(formData, "overheadPercentage", "Overhead percentage"),
