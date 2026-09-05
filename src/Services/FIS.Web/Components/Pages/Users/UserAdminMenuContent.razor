@@ -9,8 +9,8 @@
         <div class="menu-tile-body">
             <div class="menu-item">
                 <a class="menu-item-link"
-                   href="@UserAdminNavigation.GetLink(Navigation, UserAdminRoutes.Add)"
-                   @onclick="() => NavigateTo(UserAdminRoutes.Add)"
+                   href="/users/add"
+                   @onclick="NavigateToAdd"
                    @onclick:preventDefault="true">1) Add New User</a>
             </div>
             <div class="menu-item">
@@ -58,5 +58,10 @@
     {
         var link = UserAdminNavigation.GetLink(Navigation, target);
         Navigation.NavigateTo(link);
+    }
+
+    private void NavigateToAdd()
+    {
+        Navigation.NavigateTo("/users/add");
     }
 }

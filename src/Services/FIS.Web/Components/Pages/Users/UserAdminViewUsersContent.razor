@@ -91,8 +91,8 @@
     </div>
     <div class="card-footer">
         <a class="btn btn-primary"
-           href="@UserAdminNavigation.GetLink(Navigation, UserAdminRoutes.Add)"
-           @onclick="() => NavigateTo(UserAdminNavigation.GetLink(Navigation, UserAdminRoutes.Add))"
+           href="/users/add"
+           @onclick='() => NavigateTo("/users/add")'
            @onclick:preventDefault="true">Add a New User</a>
     </div>
 </div>

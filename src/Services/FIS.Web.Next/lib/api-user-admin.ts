@@ -22,6 +22,7 @@ export type UserAdminProfile = {
   passportNumber: number | null;
   cellphoneNumber: number | null;
   faxNumber: number | null;
+  approverCodeAtGfleet: number | null;
   userStatus: string | null;
   accessLevel: number;
   userActive: boolean;
@@ -33,6 +34,34 @@ export type UserAdminApiErrorReason = "unauthorized" | "unavailable" | "invalid-
 export type UserAdminMutationResult =
   | { ok: true; message?: string }
   | { ok: false; reason: UserAdminApiErrorReason | "not-found" | "rejected"; message?: string };
+
+export type UserAdminSite = {
+  siteCode: number;
+  description: string;
+};
+
+export type UserAdminPosition = {
+  positionCode: number;
+  positionName: string;
+};
+
+export type UserAdminProfileInput = {
+  userName: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  telephone: string | null;
+  siteCode: number;
+  positionCode: number;
+  persalNumber: number | null;
+  contractNumber: number | null;
+  saIdNumber: number;
+  passportNumber: number | null;
+  cellphoneNumber: number | null;
+  faxNumber: number | null;
+  approverCodeAtGfleet: number;
+  accessLevel: number;
+};
 
 export class UserAdminApiError extends Error {
   constructor(
@@ -204,6 +233,7 @@ function mapProfile(value: unknown): UserAdminProfile | null {
     passportNumber: asNumber(getValue(value, "passportNumber", "PassportNumber", "passport_number")),
     cellphoneNumber: asNumber(getValue(value, "cellphoneNumber", "CellphoneNumber", "Cellphone_Number")),
     faxNumber: asNumber(getValue(value, "faxNumber", "FaxNumber", "Fax_Number")),
+    approverCodeAtGfleet: asNumber(getValue(value, "approverCodeAtGfleet", "ApproverCodeAtGfleet", "approver_code_at_gfleet")),
     userStatus: asString(getValue(value, "userStatus", "UserStatus", "user_status")),
     accessLevel: asNumber(getValue(value, "accessLevel", "AccessLevel")) ?? 0,
     userActive: asBoolean(getValue(value, "userActive", "UserActive", "user_active")),
@@ -239,6 +269,137 @@ export async function getUserAdminUserChoices() {
   );
 }
 
+export async function getUserAdminSites(): Promise<UserAdminSite[]> {
+  const response = await requestApi("api/site");
+  return getCollection(await readJson(response))
+    .map((value) => {
+      if (!isRecord(value)) {
+        return null;
+      }
+
+      const siteCode = asNumber(getValue(value, "siteCode", "SiteCode", "site_code", "Site_code"));
+      const description = asString(getValue(value, "description", "Description", "siteDescription", "site_description"));
+      return siteCode !== null && description ? { siteCode, description } satisfies UserAdminSite : null;
+    })
+    .filter((site): site is UserAdminSite => site !== null)
+    .sort((left, right) => left.description.localeCompare(right.description));
+}
+
+export async function getUserAdminPositions(): Promise<UserAdminPosition[]> {
+  const response = await requestApi("api/userprofile/positions");
+  return getCollection(await readJson(response))
+    .map((value) => {
+      if (!isRecord(value)) {
+        return null;
+      }
+
+      const positionCode = asNumber(getValue(value, "positionCode", "PositionCode", "position_code"));
+      const positionName = asString(getValue(value, "positionName", "PositionName", "position_name"));
+      return positionCode !== null && positionName ? { positionCode, positionName } satisfies UserAdminPosition : null;
+    })
+    .filter((position): position is UserAdminPosition => position !== null)
+    .sort((left, right) => left.positionName.localeCompare(right.positionName));
+}
+
+async function runUserAdminProfileMutation(
+  path: string,
+  method: "POST" | "PUT",
+  requestPayload: JsonRecord,
+): Promise<UserAdminMutationResult> {
+  try {
+    const response = await requestApi(path, {
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(requestPayload),
+    });
+    const responsePayload = await readJson(response);
+    if (!isRecord(responsePayload)) {
+      return { ok: false, reason: "invalid-response" };
+    }
+
+    return {
+      ok: true,
+      message: asString(getValue(responsePayload, "message", "Message")) ?? undefined,
+    };
+  } catch (error) {
+    if (error instanceof UserAdminApiError) {
+      return {
+        ok: false,
+        reason: error.status === 404 ? "not-found" : error.status === 400 || error.status === 409 ? "rejected" : error.reason,
+        message: error.message,
+      };
+    }
+
+    console.error("FIS API user profile mutation failed", error instanceof Error ? error.message : "unknown error");
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
+export async function createUserAdminProfile(input: UserAdminProfileInput): Promise<UserAdminMutationResult> {
+  try {
+    const response = await requestApi("api/userprofile", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        userName: input.userName,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        telephone: input.telephone,
+        siteCode: input.siteCode,
+        positionCode: input.positionCode,
+        persalNumber: input.persalNumber,
+        contractNumber: input.contractNumber,
+        saIdNumber: input.saIdNumber,
+        passportNumber: input.passportNumber,
+        cellphoneNumber: input.cellphoneNumber,
+        faxNumber: input.faxNumber,
+        approverCodeAtGfleet: input.approverCodeAtGfleet,
+        accessLevel: input.accessLevel,
+      }),
+    });
+    const responsePayload = await readJson(response);
+    if (!mapProfile(responsePayload)) {
+      return { ok: false, reason: "invalid-response" };
+    }
+
+    return { ok: true, message: "User created successfully." };
+  } catch (error) {
+    if (error instanceof UserAdminApiError) {
+      return {
+        ok: false,
+        reason: error.status === 404 ? "not-found" : error.status === 400 || error.status === 409 ? "rejected" : error.reason,
+        message: error.message,
+      };
+    }
+
+    console.error("FIS API user profile creation failed", error instanceof Error ? error.message : "unknown error");
+    return { ok: false, reason: "unavailable" };
+  }
+}
+
+export async function updateUserAdminProfile(
+  userAccessCode: number,
+  input: Omit<UserAdminProfileInput, "userName">,
+): Promise<UserAdminMutationResult> {
+  return runUserAdminProfileMutation(`api/userprofile/${encodeURIComponent(userAccessCode)}`, "PUT", {
+    firstName: input.firstName,
+    lastName: input.lastName,
+    email: input.email,
+    telephone: input.telephone,
+    siteCode: input.siteCode,
+    positionCode: input.positionCode,
+    persalNumber: input.persalNumber,
+    contractNumber: input.contractNumber,
+    saIdNumber: input.saIdNumber,
+    passportNumber: input.passportNumber,
+    cellphoneNumber: input.cellphoneNumber,
+    faxNumber: input.faxNumber,
+    approverCodeAtGfleet: input.approverCodeAtGfleet,
+    accessLevel: input.accessLevel,
+  });
+}
+
 export async function resetUserLogin(username: string): Promise<UserAdminMutationResult> {
   return runUserAdminMutation("api/auth/reset-login", { username });
 }
@@ -266,7 +427,7 @@ async function runUserAdminMutation(path: string, requestPayload: JsonRecord): P
     if (error instanceof UserAdminApiError) {
       return {
         ok: false,
-        reason: error.status === 404 ? "not-found" : error.status === 400 ? "rejected" : error.reason,
+        reason: error.status === 404 ? "not-found" : error.status === 400 || error.status === 409 ? "rejected" : error.reason,
         message: error.message,
       };
     }
