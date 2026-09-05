@@ -60,6 +60,70 @@ export type CallCentreIncidentRecord = {
   dateUpdated: string | null;
 };
 
+export type CallCentreChildRecord = Record<string, unknown>;
+
+export type CallCentreEditDetails = {
+  accidentTableAvailable: boolean;
+  accident: CallCentreChildRecord | null;
+  lossTableAvailable: boolean;
+  loss: CallCentreChildRecord | null;
+  towingTableAvailable: boolean;
+  towing: CallCentreChildRecord | null;
+};
+
+export type AccidentEditUpdate = {
+  OccurenceDate: string | null;
+  OccurenceTime: string | null;
+  Description: string | null;
+  DriverName: string | null;
+  DriverEmployNumber: string | null;
+  DriverTelno: string | null;
+  DriverSiteCode: number | null;
+  TransportOfficerName: string | null;
+  TransportOfficerTel: string | null;
+  Death: string | null;
+  Injured: string | null;
+  ThirdPartyRegistration: string | null;
+  ThirdPartyOwner: string | null;
+  ThirdPartyTelephone: string | null;
+  DamageDescription: string | null;
+  Notes: string | null;
+  OccurencePlace: string | null;
+  TowNeed: string | null;
+};
+
+export type LossEditUpdate = {
+  LossDate: string | null;
+  LossTypeCode: number | null;
+  SiteCode: number | null;
+  DepartmentContact: string | null;
+  PlaceOfLoss: string | null;
+  DriverName: string | null;
+  Remarks: string | null;
+  TowNeed: string | null;
+};
+
+export type TowingEditUpdate = {
+  Location: string | null;
+  VehicleProblem: string | null;
+  SiteCode: number | null;
+  TowTruckCode: number | null;
+  ContactPersonName: string | null;
+  ContactPersonTel: string | null;
+  Remarks: string | null;
+};
+
+export type CallCentreEditUpdate = {
+  Accident?: AccidentEditUpdate;
+  Loss?: LossEditUpdate;
+  Towing?: TowingEditUpdate;
+};
+
+export type UpdateCallCentreEditDetailsRequest = {
+  CallCentre: UpdateCallCentreRequest;
+  ChildUpdates: CallCentreEditUpdate;
+};
+
 export type CallCentreDataAccessEntry = {
   counter: number | null;
   dataCaptureId: number | null;
@@ -500,6 +564,24 @@ export async function getCallCentreIncident(callCentreCode: number) {
   return incident;
 }
 
+export async function getCallCentreEditDetails(callCentreCode: number): Promise<CallCentreEditDetails> {
+  const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}/edit-details`);
+  const payload = await readJson(response);
+  if (!isRecord(payload)) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned invalid call centre edit details.");
+  }
+
+  const mapChild = (value: unknown) => (isRecord(value) ? value : null);
+  return {
+    accidentTableAvailable: Boolean(getValue(payload, "AccidentTableAvailable", "accidentTableAvailable")),
+    accident: mapChild(getValue(payload, "Accident", "accident")),
+    lossTableAvailable: Boolean(getValue(payload, "LossTableAvailable", "lossTableAvailable")),
+    loss: mapChild(getValue(payload, "Loss", "loss")),
+    towingTableAvailable: Boolean(getValue(payload, "TowingTableAvailable", "towingTableAvailable")),
+    towing: mapChild(getValue(payload, "Towing", "towing")),
+  };
+}
+
 export async function getCallCentreIncidents() {
   const response = await requestApi("api/CallCentre");
   return getCollection(await readJson(response))
@@ -509,6 +591,23 @@ export async function getCallCentreIncidents() {
 
 export async function updateCallCentreIncident(callCentreCode: number, request: UpdateCallCentreRequest) {
   const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}`, {
+    method: "PUT",
+    body: JSON.stringify(request),
+  });
+  const payload = await readJson(response);
+  const updated = mapCallCentreIncident(payload);
+  if (!updated) {
+    throw new CallCentreApiError("invalid-response", "The FIS API returned an invalid updated call centre record.");
+  }
+
+  return updated;
+}
+
+export async function updateCallCentreEditDetails(
+  callCentreCode: number,
+  request: UpdateCallCentreEditDetailsRequest,
+) {
+  const response = await requestApi(`api/CallCentre/${encodeURIComponent(callCentreCode)}/edit-details`, {
     method: "PUT",
     body: JSON.stringify(request),
   });

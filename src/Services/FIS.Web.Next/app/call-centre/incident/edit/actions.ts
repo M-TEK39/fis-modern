@@ -4,9 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import {
-  updateCallCentreIncident,
+  updateCallCentreEditDetails,
   CallCentreApiError,
   type UpdateCallCentreRequest,
+  type AccidentEditUpdate,
+  type CallCentreEditUpdate,
+  type LossEditUpdate,
+  type TowingEditUpdate,
 } from "@/lib/api-call-centre";
 import { getSession } from "@/lib/session";
 
@@ -132,6 +136,63 @@ function getRequest(formData: FormData): UpdateCallCentreRequest {
   return request;
 }
 
+function getAccidentUpdate(formData: FormData): AccidentEditUpdate {
+  return {
+    OccurenceDate: getDate(formData, "accident_occurence_date"),
+    OccurenceTime: getTime(formData, "accident_occurence_time"),
+    Description: validateMaxLength(formData, "Accident description", 60, "accident_description"),
+    DriverName: validateMaxLength(formData, "Accident driver name", 30, "Driver_name"),
+    DriverEmployNumber: validateMaxLength(formData, "Accident driver Persal number", 15, "Driver_persalno"),
+    DriverTelno: validateMaxLength(formData, "Accident driver telephone", 30, "Driver_tel"),
+    DriverSiteCode: getNullableNumber(formData, "accident_driver_site_code"),
+    TransportOfficerName: validateMaxLength(formData, "Accident transport officer name", 30, "TrOfficer_name"),
+    TransportOfficerTel: validateMaxLength(formData, "Accident transport officer telephone", 30, "TrOfficer_tel"),
+    Death: validateMaxLength(formData, "Accident death choice", 1, "accident_death"),
+    Injured: validateMaxLength(formData, "Accident injured choice", 1, "accident_injured"),
+    ThirdPartyRegistration: validateMaxLength(formData, "Third party registration", 8, "accident_third_party_regno"),
+    ThirdPartyOwner: validateMaxLength(formData, "Third party owner", 30, "accident_third_party_owner"),
+    ThirdPartyTelephone: validateMaxLength(formData, "Third party telephone", 30, "accident_third_party_tel"),
+    DamageDescription: validateMaxLength(formData, "Accident damage description", 60, "accident_damage_description"),
+    Notes: validateMaxLength(formData, "Accident notes", 50, "accident_notes"),
+    OccurencePlace: validateMaxLength(formData, "Accident place", 50, "accident_occurence_place"),
+    TowNeed: validateMaxLength(formData, "Accident tow choice", 1, "accident_tow_need"),
+  };
+}
+
+function getLossUpdate(formData: FormData): LossEditUpdate {
+  return {
+    LossDate: getDate(formData, "loss_date"),
+    LossTypeCode: getNullableNumber(formData, "loss_type_code"),
+    SiteCode: getNullableNumber(formData, "loss_site_code"),
+    DepartmentContact: validateMaxLength(formData, "Loss department contact", 100, "loss_department_contact"),
+    PlaceOfLoss: validateMaxLength(formData, "Place of loss", 100, "loss_place_of_loss"),
+    DriverName: validateMaxLength(formData, "Loss driver name", 100, "loss_driver_name"),
+    Remarks: validateMaxLength(formData, "Loss remarks", 100, "loss_remarks"),
+    TowNeed: validateMaxLength(formData, "Loss tow choice", 1, "loss_tow_need"),
+  };
+}
+
+function getTowingUpdate(formData: FormData): TowingEditUpdate {
+  return {
+    Location: validateMaxLength(formData, "Towing location", 50, "towing_location"),
+    VehicleProblem: validateMaxLength(formData, "Vehicle problem", 60, "towing_vehicle_problem"),
+    SiteCode: getNullableNumber(formData, "towing_site_code"),
+    TowTruckCode: getNullableNumber(formData, "towing_tow_truck_code"),
+    ContactPersonName: validateMaxLength(formData, "Towing contact person", 30, "towing_contact_person_name"),
+    ContactPersonTel: validateMaxLength(formData, "Towing contact telephone", 30, "towing_contact_person_tel"),
+    Remarks: validateMaxLength(formData, "Towing remarks", 50, "towing_remarks"),
+  };
+}
+
+function getChildUpdates(formData: FormData): CallCentreEditUpdate {
+  if (getText(formData, "child-record-available") !== "1") return {};
+  const incidentType = getText(formData, "Incident_type", "incidentType").toLowerCase();
+  if (incidentType === "accident") return { Accident: getAccidentUpdate(formData) };
+  if (incidentType === "loss_theft") return { Loss: getLossUpdate(formData) };
+  if (incidentType === "road_assistance") return { Towing: getTowingUpdate(formData) };
+  return {};
+}
+
 function apiErrorMessage(error: unknown) {
   if (error instanceof CallCentreApiError) {
     if (error.reason === "unauthorized") return "Your session has expired. Sign in again before continuing.";
@@ -148,7 +209,10 @@ export async function updateCallCentreIncidentAction(formData: FormData) {
     const codeResult = getRequiredCode(formData);
     referenceNumber = codeResult.rawCode;
     await authorizeCallCentre(referenceNumber);
-    await updateCallCentreIncident(codeResult.code, getRequest(formData));
+    await updateCallCentreEditDetails(codeResult.code, {
+      CallCentre: getRequest(formData),
+      ChildUpdates: getChildUpdates(formData),
+    });
   } catch (error) {
     if (error instanceof Error && !(error instanceof CallCentreApiError)) {
       redirectWithError(error.message, referenceNumber);
