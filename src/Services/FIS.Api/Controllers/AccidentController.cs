@@ -179,6 +179,30 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/private-vehicle")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetPrivateVehicleReport(
+        [FromQuery] string searchTerm,
+        [FromQuery] string mode = "third-party")
+    {
+        var normalizedMode = mode.Trim().ToLowerInvariant();
+        var searchByDescription = normalizedMode is "description" or "capture-description" or "private-description";
+        var validThirdPartyMode = normalizedMode is "third-party" or "thirdparty" or "regno" or "private";
+        if (!searchByDescription && !validThirdPartyMode)
+        {
+            return BadRequest(new { error = "Mode must be third-party or description." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetPrivateVehicleReportAsync(searchTerm, searchByDescription));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving private vehicle accident report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,

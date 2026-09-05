@@ -271,11 +271,20 @@ public sealed class AccidentRepository : IAccidentRepository
         }
     }
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet)
+        => GetVehicleReportCoreAsync(searchTerm, searchByFleet ? "fleet_number" : "registration_number", containsSearch: false);
+
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription)
+        => GetVehicleReportCoreAsync(searchTerm, searchByDescription ? "description" : "third_party_regno", containsSearch: true);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "The report query is composed only from allowlisted schema metadata and fixed SQL fragments; the vehicle search value is parameterized.")]
-    public async Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet)
+        Justification = "The report query is composed only from allowlisted schema metadata and fixed SQL fragments; the vehicle or accident search value is parameterized.")]
+    private async Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportCoreAsync(
+        string searchTerm,
+        string searchColumn,
+        bool containsSearch)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         if (normalizedSearchTerm.Length == 0)
@@ -288,8 +297,10 @@ public sealed class AccidentRepository : IAccidentRepository
         var siteColumns = await GetAvailableColumnsAsync("site");
         var locationColumns = await GetAvailableColumnsAsync("location");
         var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
-        var searchColumn = searchByFleet ? "fleet_number" : "registration_number";
-        if (!vehicleColumns.Contains(searchColumn))
+        var searchAvailable = containsSearch
+            ? accidentColumns.Contains(searchColumn)
+            : vehicleColumns.Contains(searchColumn);
+        if (!searchAvailable)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -348,9 +359,11 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 GetActiveFilter(accidentColumns, "a"),
                 GetActiveFilter(vehicleColumns, "v"),
-                $"[v].[{searchColumn}] = @searchTerm"
+                containsSearch
+                    ? $"[a].[{searchColumn}] LIKE @searchTerm"
+                    : $"[v].[{searchColumn}] = @searchTerm"
             };
-            var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : searchColumn;
+            var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : "vmf_code";
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
                 FROM [dbo].[{TableName}] AS [a]
@@ -358,7 +371,7 @@ public sealed class AccidentRepository : IAccidentRepository
                 WHERE {string.Join(" AND ", conditions)}
                 ORDER BY [v].[{orderColumn}], [a].[accident_code]
                 """;
-            AddParameter(command, "@searchTerm", DbType.String, normalizedSearchTerm);
+            AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
 
             var results = new List<AccidentVehicleReportRow>();
             await using var reader = await command.ExecuteReaderAsync();

@@ -7,6 +7,7 @@ public interface IAccidentRepository
     Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(string searchTerm, bool searchById);
     Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet);
+    Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription);
     Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<AccidentClaimsSummary> GetClaimsSummaryAsync();
     Task<IEnumerable<AccidentReport>> GetRecentReportsAsync(int limit = 10);
