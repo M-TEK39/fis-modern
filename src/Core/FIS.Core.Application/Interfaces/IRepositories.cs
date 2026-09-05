@@ -580,9 +580,15 @@ public interface ILicenseFeeRepository
     Task<LicenseFee?> GetByDescriptionAsync(string description);
     Task<IEnumerable<LicenseFee>> GetAllAsync();
     Task<IEnumerable<LicenseFee>> SearchAsync(string searchTerm);
+    Task<LicenseFeeDeleteCheck> GetDeleteCheckAsync(short licenceFeeCode);
     Task<LicenseFee> CreateAsync(LicenseFee licenseFee, int currentUserId);
     Task UpdateAsync(LicenseFee licenseFee, int currentUserId);
     Task DeleteAsync(short licenceFeeCode, int currentUserId);
+}
+
+public sealed record LicenseFeeDeleteCheck(int ModelCount)
+{
+    public bool CanDelete => ModelCount == 0;
 }
 
 /// <summary>
