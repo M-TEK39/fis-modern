@@ -511,6 +511,40 @@ public class CallCentreController : BaseApiController
         }
     }
 
+    [HttpPut("{id}/booking-link")]
+    public async Task<ActionResult<CallCentre>> LinkBooking(short id, [FromBody] LinkBookingDto dto)
+    {
+        if (!ModelState.IsValid || dto.BookingId <= 0)
+        {
+            return BadRequest(new { error = "A valid booking ID is required." });
+        }
+
+        try
+        {
+            var existing = await _repository.GetByIdAsync(id);
+            if (existing == null)
+            {
+                return NotFound(new { error = "Call centre record not found", id });
+            }
+
+            // This endpoint intentionally updates only the legacy booking link.
+            // The repository writes only columns present in the active database,
+            // so other Call_centre fields remain untouched on either schema.
+            existing.Incident_Desc = dto.BookingId.ToString();
+            if (string.IsNullOrWhiteSpace(existing.Incident_type))
+            {
+                existing.Incident_type = "Booking";
+            }
+
+            return Ok(await _repository.UpdateAsync(existing, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error linking booking {BookingId} to call centre record {Id}", dto.BookingId, id);
+            return StatusCode(500, new { error = "Failed to link booking to the call centre record." });
+        }
+    }
+
     [HttpPut("{id}/edit-details")]
     public async Task<ActionResult<CallCentre>> UpdateEditDetails(
         short id,
@@ -1154,6 +1188,11 @@ public class CreateCallCentreDto : CallCentreFieldsDto
 
 public class UpdateCallCentreDto : CallCentreFieldsDto
 {
+}
+
+public class LinkBookingDto
+{
+    public short BookingId { get; set; }
 }
 
 public class UpdateCallCentreEditDetailsDto
