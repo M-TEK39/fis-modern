@@ -355,6 +355,12 @@ input:focus-visible {
   color: var(--fis-text);
 }
 
+.notice-warning {
+  border-color: hsl(38 92% 50% / 0.35);
+  background: hsl(38 92% 95%);
+  color: hsl(28 80% 28%);
+}
+
 .status-card,
 .loading-card {
   padding: clamp(1.5rem, 5vw, 2.5rem);
@@ -823,6 +829,23 @@ input:focus-visible {
   background: var(--fis-hover);
   text-decoration: underline;
   text-underline-offset: 0.2rem;
+}
+
+.vehicle-menu-link-disabled {
+  color: var(--fis-muted);
+  cursor: not-allowed;
+}
+
+.vehicle-menu-link-disabled:hover {
+  background: transparent;
+  text-decoration: none;
+}
+
+.vehicle-menu-link-disabled small {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.74rem;
+  font-weight: 500;
 }
 
 .vehicle-overview {

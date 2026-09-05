@@ -207,6 +207,19 @@ export type AccidentUpdateRequest = AccidentLegacyWriteFields & {
 
 export type AccidentApiErrorReason = "unauthorized" | "unavailable" | "invalid-response" | "not-found";
 
+export type AccidentDriverReportMode = "name" | "id";
+
+export type AccidentDriverReportRow = {
+  registrationNumber: string | null;
+  fleetNumber: string | null;
+  driverName: string | null;
+  driverEmployNumber: string | null;
+  accidentDate: string | null;
+  departmentNumber: string | null;
+  siteDescription: string | null;
+  costOfRepair: number | null;
+};
+
 export class AccidentApiError extends Error {
   constructor(
     public readonly reason: AccidentApiErrorReason,
@@ -497,6 +510,34 @@ function mapAccidentEditRecord(value: unknown): AccidentEditRecord {
 
 export async function getAccidentForEdit(accidentCode: number) {
   return mapAccidentEditRecord(await requestApi(`api/accidents/${encodeURIComponent(accidentCode)}`));
+}
+
+function mapAccidentDriverReportRow(value: unknown): AccidentDriverReportRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+    driverName: asString(getValue(value, "driver_name", "driverName")),
+    driverEmployNumber: asString(getValue(value, "driver_employ_number", "driverEmployNumber")),
+    accidentDate: asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate")),
+    departmentNumber: asString(getValue(value, "department_number", "departmentNumber")),
+    siteDescription: asString(getValue(value, "site_description", "siteDescription")),
+    costOfRepair: asNumber(getValue(value, "cost_of_repair", "costOfRepair")),
+  };
+}
+
+export async function getAccidentDriverReport(
+  searchTerm: string,
+  mode: AccidentDriverReportMode,
+) {
+  const query = new URLSearchParams({
+    searchTerm: searchTerm.trim(),
+    mode,
+  });
+  return mapPresent(getCollection(await requestApi(`api/accidents/reports/driver?${query.toString()}`)), mapAccidentDriverReportRow);
 }
 
 export async function updateAccidentAgainstApi(request: AccidentUpdateRequest) {
