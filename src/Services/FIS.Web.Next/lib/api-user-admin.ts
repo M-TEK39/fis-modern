@@ -225,25 +225,39 @@ export async function getUserAdminProfiles(alphabet: string) {
   );
 }
 
-export async function resetUserLogin(username: string): Promise<UserAdminMutationResult> {
-  return runUserAdminMutation("api/auth/reset-login", username);
+export async function getUserAdminUserChoices() {
+  const response = await requestApi("api/userprofile");
+  const profiles = getCollection(await readJson(response))
+    .map(mapProfile)
+    .filter((profile): profile is UserAdminProfile => profile !== null);
+
+  return profiles.sort(
+    (left, right) =>
+      (left.userName ?? "").localeCompare(right.userName ?? "") ||
+      (left.lastName ?? "").localeCompare(right.lastName ?? "") ||
+      left.userAccessCode - right.userAccessCode,
+  );
 }
 
-async function runUserAdminMutation(path: string, username: string): Promise<UserAdminMutationResult> {
+export async function resetUserLogin(username: string): Promise<UserAdminMutationResult> {
+  return runUserAdminMutation("api/auth/reset-login", { username });
+}
+
+async function runUserAdminMutation(path: string, requestPayload: JsonRecord): Promise<UserAdminMutationResult> {
   try {
     const response = await requestApi(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username }),
+      body: JSON.stringify(requestPayload),
     });
-    const payload = await readJson(response);
-    if (!isRecord(payload)) {
+    const responsePayload = await readJson(response);
+    if (!isRecord(responsePayload)) {
       return { ok: false, reason: "invalid-response" };
     }
 
-    const message = asString(payload.message ?? payload.Message) ?? undefined;
+    const message = asString(responsePayload.message ?? responsePayload.Message) ?? undefined;
 
-    if (payload.success === true || payload.Success === true) {
+    if (responsePayload.success === true || responsePayload.Success === true) {
       return { ok: true, message };
     }
 
@@ -263,13 +277,17 @@ async function runUserAdminMutation(path: string, username: string): Promise<Use
 }
 
 export async function deactivateUser(username: string): Promise<UserAdminMutationResult> {
-  return runUserAdminMutation("api/auth/deactivate-user", username);
+  return runUserAdminMutation("api/auth/deactivate-user", { username });
 }
 
 export async function deactivateExpiredPassword(username: string): Promise<UserAdminMutationResult> {
-  return runUserAdminMutation("api/auth/deactivate-expired", username);
+  return runUserAdminMutation("api/auth/deactivate-expired", { username });
 }
 
 export async function activateUser(username: string): Promise<UserAdminMutationResult> {
-  return runUserAdminMutation("api/auth/activate-user", username);
+  return runUserAdminMutation("api/auth/activate-user", { username });
+}
+
+export async function forceUserPassword(username: string, newPassword: string): Promise<UserAdminMutationResult> {
+  return runUserAdminMutation("api/auth/force-password", { username, newPassword });
 }

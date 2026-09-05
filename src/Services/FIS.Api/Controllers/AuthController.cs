@@ -623,6 +623,16 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<ActionResult<UserAdminResponse>> ForcePassword([FromBody] ForcePasswordRequest request)
     {
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        if (!User.IsInRole("User Administration"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var profile = await ResolveUserProfileAsync(request.Username);
@@ -667,6 +677,9 @@ public class AuthController : ControllerBase
                     password_salt = string.Empty,
                     last_password_change = now,
                     password_expiry_date = now.AddDays(90),
+                    password_reset_token = SerializeSecurityQuestionPayload(
+                        DefaultSecurityQuestion,
+                        HashSecurityAnswer(profile.ResolvedUsername)),
                     changed_by_user_code = actorUserCode > 0 ? actorUserCode : null,
                     created_date = now,
                     modified_date = now,
@@ -688,14 +701,10 @@ public class AuthController : ControllerBase
                     credential.is_active = true;
                     credential.modified_date = now;
 
-                    var existingPayload = DeserializeSecurityQuestionPayload(credential.password_reset_token);
-                    if (existingPayload is null)
-                    {
-                        credential.password_reset_token = SerializeSecurityQuestionPayload(
-                            DefaultSecurityQuestion,
-                            HashSecurityAnswer(profile.ResolvedUsername));
-                        credential.password_reset_token_expiry = null;
-                    }
+                    credential.password_reset_token = SerializeSecurityQuestionPayload(
+                        DefaultSecurityQuestion,
+                        HashSecurityAnswer(profile.ResolvedUsername));
+                    credential.password_reset_token_expiry = null;
 
                     _context.LegacyUserCredentials.Update(credential);
                 }
@@ -1605,23 +1614,6 @@ public class AuthController : ControllerBase
             Question = question,
             AnswerHash = answerHash
         });
-    }
-
-    private static SecurityQuestionPayload? DeserializeSecurityQuestionPayload(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        try
-        {
-            return JsonSerializer.Deserialize<SecurityQuestionPayload>(raw);
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static readonly string RefreshTokenCookieName = "FIS_Refresh_Token";
