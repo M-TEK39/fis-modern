@@ -1,10 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_make.aspx"
-@page "/Validation/MNT_Make_Add.aspx"
-@page "/Validation/MNT_Make_Edit.aspx"
-@page "/Validation/MNT_Make_Update.aspx"
-@page "/Validation/MNT_Make_Del.aspx"
-@page "/Validation/MNT_Make_Del_Check.aspx"
 @page "/Validation/MNT_model.aspx"
 @page "/Validation/MNT_Model_Add.aspx"
 @page "/Validation/MNT_Model_Edit.aspx"
@@ -60,10 +54,6 @@
 
 <div class="page-content">
     <div class="tabs">
-        <button class="tab @(_activeTab == "makes" ? "active" : "")" @onclick='() => SetActiveTab("makes")'>
-            <i class="bx bx-car"></i>
-            Vehicle Makes
-        </button>
         <button class="tab @(_activeTab == "types" ? "active" : "")" @onclick='() => SetActiveTab("types")'>
             <i class="bx bx-category"></i>
             Vehicle Types
@@ -111,11 +101,7 @@
     </div>
 
     <div class="tab-content">
-        @if (_activeTab == "makes")
-        {
-            <MakesTab />
-        }
-        else if (_activeTab == "types")
+        @if (_activeTab == "types")
         {
             <TypesTab />
         }
@@ -171,7 +157,7 @@
                       Filters="_filters" />
 </div>
 @code {
-    private string _activeTab = "makes";
+    private string _activeTab = "types";
     [SupplyParameterFromQuery(Name = "tab")]
     public string? Tab { get; set; }
 
@@ -192,7 +178,6 @@
 
     private readonly IReadOnlyList<Dictionary<string, string?>> _rows =
     [
-        Row("Vehicle", "Vehicle Makes", "/reference-data?tab=makes"),
         Row("Vehicle", "Vehicle Types", "/reference-data?tab=types"),
         Row("Vehicle", "Fuel Types", "/reference-data?tab=fueltypes"),
         Row("Vehicle", "Vehicle Classes", "/reference-data?tab=classes"),
@@ -214,7 +199,7 @@
 
         var allowed = new HashSet<string>
         {
-            "makes", "types", "fueltypes", "classes", "units", "licenses", "models",
+            "types", "fueltypes", "classes", "units", "licenses", "models",
             "sites", "licensefees", "driverlicenses", "extras", "losstypes"
         };
 
@@ -229,12 +214,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_make.aspx" => "makes",
-            "validation/mnt_make_add.aspx" => "makes",
-            "validation/mnt_make_edit.aspx" => "makes",
-            "validation/mnt_make_update.aspx" => "makes",
-            "validation/mnt_make_del.aspx" => "makes",
-            "validation/mnt_make_del_check.aspx" => "makes",
             "validation/mnt_model.aspx" => "models",
             "validation/mnt_model_add.aspx" => "models",
             "validation/mnt_model_edit.aspx" => "models",
