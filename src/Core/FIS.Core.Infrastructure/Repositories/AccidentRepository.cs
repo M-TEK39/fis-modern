@@ -103,6 +103,50 @@ public sealed class AccidentRepository : IAccidentRepository
         "is_deleted"
     ];
 
+    private static readonly string[] VehicleReportColumns =
+    [
+        "accident_code",
+        "occurence_date",
+        "occurence_time",
+        "occurence_place",
+        "fin_year",
+        "date_updated",
+        "Flag_gg_hq",
+        "Flag_gg_hq_date",
+        "Flag_trip_author",
+        "flag_trip_auth_date",
+        "description",
+        "trip_author",
+        "driver_name",
+        "driver_employ_number",
+        "transoffic_name",
+        "transoffic_tel",
+        "hq_reference",
+        "gg_reference",
+        "sa_reference",
+        "case_number",
+        "cost_of_repair",
+        "damage_description",
+        "driver_fault",
+        "death",
+        "Injured",
+        "third_party_regno",
+        "third_party_owner",
+        "third_party_claim",
+        "priv_dampay_date",
+        "insurance_claim",
+        "th_claim_receive",
+        "claim_against_dept",
+        "th_claim_accept_reject",
+        "th_claim_reject_reason",
+        "write_off_amount",
+        "write_off_date",
+        "letterhead",
+        "z181",
+        "file_close_date",
+        "notes"
+    ];
+
     private readonly FisDbContext _context;
 
     public AccidentRepository(FisDbContext context)
@@ -213,6 +257,160 @@ public sealed class AccidentRepository : IAccidentRepository
                     department_number = ReadString(reader, "department_number") ?? string.Empty,
                     site_description = ReadString(reader, "site_description") ?? string.Empty,
                     cost_of_repair = ReadDecimal(reader, "cost_of_repair")
+                });
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report query is composed only from allowlisted schema metadata and fixed SQL fragments; the vehicle search value is parameterized.")]
+    public async Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet)
+    {
+        var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
+        if (normalizedSearchTerm.Length == 0)
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName, ["vmf_code"]);
+        var siteColumns = await GetAvailableColumnsAsync("site");
+        var locationColumns = await GetAvailableColumnsAsync("location");
+        var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
+        var searchColumn = searchByFleet ? "fleet_number" : "registration_number";
+        if (!vehicleColumns.Contains(searchColumn))
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
+            var locationJoinAvailable = vehicleColumns.Contains("location_code") && locationColumns.Contains("location_code");
+            var accidentTypeJoinAvailable = accidentColumns.Contains("acc_type_code") && accidentTypeColumns.Contains("acc_type_code");
+            var projection = VehicleReportColumns
+                .Select(column => GetProjection(accidentColumns, column, "a"))
+                .Concat(
+                [
+                    GetVehicleProjection(vehicleColumns, "registration_number", true),
+                    GetVehicleProjection(vehicleColumns, "fleet_number", true),
+                    locationJoinAvailable && locationColumns.Contains("description")
+                        ? "[l].[description] AS [location_description]"
+                        : "CAST(NULL AS nvarchar(255)) AS [location_description]",
+                    accidentTypeJoinAvailable && accidentTypeColumns.Contains("acc_type_description")
+                        ? "[at].[acc_type_description] AS [accident_type_description]"
+                        : "CAST(NULL AS nvarchar(255)) AS [accident_type_description]",
+                    siteJoinAvailable && siteColumns.Contains("Department_number")
+                        ? "[s].[Department_number] AS [department_number]"
+                        : "CAST(NULL AS nvarchar(50)) AS [department_number]"
+                ])
+                .ToArray();
+            var joins = new List<string>
+            {
+                "INNER JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [a].[vmf_code]"
+            };
+            if (siteJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[site] AS [s] ON [s].[site_code] = [a].[driver_site_code]");
+            }
+
+            if (locationJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[location] AS [l] ON [l].[location_code] = [v].[location_code]");
+            }
+
+            if (accidentTypeJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[acc_type] AS [at] ON [at].[acc_type_code] = [a].[acc_type_code]");
+            }
+
+            var conditions = new List<string>
+            {
+                GetActiveFilter(accidentColumns, "a"),
+                GetActiveFilter(vehicleColumns, "v"),
+                $"[v].[{searchColumn}] = @searchTerm"
+            };
+            var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : searchColumn;
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [a]
+                {string.Join(Environment.NewLine, joins)}
+                WHERE {string.Join(" AND ", conditions)}
+                ORDER BY [v].[{orderColumn}], [a].[accident_code]
+                """;
+            AddParameter(command, "@searchTerm", DbType.String, normalizedSearchTerm);
+
+            var results = new List<AccidentVehicleReportRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new AccidentVehicleReportRow
+                {
+                    accident_code = ReadInt32(reader, "accident_code") ?? 0,
+                    registration_number = ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                    location_description = ReadString(reader, "location_description") ?? string.Empty,
+                    occurence_date = ReadDateTime(reader, "occurence_date"),
+                    occurence_time = ReadTime(reader, "occurence_time"),
+                    occurence_place = ReadString(reader, "occurence_place") ?? string.Empty,
+                    fin_year = ReadString(reader, "fin_year") ?? string.Empty,
+                    date_updated = ReadDateTime(reader, "date_updated"),
+                    flag_gg_hq = ReadString(reader, "Flag_gg_hq") ?? string.Empty,
+                    flag_gg_hq_date = ReadDateTime(reader, "Flag_gg_hq_date"),
+                    flag_trip_author = ReadString(reader, "Flag_trip_author") ?? string.Empty,
+                    flag_trip_auth_date = ReadDateTime(reader, "flag_trip_auth_date"),
+                    description = ReadString(reader, "description") ?? string.Empty,
+                    accident_type_description = ReadString(reader, "accident_type_description") ?? string.Empty,
+                    trip_author = ReadString(reader, "trip_author") ?? string.Empty,
+                    driver_name = ReadString(reader, "driver_name") ?? string.Empty,
+                    driver_employ_number = ReadString(reader, "driver_employ_number") ?? string.Empty,
+                    department_number = ReadString(reader, "department_number") ?? string.Empty,
+                    transoffic_name = ReadString(reader, "transoffic_name") ?? string.Empty,
+                    transoffic_tel = ReadString(reader, "transoffic_tel") ?? string.Empty,
+                    hq_reference = ReadString(reader, "hq_reference") ?? string.Empty,
+                    gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
+                    sa_reference = ReadString(reader, "sa_reference") ?? string.Empty,
+                    case_number = ReadString(reader, "case_number") ?? string.Empty,
+                    cost_of_repair = ReadDecimal(reader, "cost_of_repair"),
+                    damage_description = ReadString(reader, "damage_description") ?? string.Empty,
+                    driver_fault = ReadString(reader, "driver_fault") ?? string.Empty,
+                    death = ReadString(reader, "death") ?? string.Empty,
+                    injured = ReadString(reader, "Injured") ?? string.Empty,
+                    third_party_regno = ReadString(reader, "third_party_regno") ?? string.Empty,
+                    third_party_owner = ReadString(reader, "third_party_owner") ?? string.Empty,
+                    third_party_claim = ReadDecimal(reader, "third_party_claim"),
+                    priv_dampay_date = ReadDateTime(reader, "priv_dampay_date"),
+                    insurance_claim = ReadString(reader, "insurance_claim") ?? string.Empty,
+                    th_claim_receive = ReadString(reader, "th_claim_receive") ?? string.Empty,
+                    claim_against_dept = ReadDecimal(reader, "claim_against_dept"),
+                    th_claim_accept_reject = ReadString(reader, "th_claim_accept_reject") ?? string.Empty,
+                    th_claim_reject_reason = ReadString(reader, "th_claim_reject_reason") ?? string.Empty,
+                    write_off_amount = ReadDecimal(reader, "write_off_amount"),
+                    write_off_date = ReadDateTime(reader, "write_off_date"),
+                    letterhead = ReadString(reader, "letterhead") ?? string.Empty,
+                    z181 = ReadString(reader, "z181") ?? string.Empty,
+                    file_close_date = ReadDateTime(reader, "file_close_date"),
+                    notes = ReadString(reader, "notes") ?? string.Empty
                 });
             }
 

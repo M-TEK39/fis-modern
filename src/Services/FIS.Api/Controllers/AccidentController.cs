@@ -155,6 +155,30 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/vehicle")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetVehicleReport(
+        [FromQuery] string searchTerm,
+        [FromQuery] string mode = "registration")
+    {
+        var normalizedMode = mode.Trim().ToLowerInvariant();
+        var searchByFleet = normalizedMode is "fleet" or "gg" or "radiogg";
+        var validRegistrationMode = normalizedMode is "registration" or "gp" or "radiogp";
+        if (!searchByFleet && !validRegistrationMode)
+        {
+            return BadRequest(new { error = "Mode must be registration or fleet." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetVehicleReportAsync(searchTerm, searchByFleet));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident vehicle report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,
