@@ -1,16 +1,9 @@
 @page "/reference-data"
-@page "/Validation/MNT_Loss_Type.aspx"
-@page "/Validation/MNT_Loss_Type_Add.aspx"
-@page "/Validation/MNT_Loss_Type_Edit.aspx"
-@page "/Validation/MNT_Loss_Type_Update.aspx"
-@page "/Validation/MNT_Loss_Type_Del.aspx"
-@page "/Validation/MNT_Loss_Type_Del_Check.aspx"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components
 @using FIS.Web.Models
 @using FIS.Web.Services
 @using FIS.Web.Components.Pages.ReferenceData
-@inject NavigationManager Navigation
 
 <PageTitle>Reference Data Management - Fleet Information System</PageTitle>
 
@@ -42,10 +35,6 @@
             <i class="bx bx-id-card"></i>
             License Types
         </button>
-        <button class="tab @(_activeTab == "losstypes" ? "active" : "")" @onclick='() => SetActiveTab("losstypes")'>
-            <i class="bx bx-error-circle"></i>
-            Loss Types
-        </button>
     </div>
 
     <div class="tab-content">
@@ -64,10 +53,6 @@
         else if (_activeTab == "licenses")
         {
             <LicenseTypesTab />
-        }
-        else if (_activeTab == "losstypes")
-        {
-            <LossTypesTab />
         }
     </div>
 
@@ -106,40 +91,23 @@
         Row("Vehicle", "Fuel Types", "/reference-data?tab=fueltypes"),
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
-        Row("Operational", "Loss Types", "/reference-data?tab=losstypes")
     ];
 
     protected override void OnParametersSet()
     {
         var requested = string.IsNullOrWhiteSpace(Tab)
-            ? ResolveLegacyTabFromPath()
+            ? ""
             : Tab.Trim().ToLowerInvariant();
 
         var allowed = new HashSet<string>
         {
-            "types", "fueltypes", "units", "licenses",
-            "losstypes"
+            "types", "fueltypes", "units", "licenses"
         };
 
         if (allowed.Contains(requested))
         {
             _activeTab = requested;
         }
-    }
-
-    private string ResolveLegacyTabFromPath()
-    {
-        var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
-        return path switch
-        {
-            "validation/mnt_loss_type.aspx" => "losstypes",
-            "validation/mnt_loss_type_add.aspx" => "losstypes",
-            "validation/mnt_loss_type_edit.aspx" => "losstypes",
-            "validation/mnt_loss_type_update.aspx" => "losstypes",
-            "validation/mnt_loss_type_del.aspx" => "losstypes",
-            "validation/mnt_loss_type_del_check.aspx" => "losstypes",
-            _ => string.Empty
-        };
     }
 
     private void SetActiveTab(string tab)
