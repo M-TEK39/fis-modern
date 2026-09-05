@@ -2,8 +2,6 @@
 @using System.Security.Claims
 @using System.Linq
 @using Microsoft.AspNetCore.Components.Authorization
-@using FIS.Web.Components.Pages.ChangePassword
-@using FIS.Web.Components.Pages.ChangePasswordQuestion
 @using Microsoft.AspNetCore.WebUtilities
 @using FIS.Web.Services
 @inject AuthApiService AuthService
@@ -163,12 +161,25 @@
             <nav class="settings-sidebar">
                 @foreach (var navSection in VisibleSettingsSections)
                 {
-                    <button class="settings-nav-item @(navSection.Id == _activeSection ? "active" : "")"
-                            type="button"
-                            @onclick="() => SetActiveSection(navSection.Id)">
-                        <i class="@navSection.Icon" aria-hidden="true"></i>
-                        <span>@navSection.Title</span>
-                    </button>
+                    @if (navSection.Id is "passwords" or "passwords-question")
+                    {
+                        <a class="settings-nav-item @(navSection.Id == _activeSection ? "active" : "")"
+                           href="@GetPasswordRoute(navSection.Id)"
+                           @onclick="() => NavigateToPasswordPage(navSection.Id)"
+                           @onclick:preventDefault="true">
+                            <i class="@navSection.Icon" aria-hidden="true"></i>
+                            <span>@navSection.Title</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <button class="settings-nav-item @(navSection.Id == _activeSection ? "active" : "")"
+                                type="button"
+                                @onclick="() => SetActiveSection(navSection.Id)">
+                            <i class="@navSection.Icon" aria-hidden="true"></i>
+                            <span>@navSection.Title</span>
+                        </button>
+                    }
                 }
             </nav>
             <div class="settings-content">
@@ -287,14 +298,6 @@
                             </div>
                         </div>
                     </div>
-                }
-                else if (_activeSection == "passwords")
-                {
-                    <ChangePasswordContent />
-                }
-                else if (_activeSection == "passwords-question")
-                {
-                    <ChangePasswordQuestionContent />
                 }
                 else if (_activeSection == "logs")
                 {
@@ -604,6 +607,15 @@
         _activeSection = sectionId;
     }
 
+    private static string GetPasswordRoute(string sectionId) =>
+        sectionId == "passwords" ? "/change-password" : "/change-password-question";
+
+    private void NavigateToPasswordPage(string sectionId)
+    {
+        CloseOverlays();
+        Navigation.NavigateTo(GetPasswordRoute(sectionId), forceLoad: true);
+    }
+
     private void CloseNotifications()
     {
         _showNotifications = false;
@@ -635,8 +647,6 @@
     private void SyncSettingsWithRoute()
     {
         var uri = new Uri(Navigation.Uri);
-        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-        var path = "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
 
         var query = QueryHelpers.ParseQuery(uri.Query);
         if (query.TryGetValue("settings", out var settingsValue))
@@ -646,44 +656,18 @@
             {
                 if (settings.Equals("passwords", StringComparison.OrdinalIgnoreCase))
                 {
-                    _activeSection = "passwords";
+                    NavigateToPasswordPage("passwords");
                 }
                 else if (settings.Equals("passwords-question", StringComparison.OrdinalIgnoreCase))
                 {
-                    _activeSection = "passwords-question";
+                    NavigateToPasswordPage("passwords-question");
                 }
                 else
                 {
                     return;
                 }
-
-                _showSettings = true;
-                _showNotifications = false;
-                _showUserMenu = false;
                 return;
             }
-        }
-
-        if (path == "/")
-        {
-            return;
-        }
-
-        if (path == "/change-password")
-        {
-            _activeSection = "passwords";
-            _showSettings = true;
-            _showNotifications = false;
-            _showUserMenu = false;
-            return;
-        }
-
-        if (path == "/change-password-question")
-        {
-            _activeSection = "passwords-question";
-            _showSettings = true;
-            _showNotifications = false;
-            _showUserMenu = false;
         }
     }
 

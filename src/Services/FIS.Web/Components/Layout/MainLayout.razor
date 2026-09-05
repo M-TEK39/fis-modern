@@ -88,17 +88,7 @@
 
     private void UpdateBodyVisibility()
     {
-        var relative = Navigation.ToBaseRelativePath(Navigation.Uri);
-        var path = "/" + (relative?.Split('?', '#')[0] ?? string.Empty).TrimEnd('/');
-
-        if (path == "/")
-        {
-            _suppressBody = false;
-            return;
-        }
-
-        _suppressBody = path == "/change-password"
-            || path == "/change-password-question";
+        _suppressBody = false;
     }
 
     private void ToggleSidebar()
