@@ -224,6 +224,8 @@ export type AccidentVehicleReportMode = "registration" | "fleet";
 
 export type AccidentPrivateVehicleReportMode = "third-party" | "description";
 
+export type AccidentPeriodReportStatus = "open" | "closed";
+
 export type AccidentVehicleReportRow = {
   accidentCode: number;
   registrationNumber: string | null;
@@ -270,6 +272,21 @@ export type AccidentVehicleReportRow = {
   z181: string | null;
   fileCloseDate: string | null;
   notes: string | null;
+};
+
+export type AccidentPeriodReportRow = {
+  registrationNumber: string | null;
+  fleetNumber: string | null;
+  accidentDate: string | null;
+  departmentNumber: string | null;
+  siteDescription: string | null;
+  hireType: string | null;
+  accidentDescription: string | null;
+  driverName: string | null;
+  transportOfficerName: string | null;
+  callRefer: number | null;
+  costOfRepair: number | null;
+  fileCloseDate: string | null;
 };
 
 export class AccidentApiError extends Error {
@@ -671,6 +688,42 @@ export async function getAccidentPrivateVehicleReport(
     mode,
   });
   return mapPresent(getCollection(await requestApi(`api/accidents/reports/private-vehicle?${query.toString()}`)), mapAccidentVehicleReportRow);
+}
+
+function mapAccidentPeriodReportRow(value: unknown): AccidentPeriodReportRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  return {
+    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+    accidentDate: asString(getValue(value, "occurence_date", "occurrence_date", "occurenceDate")),
+    departmentNumber: asString(getValue(value, "department_number", "departmentNumber")),
+    siteDescription: asString(getValue(value, "site_description", "siteDescription")),
+    hireType: asString(getValue(value, "hire_type", "hireType")),
+    accidentDescription: asString(getValue(value, "accident_description", "accidentDescription", "acc_type_description")),
+    driverName: asString(getValue(value, "driver_name", "driverName")),
+    transportOfficerName: asString(getValue(value, "transoffic_name", "transportOfficerName")),
+    callRefer: asNumber(getValue(value, "Call_Refer", "call_refer", "callRefer")),
+    costOfRepair: asNumber(getValue(value, "cost_of_repair", "costOfRepair")),
+    fileCloseDate: asString(getValue(value, "file_close_date", "fileCloseDate")),
+  };
+}
+
+export async function getAccidentPeriodReport(
+  departmentNumber: string,
+  startDate: string,
+  endDate: string,
+  status: AccidentPeriodReportStatus,
+) {
+  const query = new URLSearchParams({
+    departmentNumber: departmentNumber.trim(),
+    startDate,
+    endDate,
+    status,
+  });
+  return mapPresent(getCollection(await requestApi(`api/accidents/reports/period?${query.toString()}`)), mapAccidentPeriodReportRow);
 }
 
 export async function updateAccidentAgainstApi(request: AccidentUpdateRequest) {

@@ -25,7 +25,7 @@ const reportEntries = [
   { label: "13) LETTER for Inspection", target: "Accident/RPT_letter_inspection_main_accident.aspx", available: false },
   { label: "14) List of Accident Categories", target: "Accident/RPT_categories_accident.aspx", available: false },
   { label: "15) Last GG Reference Number Used", target: "Accident/RPT_lastggref_accident.aspx", available: false },
-  { label: "16) Weekly, Quaterly And Yearly Report - Opened And Closed Accidents", target: "Accident/RPT_period_report1.aspx", available: false },
+  { label: "16) Weekly, Quaterly And Yearly Report - Opened And Closed Accidents", target: "Accident/RPT_period_report1.aspx", href: "/accidents/reports/period", available: true },
   { label: "17) Report By Driver Name Or ID Number", target: "Accident/RPT_accident_driver_main.aspx", href: "/accidents/reports/driver", available: true },
 ] as const;
 
@@ -52,7 +52,7 @@ async function AccidentReportsContent() {
     <>
       <div className="notice notice-warning" role="status">
         <span aria-hidden="true">!</span>
-        <span>The one-vehicle, private-vehicle, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
+        <span>The one-vehicle, private-vehicle, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
       </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (
