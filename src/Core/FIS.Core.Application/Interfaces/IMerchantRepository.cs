@@ -8,5 +8,6 @@ public interface IMerchantRepository
     Task<IEnumerable<MerchantReference>> GetAllAsync();
     Task<MerchantReference> CreateAsync(MerchantReference merchant, int currentUserId);
     Task<MerchantReference> UpdateAsync(MerchantReference merchant, int currentUserId);
+    Task<int> CountClearancesAsync(int merchantCode);
     Task DeleteAsync(int merchantCode, int currentUserId);
 }
