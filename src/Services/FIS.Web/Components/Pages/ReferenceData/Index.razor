@@ -1,5 +1,4 @@
 @page "/reference-data"
-@page "/Validation/MNT_extras.aspx"
 @page "/Validation/MNT_Loss_Type.aspx"
 @page "/Validation/MNT_Loss_Type_Add.aspx"
 @page "/Validation/MNT_Loss_Type_Edit.aspx"
@@ -43,10 +42,6 @@
             <i class="bx bx-id-card"></i>
             License Types
         </button>
-        <button class="tab @(_activeTab == "extras" ? "active" : "")" @onclick='() => SetActiveTab("extras")'>
-            <i class="bx bx-plus-circle"></i>
-            Extras
-        </button>
         <button class="tab @(_activeTab == "losstypes" ? "active" : "")" @onclick='() => SetActiveTab("losstypes")'>
             <i class="bx bx-error-circle"></i>
             Loss Types
@@ -69,10 +64,6 @@
         else if (_activeTab == "licenses")
         {
             <LicenseTypesTab />
-        }
-        else if (_activeTab == "extras")
-        {
-            <ExtrasTab />
         }
         else if (_activeTab == "losstypes")
         {
@@ -115,7 +106,6 @@
         Row("Vehicle", "Fuel Types", "/reference-data?tab=fueltypes"),
         Row("Operational", "Units of Measure", "/reference-data?tab=units"),
         Row("Licence", "License Types", "/reference-data?tab=licenses"),
-        Row("Vehicle", "Extras", "/reference-data?tab=extras"),
         Row("Operational", "Loss Types", "/reference-data?tab=losstypes")
     ];
 
@@ -128,7 +118,7 @@
         var allowed = new HashSet<string>
         {
             "types", "fueltypes", "units", "licenses",
-            "extras", "losstypes"
+            "losstypes"
         };
 
         if (allowed.Contains(requested))
@@ -142,7 +132,6 @@
         var path = Navigation.ToAbsoluteUri(Navigation.Uri).AbsolutePath.Trim('/').ToLowerInvariant();
         return path switch
         {
-            "validation/mnt_extras.aspx" => "extras",
             "validation/mnt_loss_type.aspx" => "losstypes",
             "validation/mnt_loss_type_add.aspx" => "losstypes",
             "validation/mnt_loss_type_edit.aspx" => "losstypes",
