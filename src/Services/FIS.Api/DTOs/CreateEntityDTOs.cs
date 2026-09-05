@@ -156,21 +156,40 @@ namespace FIS.Api.DTOs
         /// <summary>
         /// Description of the vehicle class (e.g., "Sedan", "SUV", "Truck")
         /// </summary>
-        [MaxLength(255)]
+        [Required]
+        [StringLength(60)]
         public string? description { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string? class_number { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string? bank_number { get; set; }
+
+        [Required]
+        public short? months_life { get; set; }
+
+        [Required]
+        public decimal? depreciation_percent { get; set; }
+
+        [Required]
+        public decimal? odometer_life { get; set; }
+
+        [Required]
+        public short? appreciate_percent { get; set; }
+
+        [Required]
+        public decimal? replacement_cost { get; set; }
     }
 
     /// <summary>
     /// DTO for updating an existing Class entity
     /// Excludes audit fields (auto-populated by repository)
     /// </summary>
-    public class UpdateClassDto
+    public class UpdateClassDto : CreateClassDto
     {
-        /// <summary>
-        /// Description of the vehicle class
-        /// </summary>
-        [MaxLength(255)]
-        public string? description { get; set; }
     }
 
     /// <summary>

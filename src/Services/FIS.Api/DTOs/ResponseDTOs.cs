@@ -75,6 +75,13 @@ namespace FIS.Api.DTOs
     {
         public short class_code { get; set; }
         public string? description { get; set; }
+        public string? class_number { get; set; }
+        public string? bank_number { get; set; }
+        public short? months_life { get; set; }
+        public decimal? depreciation_percent { get; set; }
+        public decimal? odometer_life { get; set; }
+        public short? appreciate_percent { get; set; }
+        public decimal? replacement_cost { get; set; }
         // Audit fields
         public DateTime date_created { get; set; }
         public DateTime? date_updated { get; set; }

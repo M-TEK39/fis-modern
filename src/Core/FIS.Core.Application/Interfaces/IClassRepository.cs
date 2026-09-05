@@ -29,6 +29,11 @@ namespace FIS.Core.Application.Interfaces
         Task<IEnumerable<Class>> SearchAsync(string searchTerm);
 
         /// <summary>
+        /// Checks whether models or vehicles still depend on a class.
+        /// </summary>
+        Task<ClassDeleteCheck> GetDeleteCheckAsync(short classCode);
+
+        /// <summary>
         /// Creates a new class with audit fields auto-populated
         /// </summary>
         /// <param name="classEntity">The class entity to create</param>
@@ -50,5 +55,10 @@ namespace FIS.Core.Application.Interfaces
         /// <param name="classCode">The class code to delete</param>
         /// <param name="currentUserId">User ID for audit trail</param>
         Task DeleteAsync(short classCode, int currentUserId);
+    }
+
+    public sealed record ClassDeleteCheck(int ModelCount, int VehicleCount)
+    {
+        public bool CanDelete => ModelCount == 0 && VehicleCount == 0;
     }
 }
