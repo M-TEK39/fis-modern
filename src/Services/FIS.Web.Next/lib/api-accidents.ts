@@ -508,6 +508,15 @@ export async function updateAccidentAgainstApi(request: AccidentUpdateRequest) {
   return { ok: true as const };
 }
 
+export async function updateHqAccidentAgainstApi(request: AccidentUpdateRequest) {
+  await requestApi(`api/accidents/hq/${encodeURIComponent(request.accident_code)}`, {
+    method: "PUT",
+    body: JSON.stringify(request),
+  });
+
+  return { ok: true as const };
+}
+
 export async function deleteAccidentAgainstApi(accidentCode: number) {
   await requestApi(`api/accidents/${encodeURIComponent(accidentCode)}`, {
     method: "DELETE",
@@ -670,6 +679,15 @@ export async function getGarageAccidentPage(
     searchTerm: normalizedSearchTerm,
     searchType,
   };
+}
+
+export async function getHqAccidentPage(
+  page: number,
+  searchType: GarageSearchType,
+  searchTerm: string,
+  pageSize = 12,
+) {
+  return getGarageAccidentPage(page, searchType, searchTerm, pageSize);
 }
 
 export async function createAccidentAgainstApi(request: CreateAccidentRequest) {
