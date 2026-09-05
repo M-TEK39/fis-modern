@@ -1272,8 +1272,18 @@ input:focus-visible {
   display: grid;
   overflow-y: auto;
   place-items: center;
-  background: rgb(15 23 42 / 0.58);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  background: transparent;
   padding: 1rem;
+}
+
+.vehicle-review-backdrop::backdrop {
+  background: rgb(15 23 42 / 0.58);
 }
 
 .vehicle-review-dialog {

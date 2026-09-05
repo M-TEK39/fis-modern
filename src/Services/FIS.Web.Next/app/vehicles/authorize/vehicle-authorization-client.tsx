@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useEffectEvent, useState, type FormEvent } from "react";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -293,27 +293,25 @@ function ReviewModal({
   formAction: (payload: FormData) => void;
   onClose: () => void;
 }>) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [comment, setComment] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const canReview = canReviewVehicle(vehicle, currentUserAccessCode);
   const actionable = isAwaiting(vehicle) && canReview;
 
-  const handleEscape = useEffectEvent(() => {
-    if (!pending) {
-      onClose();
-    }
-  });
-
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        handleEscape();
-      }
+    const dialog = dialogRef.current;
+    if (!dialog) {
+      return;
     }
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    dialog.showModal();
+    return () => {
+      if (dialog.open) {
+        dialog.close();
+      }
+    };
   }, []);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -340,16 +338,18 @@ function ReviewModal({
   }
 
   return (
-    <div className="vehicle-review-backdrop" role="presentation" onMouseDown={(event) => {
+    <dialog ref={dialogRef} className="vehicle-review-backdrop" aria-labelledby="vehicle-review-title" onCancel={(event) => {
+      event.preventDefault();
+      if (!pending) {
+        onClose();
+      }
+    }} onMouseDown={(event) => {
       if (event.target === event.currentTarget && !pending) {
         onClose();
       }
     }}>
       <section
         className="vehicle-review-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="vehicle-review-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="vehicle-review-header">
@@ -462,7 +462,7 @@ function ReviewModal({
           </div>
         )}
       </section>
-    </div>
+    </dialog>
   );
 }
 
