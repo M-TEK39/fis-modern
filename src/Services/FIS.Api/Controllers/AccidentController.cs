@@ -133,6 +133,28 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/driver")]
+    public async Task<ActionResult<IEnumerable<AccidentDriverReportRow>>> GetDriverReport(
+        [FromQuery] string searchTerm,
+        [FromQuery] string mode = "name")
+    {
+        var searchById = mode.Equals("id", StringComparison.OrdinalIgnoreCase);
+        if (!searchById && !mode.Equals("name", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "Mode must be name or id." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetDriverReportAsync(searchTerm, searchById));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident driver report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,

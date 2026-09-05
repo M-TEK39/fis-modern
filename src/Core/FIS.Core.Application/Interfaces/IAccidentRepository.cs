@@ -5,6 +5,7 @@ public interface IAccidentRepository
     Task<Accident?> GetByIdAsync(int accidentCode);
     Task<IEnumerable<Accident>> GetAllAsync();
     Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode);
+    Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(string searchTerm, bool searchById);
     Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<AccidentClaimsSummary> GetClaimsSummaryAsync();
     Task<IEnumerable<AccidentReport>> GetRecentReportsAsync(int limit = 10);
@@ -14,6 +15,18 @@ public interface IAccidentRepository
     Task<Accident> UpdateAsync(Accident accident, int currentUserId);
     Task<Accident> UpdateHqAsync(Accident accident, int currentUserId);
     Task DeleteAsync(int accidentCode, int currentUserId);
+}
+
+public class AccidentDriverReportRow
+{
+    public string registration_number { get; set; } = "";
+    public string fleet_number { get; set; } = "";
+    public string driver_name { get; set; } = "";
+    public string driver_employ_number { get; set; } = "";
+    public DateTime? occurence_date { get; set; }
+    public string department_number { get; set; } = "";
+    public string site_description { get; set; } = "";
+    public decimal? cost_of_repair { get; set; }
 }
 
 /// <summary>

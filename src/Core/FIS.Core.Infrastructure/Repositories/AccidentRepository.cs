@@ -124,6 +124,109 @@ public sealed class AccidentRepository : IAccidentRepository
             "[a].[vmf_code] = @vmfCode",
             command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
 
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report query is composed only from allowlisted schema metadata and fixed SQL fragments; the search value is parameterized.")]
+    public async Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(string searchTerm, bool searchById)
+    {
+        var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
+        if (normalizedSearchTerm.Length == 0)
+        {
+            return Array.Empty<AccidentDriverReportRow>();
+        }
+
+        var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName);
+        var siteColumns = await GetAvailableColumnsAsync("site");
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var searchColumn = searchById ? "driver_employ_number" : "driver_name";
+            var searchAvailable = accidentColumns.Contains(searchColumn);
+            var vehicleJoinAvailable = vehicleColumns.Contains("vmf_code");
+            var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
+            var vehicleRegistrationAvailable = vehicleJoinAvailable && vehicleColumns.Contains("registration_number");
+            var vehicleFleetAvailable = vehicleJoinAvailable && vehicleColumns.Contains("fleet_number");
+            var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
+            var siteDescriptionAvailable = siteJoinAvailable && siteColumns.Contains("description");
+            var projection = new[]
+            {
+                vehicleRegistrationAvailable
+                    ? "[v].[registration_number] AS [registration_number]"
+                    : "CAST(NULL AS nvarchar(50)) AS [registration_number]",
+                vehicleFleetAvailable
+                    ? "[v].[fleet_number] AS [fleet_number]"
+                    : "CAST(NULL AS nvarchar(50)) AS [fleet_number]",
+                GetProjection(accidentColumns, "driver_name", "a"),
+                GetProjection(accidentColumns, "driver_employ_number", "a"),
+                GetProjection(accidentColumns, "occurence_date", "a"),
+                siteDepartmentAvailable
+                    ? "[s].[Department_number] AS [department_number]"
+                    : "CAST(NULL AS nvarchar(50)) AS [department_number]",
+                siteDescriptionAvailable
+                    ? "[s].[description] AS [site_description]"
+                    : "CAST(NULL AS nvarchar(255)) AS [site_description]",
+                GetProjection(accidentColumns, "cost_of_repair", "a")
+            };
+            var joins = new List<string>();
+            if (vehicleJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[vehicle_master] AS [v] ON [v].[vmf_code] = [a].[vmf_code]");
+            }
+
+            if (siteJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[site] AS [s] ON [s].[site_code] = [a].[driver_site_code]");
+            }
+
+            var conditions = new List<string> { GetActiveFilter(accidentColumns, "a") };
+            conditions.Add(searchAvailable ? $"[a].[{searchColumn}] LIKE @searchTerm" : "1 = 0");
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [a]
+                {string.Join(Environment.NewLine, joins)}
+                WHERE {string.Join(" AND ", conditions)}
+                ORDER BY [a].[{(searchAvailable ? searchColumn : "accident_code")}]
+                """;
+            AddParameter(command, "@searchTerm", DbType.String, $"{normalizedSearchTerm}%");
+
+            var results = new List<AccidentDriverReportRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new AccidentDriverReportRow
+                {
+                    registration_number = ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                    driver_name = ReadString(reader, "driver_name") ?? string.Empty,
+                    driver_employ_number = ReadString(reader, "driver_employ_number") ?? string.Empty,
+                    occurence_date = ReadDateTime(reader, "occurence_date"),
+                    department_number = ReadString(reader, "department_number") ?? string.Empty,
+                    site_description = ReadString(reader, "site_description") ?? string.Empty,
+                    cost_of_repair = ReadDecimal(reader, "cost_of_repair")
+                });
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
         => await QueryAsync(
             "[a].[occurence_date] >= @startDate AND [a].[occurence_date] <= @endDate",
