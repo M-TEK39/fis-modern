@@ -133,6 +133,33 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/all")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetAllAccidentsReport(
+        [FromQuery] string mode = "2002-current")
+    {
+        var normalizedMode = mode.Trim().ToLowerInvariant() switch
+        {
+            "2002-current" or "radionou" or "current" => "2002-current",
+            "1999-2001" or "radioou" or "middle" => "1999-2001",
+            "before-1999" or "radiobou" or "before" => "before-1999",
+            _ => string.Empty
+        };
+        if (normalizedMode.Length == 0)
+        {
+            return BadRequest(new { error = "Mode must be 2002-current, 1999-2001, or before-1999." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetAllAccidentsReportAsync(normalizedMode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving all accident report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/driver")]
     public async Task<ActionResult<IEnumerable<AccidentDriverReportRow>>> GetDriverReport(
         [FromQuery] string searchTerm,

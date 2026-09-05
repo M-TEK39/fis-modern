@@ -294,6 +294,9 @@ public sealed class AccidentRepository : IAccidentRepository
     public Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode)
         => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, flagMode: mode);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode)
+        => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, dateRangeMode: mode);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -464,10 +467,11 @@ public sealed class AccidentRepository : IAccidentRepository
         string searchTerm,
         string searchColumn,
         bool containsSearch,
-        string? flagMode = null)
+        string? flagMode = null,
+        string? dateRangeMode = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
-        if (flagMode is null && normalizedSearchTerm.Length == 0)
+        if (flagMode is null && dateRangeMode is null && normalizedSearchTerm.Length == 0)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -486,7 +490,13 @@ public sealed class AccidentRepository : IAccidentRepository
             return Array.Empty<AccidentVehicleReportRow>();
         }
 
-        var hasFilter = searchAvailable || flagAvailable;
+        var dateAvailable = dateRangeMode is not null && accidentColumns.Contains("occurence_date");
+        if (dateRangeMode is not null && !dateAvailable)
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        var hasFilter = searchAvailable || flagAvailable || dateAvailable;
         if (!hasFilter)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -551,6 +561,10 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 conditions.Add(GetNewAccidentFlagFilter(flagMode));
             }
+            else if (dateRangeMode is not null)
+            {
+                conditions.Add(GetAllAccidentDateFilter(dateRangeMode));
+            }
             else
             {
                 conditions.Add(containsSearch
@@ -567,7 +581,12 @@ public sealed class AccidentRepository : IAccidentRepository
                 """;
             if (flagMode is null)
             {
-                AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
+                if (dateRangeMode is null)
+                {
+                    AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
+                }
+
+                AddDateRangeParameters(command, dateRangeMode);
             }
 
             var results = new List<AccidentVehicleReportRow>();
@@ -1308,6 +1327,32 @@ public sealed class AccidentRepository : IAccidentRepository
             "all" => "ISNULL([a].[Flag_gg_hq], 'N') <> 'N'",
             _ => "1 = 0"
         };
+
+    private static string GetAllAccidentDateFilter(string mode)
+        => mode switch
+        {
+            "before-1999" => "[a].[occurence_date] < @beforeDate",
+            "1999-2001" => "[a].[occurence_date] >= @middleStartDate AND [a].[occurence_date] < @middleEndDate",
+            "2002-current" => "[a].[occurence_date] >= @currentStartDate",
+            _ => "1 = 0"
+        };
+
+    private static void AddDateRangeParameters(DbCommand command, string? mode)
+    {
+        switch (mode)
+        {
+            case "before-1999":
+                AddParameter(command, "@beforeDate", DbType.Date, new DateTime(1999, 1, 1));
+                break;
+            case "1999-2001":
+                AddParameter(command, "@middleStartDate", DbType.Date, new DateTime(1999, 1, 1));
+                AddParameter(command, "@middleEndDate", DbType.Date, new DateTime(2002, 1, 1));
+                break;
+            case "2002-current":
+                AddParameter(command, "@currentStartDate", DbType.Date, new DateTime(2002, 1, 1));
+                break;
+        }
+    }
 
     private static string GetActiveFilter(IReadOnlySet<string> columns, string alias)
     {
