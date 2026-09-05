@@ -76,6 +76,74 @@ public class TowingController : BaseApiController
         }
     }
 
+    [HttpGet("tow-trucks/{id}")]
+    public async Task<ActionResult<TowTruckOption>> GetTowTruck(short id)
+    {
+        try
+        {
+            var towTruck = await _towTruckService.GetByIdAsync(id, HttpContext.RequestAborted);
+            return towTruck == null ? NotFound() : Ok(towTruck);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving tow truck {TowCode}", id);
+            return StatusCode(500);
+        }
+    }
+
+    [HttpPost("tow-trucks")]
+    public async Task<ActionResult<TowTruckOption>> CreateTowTruck([FromBody] TowTruckRequestDto request)
+    {
+        try
+        {
+            var towTruck = await _towTruckService.CreateAsync(
+                request.ToRequest(),
+                GetCurrentUserId(),
+                HttpContext.RequestAborted);
+            return Ok(towTruck);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating tow truck");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpPut("tow-trucks/{id}")]
+    public async Task<ActionResult<TowTruckOption>> UpdateTowTruck(short id, [FromBody] TowTruckRequestDto request)
+    {
+        try
+        {
+            var towTruck = await _towTruckService.UpdateAsync(
+                id,
+                request.ToRequest(),
+                GetCurrentUserId(),
+                HttpContext.RequestAborted);
+            return towTruck == null ? NotFound() : Ok(towTruck);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating tow truck {TowCode}", id);
+            return StatusCode(500);
+        }
+    }
+
+    [HttpDelete("tow-trucks/{id}")]
+    public async Task<ActionResult> DeleteTowTruck(short id)
+    {
+        try
+        {
+            return await _towTruckService.DeleteAsync(id, GetCurrentUserId(), HttpContext.RequestAborted)
+                ? NoContent()
+                : NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting tow truck {TowCode}", id);
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("menu")]
     public ActionResult<TowingMenuDto> GetMenu() => Ok(new TowingMenuDto { Options = new List<string> { "Request", "Towtruck Data", "Reports", "Help" } });
 
@@ -207,10 +275,12 @@ public class TowingController : BaseApiController
 
         if (!string.IsNullOrWhiteSpace(firm))
         {
-            query = query.Where(item =>
-                (!string.IsNullOrWhiteSpace(item.Tow_location_start) && item.Tow_location_start.Contains(firm, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(item.Keys) && item.Keys.Contains(firm, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrWhiteSpace(item.Vehicle_problem) && item.Vehicle_problem.Contains(firm, StringComparison.OrdinalIgnoreCase)));
+            var matchingTowTruckCodes = (await _towTruckService.GetAllAsync(HttpContext.RequestAborted))
+                .Where(towTruck => !string.IsNullOrWhiteSpace(towTruck.TowName) &&
+                    towTruck.TowName.Contains(firm, StringComparison.OrdinalIgnoreCase))
+                .Select(towTruck => towTruck.TowCode)
+                .ToHashSet();
+            query = query.Where(item => item.Tow_Truck_code.HasValue && matchingTowTruckCodes.Contains(item.Tow_Truck_code.Value));
         }
 
         return Ok(new TowingReportDto
@@ -269,4 +339,14 @@ public class TowingReportMenuDto { public List<string> Reports { get; set; } = n
 public class TowingRequestReportDto { public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
 public class TowingFirmDateReportDto { public string FirmName { get; set; } = ""; public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
 public class TowingReportDto { public string ReportType { get; set; } = ""; public List<object> Data { get; set; } = new(); }
+public class TowTruckRequestDto
+{
+    public string? TowArea { get; set; }
+    public string? TowName { get; set; }
+    public string? TowTel { get; set; }
+    public string? TowFax { get; set; }
+
+    public TowTruckRequest ToRequest()
+        => new(TowArea?.Trim(), TowName?.Trim(), TowTel?.Trim(), TowFax?.Trim());
+}
 #endregion
