@@ -69,6 +69,8 @@ public interface IContractRepository
     Task<IEnumerable<Contract>> GetActiveContractsAsync();
     Task<IEnumerable<Contract>> GetContractsByVehicleAsync(int vmfCode);
     Task<IEnumerable<Contract>> GetAllAsync();
+    Task<ContractPage> GetPageAsync(ContractPageQuery query);
+    Task<IEnumerable<ContractVehicleLookup>> SearchVehiclesForContractsAsync(string searchTerm);
     Task<Contract?> GetActiveContractByVehicleAsync(int vmfCode);
     Task<bool> HasActiveContractAsync(int vmfCode);
     Task<Contract> CreateAsync(Contract contract, int currentUserId);
@@ -76,6 +78,33 @@ public interface IContractRepository
     Task DeleteAsync(int contractCode, int currentUserId);
     Task EndContractAsync(int contractCode, DateTime endDate, int currentUserId, int? endOdometer = null, string? notes = null);
 }
+
+public sealed record ContractPageQuery(
+    int Page = 1,
+    int PageSize = 25,
+    short? StatusCode = null,
+    short? SiteCode = null,
+    string? StillCurrent = null,
+    DateTime? StartDateFrom = null,
+    DateTime? StartDateTo = null,
+    int? VmfCode = null);
+
+public sealed record ContractPage(
+    IReadOnlyList<Contract> Items,
+    int TotalRecords,
+    int Page,
+    int PageSize)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+}
+
+public sealed record ContractVehicleLookup(
+    int VmfCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    string? ChassisNumber,
+    string? EngineNumber,
+    string? InvoiceNumber);
 
 /// <summary>
 /// Repository interface for user operations

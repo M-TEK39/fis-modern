@@ -118,6 +118,54 @@ public class Contract
     [Column("collector_firstname")]
     public string? collector_firstname { get; set; }
 
+    // These fields were added to later contract schemas. They are populated by
+    // the compatibility repository when available and deliberately excluded
+    // from EF's static projection so the original contract table remains usable.
+    [NotMapped]
+    public string? collector_surname { get; set; }
+
+    [NotMapped]
+    public string? collector_sa_id { get; set; }
+
+    [NotMapped]
+    public string? collector_passportnumber { get; set; }
+
+    [NotMapped]
+    public string? collector_office_number { get; set; }
+
+    [NotMapped]
+    public string? collector_cellphone_number { get; set; }
+
+    [NotMapped]
+    public string? collector_office { get; set; }
+
+    [NotMapped]
+    public string? collector_designation { get; set; }
+
+    [NotMapped]
+    public bool? relief_vehicle_option { get; set; }
+
+    [NotMapped]
+    public byte? lease_contract_period { get; set; }
+
+    [NotMapped]
+    public int? contract_estimated_overall_km { get; set; }
+
+    [NotMapped]
+    public DateTime? intended_start_date { get; set; }
+
+    [NotMapped]
+    public TimeSpan? intended_start_time { get; set; }
+
+    [NotMapped]
+    public DateTime? capture_date { get; set; }
+
+    [NotMapped]
+    public DateTime? modified_date { get; set; }
+
+    [NotMapped]
+    public int? reassigned_from_contract_code { get; set; }
+
     // Navigation properties (using legacy foreign key names)
     [ForeignKey("vmf_code")]
     public virtual Vehicle? Vehicle { get; set; }

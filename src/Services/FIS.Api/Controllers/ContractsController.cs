@@ -1,5 +1,6 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Contracts;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Core.Domain.Entities.ReferenceData;
 using FIS.Data.SqlServer;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -72,6 +74,28 @@ public class ContractsController : BaseApiController
 
         return null; // Validation passed
     }
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        var roleClaims = User.Claims
+            .Where(claim => claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+
+        return roleClaims.Any(role => expectedRoles.Any(expected => string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private bool HasContractApproverRole()
+        => HasAnyRole("contracts approver", "contracts_approver", "back dating contract (approver)", "admin", "administrator");
+
+    private bool HasContractHistoryBackdatingRole()
+        => HasAnyRole("contract history back dating", "contract_history_backdating", "admin", "administrator");
 
     private async Task<string?> GetMissingTariffMessageAsync(int vmfCode)
     {
@@ -398,48 +422,50 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            if (page < 1) page = 1;
-            if (pageSize < 1 || pageSize > 100) pageSize = 25;
-
-            var query = _context.Contracts
-                .Where(c => !c.is_deleted)
-                .AsQueryable();
-
-            if (status.HasValue)
-                query = query.Where(c => c.contract_status_code == status.Value);
-            if (siteCode.HasValue)
-                query = query.Where(c => c.site_code == siteCode.Value);
-            if (!string.IsNullOrEmpty(stillCurrent))
-                query = query.Where(c => c.still_current == stillCurrent);
-            if (startDateFrom.HasValue)
-                query = query.Where(c => c.start_date >= startDateFrom.Value);
-            if (startDateTo.HasValue)
-                query = query.Where(c => c.start_date <= startDateTo.Value);
-            if (vmfCode.HasValue)
-                query = query.Where(c => c.vmf_code == vmfCode.Value);
-
-            var total = await query.CountAsync();
-            var items = await query
-                .OrderByDescending(c => c.date_created)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Include(c => c.Vehicle)
-                .Include(c => c.Site)
-                .ToListAsync();
+            var result = await _contractRepository.GetPageAsync(new ContractPageQuery(
+                page,
+                pageSize,
+                status,
+                siteCode,
+                stillCurrent,
+                startDateFrom,
+                startDateTo,
+                vmfCode));
 
             return Ok(new
             {
-                page,
-                page_size = pageSize,
-                total_records = total,
-                total_pages = (int)Math.Ceiling(total / (double)pageSize),
-                data = items.Select(MapToDto)
+                page = result.Page,
+                page_size = result.PageSize,
+                total_records = result.TotalRecords,
+                total_pages = result.TotalPages,
+                data = result.Items.Select(MapToDto)
             });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving contracts list");
             return StatusCode(500, new { error = "Failed to retrieve contracts", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Looks up vehicles for the contract workflow without relying on EF's
+    /// expanded vehicle projection. This keeps vehicle selection usable against
+    /// the client-era vehicle_master table as well as expanded databases.
+    /// </summary>
+    [HttpGet("vehicle-search")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<ContractVehicleLookup>>> SearchVehiclesForContracts([FromQuery] string query = "")
+    {
+        try
+        {
+            var vehicles = await _contractRepository.SearchVehiclesForContractsAsync(query);
+            return Ok(vehicles);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching vehicles for contract workflow");
+            return StatusCode(500, new { error = "Failed to search vehicles for contracts", message = ex.Message });
         }
     }
 
@@ -480,10 +506,7 @@ public class ContractsController : BaseApiController
     {
         try
         {
-            var contract = await _context.Contracts
-                .Include(c => c.Vehicle)
-                .Include(c => c.Site)
-                .FirstOrDefaultAsync(c => c.contract_code == id && !c.is_deleted);
+            var contract = await _contractRepository.GetByIdAsync(id);
 
             if (contract == null)
                 return NotFound(new { error = "Contract not found" });
@@ -497,10 +520,15 @@ public class ContractsController : BaseApiController
                 : null;
 
             // Audit trail
-            var auditEntries = await _context.ContractAuditLogs
-                .Where(a => a.contract_code == id)
-                .OrderBy(a => a.performed_at)
-                .ToListAsync();
+            IEnumerable<ContractAuditLog> auditEntries = [];
+            try
+            {
+                auditEntries = await _auditLog.GetByContractAsync(id);
+            }
+            catch (Exception auditEx)
+            {
+                _logger.LogWarning(auditEx, "Contract audit trail is unavailable for printout {ContractId}; continuing with legacy contract data", id);
+            }
 
             return Ok(new
             {
@@ -612,6 +640,21 @@ public class ContractsController : BaseApiController
             Authorisation = contract.Authorisation,
             ChargedUntil = contract.Charged_Until,
             CollectorFirstname = contract.collector_firstname,
+            CollectorSurname = contract.collector_surname,
+            CollectorSaId = contract.collector_sa_id,
+            CollectorPassportNumber = contract.collector_passportnumber,
+            CollectorOfficeNumber = contract.collector_office_number,
+            CollectorCellphoneNumber = contract.collector_cellphone_number,
+            CollectorOffice = contract.collector_office,
+            CollectorDesignation = contract.collector_designation,
+            ReliefVehicleOption = contract.relief_vehicle_option,
+            LeaseContractPeriod = contract.lease_contract_period,
+            ContractEstimatedOverallKm = contract.contract_estimated_overall_km,
+            IntendedStartDate = contract.intended_start_date,
+            IntendedStartTime = contract.intended_start_time,
+            CaptureDate = contract.capture_date,
+            ModifiedDate = contract.modified_date,
+            ReassignedFromContractCode = contract.reassigned_from_contract_code,
             UserCode = contract.user_code,
             ContractGroupCode = contract.contract_group_code,
             BasFundCode = contract.bas_fund_code,
@@ -1108,6 +1151,9 @@ public class ContractsController : BaseApiController
     {
         try
         {
+            if (!HasContractApproverRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
@@ -1153,6 +1199,9 @@ public class ContractsController : BaseApiController
     {
         try
         {
+            if (!HasContractApproverRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
@@ -1205,6 +1254,9 @@ public class ContractsController : BaseApiController
     {
         try
         {
+            if (!HasContractApproverRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
@@ -1248,6 +1300,9 @@ public class ContractsController : BaseApiController
     {
         try
         {
+            if (!HasContractApproverRole())
+                return Forbid();
+
             int currentUserId = GetCurrentUserId();
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
@@ -1478,6 +1533,92 @@ public class ContractsController : BaseApiController
         {
             _logger.LogError(ex, "Error getting pending details for contract {ContractId}", contractId);
             return StatusCode(500, new { error = "Failed to get pending details", message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Updates the legacy contract history fields used by the history backdating workflow.
+    /// No new columns are introduced; the existing contract dates and odometers are updated
+    /// through the compatibility repository so older client databases remain supported.
+    /// </summary>
+    [HttpPut("{contractId}/history")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult> UpdateContractHistory(
+        int contractId,
+        [FromBody] ContractHistoryBackdatingRequest request)
+    {
+        try
+        {
+            if (!HasContractHistoryBackdatingRole())
+                return Forbid();
+
+            var contract = await _contractRepository.GetByIdAsync(contractId);
+            if (contract == null)
+                return NotFound(new { error = "Contract not found" });
+
+            if (request.StartDate == default)
+                return BadRequest(new { error = "Start date is required." });
+
+            if (request.EndDate.HasValue && request.EndDate.Value.Date < request.StartDate.Date)
+                return BadRequest(new { error = "End date cannot be before the start date." });
+
+            if (request.StartOdometer.HasValue && request.StartOdometer.Value < 0)
+                return BadRequest(new { error = "Start odometer cannot be negative." });
+
+            if (request.EndOdometer.HasValue && request.EndOdometer.Value < 0)
+                return BadRequest(new { error = "End odometer cannot be negative." });
+
+            if (request.StartOdometer.HasValue && request.EndOdometer.HasValue
+                && request.EndOdometer.Value < request.StartOdometer.Value)
+                return BadRequest(new { error = "End odometer cannot be less than the start odometer." });
+
+            var currentUserId = GetCurrentUserId();
+            var previousStartDate = contract.start_date;
+            var previousEndDate = contract.end_date;
+            var previousStartOdometer = contract.start_odometer;
+            var previousEndOdometer = contract.end_odometer;
+
+            contract.start_date = request.StartDate.Date;
+            if (request.EndDate.HasValue)
+            {
+                contract.end_date = request.EndDate.Value.Date;
+            }
+            if (request.StartOdometer.HasValue)
+            {
+                contract.start_odometer = request.StartOdometer.Value;
+            }
+            if (request.EndOdometer.HasValue)
+            {
+                contract.end_odometer = request.EndOdometer.Value;
+            }
+
+            await _contractRepository.UpdateAsync(contract, currentUserId);
+            await _auditLog.LogAsync(
+                contractId,
+                "HistoryBackdated",
+                currentUserId,
+                notes: $"Start date {previousStartDate:yyyy-MM-dd} -> {contract.start_date:yyyy-MM-dd}; "
+                    + $"end date {previousEndDate:yyyy-MM-dd} -> {contract.end_date:yyyy-MM-dd}; "
+                    + $"start odometer {previousStartOdometer} -> {contract.start_odometer}; "
+                    + $"end odometer {previousEndOdometer?.ToString() ?? "-"} -> {contract.end_odometer?.ToString() ?? "-"}");
+
+            return Ok(new
+            {
+                message = "Contract history updated successfully.",
+                contractCode = contract.contract_code,
+                startDate = contract.start_date,
+                endDate = contract.end_date,
+                startOdometer = contract.start_odometer,
+                endOdometer = contract.end_odometer
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating contract history {ContractId}", contractId);
+            return StatusCode(500, new { error = "Failed to update contract history", message = ex.Message });
         }
     }
 
@@ -1919,6 +2060,15 @@ public class ContractPendingDetailsDto
     public int? SubmittedByUserCode { get; set; }
 }
 
+public class ContractHistoryBackdatingRequest
+{
+    [Required]
+    public DateTime StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public int? StartOdometer { get; set; }
+    public int? EndOdometer { get; set; }
+}
+
 public class ReliefVehicleSearchResultDto
 {
     public int VmfCode { get; set; }
@@ -1960,6 +2110,21 @@ public class ContractResponseDto
     public string? Authorisation { get; set; }
     public DateTime? ChargedUntil { get; set; }
     public string? CollectorFirstname { get; set; }
+    public string? CollectorSurname { get; set; }
+    public string? CollectorSaId { get; set; }
+    public string? CollectorPassportNumber { get; set; }
+    public string? CollectorOfficeNumber { get; set; }
+    public string? CollectorCellphoneNumber { get; set; }
+    public string? CollectorOffice { get; set; }
+    public string? CollectorDesignation { get; set; }
+    public bool? ReliefVehicleOption { get; set; }
+    public byte? LeaseContractPeriod { get; set; }
+    public int? ContractEstimatedOverallKm { get; set; }
+    public DateTime? IntendedStartDate { get; set; }
+    public TimeSpan? IntendedStartTime { get; set; }
+    public DateTime? CaptureDate { get; set; }
+    public DateTime? ModifiedDate { get; set; }
+    public int? ReassignedFromContractCode { get; set; }
     public short? UserCode { get; set; }
     public int? ContractGroupCode { get; set; }
     public string? BasFundCode { get; set; }
