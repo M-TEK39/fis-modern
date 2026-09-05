@@ -46,7 +46,8 @@ public class LegacyUserCredential
 
     /// <summary>
     /// Absolute date/time after which the password is expired.
-    /// Calculated at change time as last_password_change + 90 days.
+    /// Calculated by the API at password-change time from its configured
+    /// password expiry period.
     /// Null for legacy records (fall back to config-based calculation).
     /// </summary>
     // Optional expanded column. It is intentionally not statically mapped:

@@ -151,15 +151,16 @@ public class AuthController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Password expiry check — disabled by default for legacy data compatibility.
-        // Set JwtSettings:EnforcePasswordExpiry=true in config once real expiry data is in place.
+        // Password expiry supports both expanded credential data and the legacy
+        // user_access_old1.PWD_Expires field. A missing expiry remains a
+        // compatibility state and does not force-expire an otherwise valid user.
         bool passwordExpired = false;
         int daysRemaining = int.MaxValue;
         var enforceExpiry = bool.TryParse(_configuration["JwtSettings:EnforcePasswordExpiry"], out var enforceFlag) && enforceFlag;
 
         if (enforceExpiry)
         {
-            var fallbackExpiryDays = int.Parse(_configuration["JwtSettings:PasswordExpiryDays"] ?? "90");
+            var fallbackExpiryDays = GetPasswordExpiryDays();
 
             if (credential?.password_expiry_date.HasValue == true && credential.password_expiry_date.Value > new DateTime(2000, 1, 1))
             {
@@ -361,7 +362,7 @@ public class AuthController : ControllerBase
             {
                 credential.password_hash = _passwordService.HashPassword(request.NewPassword);
                 credential.last_password_change = now;
-                credential.password_expiry_date = now.AddDays(90);
+                credential.password_expiry_date = GetPasswordExpiryDate(now);
                 credential.changed_by_user_code = changedBy > 0 ? changedBy : null;
                 credential.modified_date = now;
                 credential.failed_login_attempts = 0;
@@ -501,7 +502,7 @@ public class AuthController : ControllerBase
             {
                 credential.password_hash = _passwordService.HashPassword(request.NewPassword);
                 credential.last_password_change = now;
-                credential.password_expiry_date = now.AddDays(90);
+                credential.password_expiry_date = GetPasswordExpiryDate(now);
                 credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
                 credential.modified_date = now;
                 credential.failed_login_attempts = 0;
@@ -680,7 +681,7 @@ public class AuthController : ControllerBase
                     password_hash = _passwordService.HashPassword(request.NewPassword),
                     password_salt = string.Empty,
                     last_password_change = now,
-                    password_expiry_date = now.AddDays(90),
+                    password_expiry_date = GetPasswordExpiryDate(now),
                     password_reset_token = SerializeSecurityQuestionPayload(
                         DefaultSecurityQuestion,
                         HashSecurityAnswer(profile.ResolvedUsername)),
@@ -698,7 +699,7 @@ public class AuthController : ControllerBase
                 {
                     credential.password_hash = _passwordService.HashPassword(request.NewPassword);
                     credential.last_password_change = now;
-                    credential.password_expiry_date = now.AddDays(90);
+                    credential.password_expiry_date = GetPasswordExpiryDate(now);
                     credential.changed_by_user_code = actorUserCode > 0 ? actorUserCode : null;
                     credential.failed_login_attempts = 0;
                     credential.account_locked_until = null;
@@ -926,7 +927,7 @@ public class AuthController : ControllerBase
                 {
                     modernCredentialLookup.Credential.password_hash = _passwordService.HashPassword(request.NewPassword);
                     modernCredentialLookup.Credential.last_password_change = now;
-                    modernCredentialLookup.Credential.password_expiry_date = now.AddDays(90);
+                    modernCredentialLookup.Credential.password_expiry_date = GetPasswordExpiryDate(now);
                     modernCredentialLookup.Credential.failed_login_attempts = 0;
                     modernCredentialLookup.Credential.account_locked_until = null;
                     modernCredentialLookup.Credential.password_reset_token = null;
@@ -976,7 +977,7 @@ public class AuthController : ControllerBase
 
             credential.password_hash = _passwordService.HashPassword(request.NewPassword);
             credential.last_password_change = now;
-            credential.password_expiry_date = now.AddDays(90);
+            credential.password_expiry_date = GetPasswordExpiryDate(now);
             credential.failed_login_attempts = 0;
             credential.account_locked_until = null;
             credential.modified_date = now;
@@ -1369,7 +1370,7 @@ public class AuthController : ControllerBase
         legacyUser.password = HashLegacyPassword(newPassword);
         legacyUser.user_active = true;
         legacyUser.Retry = 0;
-        legacyUser.PWD_Expires = now.AddDays(90);
+        legacyUser.PWD_Expires = GetPasswordExpiryDate(now);
         legacyUser.date_updated = now;
         _context.UserAccessOlds.Update(legacyUser);
     }
@@ -1583,6 +1584,17 @@ public class AuthController : ControllerBase
     {
         var configuredMinutes = _configuration.GetValue<int?>("EmailSettings:PasswordResetTokenLifetimeMinutes") ?? 30;
         return TimeSpan.FromMinutes(Math.Clamp(configuredMinutes, 5, 1440));
+    }
+
+    private int GetPasswordExpiryDays()
+    {
+        var configuredDays = _configuration.GetValue<int?>("JwtSettings:PasswordExpiryDays");
+        return configuredDays is > 0 and <= 3650 ? configuredDays.Value : 30;
+    }
+
+    private DateTime GetPasswordExpiryDate(DateTime changedAtUtc)
+    {
+        return changedAtUtc.AddDays(GetPasswordExpiryDays());
     }
 
     private bool TryGetPasswordResetBaseUrl(out string baseUrl)
