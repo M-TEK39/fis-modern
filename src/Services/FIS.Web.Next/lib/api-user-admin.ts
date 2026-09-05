@@ -30,6 +30,10 @@ export type UserAdminProfile = {
 
 export type UserAdminApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
 
+export type UserAdminMutationResult =
+  | { ok: true; message?: string }
+  | { ok: false; reason: UserAdminApiErrorReason; message?: string };
+
 export class UserAdminApiError extends Error {
   constructor(
     public readonly reason: UserAdminApiErrorReason,
@@ -109,7 +113,7 @@ function getCollection(value: unknown) {
   return [];
 }
 
-async function requestApi(path: string) {
+async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
     throw new UserAdminApiError("unauthorized", "No FIS access cookie is available.");
@@ -120,10 +124,12 @@ async function requestApi(path: string) {
 
   try {
     const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
+      ...init,
       cache: "no-store",
       headers: {
         accept: "application/json",
         cookie: cookieHeader,
+        ...init.headers,
       },
       signal: controller.signal,
     });
@@ -205,4 +211,33 @@ export async function getUserAdminProfiles(alphabet: string) {
       (left.firstName ?? "").localeCompare(right.firstName ?? "") ||
       left.userAccessCode - right.userAccessCode,
   );
+}
+
+export async function resetUserLogin(username: string): Promise<UserAdminMutationResult> {
+  try {
+    const response = await requestApi("api/auth/reset-login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    const payload = await readJson(response);
+    if (!isRecord(payload)) {
+      return { ok: false, reason: "invalid-response" };
+    }
+
+    const message = asString(payload.message ?? payload.Message) ?? undefined;
+
+    if (payload.success === true || payload.Success === true) {
+      return { ok: true, message };
+    }
+
+    return { ok: false, reason: "invalid-response", message };
+  } catch (error) {
+    if (error instanceof UserAdminApiError) {
+      return { ok: false, reason: error.reason };
+    }
+
+    console.error("FIS API reset-login request failed", error instanceof Error ? error.message : "unknown error");
+    return { ok: false, reason: "unavailable" };
+  }
 }

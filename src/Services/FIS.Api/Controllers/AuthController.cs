@@ -546,9 +546,22 @@ public class AuthController : ControllerBase
     /// Reset user login attempts
     /// </summary>
     [HttpPost("reset-login")]
-    [Authorize]
+    [Authorize(Roles = "User Administration")]
     public async Task<ActionResult<UserAdminResponse>> ResetLogin([FromBody] ResetLoginRequest request)
     {
+        // AuthController also exposes anonymous login and recovery actions. Keep this
+        // explicit guard because the controller-level AllowAnonymous metadata must
+        // not make an administrator-only mutation callable by any signed-in user.
+        if (User.Identity?.IsAuthenticated != true)
+        {
+            return Unauthorized();
+        }
+
+        if (!User.IsInRole("User Administration"))
+        {
+            return Forbid();
+        }
+
         try
         {
             var profile = await ResolveUserProfileAsync(request.Username);
