@@ -251,6 +251,13 @@ export type AccidentOutstandingDocumentReport = {
   outstandingDocuments: string[];
 };
 
+export type AccidentLastGgReferenceRow = {
+  accidentCode: number;
+  ggReference: string | null;
+  registrationNumber: string | null;
+  fleetNumber: string | null;
+};
+
 export type AccidentNewAccidentReportMode = "all" | "call" | "garage" | "confirm";
 
 export type AccidentAllReportDateMode = "2002-current" | "1999-2001" | "before-1999";
@@ -695,6 +702,24 @@ function mapAccidentOutstandingDocumentReport(value: unknown): AccidentOutstandi
   };
 }
 
+function mapAccidentLastGgReferenceRow(value: unknown): AccidentLastGgReferenceRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const accidentCode = asNumber(getValue(value, "accident_code", "accidentCode"));
+  if (accidentCode === null) {
+    return null;
+  }
+
+  return {
+    accidentCode,
+    ggReference: asString(getValue(value, "gg_reference", "ggReference")),
+    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+  };
+}
+
 export async function getAccidentDriverReport(
   searchTerm: string,
   mode: AccidentDriverReportMode,
@@ -797,6 +822,13 @@ export async function getAccidentOutstandingDocumentLookup(
 export async function getAccidentOutstandingDocumentReport(accidentCode: number) {
   return mapAccidentOutstandingDocumentReport(
     await requestApi(`api/accidents/reports/outstanding-documents/${encodeURIComponent(accidentCode)}`),
+  );
+}
+
+export async function getAccidentLastGgReferenceReport() {
+  return mapPresent(
+    getCollection(await requestApi("api/accidents/reports/last-gg-reference")),
+    mapAccidentLastGgReferenceRow,
   );
 }
 

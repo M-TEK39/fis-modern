@@ -24,7 +24,7 @@ const reportEntries = [
   { label: "12) LETTER for Outstanding Accident documents", target: "Accident/RPT_letter_outstanddoc_main_accident.aspx", href: "/accidents/reports/outstanding-docs", available: true },
   { label: "13) LETTER for Inspection", target: "Accident/RPT_letter_inspection_main_accident.aspx", href: "/accidents/reports/inspection", available: true },
   { label: "14) List of Accident Categories", target: "Accident/RPT_categories_accident.aspx", href: "/accidents/reports/categories", available: true },
-  { label: "15) Last GG Reference Number Used", target: "Accident/RPT_lastggref_accident.aspx", available: false },
+  { label: "15) Last GG Reference Number Used", target: "Accident/RPT_lastggref_accident.aspx", href: "/accidents/reports/last-gg-reference", available: true },
   { label: "16) Weekly, Quaterly And Yearly Report - Opened And Closed Accidents", target: "Accident/RPT_period_report1.aspx", href: "/accidents/reports/period", available: true },
   { label: "17) Report By Driver Name Or ID Number", target: "Accident/RPT_accident_driver_main.aspx", href: "/accidents/reports/driver", available: true },
 ] as const;
@@ -52,7 +52,7 @@ async function AccidentReportsContent() {
     <>
       <div className="notice notice-warning" role="status">
         <span aria-hidden="true">!</span>
-        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, department-period, department-period VIP, department-month, department-finyear, accident-costs-finyear, outstanding-documents, inspection-letter, categories, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
+        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, department-period, department-period VIP, department-month, department-finyear, accident-costs-finyear, outstanding-documents, inspection-letter, categories, last-gg-reference, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
       </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (
