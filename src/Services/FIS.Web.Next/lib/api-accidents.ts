@@ -1030,6 +1030,12 @@ function mapAccidentType(value: unknown): AccidentTypeOption | null {
   return typeCode !== null && description ? { typeCode, description } : null;
 }
 
+export async function getAccidentTypes() {
+  return mapPresent(getCollection(await requestApi("api/accidents/types")), mapAccidentType).toSorted((left, right) =>
+    left.typeCode - right.typeCode,
+  );
+}
+
 export async function getAccidentReferenceData() {
   const [sitePayload, typePayload] = await Promise.all([
     requestApi("api/site"),

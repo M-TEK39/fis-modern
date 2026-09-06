@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_categories_Accident.aspx"
 @page "/Accident/RPT_lastggref_Accident.aspx"
 @page "/Accident/RPT_period_report1.aspx"
 @page "/Accident/RPT_period_report2.aspx"
@@ -440,35 +439,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-            }
-            else if (CurrentMode == "categories")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Categories</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in CategoryColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>01</td>
-                                        <td>Minor collision</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
                     </div>
                 </div>
             }
@@ -983,7 +953,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "categories" => "List of Accident Categories",
             "last-gg-reference" => "Last GG Reference Number Used",
             "weekly-quarterly-yearly" => "Weekly, Quarterly And Yearly Report - Opened And Closed Accidents",
             "period-open-close" => "Accident Report For A Period",
@@ -1011,7 +980,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_categories_accident.aspx" => "categories",
             "accident/rpt_lastggref_accident.aspx" => "last-gg-reference",
             "accident/rpt_period_report1.aspx" => "weekly-quarterly-yearly",
             "accident/rpt_period_report2.aspx" => "period-open-close",
@@ -1211,12 +1179,6 @@
         "Priv Car Damage",
         "File Close Date",
         "Notes"
-    };
-
-    private static readonly string[] CategoryColumns =
-    {
-        "Category Number",
-        "Accident Category Description"
     };
 
     private static readonly string[] LastGgReferenceColumns =
