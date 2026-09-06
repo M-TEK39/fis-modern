@@ -6,8 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_period_report1.aspx"
-@page "/Accident/RPT_period_report2.aspx"
 @page "/Accident/RPT_accident_driver_main.aspx"
 @page "/Accident/RPT_F_dup_main_Accident.htm"
 @page "/Accident/RPT_F_dup_report_Accident.aspx"
@@ -441,178 +439,6 @@
                     </div>
                 </div>
             }
-            else if (CurrentMode == "weekly-quarterly-yearly")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Period Report</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">Site list by</label>
-                            <div class="form-grid">
-                                <label class="form-label">
-                                    <input type="radio" name="periodSiteListBy" />
-                                    Name
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="periodSiteListBy" checked />
-                                    Code
-                                </label>
-                            </div>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Site</label>
-                            <select class="form-select" @bind="_weeklyPeriodSiteCode">
-                                <option value="">Select site...</option>
-                                @foreach (var site in _sites)
-                                {
-                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Begin Date</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">End Date</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Accidents</label>
-                            <div class="form-grid">
-                                <label class="form-label">
-                                    <input type="radio" name="accidentStatus" checked />
-                                    Open
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="accidentStatus" />
-                                    Closed
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Report Output</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in PeriodReportColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GPA-0221</td>
-                                        <td>GG45454</td>
-                                        <td>2024/02/05</td>
-                                        <td>SITE-06</td>
-                                        <td>Regional Ops</td>
-                                        <td>Pool</td>
-                                        <td>Skid in rain</td>
-                                        <td>L. Moyo</td>
-                                        <td>T. Jacobs</td>
-                                        <td>CALL-901</td>
-                                        <td>6500</td>
-                                        <td>2024/03/20</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
-            else if (CurrentMode == "period-open-close")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Report For A Period</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">Department/Site Code (optional)</label>
-                            <input class="form-input" @bind="_periodDepartmentNumber" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Begin Date</label>
-                            <input type="date" class="form-input" @bind="_periodBeginDate" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">End Date</label>
-                            <input type="date" class="form-input" @bind="_periodEndDate" />
-                        </div>
-                        <div class="form-field form-group-full">
-                            <div class="contract-search-radio">
-                                <label class="form-radio-label">
-                                    <input type="radio" name="periodStatus" checked="@(_periodStatus == "open")" @onchange='() => _periodStatus = "open"' />
-                                    Open Accidents
-                                </label>
-                                <label class="form-radio-label">
-                                    <input type="radio" name="periodStatus" checked="@(_periodStatus == "close")" @onchange='() => _periodStatus = "close"' />
-                                    Closed Accidents
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
-                    </div>
-                </div>
-                @if (_customReportRows.Count > 0)
-                {
-                    <div class="form-section">
-                        <h2 class="form-section-title">Period Report Output</h2>
-                        <div class="table-container">
-                            <div class="table-wrapper">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Reg Number</th>
-                                            <th>GG Number</th>
-                                            <th>Accident Date</th>
-                                            <th>Dept/Site Code</th>
-                                            <th>Dept/Site</th>
-                                            <th>Hire Type</th>
-                                            <th>Accident Description</th>
-                                            <th>Driver</th>
-                                            <th>Transport Officer</th>
-                                            <th>Call Refer</th>
-                                            <th>GG Car Damage</th>
-                                            <th>File Close Date</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var row in _customReportRows)
-                                        {
-                                            <tr>
-                                                <td>@GetReportValue(row, "registration_number")</td>
-                                                <td>@GetReportValue(row, "fleet_number")</td>
-                                                <td>@GetReportValue(row, "occurence_date")</td>
-                                                <td>@GetReportValue(row, "department_number")</td>
-                                                <td>@GetReportValue(row, "site_description")</td>
-                                                <td>@GetReportValue(row, "hire_type")</td>
-                                                <td>@GetReportValue(row, "accident_type_description")</td>
-                                                <td>@GetReportValue(row, "driver_name")</td>
-                                                <td>@GetReportValue(row, "transoffic_name")</td>
-                                                <td>@GetReportValue(row, "call_refer")</td>
-                                                <td>@GetReportValue(row, "cost_of_repair")</td>
-                                                <td>@GetReportValue(row, "file_close_date")</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                }
-            }
             else if (CurrentMode == "duplicate-accidents")
             {
                 <div class="form-section">
@@ -768,13 +594,8 @@
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private int? _selectedDriverCode;
-    private short? _weeklyPeriodSiteCode;
     private string _newAccidentReportMode = "call";
     private string _duplicateGarage = "all";
-    private string _periodStatus = "open";
-    private string _periodDepartmentNumber = string.Empty;
-    private DateTime _periodBeginDate = DateTime.Today.AddMonths(-1);
-    private DateTime _periodEndDate = DateTime.Today;
     private List<Dictionary<string, string>> _customReportRows = new();
     private int _page = 1;
     private const int _pageSize = 12;
@@ -801,10 +622,6 @@
         else if (CurrentMode == "new-accidents")
         {
             _customReportRows = await AccidentService.GetNewAccidentsReportAsync(_newAccidentReportMode);
-        }
-        else if (CurrentMode == "period-open-close")
-        {
-            _customReportRows = await AccidentService.GetPeriodStatusReportAsync(_periodDepartmentNumber, _periodBeginDate, _periodEndDate, _periodStatus);
         }
         _recentReports = await AccidentService.GetRecentReportsAsync();
         _page = 1;
@@ -921,8 +738,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "weekly-quarterly-yearly" => "Weekly, Quarterly And Yearly Report - Opened And Closed Accidents",
-            "period-open-close" => "Accident Report For A Period",
             "duplicate-accidents" => "Report on ALL Duplicate Accidents",
             "driver-report" => "Report By Driver Name Or ID Number",
             _ => "Accident Report"
@@ -947,8 +762,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_period_report1.aspx" => "weekly-quarterly-yearly",
-            "accident/rpt_period_report2.aspx" => "period-open-close",
             "accident/rpt_accident_driver_main.aspx" => "driver-report",
             "accident/rpt_f_dup_main_accident.htm" => "duplicate-accidents",
             "accident/rpt_f_dup_report_accident.aspx" => "duplicate-accidents",
@@ -1145,22 +958,6 @@
         "Priv Car Damage",
         "File Close Date",
         "Notes"
-    };
-
-    private static readonly string[] PeriodReportColumns =
-    {
-        "Reg Number",
-        "GG Number",
-        "Accid Date",
-        "Dept/Site ID",
-        "Dept/Site",
-        "Hire Type",
-        "Accident Description",
-        "Driver",
-        "Trans Officer",
-        "Call Refer",
-        "GG Car Damage",
-        "File Close Date"
     };
 
     private static readonly string[] DriverReportColumns =

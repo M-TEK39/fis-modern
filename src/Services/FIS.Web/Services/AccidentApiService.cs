@@ -213,23 +213,6 @@ public class AccidentApiService
         }
     }
 
-    public async Task<List<Dictionary<string, string>>> GetPeriodStatusReportAsync(string departmentNumber, DateTime startDate, DateTime endDate, string status)
-    {
-        try
-        {
-            AddAuthHeader();
-            var query =
-                $"api/accidents/reports/period-status?departmentNumber={Uri.EscapeDataString(departmentNumber ?? string.Empty)}&startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}&status={Uri.EscapeDataString(status ?? "open")}";
-            var response = await _httpClient.GetAsync(query);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<Dictionary<string, string>>>() ?? new List<Dictionary<string, string>>();
-        }
-        catch
-        {
-            return new List<Dictionary<string, string>>();
-        }
-    }
-
     public async Task<List<Dictionary<string, string>>> GetNewAccidentsReportAsync(string mode)
     {
         try
