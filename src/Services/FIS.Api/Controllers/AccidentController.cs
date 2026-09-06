@@ -414,6 +414,44 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/department-finyear")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentFinancialYearReport(
+        [FromQuery] string? departmentNumber,
+        [FromQuery] string? financialYear,
+        [FromQuery] string garage = "jhb")
+    {
+        var normalizedGarage = garage.Trim().ToLowerInvariant() switch
+        {
+            "jhb" or "radiojhb" => "jhb",
+            "pta" or "radiopta" => "pta",
+            "all" or "radioall" => "all",
+            _ => string.Empty
+        };
+        if (normalizedGarage.Length == 0)
+        {
+            return BadRequest(new { error = "Garage must be jhb, pta, or all." });
+        }
+
+        var normalizedFinancialYear = financialYear?.Trim() ?? string.Empty;
+        if (normalizedFinancialYear.Length == 0 || normalizedFinancialYear.Length > 5)
+        {
+            return BadRequest(new { error = "Book / Financial Year must be between 1 and 5 characters." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetDepartmentFinancialYearReportAsync(
+                departmentNumber ?? string.Empty,
+                normalizedGarage,
+                normalizedFinancialYear));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident department financial year report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,

@@ -236,6 +236,8 @@ export type AccidentDepartmentMonthGarageMode = "jhb" | "pta" | "all";
 
 export type AccidentDepartmentMonthPeriodMode = "month" | "year" | "02/03" | "01/02";
 
+export type AccidentDepartmentFinancialYearGarageMode = "jhb" | "pta" | "all";
+
 export type AccidentPeriodReportStatus = "open" | "closed";
 
 export type AccidentVehicleReportRow = {
@@ -773,6 +775,22 @@ export async function getAccidentDepartmentMonthReport(
   });
   return mapPresent(
     getCollection(await requestApi(`api/accidents/reports/department-month?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
+}
+
+export async function getAccidentDepartmentFinancialYearReport(
+  departmentNumber: string,
+  garage: AccidentDepartmentFinancialYearGarageMode,
+  financialYear: string,
+) {
+  const query = new URLSearchParams({
+    departmentNumber: departmentNumber.trim(),
+    garage,
+    financialYear: financialYear.trim(),
+  });
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/department-finyear?${query.toString()}`)),
     mapAccidentVehicleReportRow,
   );
 }

@@ -343,6 +343,18 @@ public sealed class AccidentRepository : IAccidentRepository
             accidentYear: year,
             accidentMonth: month);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
+        string departmentNumber,
+        string garageMode,
+        string financialYear)
+        => GetVehicleReportCoreAsync(
+            string.Empty,
+            string.Empty,
+            containsSearch: false,
+            garageMode: garageMode,
+            departmentNumber: departmentNumber?.Trim() ?? string.Empty,
+            financialYear: financialYear?.Trim() ?? string.Empty);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -522,12 +534,14 @@ public sealed class AccidentRepository : IAccidentRepository
         string? hireTypeMode = null,
         string? calendarPeriodMode = null,
         int? accidentYear = null,
-        int? accidentMonth = null)
+        int? accidentMonth = null,
+        string? financialYear = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
         var hasCalendarPeriodFilter = calendarPeriodMode is not null;
-        var hasDepartmentPeriodFilter = departmentNumber is not null || periodStartDate.HasValue || periodEndDate.HasValue || hasCalendarPeriodFilter;
+        var hasFinancialYearFilter = financialYear is not null;
+        var hasDepartmentPeriodFilter = departmentNumber is not null || periodStartDate.HasValue || periodEndDate.HasValue || hasCalendarPeriodFilter || hasFinancialYearFilter;
         if (flagMode is null && dateRangeMode is null && garageMode is null && !hasDepartmentPeriodFilter && normalizedSearchTerm.Length == 0)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -543,13 +557,19 @@ public sealed class AccidentRepository : IAccidentRepository
         var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
         var periodAvailable = periodStartDate.HasValue && periodEndDate.HasValue && accidentColumns.Contains("occurence_date");
         var calendarPeriodAvailable = hasCalendarPeriodFilter && accidentColumns.Contains("occurence_date");
+        var financialYearAvailable = hasFinancialYearFilter && accidentColumns.Contains("fin_year");
         var typeJoinAvailable = vehicleColumns.Contains("type_code") && typeColumns.Contains("type_code");
-        if (hasDepartmentPeriodFilter && ((!periodAvailable && !calendarPeriodAvailable) || (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)))
+        if (hasDepartmentPeriodFilter && ((!periodAvailable && !calendarPeriodAvailable && !financialYearAvailable) || (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)))
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
 
         if (hasCalendarPeriodFilter && !calendarPeriodAvailable)
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        if (hasFinancialYearFilter && !financialYearAvailable)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -580,7 +600,7 @@ public sealed class AccidentRepository : IAccidentRepository
             return Array.Empty<AccidentVehicleReportRow>();
         }
 
-        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null || periodAvailable || calendarPeriodAvailable;
+        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null || periodAvailable || calendarPeriodAvailable || financialYearAvailable;
         if (!hasFilter)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -667,6 +687,10 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 conditions.Add(GetCalendarPeriodFilter(calendarPeriodMode!));
             }
+            else if (financialYearAvailable)
+            {
+                conditions.Add("[a].[fin_year] = @financialYear");
+            }
             else if (garageMode is null)
             {
                 conditions.Add(containsSearch
@@ -709,6 +733,11 @@ public sealed class AccidentRepository : IAccidentRepository
                 }
 
                 AddCalendarPeriodParameters(command, calendarPeriodMode, accidentYear, accidentMonth);
+
+                if (financialYear is not null)
+                {
+                    AddParameter(command, "@financialYear", DbType.String, financialYear);
+                }
 
                 if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
                 {

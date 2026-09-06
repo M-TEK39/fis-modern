@@ -26,6 +26,10 @@ public interface IAccidentRepository
         string periodMode,
         int? year,
         int? month);
+    Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
+        string departmentNumber,
+        string garageMode,
+        string financialYear);
     Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
