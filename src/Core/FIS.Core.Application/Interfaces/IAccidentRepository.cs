@@ -15,6 +15,11 @@ public interface IAccidentRepository
         string departmentNumber,
         DateTime startDate,
         DateTime endDate);
+    Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
+        string departmentNumber,
+        DateTime startDate,
+        DateTime endDate,
+        string hireTypeMode);
     Task<IEnumerable<AccidentPeriodReportRow>> GetPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
@@ -54,6 +59,7 @@ public class AccidentVehicleReportRow
     public string occurence_place { get; set; } = "";
     public string fin_year { get; set; } = "";
     public decimal? call_refer { get; set; }
+    public string hire_type { get; set; } = "";
     public DateTime? date_updated { get; set; }
     public string flag_gg_hq { get; set; } = "";
     public DateTime? flag_gg_hq_date { get; set; }

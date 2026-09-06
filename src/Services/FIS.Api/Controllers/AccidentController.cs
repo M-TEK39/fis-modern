@@ -315,6 +315,46 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/department-period-vip")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentPeriodVipReport(
+        [FromQuery] string? departmentNumber,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate,
+        [FromQuery] string mode = "all")
+    {
+        if (endDate < startDate)
+        {
+            return BadRequest(new { error = "End date must be on or after start date." });
+        }
+
+        var normalizedMode = mode.Trim().ToLowerInvariant() switch
+        {
+            "all" or "radioall" => "all",
+            "vip" or "radiovip" => "vip",
+            "pool" or "radiopool" => "pool",
+            "permanent" or "radioperm" => "permanent",
+            _ => string.Empty
+        };
+        if (normalizedMode.Length == 0)
+        {
+            return BadRequest(new { error = "Mode must be all, vip, pool, or permanent." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetDepartmentPeriodVipReportAsync(
+                departmentNumber ?? string.Empty,
+                startDate,
+                endDate,
+                normalizedMode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident department period hire-type report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,

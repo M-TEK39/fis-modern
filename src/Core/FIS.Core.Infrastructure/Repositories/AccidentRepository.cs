@@ -313,6 +313,20 @@ public sealed class AccidentRepository : IAccidentRepository
             periodStartDate: startDate.Date,
             periodEndDate: endDate.Date);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
+        string departmentNumber,
+        DateTime startDate,
+        DateTime endDate,
+        string hireTypeMode)
+        => GetVehicleReportCoreAsync(
+            string.Empty,
+            string.Empty,
+            containsSearch: false,
+            departmentNumber: departmentNumber?.Trim() ?? string.Empty,
+            periodStartDate: startDate.Date,
+            periodEndDate: endDate.Date,
+            hireTypeMode: hireTypeMode);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -488,7 +502,8 @@ public sealed class AccidentRepository : IAccidentRepository
         string? garageMode = null,
         string? departmentNumber = null,
         DateTime? periodStartDate = null,
-        DateTime? periodEndDate = null)
+        DateTime? periodEndDate = null,
+        string? hireTypeMode = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
@@ -503,10 +518,17 @@ public sealed class AccidentRepository : IAccidentRepository
         var siteColumns = await GetAvailableColumnsAsync("site");
         var locationColumns = await GetAvailableColumnsAsync("location");
         var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
+        var typeColumns = await GetAvailableColumnsAsync("type");
         var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
         var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
         var periodAvailable = periodStartDate.HasValue && periodEndDate.HasValue && accidentColumns.Contains("occurence_date");
+        var typeJoinAvailable = vehicleColumns.Contains("type_code") && typeColumns.Contains("type_code");
         if (hasDepartmentPeriodFilter && (!periodAvailable || (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)))
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        if (hireTypeMode is not null && hireTypeMode is not "all" && !typeJoinAvailable)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -568,7 +590,10 @@ public sealed class AccidentRepository : IAccidentRepository
                         : "CAST(NULL AS nvarchar(50)) AS [department_number]",
                     siteJoinAvailable && siteColumns.Contains("description")
                         ? "[s].[description] AS [site_description]"
-                        : "CAST(NULL AS nvarchar(255)) AS [site_description]"
+                        : "CAST(NULL AS nvarchar(255)) AS [site_description]",
+                    typeJoinAvailable && typeColumns.Contains("type_description")
+                        ? "[t].[type_description] AS [hire_type]"
+                        : "CAST(NULL AS nvarchar(255)) AS [hire_type]"
                 ])
                 .ToArray();
             var joins = new List<string>
@@ -588,6 +613,11 @@ public sealed class AccidentRepository : IAccidentRepository
             if (accidentTypeJoinAvailable)
             {
                 joins.Add("LEFT JOIN [dbo].[acc_type] AS [at] ON [at].[acc_type_code] = [a].[acc_type_code]");
+            }
+
+            if (typeJoinAvailable)
+            {
+                joins.Add("LEFT JOIN [dbo].[type] AS [t] ON [t].[type_code] = [v].[type_code]");
             }
 
             var conditions = new List<string>
@@ -621,6 +651,10 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 conditions.Add("[s].[Department_number] LIKE @departmentNumber");
             }
+            if (hireTypeMode is not null && hireTypeMode is not "all")
+            {
+                conditions.Add(GetHireTypeFilter(hireTypeMode));
+            }
             var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : "vmf_code";
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
@@ -648,6 +682,8 @@ public sealed class AccidentRepository : IAccidentRepository
                 {
                     AddParameter(command, "@departmentNumber", DbType.String, $"%{normalizedDepartmentNumber}%");
                 }
+
+                AddHireTypeParameters(command, hireTypeMode);
             }
 
             var results = new List<AccidentVehicleReportRow>();
@@ -665,6 +701,7 @@ public sealed class AccidentRepository : IAccidentRepository
                     occurence_place = ReadString(reader, "occurence_place") ?? string.Empty,
                     fin_year = ReadString(reader, "fin_year") ?? string.Empty,
                     call_refer = ReadDecimal(reader, "Call_Refer"),
+                    hire_type = ReadString(reader, "hire_type") ?? string.Empty,
                     date_updated = ReadDateTime(reader, "date_updated"),
                     flag_gg_hq = ReadString(reader, "Flag_gg_hq") ?? string.Empty,
                     flag_gg_hq_date = ReadDateTime(reader, "Flag_gg_hq_date"),
@@ -1431,6 +1468,27 @@ public sealed class AccidentRepository : IAccidentRepository
         if (mode is "jhb" or "pta")
         {
             AddParameter(command, "@garageCode", DbType.Int32, mode == "jhb" ? 1 : 2);
+        }
+    }
+
+    private static string GetHireTypeFilter(string mode)
+        => mode switch
+        {
+            "pool" or "vip" or "permanent" => "[v].[type_code] = @hireTypeCode",
+            "all" => "1 = 1",
+            _ => "1 = 0"
+        };
+
+    private static void AddHireTypeParameters(DbCommand command, string? mode)
+    {
+        if (mode is "pool" or "vip" or "permanent")
+        {
+            AddParameter(command, "@hireTypeCode", DbType.Int32, mode switch
+            {
+                "pool" => 1,
+                "vip" => 2,
+                _ => 3
+            });
         }
     }
 

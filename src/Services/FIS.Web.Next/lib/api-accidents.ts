@@ -230,6 +230,8 @@ export type AccidentAllReportDateMode = "2002-current" | "1999-2001" | "before-1
 
 export type AccidentGarageReportMode = "jhb" | "pta" | "all";
 
+export type AccidentDepartmentPeriodVipMode = "all" | "vip" | "pool" | "permanent";
+
 export type AccidentPeriodReportStatus = "open" | "closed";
 
 export type AccidentVehicleReportRow = {
@@ -242,6 +244,7 @@ export type AccidentVehicleReportRow = {
   accidentPlace: string | null;
   financialYear: string | null;
   callRefer: number | null;
+  hireType: string | null;
   dateUpdated: string | null;
   notifiedGarage: string | null;
   notifiedGarageDate: string | null;
@@ -637,6 +640,7 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
     accidentPlace: asString(getValue(value, "occurence_place", "occurrence_place", "occurencePlace")),
     financialYear: asString(getValue(value, "fin_year", "financialYear")),
     callRefer: asNumber(getValue(value, "Call_Refer", "call_Refer", "call_refer", "callRefer")),
+    hireType: asString(getValue(value, "hire_type", "hireType")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     notifiedGarage: asString(getValue(value, "Flag_gg_hq", "flag_gg_hq", "notifiedGarage")),
     notifiedGarageDate: asString(getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "notifiedGarageDate")),
@@ -727,6 +731,24 @@ export async function getAccidentDepartmentPeriodReport(
   });
   return mapPresent(
     getCollection(await requestApi(`api/accidents/reports/department-period?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
+}
+
+export async function getAccidentDepartmentPeriodVipReport(
+  departmentNumber: string,
+  startDate: string,
+  endDate: string,
+  mode: AccidentDepartmentPeriodVipMode,
+) {
+  const query = new URLSearchParams({
+    departmentNumber: departmentNumber.trim(),
+    startDate,
+    endDate,
+    mode,
+  });
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/department-period-vip?${query.toString()}`)),
     mapAccidentVehicleReportRow,
   );
 }
