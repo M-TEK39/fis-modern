@@ -116,6 +116,62 @@ public sealed class VehicleSourceFieldUnavailableException : Exception
 }
 
 /// <summary>
+/// Repository interface for the vehicle status report. The report is read
+/// directly from the legacy vehicle/reference columns so expanded columns do
+/// not make an older client database unusable.
+/// </summary>
+public interface IVehicleStatusReportRepository
+{
+    Task<VehicleStatusReportPage> GetPageAsync(VehicleStatusReportQuery query);
+}
+
+public sealed record VehicleStatusReportQuery(
+    byte? VehicleSourceCode = null,
+    short? TypeCode = null,
+    short? LocationCode = null,
+    short? MakeCode = null,
+    short? ModelCode = null,
+    short? VehicleStatusCode = null,
+    string? Search = null);
+
+public sealed record VehicleStatusReportLookup(int Code, string Description);
+
+public sealed record VehicleStatusReportModelLookup(int Code, string Description, int? MakeCode);
+
+public sealed record VehicleStatusReportRemark(
+    int RemarkId,
+    string? Category,
+    string? Text,
+    DateTime? DateCreated);
+
+public sealed record VehicleStatusReportVehicle(
+    int VmfCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    short? VehicleStatusCode,
+    short? TypeCode,
+    byte? VehicleSourceCode,
+    short? ModelCode,
+    short? LocationCode,
+    string? ChassisNumber,
+    string? EngineNumber,
+    short? YearManufactured,
+    DateTime? TakeOnDate,
+    string? InvoiceNumber,
+    DateTime? DateCreated,
+    int? CurrentOdometer,
+    VehicleStatusReportRemark? ActiveRemark);
+
+public sealed record VehicleStatusReportPage(
+    IReadOnlyList<VehicleStatusReportVehicle> Vehicles,
+    IReadOnlyList<VehicleStatusReportLookup> Sites,
+    IReadOnlyList<VehicleStatusReportLookup> Types,
+    IReadOnlyList<VehicleStatusReportLookup> Makes,
+    IReadOnlyList<VehicleStatusReportModelLookup> Models,
+    IReadOnlyList<VehicleStatusReportLookup> Statuses,
+    bool RemarksAvailable);
+
+/// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
 /// </summary>
 public interface IVehicleAuthorizationRepository
