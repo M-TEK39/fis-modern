@@ -6,8 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_F_dup_main_Accident.htm"
-@page "/Accident/RPT_F_dup_report_Accident.aspx"
 @rendermode InteractiveServer
 @using FIS.Web.Models
 @using FIS.Web.Services
@@ -436,73 +434,6 @@
                     </div>
                 </div>
             }
-            else if (CurrentMode == "duplicate-accidents")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Duplicate Accidents</h2>
-                    <div class="form-grid">
-                        <div class="form-field form-group-full">
-                            <div class="contract-search-radio">
-                                <label class="form-radio-label">
-                                    <input type="radio" name="dupGarage" checked="@(_duplicateGarage == "jhb")" @onchange='() => _duplicateGarage = "jhb"' />
-                                    JHB
-                                </label>
-                                <label class="form-radio-label">
-                                    <input type="radio" name="dupGarage" checked="@(_duplicateGarage == "pta")" @onchange='() => _duplicateGarage = "pta"' />
-                                    PTA
-                                </label>
-                                <label class="form-radio-label">
-                                    <input type="radio" name="dupGarage" checked="@(_duplicateGarage == "all")" @onchange='() => _duplicateGarage = "all"' />
-                                    ALL
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
-                    </div>
-                </div>
-                @if (_customReportRows.Count > 0)
-                {
-                    <div class="form-section">
-                        <h2 class="form-section-title">Duplicate Accidents Output</h2>
-                        <div class="table-container">
-                            <div class="table-wrapper">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>GG Number</th>
-                                            <th>Reg Number</th>
-                                            <th>Accident Date</th>
-                                            <th>Accident Time</th>
-                                            <th>Accident Place</th>
-                                            <th>Driver</th>
-                                            <th>Case Number</th>
-                                            <th>Cost of Repair</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var row in _customReportRows)
-                                        {
-                                            <tr>
-                                                <td>@GetReportValue(row, "fleet_number")</td>
-                                                <td>@GetReportValue(row, "registration_number")</td>
-                                                <td>@GetReportValue(row, "occurence_date")</td>
-                                                <td>@GetReportValue(row, "occurence_time")</td>
-                                                <td>@GetReportValue(row, "occurence_place")</td>
-                                                <td>@GetReportValue(row, "driver_name")</td>
-                                                <td>@GetReportValue(row, "case_number")</td>
-                                                <td>@GetReportValue(row, "cost_of_repair")</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                }
-            }
             else
             {
                 <p class="form-hint">Use the filters above to run and review accident report output.</p>
@@ -526,7 +457,6 @@
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private string _newAccidentReportMode = "call";
-    private string _duplicateGarage = "all";
     private List<Dictionary<string, string>> _customReportRows = new();
     private int _page = 1;
     private const int _pageSize = 12;
@@ -539,10 +469,6 @@
         if (CurrentMode == "one-vehicle")
         {
             await SearchOneVehicleAsync();
-        }
-        else if (CurrentMode == "duplicate-accidents")
-        {
-            _customReportRows = await AccidentService.GetDuplicateAccidentReportAsync(_duplicateGarage);
         }
         else if (CurrentMode == "new-accidents")
         {
@@ -649,7 +575,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "duplicate-accidents" => "Report on ALL Duplicate Accidents",
             _ => "Accident Report"
         };
     }
@@ -672,8 +597,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_f_dup_main_accident.htm" => "duplicate-accidents",
-            "accident/rpt_f_dup_report_accident.aspx" => "duplicate-accidents",
             _ => string.Empty
         };
     }

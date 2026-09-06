@@ -586,64 +586,30 @@ public class AccidentController : BaseApiController
     }
 
     [HttpGet("reports/duplicates")]
-    public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetDuplicateAccidentsReport([FromQuery] string garage = "all")
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDuplicateAccidentsReport(
+        [FromQuery] string garage = "all")
     {
-        var sql = @"
-WITH ordered AS
-(
-    SELECT
-        a.accident_code,
-        a.vmf_code,
-        ISNULL(vm.fleet_number, '') AS fleet_number,
-        ISNULL(vm.registration_number, '') AS registration_number,
-        ISNULL(CONVERT(varchar(10), a.occurence_date, 120), '') AS occurence_date,
-        ISNULL(CONVERT(varchar(5), a.occurence_time, 108), '') AS occurence_time,
-        ISNULL(a.occurence_place, '') AS occurence_place,
-        ISNULL(a.fin_year, '') AS fin_year,
-        ISNULL(a.description, '') AS description,
-        ISNULL(a.trip_author, '') AS trip_author,
-        ISNULL(a.driver_name, '') AS driver_name,
-        ISNULL(a.driver_employ_number, '') AS driver_employ_number,
-        ISNULL(s.Department_number, '') AS department_number,
-        ISNULL(a.transoffic_name, '') AS transoffic_name,
-        ISNULL(a.transoffic_tel, '') AS transoffic_tel,
-        ISNULL(a.hq_reference, '') AS hq_reference,
-        ISNULL(a.gg_reference, '') AS gg_reference,
-        ISNULL(a.case_number, '') AS case_number,
-        ISNULL(CONVERT(varchar(32), a.cost_of_repair), '') AS cost_of_repair,
-        ISNULL(a.driver_fault, '') AS driver_fault,
-        ISNULL(CONVERT(varchar(16), a.death), '') AS death,
-        ISNULL(CONVERT(varchar(16), a.injured), '') AS injured,
-        ISNULL(a.third_party_regno, '') AS third_party_regno,
-        ISNULL(a.third_party_owner, '') AS third_party_owner,
-        ISNULL(CONVERT(varchar(32), a.third_party_claim), '') AS third_party_claim,
-        ISNULL(CONVERT(varchar(32), a.claim_against_dept), '') AS claim_against_dept,
-        ISNULL(CONVERT(varchar(10), a.file_close_date, 120), '') AS file_close_date,
-        ISNULL(a.notes, '') AS notes
-    FROM accident a
-    INNER JOIN vehicle_master vm ON vm.vmf_code = a.vmf_code
-    LEFT JOIN site s ON s.site_code = a.driver_site_code
-    WHERE ISNULL(a.is_deleted, 0) = 0
-      AND (
-            @garage = 'all'
-            OR (@garage = 'jhb' AND vm.location_code = 1)
-            OR (@garage = 'pta' AND vm.location_code = 2)
-      )
-),
-dups AS
-(
-    SELECT vmf_code, occurence_date
-    FROM ordered
-    GROUP BY vmf_code, occurence_date
-    HAVING COUNT(*) > 1
-)
-SELECT o.*
-FROM ordered o
-INNER JOIN dups d ON d.vmf_code = o.vmf_code AND d.occurence_date = o.occurence_date
-ORDER BY o.fleet_number, o.occurence_date, o.accident_code";
+        var normalizedGarage = garage.Trim().ToLowerInvariant() switch
+        {
+            "jhb" or "radiojhb" => "jhb",
+            "pta" or "radiopta" => "pta",
+            "all" or "radioall" => "all",
+            _ => string.Empty
+        };
+        if (normalizedGarage.Length == 0)
+        {
+            return BadRequest(new { error = "Garage must be jhb, pta, or all." });
+        }
 
-        var rows = await ExecuteReportQueryAsync(sql, ("@garage", garage.Trim().ToLowerInvariant()));
-        return Ok(rows);
+        try
+        {
+            return Ok(await _repository.GetDuplicateAccidentsReportAsync(normalizedGarage));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving duplicate accident report");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("reports/new-accidents")]

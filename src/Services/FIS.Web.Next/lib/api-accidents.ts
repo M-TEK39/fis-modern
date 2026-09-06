@@ -878,6 +878,11 @@ export async function getAccidentGarageReport(mode: AccidentGarageReportMode) {
   return mapPresent(getCollection(await requestApi(`api/accidents/reports/garage-detail?${query.toString()}`)), mapAccidentVehicleReportRow);
 }
 
+export async function getAccidentDuplicateReport(mode: AccidentGarageReportMode) {
+  const query = new URLSearchParams({ garage: mode });
+  return mapPresent(getCollection(await requestApi(`api/accidents/reports/duplicates?${query.toString()}`)), mapAccidentVehicleReportRow);
+}
+
 export async function getAccidentDepartmentPeriodReport(
   departmentNumber: string,
   startDate: string,

@@ -577,6 +577,14 @@ public sealed class AccidentRepository : IAccidentRepository
     public Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode)
         => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, garageMode: mode);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetDuplicateAccidentsReportAsync(string garageMode)
+        => GetVehicleReportCoreAsync(
+            string.Empty,
+            string.Empty,
+            containsSearch: false,
+            garageMode: garageMode,
+            duplicateOnly: true);
+
     public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
@@ -824,7 +832,8 @@ public sealed class AccidentRepository : IAccidentRepository
         int? accidentYear = null,
         int? accidentMonth = null,
         string? financialYear = null,
-        bool orderByDepartment = false)
+        bool orderByDepartment = false,
+        bool duplicateOnly = false)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
@@ -842,6 +851,10 @@ public sealed class AccidentRepository : IAccidentRepository
         var locationColumns = await GetAvailableColumnsAsync("location");
         var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
         var typeColumns = await GetAvailableColumnsAsync("type");
+        if (duplicateOnly && !accidentColumns.Contains("occurence_date"))
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
         var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
         var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
         var periodAvailable = periodStartDate.HasValue && periodEndDate.HasValue && accidentColumns.Contains("occurence_date");
@@ -908,6 +921,22 @@ public sealed class AccidentRepository : IAccidentRepository
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
             var locationJoinAvailable = vehicleColumns.Contains("location_code") && locationColumns.Contains("location_code");
             var accidentTypeJoinAvailable = accidentColumns.Contains("acc_type_code") && accidentTypeColumns.Contains("acc_type_code");
+            var duplicateJoin = duplicateOnly
+                ? $"""
+                INNER JOIN (
+                    SELECT [d].[vmf_code], [d].[occurence_date]
+                    FROM [dbo].[{TableName}] AS [d]
+                    WHERE {GetActiveFilter(accidentColumns, "d")}
+                    GROUP BY [d].[vmf_code], [d].[occurence_date]
+                    HAVING COUNT(*) > 1
+                ) AS [duplicates]
+                    ON [duplicates].[vmf_code] = [a].[vmf_code]
+                    AND (
+                        [duplicates].[occurence_date] = [a].[occurence_date]
+                        OR ([duplicates].[occurence_date] IS NULL AND [a].[occurence_date] IS NULL)
+                    )
+                """
+                : string.Empty;
             var projection = VehicleReportColumns
                 .Select(column => GetProjection(accidentColumns, column, "a"))
                 .Concat(
@@ -1002,12 +1031,16 @@ public sealed class AccidentRepository : IAccidentRepository
             var primaryOrderColumn = orderByDepartment && siteDepartmentAvailable
                 ? "[s].[Department_number]"
                 : $"[v].[{orderColumn}]";
+            var orderBy = duplicateOnly
+                ? $"[v].[{orderColumn}], [a].[occurence_date], [a].[accident_code]"
+                : $"{primaryOrderColumn}, [v].[{orderColumn}], [a].[accident_code]";
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
                 FROM [dbo].[{TableName}] AS [a]
                 {string.Join(Environment.NewLine, joins)}
+                {duplicateJoin}
                 WHERE {string.Join(" AND ", conditions)}
-                ORDER BY {primaryOrderColumn}, [v].[{orderColumn}], [a].[accident_code]
+                ORDER BY {orderBy}
                 """;
             if (flagMode is null)
             {

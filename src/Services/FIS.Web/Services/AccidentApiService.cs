@@ -198,21 +198,6 @@ public class AccidentApiService
         }
     }
 
-    public async Task<List<Dictionary<string, string>>> GetDuplicateAccidentReportAsync(string garage)
-    {
-        try
-        {
-            AddAuthHeader();
-            var response = await _httpClient.GetAsync($"api/accidents/reports/duplicates?garage={Uri.EscapeDataString(garage ?? "all")}");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<Dictionary<string, string>>>() ?? new List<Dictionary<string, string>>();
-        }
-        catch
-        {
-            return new List<Dictionary<string, string>>();
-        }
-    }
-
     public async Task<List<Dictionary<string, string>>> GetNewAccidentsReportAsync(string mode)
     {
         try

@@ -19,6 +19,7 @@ public interface IAccidentRepository
     Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode);
+    Task<IEnumerable<AccidentVehicleReportRow>> GetDuplicateAccidentsReportAsync(string garageMode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
         string departmentNumber,
         DateTime startDate,
