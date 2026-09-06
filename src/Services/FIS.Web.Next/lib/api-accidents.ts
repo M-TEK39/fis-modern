@@ -252,6 +252,7 @@ export type AccidentVehicleReportRow = {
   callRefer: number | null;
   hireType: string | null;
   dateUpdated: string | null;
+  reportedDate: string | null;
   notifiedGarage: string | null;
   notifiedGarageDate: string | null;
   notifiedTripAuthority: string | null;
@@ -648,6 +649,7 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
     callRefer: asNumber(getValue(value, "Call_Refer", "call_Refer", "call_refer", "callRefer")),
     hireType: asString(getValue(value, "hire_type", "hireType")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
+    reportedDate: asString(getValue(value, "reported_date", "reportedDate")),
     notifiedGarage: asString(getValue(value, "Flag_gg_hq", "flag_gg_hq", "notifiedGarage")),
     notifiedGarageDate: asString(getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "notifiedGarageDate")),
     notifiedTripAuthority: asString(getValue(value, "Flag_trip_author", "flag_trip_author", "notifiedTripAuthority")),
@@ -791,6 +793,14 @@ export async function getAccidentDepartmentFinancialYearReport(
   });
   return mapPresent(
     getCollection(await requestApi(`api/accidents/reports/department-finyear?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
+}
+
+export async function getAccidentCostsFinancialYearReport(financialYear: string) {
+  const query = new URLSearchParams({ financialYear: financialYear.trim() });
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/accident-costs-finyear?${query.toString()}`)),
     mapAccidentVehicleReportRow,
   );
 }

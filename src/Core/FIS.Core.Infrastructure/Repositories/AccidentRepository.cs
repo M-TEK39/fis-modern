@@ -112,6 +112,7 @@ public sealed class AccidentRepository : IAccidentRepository
         "fin_year",
         "Call_Refer",
         "date_updated",
+        "reported_date",
         "Flag_gg_hq",
         "Flag_gg_hq_date",
         "Flag_trip_author",
@@ -311,7 +312,8 @@ public sealed class AccidentRepository : IAccidentRepository
             containsSearch: false,
             departmentNumber: departmentNumber?.Trim() ?? string.Empty,
             periodStartDate: startDate.Date,
-            periodEndDate: endDate.Date);
+            periodEndDate: endDate.Date,
+            orderByDepartment: true);
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodVipReportAsync(
         string departmentNumber,
@@ -325,7 +327,8 @@ public sealed class AccidentRepository : IAccidentRepository
             departmentNumber: departmentNumber?.Trim() ?? string.Empty,
             periodStartDate: startDate.Date,
             periodEndDate: endDate.Date,
-            hireTypeMode: hireTypeMode);
+            hireTypeMode: hireTypeMode,
+            orderByDepartment: true);
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
         string departmentNumber,
@@ -341,7 +344,8 @@ public sealed class AccidentRepository : IAccidentRepository
             departmentNumber: departmentNumber?.Trim() ?? string.Empty,
             calendarPeriodMode: periodMode,
             accidentYear: year,
-            accidentMonth: month);
+            accidentMonth: month,
+            orderByDepartment: true);
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentFinancialYearReportAsync(
         string departmentNumber,
@@ -353,7 +357,16 @@ public sealed class AccidentRepository : IAccidentRepository
             containsSearch: false,
             garageMode: garageMode,
             departmentNumber: departmentNumber?.Trim() ?? string.Empty,
-            financialYear: financialYear?.Trim() ?? string.Empty);
+            financialYear: financialYear?.Trim() ?? string.Empty,
+            orderByDepartment: true);
+
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetAccidentCostsFinancialYearReportAsync(string financialYear)
+        => GetVehicleReportCoreAsync(
+            string.Empty,
+            string.Empty,
+            containsSearch: false,
+            financialYear: financialYear?.Trim() ?? string.Empty,
+            orderByDepartment: true);
 
     [SuppressMessage(
         "Security",
@@ -535,7 +548,8 @@ public sealed class AccidentRepository : IAccidentRepository
         string? calendarPeriodMode = null,
         int? accidentYear = null,
         int? accidentMonth = null,
-        string? financialYear = null)
+        string? financialYear = null,
+        bool orderByDepartment = false)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
@@ -710,12 +724,15 @@ public sealed class AccidentRepository : IAccidentRepository
                 conditions.Add(GetHireTypeFilter(hireTypeMode));
             }
             var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : "vmf_code";
+            var primaryOrderColumn = orderByDepartment && siteDepartmentAvailable
+                ? "[s].[Department_number]"
+                : $"[v].[{orderColumn}]";
             command.CommandText = $"""
                 SELECT {string.Join(", ", projection)}
                 FROM [dbo].[{TableName}] AS [a]
                 {string.Join(Environment.NewLine, joins)}
                 WHERE {string.Join(" AND ", conditions)}
-                ORDER BY [v].[{orderColumn}], [a].[accident_code]
+                ORDER BY {primaryOrderColumn}, [v].[{orderColumn}], [a].[accident_code]
                 """;
             if (flagMode is null)
             {
@@ -764,6 +781,7 @@ public sealed class AccidentRepository : IAccidentRepository
                     call_refer = ReadDecimal(reader, "Call_Refer"),
                     hire_type = ReadString(reader, "hire_type") ?? string.Empty,
                     date_updated = ReadDateTime(reader, "date_updated"),
+                    reported_date = ReadDateTime(reader, "reported_date"),
                     flag_gg_hq = ReadString(reader, "Flag_gg_hq") ?? string.Empty,
                     flag_gg_hq_date = ReadDateTime(reader, "Flag_gg_hq_date"),
                     flag_trip_author = ReadString(reader, "Flag_trip_author") ?? string.Empty,

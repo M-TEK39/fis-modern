@@ -452,6 +452,27 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/accident-costs-finyear")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetAccidentCostsFinancialYearReport(
+        [FromQuery] string? financialYear)
+    {
+        var normalizedFinancialYear = financialYear?.Trim() ?? string.Empty;
+        if (normalizedFinancialYear.Length == 0 || normalizedFinancialYear.Length > 5)
+        {
+            return BadRequest(new { error = "Financial Year must be between 1 and 5 characters." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetAccidentCostsFinancialYearReportAsync(normalizedFinancialYear));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident costs financial year report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,
