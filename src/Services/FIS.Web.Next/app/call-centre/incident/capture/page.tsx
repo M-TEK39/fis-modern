@@ -1074,6 +1074,10 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
   const saved = getQueryValue(params.saved) === "1";
   const savedCode = getQueryValue(params.code);
 
+  if (incidentType === "Booking") {
+    redirect("/CallCentre/Bookings/Booking_1G.aspx?xinctype=Booking");
+  }
+
   let vehicle: CallCentreVehicleOption | null = null;
   let vehicles: CallCentreVehicleOption[] = [];
   let sites: CallCentreSiteOption[] = [];
