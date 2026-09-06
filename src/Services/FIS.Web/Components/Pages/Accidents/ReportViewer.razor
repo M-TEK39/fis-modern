@@ -6,8 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_Dept_period_main_Accident.aspx"
-@page "/Accident/RPT_Dept_period_main_Accident.htm"
 @page "/Accident/RPT_Dept_periodVIP_main_Accident.aspx"
 @page "/Accident/RPT_Dept_month_main_Accident.htm"
 @page "/Accident/RPT_Dept_finyear_main_Accident.htm"
@@ -444,105 +442,6 @@
                                                 <td>@GetReportValue(row, "notes")</td>
                                             </tr>
                                         }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
-            else if (CurrentMode == "department-period")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Department/Site Period</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">Garage</label>
-                            <div class="form-grid">
-                                <label class="form-label">
-                                    <input type="radio" name="deptPeriodGarage" checked />
-                                    JHB
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="deptPeriodGarage" />
-                                    PTA
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="deptPeriodGarage" />
-                                    ALL
-                                </label>
-                            </div>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Begin Date (e.g. 2002/03/01)</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">End Date (e.g. 2002/03/31)</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Department/Site (first 5 characters)</label>
-                            <select class="form-select" @bind="_departmentPeriodSiteCode">
-                                <option value="">Select site...</option>
-                                @foreach (var site in _sites)
-                                {
-                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Report Output</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in DeptPeriodColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GPA-0020</td>
-                                        <td>GG55555</td>
-                                        <td>CALL-77</td>
-                                        <td>JHB</td>
-                                        <td>2024/01/22</td>
-                                        <td>Sandton</td>
-                                        <td>Minor</td>
-                                        <td>TA-118</td>
-                                        <td>A. Patel</td>
-                                        <td>SITE-04</td>
-                                        <td>Finance HQ</td>
-                                        <td>N. Mthembu</td>
-                                        <td>011-555-4444</td>
-                                        <td>HQ-2231</td>
-                                        <td>GG-7788</td>
-                                        <td>CASE-420</td>
-                                        <td>9500</td>
-                                        <td>15000</td>
-                                        <td>5000</td>
-                                        <td>Settled by insurer</td>
-                                    </tr>
-                                    @foreach (var report in PagedRecentReports)
-                                    {
-                                        <tr>
-                                            <td>@report.ReportType</td>
-                                            <td>@report.Name</td>
-                                            <td></td>
-                                            <td></td>
-                                            <td>@FormatDate(report.GeneratedDate)</td>
-                                            <td colspan="15"></td>
-                                        </tr>
                                     }
                                 </tbody>
                             </table>
@@ -1360,7 +1259,6 @@
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private int? _selectedDriverCode;
-    private short? _departmentPeriodSiteCode;
     private short? _sitePeriodVipSiteCode;
     private short? _departmentMonthSiteCode;
     private short? _departmentFinYearSiteCode;
@@ -1546,7 +1444,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "department-period" => "Report for a Department/Site, for a Period",
             "site-period-vip" => "Report for a Site, for a Period, for VIP/GG, for Hire Type",
             "department-month" => "Report for a Department/Site, for a Month/Year",
             "department-finyear" => "Report for a Department/Site, for a Book / Financial Year",
@@ -1581,8 +1478,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_dept_period_main_accident.aspx" => "department-period",
-            "accident/rpt_dept_period_main_accident.htm" => "department-period",
             "accident/rpt_dept_periodvip_main_accident.aspx" => "site-period-vip",
             "accident/rpt_dept_month_main_accident.htm" => "department-month",
             "accident/rpt_dept_finyear_main_accident.htm" => "department-finyear",
@@ -1788,30 +1683,6 @@
         "Private Party",
         "Priv Car Damage",
         "File Close Date",
-        "Notes"
-    };
-
-    private static readonly string[] DeptPeriodColumns =
-    {
-        "Prov Reg Number",
-        "GG Number",
-        "Call Refer",
-        "Garage",
-        "Accid Date",
-        "Accid Place",
-        "Accident Category",
-        "Trip Auth",
-        "Driver Name",
-        "Dept/Site ID",
-        "Dept/Site",
-        "Trans Officer",
-        "TO Tel",
-        "HQ Ref",
-        "GG Ref",
-        "Case Num",
-        "GG Car Damage",
-        "Priv Car Damage",
-        "Cost Claim Agains Dept",
         "Notes"
     };
 

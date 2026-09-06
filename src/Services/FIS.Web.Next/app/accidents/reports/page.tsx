@@ -16,7 +16,7 @@ const reportEntries = [
   { label: "4) All Accidents - ALL DETAIL", target: "Accident/RPT_all_main_accident.htm", href: "/accidents/reports/all", available: true },
   { label: "5) All Accidents - GARAGE DETAIL", target: "Accident/RPT_allgar_main_accident.htm", href: "/accidents/reports/garage-detail", available: true },
   { label: "6) Report on New Accident's", target: "Accident/RPT_flagnew_main_accident.htm", href: "/accidents/reports/new-accidents", available: true },
-  { label: "7) Report for a Department/Site, for a Period", target: "Accident/RPT_dept_period_main_accident.aspx", available: false },
+  { label: "7) Report for a Department/Site, for a Period", target: "Accident/RPT_dept_period_main_accident.aspx", href: "/accidents/reports/department-period", available: true },
   { label: "8) Report for a Site, for a Period, for VIP/GG, for Hire Type", target: "Accident/RPT_dept_periodVIP_main_accident.aspx", available: false },
   { label: "9) Report for a Department/Site, for a Month/Year", target: "Accident/RPT_dept_month_main_accident.htm", available: false },
   { label: "10) Report for a Department/Site, for a Book / Financial Year", target: "Accident/RPT_dept_finyear_main_accident.htm", available: false },
@@ -52,7 +52,7 @@ async function AccidentReportsContent() {
     <>
       <div className="notice notice-warning" role="status">
         <span aria-hidden="true">!</span>
-        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
+        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, department-period, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
       </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (
