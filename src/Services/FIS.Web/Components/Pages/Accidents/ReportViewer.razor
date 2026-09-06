@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_letter_inspection_main_Accident.aspx"
 @page "/Accident/RPT_categories_Accident.aspx"
 @page "/Accident/RPT_lastggref_Accident.aspx"
 @page "/Accident/RPT_period_report1.aspx"
@@ -444,67 +443,6 @@
                     </div>
                 </div>
             }
-            else if (CurrentMode == "letter-inspection")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Vehicle Search</h2>
-                    <div class="form-grid">
-                        <div class="form-field form-group-full">
-                            <div class="contract-search-radio">
-                                <label class="form-radio-label">
-                                    <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gp")" @onchange='() => SetLetterVehicleSearchMode("gp")' />
-                                    GP
-                                </label>
-                                <label class="form-radio-label">
-                                    <input type="radio" name="letterType" checked="@(_letterVehicleSearchMode == "gg")" @onchange='() => SetLetterVehicleSearchMode("gg")' />
-                                    GG
-                                </label>
-                            </div>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">@(_letterVehicleSearchMode == "gg" ? "GG Number" : "GP Number")</label>
-                            <input class="form-input" @bind="_letterVehicleSearchTerm" placeholder="@(_letterVehicleSearchMode == "gg" ? "Enter GG number" : "Enter GP number")" />
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Records</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in LetterColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GG12345</td>
-                                        <td>GG-4589</td>
-                                        <td>2024/01/15</td>
-                                        <td><a href="#accident-letter-report">Report</a></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <div class="form-section" id="accident-letter-report">
-                    <h2 class="form-section-title">Report Output</h2>
-                    <div class="form-card form-card-compact">
-                        <p><strong>Vehicle:</strong> GG12345 / GG-4589</p>
-                        <p><strong>Accident Date:</strong> 2024/01/15</p>
-                        <p><strong>Action:</strong> Generated letter report based on current search criteria.</p>
-                    </div>
-                </div>
-            }
             else if (CurrentMode == "categories")
             {
                 <div class="form-section">
@@ -888,9 +826,7 @@
     private List<SiteResponseDto> _sites = new();
     private List<DriverDto> _drivers = new();
     private string _oneVehicleSearchMode = "gp";
-    private string _letterVehicleSearchMode = "gp";
     private string _oneVehicleSearchTerm = string.Empty;
-    private string _letterVehicleSearchTerm = string.Empty;
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private int? _selectedDriverCode;
@@ -932,24 +868,6 @@
         {
             _customReportRows = await AccidentService.GetPeriodStatusReportAsync(_periodDepartmentNumber, _periodBeginDate, _periodEndDate, _periodStatus);
         }
-        else if (CurrentMode == "letter-inspection")
-        {
-            var keyword = _letterVehicleSearchTerm.Trim();
-            if (!string.IsNullOrWhiteSpace(keyword))
-            {
-                try
-                {
-                    var matches = await VehicleLookupService.SearchAsync(keyword);
-                    _oneVehicleMatches = RankVehicleMatches(matches, keyword, _letterVehicleSearchMode == "gg");
-                    _oneVehicleSelectedVmfCode = _oneVehicleMatches.FirstOrDefault()?.VmfCode;
-                }
-                catch (Exception ex)
-                {
-                    await JSRuntime.InvokeVoidAsync("console.error", ex.Message);
-                }
-            }
-        }
-
         _recentReports = await AccidentService.GetRecentReportsAsync();
         _page = 1;
     }
@@ -1019,17 +937,6 @@
         _oneVehicleSelectedVmfCode = null;
     }
 
-    private void SetLetterVehicleSearchMode(string mode)
-    {
-        if (_letterVehicleSearchMode == mode)
-        {
-            return;
-        }
-
-        _letterVehicleSearchMode = mode;
-        _letterVehicleSearchTerm = string.Empty;
-    }
-
     private void PreviousPage()
     {
         if (_page > 1)
@@ -1076,7 +983,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "letter-inspection" => "LETTER for Inspection",
             "categories" => "List of Accident Categories",
             "last-gg-reference" => "Last GG Reference Number Used",
             "weekly-quarterly-yearly" => "Weekly, Quarterly And Yearly Report - Opened And Closed Accidents",
@@ -1105,7 +1011,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_letter_inspection_main_accident.aspx" => "letter-inspection",
             "accident/rpt_categories_accident.aspx" => "categories",
             "accident/rpt_lastggref_accident.aspx" => "last-gg-reference",
             "accident/rpt_period_report1.aspx" => "weekly-quarterly-yearly",
@@ -1306,14 +1211,6 @@
         "Priv Car Damage",
         "File Close Date",
         "Notes"
-    };
-
-    private static readonly string[] LetterColumns =
-    {
-        "Vehicle Number",
-        "Refer Number (GMT Number)",
-        "Accident Date",
-        "Report"
     };
 
     private static readonly string[] CategoryColumns =

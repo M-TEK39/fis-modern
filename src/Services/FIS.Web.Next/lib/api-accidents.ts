@@ -800,6 +800,26 @@ export async function getAccidentOutstandingDocumentReport(accidentCode: number)
   );
 }
 
+export async function getAccidentInspectionLetterLookup(
+  searchTerm: string,
+  mode: AccidentVehicleReportMode,
+) {
+  const query = new URLSearchParams({
+    searchTerm: searchTerm.trim(),
+    mode,
+  });
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/inspection-letter?${query.toString()}`)),
+    mapAccidentOutstandingDocumentLookupRow,
+  );
+}
+
+export async function getAccidentInspectionLetterReport(accidentCode: number) {
+  return mapAccidentOutstandingDocumentReport(
+    await requestApi(`api/accidents/reports/inspection-letter/${encodeURIComponent(accidentCode)}`),
+  );
+}
+
 export async function getAccidentPrivateVehicleReport(
   searchTerm: string,
   mode: AccidentPrivateVehicleReportMode,
