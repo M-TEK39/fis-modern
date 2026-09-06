@@ -47,6 +47,7 @@ public interface IAccidentRepository
     Task<IEnumerable<Accident>> GetByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<AccidentClaimsSummary> GetClaimsSummaryAsync();
     Task<IEnumerable<AccidentReport>> GetRecentReportsAsync(int limit = 10);
+    Task<IEnumerable<AccidentLastGgReferenceRow>> GetLastGgReferenceReportAsync();
     Task<IEnumerable<AccidentOutstandingClaim>> GetOutstandingClaimsAsync();
     Task<AccidentStatistics> GetStatisticsAsync(DateTime? fromDate = null, DateTime? toDate = null);
     Task<Accident> CreateAsync(Accident accident, int currentUserId);
@@ -147,6 +148,14 @@ public class AccidentOutstandingDocumentReport
     public string damage_description { get; set; } = "";
     public bool document_status_tracking_available { get; set; }
     public IReadOnlyList<string> outstanding_documents { get; set; } = Array.Empty<string>();
+}
+
+public class AccidentLastGgReferenceRow
+{
+    public int accident_code { get; set; }
+    public string gg_reference { get; set; } = "";
+    public string registration_number { get; set; } = "";
+    public string fleet_number { get; set; } = "";
 }
 
 public class AccidentPeriodReportRow

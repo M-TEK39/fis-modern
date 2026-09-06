@@ -20,6 +20,7 @@ public sealed class AccidentRepository : IAccidentRepository
 {
     private const string TableName = "accident";
     private const string VehicleTableName = "vehicle_master";
+    private const int LastGgReferenceMinimumAccidentCode = 19760;
 
     private static readonly string[] RequiredColumns =
     [
@@ -498,6 +499,71 @@ public sealed class AccidentRepository : IAccidentRepository
 
     public Task<AccidentOutstandingDocumentReport?> GetInspectionLetterReportAsync(int accidentCode)
         => GetOutstandingDocumentReportAsync(accidentCode);
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report projection is composed only from fixed legacy columns and the accident threshold is parameterized.")]
+    public async Task<IEnumerable<AccidentLastGgReferenceRow>> GetLastGgReferenceReportAsync()
+    {
+        var accidentColumns = await GetAvailableColumnsAsync(
+            TableName,
+            ["accident_code", "vmf_code", "gg_reference"]);
+        var vehicleColumns = await GetAvailableColumnsAsync(
+            VehicleTableName,
+            ["vmf_code", "registration_number", "fleet_number"]);
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                SELECT {string.Join(", ",
+                    [
+                        GetProjection(accidentColumns, "accident_code", "a"),
+                        GetProjection(accidentColumns, "gg_reference", "a"),
+                        GetAliasedProjection(vehicleColumns, "registration_number", "v", "registration_number"),
+                        GetAliasedProjection(vehicleColumns, "fleet_number", "v", "fleet_number")
+                    ])}
+                FROM [dbo].[{TableName}] AS [a]
+                INNER JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [a].[vmf_code]
+                WHERE {GetActiveFilter(accidentColumns, "a")}
+                  AND {GetActiveFilter(vehicleColumns, "v")}
+                  AND [a].[accident_code] > @minimumAccidentCode
+                ORDER BY [a].[accident_code] DESC
+                """;
+            AddParameter(command, "@minimumAccidentCode", DbType.Int32, LastGgReferenceMinimumAccidentCode);
+
+            var results = new List<AccidentLastGgReferenceRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new AccidentLastGgReferenceRow
+                {
+                    accident_code = ReadInt32(reader, "accident_code") ?? 0,
+                    gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
+                    registration_number = ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty
+                });
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription)
         => GetVehicleReportCoreAsync(searchTerm, searchByDescription ? "description" : "third_party_regno", containsSearch: true);

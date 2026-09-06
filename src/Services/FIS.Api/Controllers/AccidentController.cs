@@ -133,6 +133,20 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/last-gg-reference")]
+    public async Task<ActionResult<IEnumerable<AccidentLastGgReferenceRow>>> GetLastGgReferenceReport()
+    {
+        try
+        {
+            return Ok(await _repository.GetLastGgReferenceReportAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving last GG reference report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/all")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetAllAccidentsReport(
         [FromQuery] string mode = "2002-current")
