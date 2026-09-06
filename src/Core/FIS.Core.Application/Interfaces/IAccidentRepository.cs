@@ -7,6 +7,10 @@ public interface IAccidentRepository
     Task<IEnumerable<Accident>> GetByVehicleAsync(int vmfCode);
     Task<IEnumerable<AccidentDriverReportRow>> GetDriverReportAsync(string searchTerm, bool searchById);
     Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet);
+    Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetOutstandingDocumentLookupAsync(
+        string searchTerm,
+        bool searchByFleet);
+    Task<AccidentOutstandingDocumentReport?> GetOutstandingDocumentReportAsync(int accidentCode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription);
     Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode);
@@ -110,6 +114,35 @@ public class AccidentVehicleReportRow
     public string z181 { get; set; } = "";
     public DateTime? file_close_date { get; set; }
     public string notes { get; set; } = "";
+}
+
+public class AccidentOutstandingDocumentLookupRow
+{
+    public int accident_code { get; set; }
+    public string registration_number { get; set; } = "";
+    public string fleet_number { get; set; } = "";
+    public string gg_reference { get; set; } = "";
+    public DateTime? occurence_date { get; set; }
+}
+
+public class AccidentOutstandingDocumentReport
+{
+    public int accident_code { get; set; }
+    public string registration_number { get; set; } = "";
+    public string fleet_number { get; set; } = "";
+    public string gg_reference { get; set; } = "";
+    public string department_number { get; set; } = "";
+    public string site_description { get; set; } = "";
+    public string address1 { get; set; } = "";
+    public string address2 { get; set; } = "";
+    public string postal_code { get; set; } = "";
+    public string res_person { get; set; } = "";
+    public string telephone { get; set; } = "";
+    public string fax { get; set; } = "";
+    public DateTime? reported_date { get; set; }
+    public string damage_description { get; set; } = "";
+    public bool document_status_tracking_available { get; set; }
+    public IReadOnlyList<string> outstanding_documents { get; set; } = Array.Empty<string>();
 }
 
 public class AccidentPeriodReportRow

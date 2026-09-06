@@ -233,6 +233,55 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/outstanding-documents")]
+    public async Task<ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>> GetOutstandingDocumentLookup(
+        [FromQuery] string searchTerm,
+        [FromQuery] string mode = "registration")
+    {
+        if (searchTerm?.Trim().Length > 8)
+        {
+            return BadRequest(new { error = "Vehicle number must be 8 characters or fewer." });
+        }
+
+        var normalizedMode = mode.Trim().ToLowerInvariant();
+        var searchByFleet = normalizedMode is "fleet" or "gg" or "radiogg";
+        var validRegistrationMode = normalizedMode is "registration" or "gp" or "radiogp";
+        if (!searchByFleet && !validRegistrationMode)
+        {
+            return BadRequest(new { error = "Mode must be registration or fleet." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetOutstandingDocumentLookupAsync(searchTerm ?? string.Empty, searchByFleet));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving outstanding accident document lookup");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("reports/outstanding-documents/{accidentCode:int}")]
+    public async Task<ActionResult<AccidentOutstandingDocumentReport>> GetOutstandingDocumentReport(int accidentCode)
+    {
+        if (accidentCode <= 0)
+        {
+            return BadRequest(new { error = "Accident code must be a positive integer." });
+        }
+
+        try
+        {
+            var report = await _repository.GetOutstandingDocumentReportAsync(accidentCode);
+            return report is null ? NotFound() : Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving outstanding accident document report for {AccidentCode}", accidentCode);
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/private-vehicle")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetPrivateVehicleReport(
         [FromQuery] string searchTerm,

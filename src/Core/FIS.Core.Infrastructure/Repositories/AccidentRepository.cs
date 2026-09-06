@@ -163,6 +163,19 @@ public sealed class AccidentRepository : IAccidentRepository
         "acc_type_code"
     ];
 
+    private static readonly (string Column, string Label)[] OutstandingDocumentDefinitions =
+    [
+        ("letterhead", "Departmental Letterhead"),
+        ("z181", "ORIGINAL Z181 Accident Report"),
+        ("part3", "Part III of the Z181 Accident Report"),
+        ("statement", "Detailed statement of the driver of the vehicle"),
+        ("sketch", "Sketch plan of the scene of the accident"),
+        ("trip_author", "Trip Authority on the day of the accident"),
+        ("iddoc", "Certified copy of the driver's ID document"),
+        ("drivelic", "Certified copy of the driver's licence"),
+        ("flag_case_num", "Complete case number")
+    ];
+
     private readonly FisDbContext _context;
 
     public AccidentRepository(FisDbContext context)
@@ -289,6 +302,194 @@ public sealed class AccidentRepository : IAccidentRepository
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetVehicleReportAsync(string searchTerm, bool searchByFleet)
         => GetVehicleReportCoreAsync(searchTerm, searchByFleet ? "fleet_number" : "registration_number", containsSearch: false);
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The search column is selected from a fixed allowlist and the vehicle value is parameterized.")]
+    public async Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetOutstandingDocumentLookupAsync(
+        string searchTerm,
+        bool searchByFleet)
+    {
+        var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
+        if (normalizedSearchTerm.Length == 0)
+        {
+            return Array.Empty<AccidentOutstandingDocumentLookupRow>();
+        }
+
+        var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName, ["vmf_code"]);
+        var searchColumn = searchByFleet ? "fleet_number" : "registration_number";
+        if (!vehicleColumns.Contains(searchColumn))
+        {
+            return Array.Empty<AccidentOutstandingDocumentLookupRow>();
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var projection = new[]
+            {
+                GetProjection(accidentColumns, "accident_code", "a"),
+                GetProjection(accidentColumns, "gg_reference", "a"),
+                GetProjection(accidentColumns, "occurence_date", "a"),
+                GetAliasedProjection(vehicleColumns, "registration_number", "v", "registration_number"),
+                GetAliasedProjection(vehicleColumns, "fleet_number", "v", "fleet_number")
+            };
+            var orderColumn = vehicleColumns.Contains("fleet_number")
+                ? "[v].[fleet_number]"
+                : "[a].[accident_code]";
+            var orderDateColumn = accidentColumns.Contains("occurence_date")
+                ? "[a].[occurence_date] DESC"
+                : "[a].[accident_code]";
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [a]
+                INNER JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [a].[vmf_code]
+                WHERE {GetActiveFilter(accidentColumns, "a")}
+                  AND {GetActiveFilter(vehicleColumns, "v")}
+                  AND [v].[{searchColumn}] = @searchTerm
+                ORDER BY {orderColumn}, {orderDateColumn}, [a].[accident_code]
+                """;
+            AddParameter(command, "@searchTerm", DbType.String, normalizedSearchTerm);
+
+            var results = new List<AccidentOutstandingDocumentLookupRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(new AccidentOutstandingDocumentLookupRow
+                {
+                    accident_code = ReadInt32(reader, "accident_code") ?? 0,
+                    registration_number = ReadString(reader, "registration_number") ?? string.Empty,
+                    fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                    gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
+                    occurence_date = ReadDateTime(reader, "occurence_date")
+                });
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The report projection is composed only from fixed columns and allowlisted runtime metadata; the accident identifier is parameterized.")]
+    public async Task<AccidentOutstandingDocumentReport?> GetOutstandingDocumentReportAsync(int accidentCode)
+    {
+        if (accidentCode <= 0)
+        {
+            return null;
+        }
+
+        var accidentColumns = await GetAvailableColumnsAsync(TableName, RequiredColumns);
+        var vehicleColumns = await GetAvailableColumnsAsync(VehicleTableName, ["vmf_code"]);
+        var siteColumns = await GetAvailableColumnsAsync("site");
+        var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
+        var siteProjectionColumns = siteJoinAvailable
+            ? siteColumns
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var documentStatusTrackingAvailable = OutstandingDocumentDefinitions
+            .All(document => accidentColumns.Contains(document.Column));
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var projection = new List<string>
+            {
+                GetProjection(accidentColumns, "accident_code", "a"),
+                GetProjection(accidentColumns, "gg_reference", "a"),
+                GetProjection(accidentColumns, "reported_date", "a"),
+                GetProjection(accidentColumns, "damage_description", "a"),
+                GetAliasedProjection(vehicleColumns, "registration_number", "v", "registration_number"),
+                GetAliasedProjection(vehicleColumns, "fleet_number", "v", "fleet_number"),
+                GetAliasedProjection(siteProjectionColumns, "Department_number", "s", "department_number"),
+                GetAliasedProjection(siteProjectionColumns, "description", "s", "site_description"),
+                GetAliasedProjection(siteProjectionColumns, "address1", "s", "address1"),
+                GetAliasedProjection(siteProjectionColumns, "address2", "s", "address2"),
+                GetAliasedProjection(siteProjectionColumns, "postal_code", "s", "postal_code"),
+                GetAliasedProjection(siteProjectionColumns, "res_person", "s", "res_person"),
+                GetAliasedProjection(siteProjectionColumns, "telephone", "s", "telephone"),
+                GetAliasedProjection(siteProjectionColumns, "fax", "s", "fax")
+            };
+            projection.AddRange(OutstandingDocumentDefinitions.Select(document =>
+                GetProjection(accidentColumns, document.Column, "a")));
+
+            var siteJoin = siteJoinAvailable
+                ? "LEFT JOIN [dbo].[site] AS [s] ON [s].[site_code] = [a].[driver_site_code]"
+                : string.Empty;
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}] AS [a]
+                INNER JOIN [dbo].[{VehicleTableName}] AS [v] ON [v].[vmf_code] = [a].[vmf_code]
+                {siteJoin}
+                WHERE {GetActiveFilter(accidentColumns, "a")}
+                  AND {GetActiveFilter(vehicleColumns, "v")}
+                  AND [a].[accident_code] = @accidentCode
+                """;
+            AddParameter(command, "@accidentCode", DbType.Int32, accidentCode);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                return null;
+            }
+
+            return new AccidentOutstandingDocumentReport
+            {
+                accident_code = ReadInt32(reader, "accident_code") ?? accidentCode,
+                registration_number = ReadString(reader, "registration_number") ?? string.Empty,
+                fleet_number = ReadString(reader, "fleet_number") ?? string.Empty,
+                gg_reference = ReadString(reader, "gg_reference") ?? string.Empty,
+                department_number = ReadString(reader, "department_number") ?? string.Empty,
+                site_description = ReadString(reader, "site_description") ?? string.Empty,
+                address1 = ReadString(reader, "address1") ?? string.Empty,
+                address2 = ReadString(reader, "address2") ?? string.Empty,
+                postal_code = ReadString(reader, "postal_code") ?? string.Empty,
+                res_person = ReadString(reader, "res_person") ?? string.Empty,
+                telephone = ReadString(reader, "telephone") ?? string.Empty,
+                fax = ReadString(reader, "fax") ?? string.Empty,
+                reported_date = ReadDateTime(reader, "reported_date"),
+                damage_description = ReadString(reader, "damage_description") ?? string.Empty,
+                document_status_tracking_available = documentStatusTrackingAvailable,
+                outstanding_documents = OutstandingDocumentDefinitions
+                    .Where(document => accidentColumns.Contains(document.Column))
+                    .Where(document => !string.Equals(ReadString(reader, document.Column), "Y", StringComparison.OrdinalIgnoreCase))
+                    .Select(document => document.Label)
+                    .ToArray()
+            };
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
 
     public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription)
         => GetVehicleReportCoreAsync(searchTerm, searchByDescription ? "description" : "third_party_regno", containsSearch: true);
@@ -1481,6 +1682,15 @@ public sealed class AccidentRepository : IAccidentRepository
         => columns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS {GetSqlType(column)}) AS [{column}]";
+
+    private static string GetAliasedProjection(
+        IReadOnlySet<string> columns,
+        string column,
+        string alias,
+        string outputColumn)
+        => columns.Contains(column)
+            ? $"[{alias}].[{column}] AS [{outputColumn}]"
+            : $"CAST(NULL AS {GetSqlType(column)}) AS [{outputColumn}]";
 
     private static string GetVehicleProjection(
         IReadOnlySet<string> columns,
