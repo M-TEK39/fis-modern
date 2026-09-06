@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_Dept_periodVIP_main_Accident.aspx"
 @page "/Accident/RPT_Dept_month_main_Accident.htm"
 @page "/Accident/RPT_Dept_finyear_main_Accident.htm"
 @page "/Accident/RPT_Dept_finyear_cost_main_Accident.aspx"
@@ -442,112 +441,6 @@
                                                 <td>@GetReportValue(row, "notes")</td>
                                             </tr>
                                         }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
-            else if (CurrentMode == "site-period-vip")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Site Period (VIP/GG/Hire Type)</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">Site list by</label>
-                            <div class="form-grid">
-                                <label class="form-label">
-                                    <input type="radio" name="siteListBy" />
-                                    Name
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="siteListBy" checked />
-                                    Code
-                                </label>
-                            </div>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Site</label>
-                            <select class="form-select" @bind="_sitePeriodVipSiteCode">
-                                <option value="">Select site...</option>
-                                @foreach (var site in _sites)
-                                {
-                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Begin Date</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">End Date</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Hire Type</label>
-                            <div class="form-grid">
-                                <label class="form-label">
-                                    <input type="radio" name="hireTypeVip" checked />
-                                    ALL
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="hireTypeVip" />
-                                    VIP
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="hireTypeVip" />
-                                    Pool
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="hireTypeVip" />
-                                    Permanent
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Report Output</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in SitePeriodVipColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GPA-0333</td>
-                                        <td>GG90909</td>
-                                        <td>2024/02/18</td>
-                                        <td>SITE-07</td>
-                                        <td>Operations West</td>
-                                        <td>VIP</td>
-                                        <td>Minor collision</td>
-                                        <td>R. Sithole</td>
-                                        <td>J. Hadebe</td>
-                                        <td>CALL-123</td>
-                                        <td>12000</td>
-                                        <td>3500</td>
-                                    </tr>
-                                    @foreach (var report in PagedRecentReports)
-                                    {
-                                        <tr>
-                                            <td>@report.ReportType</td>
-                                            <td>@report.Name</td>
-                                            <td>@FormatDate(report.GeneratedDate)</td>
-                                            <td colspan="9"></td>
-                                        </tr>
                                     }
                                 </tbody>
                             </table>
@@ -1259,7 +1152,6 @@
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private int? _selectedDriverCode;
-    private short? _sitePeriodVipSiteCode;
     private short? _departmentMonthSiteCode;
     private short? _departmentFinYearSiteCode;
     private short? _weeklyPeriodSiteCode;
@@ -1444,7 +1336,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "site-period-vip" => "Report for a Site, for a Period, for VIP/GG, for Hire Type",
             "department-month" => "Report for a Department/Site, for a Month/Year",
             "department-finyear" => "Report for a Department/Site, for a Book / Financial Year",
             "accident-costs-finyear" => "Report on Accident Costs for a Financial Year",
@@ -1478,7 +1369,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_dept_periodvip_main_accident.aspx" => "site-period-vip",
             "accident/rpt_dept_month_main_accident.htm" => "department-month",
             "accident/rpt_dept_finyear_main_accident.htm" => "department-finyear",
             "accident/rpt_dept_finyear_cost_main_accident.aspx" => "accident-costs-finyear",
@@ -1684,22 +1574,6 @@
         "Priv Car Damage",
         "File Close Date",
         "Notes"
-    };
-
-    private static readonly string[] SitePeriodVipColumns =
-    {
-        "Reg Number",
-        "GG Number",
-        "Accid Date",
-        "Dept/Site ID",
-        "Dept/Site",
-        "Hire Type",
-        "Accident Description",
-        "Driver",
-        "Trans Officer",
-        "Call Refer",
-        "GG Car Damage",
-        "Cost Claim Against Dept"
     };
 
     private static readonly string[] DeptMonthColumns =
