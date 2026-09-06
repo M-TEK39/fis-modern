@@ -80,13 +80,13 @@ async function DriverReportContent({ searchParams }: DriverReportPageProps) {
 
       {rows !== null ? (
         rows.length === 0 ? (
-          <div className="vehicle-empty-state"><p className="eyebrow">No vehicles found</p><h2>No accidents matched this driver search.</h2><p className="muted-copy">Try a different driver name or ID number.</p></div>
+          <div className="vehicle-empty-state"><p className="eyebrow">No accidents found</p><h2>No accidents matched this driver search.</h2><p className="muted-copy">Try a different driver name or ID number.</p></div>
         ) : (
           <>
             <div className="vehicle-table-wrapper" aria-live="polite">
               <table className="vehicle-table">
                 <caption className="sr-only">Accident report by driver name or ID number</caption>
-                <thead><tr><th scope="col">Registration Number</th><th scope="col">Fleet Number</th><th scope="col">Driver Name</th><th scope="col">ID Number</th><th scope="col">Accident Date</th><th scope="col">Dept/Site Number</th><th scope="col">Department/Site Description</th><th scope="col">Damage Amount</th></tr></thead>
+                <thead><tr><th scope="col">Registration Number</th><th scope="col">Fleet Number</th><th scope="col">Driver Name</th><th scope="col">ID Number</th><th scope="col">Accident Date</th><th scope="col">Dept/Site Number</th><th scope="col">Department/Site Desciption</th><th scope="col">Damage Amount</th></tr></thead>
                 <tbody>{rows.map((row, index) => <tr key={`${row.fleetNumber ?? "vehicle"}-${row.accidentDate ?? "date"}-${index}`}><td>{valueOrDash(row.registrationNumber)}</td><td>{valueOrDash(row.fleetNumber)}</td><td>{valueOrDash(row.driverName)}</td><td>{valueOrDash(row.driverEmployNumber)}</td><td>{row.accidentDate?.slice(0, 10) ?? "-"}</td><td>{valueOrDash(row.departmentNumber)}</td><td>{valueOrDash(row.siteDescription)}</td><td>{valueOrDash(row.costOfRepair)}</td></tr>)}</tbody>
               </table>
             </div>

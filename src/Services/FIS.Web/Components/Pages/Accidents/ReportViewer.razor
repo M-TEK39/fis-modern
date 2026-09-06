@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_accident_driver_main.aspx"
 @page "/Accident/RPT_F_dup_main_Accident.htm"
 @page "/Accident/RPT_F_dup_report_Accident.aspx"
 @rendermode InteractiveServer
@@ -14,9 +13,7 @@
 @using FIS.Web.Services
 @inject NavigationManager Navigation
 @inject AccidentApiService AccidentService
-@inject SiteApiService SiteService
 @inject VehicleLookupApiService VehicleLookupService
-@inject DriverApiService DriverService
 @inject IJSRuntime JSRuntime
 
 <PageTitle>@_pageTitle - Fleet Information System</PageTitle>
@@ -506,69 +503,6 @@
                     </div>
                 }
             }
-            else if (CurrentMode == "driver-report")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Driver Search</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="driverSearchType" checked />
-                                Driver Name
-                            </label>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">
-                                <input type="radio" name="driverSearchType" />
-                                ID Number
-                            </label>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Driver Name or ID Number</label>
-                            <select class="form-select" @bind="_selectedDriverCode">
-                                <option value="">Select driver...</option>
-                                @foreach (var driver in _drivers)
-                                {
-                                    <option value="@driver.site_driver_code">@DriverOptionLabel(driver)</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Report Output</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in DriverReportColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GPA-0402</td>
-                                        <td>GG12121</td>
-                                        <td>P. Dube</td>
-                                        <td>7901015009088</td>
-                                        <td>2024/02/27</td>
-                                        <td>SITE-11</td>
-                                        <td>Facilities</td>
-                                        <td>9000</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
             else
             {
                 <p class="form-hint">Use the filters above to run and review accident report output.</p>
@@ -587,13 +521,10 @@
 
 @code {
     private List<ReportDto> _recentReports = new();
-    private List<SiteResponseDto> _sites = new();
-    private List<DriverDto> _drivers = new();
     private string _oneVehicleSearchMode = "gp";
     private string _oneVehicleSearchTerm = string.Empty;
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
-    private int? _selectedDriverCode;
     private string _newAccidentReportMode = "call";
     private string _duplicateGarage = "all";
     private List<Dictionary<string, string>> _customReportRows = new();
@@ -601,12 +532,6 @@
     private const int _pageSize = 12;
     private IEnumerable<ReportDto> PagedRecentReports => _recentReports.Skip((_page - 1) * _pageSize).Take(_pageSize);
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_recentReports.Count / (double)_pageSize));
-
-    protected override async Task OnInitializedAsync()
-    {
-        _sites = await SiteService.GetAllAsync();
-        _drivers = await DriverService.GetDriversAsync();
-    }
 
     private async Task LoadReports()
     {
@@ -630,9 +555,6 @@
     private static string FormatDate(DateTime? value)
         => value.HasValue ? value.Value.ToString("yyyy-MM-dd") : "-";
 
-    private static string SiteOptionLabel(SiteResponseDto site)
-        => $"{site.Description} ({site.SiteCode})";
-
     private static string VehicleOptionLabel(VehicleLookupDto vehicle)
     {
         var gg = ValueOrDash(vehicle.GGNumber);
@@ -642,17 +564,6 @@
 
     private static string ValueOrDash(string? value)
         => string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-    private static string DriverOptionLabel(DriverDto driver)
-    {
-        var fullName = $"{driver.driver_firstname} {driver.driver_surname}".Trim();
-        if (string.IsNullOrWhiteSpace(fullName))
-        {
-            fullName = "Unknown Driver";
-        }
-
-        return $"{fullName} ({driver.site_driver_code}) [{ValueOrDash(driver.driver_SA_id)}]";
-    }
 
     private async Task SearchOneVehicleAsync()
     {
@@ -739,7 +650,6 @@
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
             "duplicate-accidents" => "Report on ALL Duplicate Accidents",
-            "driver-report" => "Report By Driver Name Or ID Number",
             _ => "Accident Report"
         };
     }
@@ -762,7 +672,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_accident_driver_main.aspx" => "driver-report",
             "accident/rpt_f_dup_main_accident.htm" => "duplicate-accidents",
             "accident/rpt_f_dup_report_accident.aspx" => "duplicate-accidents",
             _ => string.Empty
@@ -958,18 +867,6 @@
         "Priv Car Damage",
         "File Close Date",
         "Notes"
-    };
-
-    private static readonly string[] DriverReportColumns =
-    {
-        "Registration Number",
-        "Fleet Number",
-        "Driver Name",
-        "ID Number",
-        "Accident Date",
-        "Dept/Site Number",
-        "Department/Site Desciption",
-        "Damage Amount"
     };
 
     private static string GetSampleValue(string field) =>
