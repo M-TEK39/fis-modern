@@ -241,6 +241,7 @@ export type AccidentVehicleReportRow = {
   accidentTime: string | null;
   accidentPlace: string | null;
   financialYear: string | null;
+  callRefer: number | null;
   dateUpdated: string | null;
   notifiedGarage: string | null;
   notifiedGarageDate: string | null;
@@ -252,6 +253,7 @@ export type AccidentVehicleReportRow = {
   driverName: string | null;
   driverEmployNumber: string | null;
   departmentNumber: string | null;
+  siteDescription: string | null;
   transportOfficerName: string | null;
   transportOfficerTelephone: string | null;
   hqReference: string | null;
@@ -634,6 +636,7 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
     accidentTime: asString(getValue(value, "occurence_time", "occurrence_time", "occurenceTime")),
     accidentPlace: asString(getValue(value, "occurence_place", "occurrence_place", "occurencePlace")),
     financialYear: asString(getValue(value, "fin_year", "financialYear")),
+    callRefer: asNumber(getValue(value, "Call_Refer", "call_Refer", "call_refer", "callRefer")),
     dateUpdated: asString(getValue(value, "date_updated", "dateUpdated")),
     notifiedGarage: asString(getValue(value, "Flag_gg_hq", "flag_gg_hq", "notifiedGarage")),
     notifiedGarageDate: asString(getValue(value, "Flag_gg_hq_date", "flag_gg_hq_date", "notifiedGarageDate")),
@@ -645,6 +648,7 @@ function mapAccidentVehicleReportRow(value: unknown): AccidentVehicleReportRow |
     driverName: asString(getValue(value, "driver_name", "driverName")),
     driverEmployNumber: asString(getValue(value, "driver_employ_number", "driverEmployNumber")),
     departmentNumber: asString(getValue(value, "department_number", "departmentNumber")),
+    siteDescription: asString(getValue(value, "site_description", "siteDescription")),
     transportOfficerName: asString(getValue(value, "transoffic_name", "transportOfficerName")),
     transportOfficerTelephone: asString(getValue(value, "transoffic_tel", "transportOfficerTelephone")),
     hqReference: asString(getValue(value, "hq_reference", "hqReference")),
@@ -709,6 +713,22 @@ export async function getAccidentAllReport(mode: AccidentAllReportDateMode) {
 export async function getAccidentGarageReport(mode: AccidentGarageReportMode) {
   const query = new URLSearchParams({ mode });
   return mapPresent(getCollection(await requestApi(`api/accidents/reports/garage-detail?${query.toString()}`)), mapAccidentVehicleReportRow);
+}
+
+export async function getAccidentDepartmentPeriodReport(
+  departmentNumber: string,
+  startDate: string,
+  endDate: string,
+) {
+  const query = new URLSearchParams({
+    departmentNumber: departmentNumber.trim(),
+    startDate,
+    endDate,
+  });
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/department-period?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
 }
 
 function mapAccidentPeriodReportRow(value: unknown): AccidentPeriodReportRow | null {

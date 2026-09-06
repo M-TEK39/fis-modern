@@ -290,6 +290,31 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/department-period")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentPeriodReport(
+        [FromQuery] string? departmentNumber,
+        [FromQuery] DateTime startDate,
+        [FromQuery] DateTime endDate)
+    {
+        if (endDate < startDate)
+        {
+            return BadRequest(new { error = "End date must be on or after start date." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetDepartmentPeriodReportAsync(
+                departmentNumber ?? string.Empty,
+                startDate,
+                endDate));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident department period report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,

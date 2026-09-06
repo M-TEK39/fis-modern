@@ -110,6 +110,7 @@ public sealed class AccidentRepository : IAccidentRepository
         "occurence_time",
         "occurence_place",
         "fin_year",
+        "Call_Refer",
         "date_updated",
         "Flag_gg_hq",
         "Flag_gg_hq_date",
@@ -300,6 +301,18 @@ public sealed class AccidentRepository : IAccidentRepository
     public Task<IEnumerable<AccidentVehicleReportRow>> GetGarageAccidentsReportAsync(string mode)
         => GetVehicleReportCoreAsync(string.Empty, string.Empty, containsSearch: false, garageMode: mode);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentPeriodReportAsync(
+        string departmentNumber,
+        DateTime startDate,
+        DateTime endDate)
+        => GetVehicleReportCoreAsync(
+            string.Empty,
+            string.Empty,
+            containsSearch: false,
+            departmentNumber: departmentNumber?.Trim() ?? string.Empty,
+            periodStartDate: startDate.Date,
+            periodEndDate: endDate.Date);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -472,10 +485,15 @@ public sealed class AccidentRepository : IAccidentRepository
         bool containsSearch,
         string? flagMode = null,
         string? dateRangeMode = null,
-        string? garageMode = null)
+        string? garageMode = null,
+        string? departmentNumber = null,
+        DateTime? periodStartDate = null,
+        DateTime? periodEndDate = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
-        if (flagMode is null && dateRangeMode is null && garageMode is null && normalizedSearchTerm.Length == 0)
+        var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
+        var hasDepartmentPeriodFilter = departmentNumber is not null || periodStartDate.HasValue || periodEndDate.HasValue;
+        if (flagMode is null && dateRangeMode is null && garageMode is null && !hasDepartmentPeriodFilter && normalizedSearchTerm.Length == 0)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -485,6 +503,14 @@ public sealed class AccidentRepository : IAccidentRepository
         var siteColumns = await GetAvailableColumnsAsync("site");
         var locationColumns = await GetAvailableColumnsAsync("location");
         var accidentTypeColumns = await GetAvailableColumnsAsync("acc_type");
+        var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
+        var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
+        var periodAvailable = periodStartDate.HasValue && periodEndDate.HasValue && accidentColumns.Contains("occurence_date");
+        if (hasDepartmentPeriodFilter && (!periodAvailable || (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)))
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
         var searchAvailable = flagMode is null && (containsSearch
             ? accidentColumns.Contains(searchColumn)
             : vehicleColumns.Contains(searchColumn));
@@ -506,7 +532,7 @@ public sealed class AccidentRepository : IAccidentRepository
             return Array.Empty<AccidentVehicleReportRow>();
         }
 
-        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null;
+        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null || periodAvailable;
         if (!hasFilter)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -523,7 +549,6 @@ public sealed class AccidentRepository : IAccidentRepository
         {
             await using var command = connection.CreateCommand();
             command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
-            var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
             var locationJoinAvailable = vehicleColumns.Contains("location_code") && locationColumns.Contains("location_code");
             var accidentTypeJoinAvailable = accidentColumns.Contains("acc_type_code") && accidentTypeColumns.Contains("acc_type_code");
             var projection = VehicleReportColumns
@@ -538,9 +563,12 @@ public sealed class AccidentRepository : IAccidentRepository
                     accidentTypeJoinAvailable && accidentTypeColumns.Contains("acc_type_description")
                         ? "[at].[acc_type_description] AS [accident_type_description]"
                         : "CAST(NULL AS nvarchar(255)) AS [accident_type_description]",
-                    siteJoinAvailable && siteColumns.Contains("Department_number")
+                    siteDepartmentAvailable
                         ? "[s].[Department_number] AS [department_number]"
-                        : "CAST(NULL AS nvarchar(50)) AS [department_number]"
+                        : "CAST(NULL AS nvarchar(50)) AS [department_number]",
+                    siteJoinAvailable && siteColumns.Contains("description")
+                        ? "[s].[description] AS [site_description]"
+                        : "CAST(NULL AS nvarchar(255)) AS [site_description]"
                 ])
                 .ToArray();
             var joins = new List<string>
@@ -579,11 +607,19 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 conditions.Add(GetGarageFilter(garageMode));
             }
+            else if (hasDepartmentPeriodFilter)
+            {
+                conditions.Add("[a].[occurence_date] >= @periodStartDate AND [a].[occurence_date] <= @periodEndDate");
+            }
             else
             {
                 conditions.Add(containsSearch
                     ? $"[a].[{searchColumn}] LIKE @searchTerm"
                     : $"[v].[{searchColumn}] = @searchTerm");
+            }
+            if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
+            {
+                conditions.Add("[s].[Department_number] LIKE @departmentNumber");
             }
             var orderColumn = vehicleColumns.Contains("fleet_number") ? "fleet_number" : "vmf_code";
             command.CommandText = $"""
@@ -595,13 +631,23 @@ public sealed class AccidentRepository : IAccidentRepository
                 """;
             if (flagMode is null)
             {
-                if (dateRangeMode is null && garageMode is null)
+                if (dateRangeMode is null && garageMode is null && !hasDepartmentPeriodFilter)
                 {
                     AddParameter(command, "@searchTerm", DbType.String, containsSearch ? $"%{normalizedSearchTerm}%" : normalizedSearchTerm);
                 }
 
                 AddDateRangeParameters(command, dateRangeMode);
                 AddGarageParameters(command, garageMode);
+                if (periodStartDate.HasValue && periodEndDate.HasValue)
+                {
+                    AddParameter(command, "@periodStartDate", DbType.Date, periodStartDate.Value.Date);
+                    AddParameter(command, "@periodEndDate", DbType.Date, periodEndDate.Value.Date);
+                }
+
+                if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
+                {
+                    AddParameter(command, "@departmentNumber", DbType.String, $"%{normalizedDepartmentNumber}%");
+                }
             }
 
             var results = new List<AccidentVehicleReportRow>();
@@ -618,6 +664,7 @@ public sealed class AccidentRepository : IAccidentRepository
                     occurence_time = ReadTime(reader, "occurence_time"),
                     occurence_place = ReadString(reader, "occurence_place") ?? string.Empty,
                     fin_year = ReadString(reader, "fin_year") ?? string.Empty,
+                    call_refer = ReadDecimal(reader, "Call_Refer"),
                     date_updated = ReadDateTime(reader, "date_updated"),
                     flag_gg_hq = ReadString(reader, "Flag_gg_hq") ?? string.Empty,
                     flag_gg_hq_date = ReadDateTime(reader, "Flag_gg_hq_date"),
@@ -629,6 +676,7 @@ public sealed class AccidentRepository : IAccidentRepository
                     driver_name = ReadString(reader, "driver_name") ?? string.Empty,
                     driver_employ_number = ReadString(reader, "driver_employ_number") ?? string.Empty,
                     department_number = ReadString(reader, "department_number") ?? string.Empty,
+                    site_description = ReadString(reader, "site_description") ?? string.Empty,
                     transoffic_name = ReadString(reader, "transoffic_name") ?? string.Empty,
                     transoffic_tel = ReadString(reader, "transoffic_tel") ?? string.Empty,
                     hq_reference = ReadString(reader, "hq_reference") ?? string.Empty,
