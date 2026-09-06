@@ -29,6 +29,39 @@ public interface IVehicleRepository
 }
 
 /// <summary>
+/// Repository interface for GG block number range maintenance.
+/// </summary>
+public interface IGgBlockRepository
+{
+    Task<GgBlockHistoryPage> GetHistoryAsync(int page, int pageSize);
+    Task<GgBlockHistoryRecord> CreateAsync(string startGgNumber, string endGgNumber, int currentUserId);
+}
+
+public sealed record GgBlockHistoryRecord(
+    short BlockId,
+    string CapturedBy,
+    DateTime? DateCreated,
+    string StartGgNumber,
+    string EndGgNumber);
+
+public sealed record GgBlockHistoryPage(
+    IReadOnlyList<GgBlockHistoryRecord> Items,
+    int Page,
+    int PageSize,
+    int TotalRecords)
+{
+    public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalRecords / (double)PageSize));
+}
+
+public sealed class GgBlockRangeConflictException : Exception
+{
+    public GgBlockRangeConflictException()
+        : base("The requested GG block range overlaps an existing range.")
+    {
+    }
+}
+
+/// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
 /// </summary>
 public interface IVehicleAuthorizationRepository
