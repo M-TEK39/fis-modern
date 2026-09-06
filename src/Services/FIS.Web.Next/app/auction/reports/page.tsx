@@ -11,14 +11,14 @@ function hasRole(roles: readonly string[], role: string) {
   return roles.some((candidate) => candidate.localeCompare(role, undefined, { sensitivity: "accent" }) === 0);
 }
 
-export default async function AuctionReportsPage() {
+export default async function AuctionReportsPage({ routePath = "/auction/reports" }: { routePath?: string }) {
   await connection();
   const session = await getSession();
   if (session.status === "anonymous") {
     redirect("/login");
   }
   if (session.status === "expired") {
-    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath="/auction/reports" /></main>;
+    return <main className="page-shell vehicle-page-shell"><SessionRecovery returnPath={routePath} /></main>;
   }
   if (session.status === "unavailable") {
     return <main className="page-shell vehicle-page-shell"><section className="vehicle-status-card" role="alert"><p className="eyebrow">API unavailable</p><h2>Auction reports could not be opened.</h2><p className="muted-copy">Retry when the FIS API is available.</p></section></main>;
