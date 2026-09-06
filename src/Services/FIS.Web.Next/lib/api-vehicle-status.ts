@@ -1,15 +1,33 @@
 import "server-only";
 
 import { getForwardedAuthCookieHeader } from "@/lib/api-auth";
+import {
+  VEHICLE_STATUS_OPTIONS,
+  type VehicleStatusOption,
+  type VehicleStatusReport,
+  type VehicleStatusReportFilters,
+  type VehicleStatusReportRemark,
+  type VehicleStatusReportRow,
+  type VehicleStatusSite,
+  type VehicleStatusType,
+} from "@/app/vehicles/status/status-types";
+
+export {
+  VEHICLE_STATUS_OPTIONS,
+};
+export type {
+  VehicleStatusOption,
+  VehicleStatusReport,
+  VehicleStatusReportFilters,
+  VehicleStatusReportRemark,
+  VehicleStatusReportRow,
+  VehicleStatusSite,
+  VehicleStatusType,
+} from "@/app/vehicles/status/status-types";
 
 const API_TIMEOUT_MS = 8_000;
 
 type JsonRecord = Record<string, unknown>;
-
-export type VehicleStatusOption = {
-  code: number;
-  description: string;
-};
 
 export type VehicleStatusVehicle = {
   vmfCode: number;
@@ -29,11 +47,6 @@ export type VehicleStatusVehicle = {
   engineNumber: string | null;
   hiredFrom: string | null;
   currentOdo: number | null;
-};
-
-export type VehicleStatusSite = {
-  code: number;
-  description: string;
 };
 
 export type VehicleStatusChangeResult = {
@@ -57,21 +70,6 @@ export class VehicleStatusApiError extends Error {
     this.name = "VehicleStatusApiError";
   }
 }
-
-export const VEHICLE_STATUS_OPTIONS: readonly VehicleStatusOption[] = [
-  { code: 1, description: "In Service" },
-  { code: 2, description: "Withdrawn" },
-  { code: 3, description: "Board of Survey" },
-  { code: 4, description: "Stolen" },
-  { code: 5, description: "Sold" },
-  { code: 6, description: "Transferred" },
-  { code: 7, description: "Subsidized" },
-  { code: 8, description: "From Focus" },
-  { code: 9, description: "Privatised" },
-  { code: 10, description: "Recovered" },
-  { code: 11, description: "Missing" },
-  { code: 12, description: "Destroyed" },
-];
 
 function getApiBaseUrl() {
   const value = process.env.API_BASE_URL?.trim() || "http://localhost:5010";
@@ -102,6 +100,14 @@ function asString(value: unknown) {
   }
 
   return "";
+}
+
+function asBoolean(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return ["true", "1", "yes", "y"].includes(String(value).trim().toLowerCase());
 }
 
 function asNumber(value: unknown) {
@@ -240,6 +246,67 @@ function mapVehicle(value: unknown): VehicleStatusVehicle | null {
   };
 }
 
+function mapReportRemark(value: unknown): VehicleStatusReportRemark | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const remarkId = asNumber(getValue(value, "remark_id", "remarkId"));
+  if (remarkId === null) {
+    return null;
+  }
+
+  return {
+    remarkId,
+    category: asString(getValue(value, "remark_category", "remarkCategory")) || null,
+    text: asString(getValue(value, "remark_text", "remarkText")) || null,
+  };
+}
+
+function mapReportRow(value: unknown): VehicleStatusReportRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
+  if (vmfCode === null) {
+    return null;
+  }
+
+  return {
+    vmfCode,
+    fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")) || null,
+    registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")) || null,
+    invoiceNumber: asString(getValue(value, "invoice_number", "invoiceNumber")) || null,
+    makeDescription: asString(getValue(value, "make_description", "makeDescription")) || null,
+    modelDescription: asString(getValue(value, "model_description", "modelDescription")) || null,
+    statusCode: asNumber(getValue(value, "vehicle_status_code", "vehicleStatusCode")) ?? 0,
+    statusText: asString(getValue(value, "status_text", "statusText", "status_description", "statusDescription")) || null,
+    typeCode: asNumber(getValue(value, "type_code", "typeCode")),
+    typeDescription: asString(getValue(value, "type_description", "typeDescription")) || null,
+    locationCode: asNumber(getValue(value, "location_code", "locationCode")),
+    siteName: asString(getValue(value, "site_name", "siteName", "location_description", "locationDescription")) || null,
+    remark: mapReportRemark(getValue(value, "active_remark", "activeRemark")),
+  };
+}
+
+function mapReportLookup(value: unknown): VehicleStatusOption | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const code = asNumber(getValue(value, "code", "Code"));
+  const description = asString(getValue(value, "description", "Description"));
+  return code !== null && description ? { code, description } : null;
+}
+
+function mapReportLookups(value: unknown) {
+  return getCollection(value)
+    .map(mapReportLookup)
+    .filter((lookup): lookup is VehicleStatusOption => lookup !== null)
+    .toSorted((left, right) => left.description.localeCompare(right.description));
+}
+
 export async function searchVehiclesForStatus(searchTerm: string) {
   const response = await requestApi(`api/vehicles/search?searchTerm=${encodeURIComponent(searchTerm)}`);
   return getCollection(await readJson(response))
@@ -271,6 +338,89 @@ export async function getSitesForVehicleStatus() {
     })
     .filter((site): site is VehicleStatusSite => site !== null)
     .toSorted((left, right) => left.description.localeCompare(right.description));
+}
+
+export async function getVehicleTypesForStatus(): Promise<VehicleStatusType[]> {
+  const response = await requestApi("api/type");
+  return getCollection(await readJson(response))
+    .map((value) => {
+      if (!isRecord(value)) {
+        return null;
+      }
+
+      const code = asNumber(getValue(value, "type_code", "typeCode"));
+      const description = asString(getValue(value, "type_description", "typeDescription"));
+      return code !== null && description ? { code, description } satisfies VehicleStatusType : null;
+    })
+    .filter((type): type is VehicleStatusType => type !== null)
+    .toSorted((left, right) => left.description.localeCompare(right.description));
+}
+
+export async function getVehicleStatusReport(
+  filters: VehicleStatusReportFilters = {},
+): Promise<VehicleStatusReport> {
+  const query = new URLSearchParams();
+  if (filters.search?.trim()) {
+    query.set("search", filters.search.trim());
+  }
+  if (filters.locationCode !== undefined) {
+    query.set("location_code", String(filters.locationCode));
+  }
+  if (filters.typeCode !== undefined) {
+    query.set("type_code", String(filters.typeCode));
+  }
+  if (filters.makeCode !== undefined) {
+    query.set("make_code", String(filters.makeCode));
+  }
+  if (filters.vehicleStatusCode !== undefined) {
+    query.set("vehicle_status_code", String(filters.vehicleStatusCode));
+  }
+
+  const path = `api/report/new-in-service${query.size > 0 ? `?${query.toString()}` : ""}`;
+  const payload = await readJson(await requestApi(path));
+  if (!isRecord(payload)) {
+    throw new VehicleStatusApiError("invalid-response", "The FIS API returned an invalid vehicle status report.");
+  }
+
+  const rows = getCollection(getValue(payload, "vehicles", "rows", "data"))
+    .map(mapReportRow)
+    .filter((row): row is VehicleStatusReportRow => row !== null);
+
+  const availableFilters = getValue(payload, "available_filters", "availableFilters");
+  const filterRecord = isRecord(availableFilters) ? availableFilters : {};
+  const sites = mapReportLookups(getValue(filterRecord, "sites")) as VehicleStatusSite[];
+  const types = mapReportLookups(getValue(filterRecord, "types")) as VehicleStatusType[];
+  const makes = mapReportLookups(getValue(filterRecord, "makes"));
+
+  return {
+    totalCount: asNumber(getValue(payload, "total_count", "totalCount")) ?? rows.length,
+    remarksAvailable: asBoolean(getValue(payload, "remarks_available", "remarksAvailable")),
+    assumptionNote: asString(getValue(payload, "assumption_note", "assumptionNote")) || null,
+    sites,
+    types,
+    makes,
+    rows,
+  };
+}
+
+async function completeRemarkRequest(path: string, body: object) {
+  await readJson(await requestApi(path, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function addVehicleRemarkAgainstApi(vmfCode: number, category: string, text: string) {
+  await completeRemarkRequest(`api/vehicles/${encodeURIComponent(vmfCode)}/remarks`, {
+    remark_category: category,
+    remark_text: text,
+  });
+}
+
+export async function resolveVehicleRemarkAgainstApi(vmfCode: number, remarkId: number, resolutionNotes: string) {
+  await completeRemarkRequest(`api/vehicles/${encodeURIComponent(vmfCode)}/remarks/${encodeURIComponent(remarkId)}/resolve`, {
+    resolution_notes: resolutionNotes,
+  });
 }
 
 export async function changeVehicleStatusAgainstApi(
