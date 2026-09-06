@@ -1577,6 +1577,26 @@ input:focus-visible {
   }
 }
 
+@media print {
+  body {
+    background: white;
+  }
+
+  .accident-letter {
+    box-shadow: none;
+    max-width: none;
+  }
+
+  .accident-letter .vehicle-page-header .button-row,
+  .accident-letter .vehicle-footer-actions {
+    display: none;
+  }
+
+  .accident-letter .vehicle-status-maintenance-panel {
+    break-inside: avoid;
+  }
+}
+
 @media (max-width: 28rem) {
   .page-shell {
     padding: 0.75rem;

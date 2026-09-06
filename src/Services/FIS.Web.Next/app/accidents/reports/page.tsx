@@ -21,7 +21,7 @@ const reportEntries = [
   { label: "9) Report for a Department/Site, for a Month/Year", target: "Accident/RPT_dept_month_main_accident.htm", href: "/accidents/reports/department-month", available: true },
   { label: "10) Report for a Department/Site, for a Book / Financial Year", target: "Accident/RPT_dept_finyear_main_accident.htm", href: "/accidents/reports/department-finyear", available: true },
   { label: "11) Report on Accident Costs for a Financial Year", target: "Accident/RPT_dept_finyear_cost_main_accident.aspx", href: "/accidents/reports/accident-costs-finyear", available: true },
-  { label: "12) LETTER for Outstanding Accident documents", target: "Accident/RPT_letter_outstanddoc_main_accident.aspx", available: false },
+  { label: "12) LETTER for Outstanding Accident documents", target: "Accident/RPT_letter_outstanddoc_main_accident.aspx", href: "/accidents/reports/outstanding-docs", available: true },
   { label: "13) LETTER for Inspection", target: "Accident/RPT_letter_inspection_main_accident.aspx", available: false },
   { label: "14) List of Accident Categories", target: "Accident/RPT_categories_accident.aspx", available: false },
   { label: "15) Last GG Reference Number Used", target: "Accident/RPT_lastggref_accident.aspx", available: false },
@@ -52,7 +52,7 @@ async function AccidentReportsContent() {
     <>
       <div className="notice notice-warning" role="status">
         <span aria-hidden="true">!</span>
-        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, department-period, department-period VIP, department-month, department-finyear, accident-costs-finyear, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
+        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, department-period, department-period VIP, department-month, department-finyear, accident-costs-finyear, outstanding-documents, period, and driver reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
       </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (

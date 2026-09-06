@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_letter_outstanddoc_main_Accident.aspx"
 @page "/Accident/RPT_letter_inspection_main_Accident.aspx"
 @page "/Accident/RPT_categories_Accident.aspx"
 @page "/Accident/RPT_lastggref_Accident.aspx"
@@ -445,7 +444,7 @@
                     </div>
                 </div>
             }
-            else if (CurrentMode == "letter-outstanding-docs" || CurrentMode == "letter-inspection")
+            else if (CurrentMode == "letter-inspection")
             {
                 <div class="form-section">
                     <h2 class="form-section-title">Vehicle Search</h2>
@@ -933,7 +932,7 @@
         {
             _customReportRows = await AccidentService.GetPeriodStatusReportAsync(_periodDepartmentNumber, _periodBeginDate, _periodEndDate, _periodStatus);
         }
-        else if (CurrentMode == "letter-outstanding-docs" || CurrentMode == "letter-inspection")
+        else if (CurrentMode == "letter-inspection")
         {
             var keyword = _letterVehicleSearchTerm.Trim();
             if (!string.IsNullOrWhiteSpace(keyword))
@@ -1077,7 +1076,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "letter-outstanding-docs" => "LETTER for Outstanding Accident documents",
             "letter-inspection" => "LETTER for Inspection",
             "categories" => "List of Accident Categories",
             "last-gg-reference" => "Last GG Reference Number Used",
@@ -1107,7 +1105,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_letter_outstanddoc_main_accident.aspx" => "letter-outstanding-docs",
             "accident/rpt_letter_inspection_main_accident.aspx" => "letter-inspection",
             "accident/rpt_categories_accident.aspx" => "categories",
             "accident/rpt_lastggref_accident.aspx" => "last-gg-reference",
