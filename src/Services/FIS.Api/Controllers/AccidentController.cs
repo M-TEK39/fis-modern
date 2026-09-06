@@ -282,6 +282,55 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/inspection-letter")]
+    public async Task<ActionResult<IEnumerable<AccidentOutstandingDocumentLookupRow>>> GetInspectionLetterLookup(
+        [FromQuery] string searchTerm,
+        [FromQuery] string mode = "registration")
+    {
+        if (searchTerm?.Trim().Length > 8)
+        {
+            return BadRequest(new { error = "Vehicle number must be 8 characters or fewer." });
+        }
+
+        var normalizedMode = mode.Trim().ToLowerInvariant();
+        var searchByFleet = normalizedMode is "fleet" or "gg" or "radiogg";
+        var validRegistrationMode = normalizedMode is "registration" or "gp" or "radiogp";
+        if (!searchByFleet && !validRegistrationMode)
+        {
+            return BadRequest(new { error = "Mode must be registration or fleet." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetInspectionLetterLookupAsync(searchTerm ?? string.Empty, searchByFleet));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving inspection letter lookup");
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("reports/inspection-letter/{accidentCode:int}")]
+    public async Task<ActionResult<AccidentOutstandingDocumentReport>> GetInspectionLetterReport(int accidentCode)
+    {
+        if (accidentCode <= 0)
+        {
+            return BadRequest(new { error = "Accident code must be a positive integer." });
+        }
+
+        try
+        {
+            var report = await _repository.GetInspectionLetterReportAsync(accidentCode);
+            return report is null ? NotFound() : Ok(report);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving inspection letter for {AccidentCode}", accidentCode);
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/private-vehicle")]
     public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetPrivateVehicleReport(
         [FromQuery] string searchTerm,

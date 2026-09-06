@@ -491,6 +491,14 @@ public sealed class AccidentRepository : IAccidentRepository
         }
     }
 
+    public Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetInspectionLetterLookupAsync(
+        string searchTerm,
+        bool searchByFleet)
+        => GetOutstandingDocumentLookupAsync(searchTerm, searchByFleet);
+
+    public Task<AccidentOutstandingDocumentReport?> GetInspectionLetterReportAsync(int accidentCode)
+        => GetOutstandingDocumentReportAsync(accidentCode);
+
     public Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription)
         => GetVehicleReportCoreAsync(searchTerm, searchByDescription ? "description" : "third_party_regno", containsSearch: true);
 

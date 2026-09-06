@@ -11,6 +11,10 @@ public interface IAccidentRepository
         string searchTerm,
         bool searchByFleet);
     Task<AccidentOutstandingDocumentReport?> GetOutstandingDocumentReportAsync(int accidentCode);
+    Task<IEnumerable<AccidentOutstandingDocumentLookupRow>> GetInspectionLetterLookupAsync(
+        string searchTerm,
+        bool searchByFleet);
+    Task<AccidentOutstandingDocumentReport?> GetInspectionLetterReportAsync(int accidentCode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetPrivateVehicleReportAsync(string searchTerm, bool searchByDescription);
     Task<IEnumerable<AccidentVehicleReportRow>> GetNewAccidentsReportAsync(string mode);
     Task<IEnumerable<AccidentVehicleReportRow>> GetAllAccidentsReportAsync(string mode);
