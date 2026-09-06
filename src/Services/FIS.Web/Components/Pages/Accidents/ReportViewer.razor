@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_Dept_finyear_main_Accident.htm"
 @page "/Accident/RPT_Dept_finyear_cost_main_Accident.aspx"
 @page "/Accident/RPT_letter_outstanddoc_main_Accident.aspx"
 @page "/Accident/RPT_letter_inspection_main_Accident.aspx"
@@ -441,90 +440,6 @@
                                             </tr>
                                         }
                                     }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
-            else if (CurrentMode == "department-finyear")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Department/Site Financial Year</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">Garage</label>
-                            <div class="form-grid">
-                                <label class="form-label">
-                                    <input type="radio" name="deptFinGarage" checked />
-                                    JHB
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="deptFinGarage" />
-                                    PTA
-                                </label>
-                                <label class="form-label">
-                                    <input type="radio" name="deptFinGarage" />
-                                    ALL
-                                </label>
-                            </div>
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Book / Financial Year (e.g. 02/03)</label>
-                            <input class="form-input" />
-                        </div>
-                        <div class="form-field">
-                            <label class="form-label">Department/Site (first 5 characters)</label>
-                            <select class="form-select" @bind="_departmentFinYearSiteCode">
-                                <option value="">Select site...</option>
-                                @foreach (var site in _sites)
-                                {
-                                    <option value="@site.SiteCode">@SiteOptionLabel(site)</option>
-                                }
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Report Output</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in DeptFinyearColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GPA-0099</td>
-                                        <td>GG77777</td>
-                                        <td>ALL</td>
-                                        <td>2023/24</td>
-                                        <td>2024/01/09</td>
-                                        <td>Midrand</td>
-                                        <td>Major</td>
-                                        <td>TA-009</td>
-                                        <td>T. Khumalo</td>
-                                        <td>SITE-09</td>
-                                        <td>IT Services</td>
-                                        <td>G. Naicker</td>
-                                        <td>011-555-3344</td>
-                                        <td>HQ-9081</td>
-                                        <td>GG-9980</td>
-                                        <td>CASE-700</td>
-                                        <td>56000</td>
-                                        <td>22000</td>
-                                        <td>34000</td>
-                                        <td>Closed</td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1033,7 +948,6 @@
     private List<VehicleLookupDto> _oneVehicleMatches = new();
     private int? _oneVehicleSelectedVmfCode;
     private int? _selectedDriverCode;
-    private short? _departmentFinYearSiteCode;
     private short? _weeklyPeriodSiteCode;
     private string _newAccidentReportMode = "call";
     private string _duplicateGarage = "all";
@@ -1216,7 +1130,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "department-finyear" => "Report for a Department/Site, for a Book / Financial Year",
             "accident-costs-finyear" => "Report on Accident Costs for a Financial Year",
             "letter-outstanding-docs" => "LETTER for Outstanding Accident documents",
             "letter-inspection" => "LETTER for Inspection",
@@ -1248,7 +1161,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_dept_finyear_main_accident.htm" => "department-finyear",
             "accident/rpt_dept_finyear_cost_main_accident.aspx" => "accident-costs-finyear",
             "accident/rpt_letter_outstanddoc_main_accident.aspx" => "letter-outstanding-docs",
             "accident/rpt_letter_inspection_main_accident.aspx" => "letter-inspection",
@@ -1451,30 +1363,6 @@
         "Private Party",
         "Priv Car Damage",
         "File Close Date",
-        "Notes"
-    };
-
-    private static readonly string[] DeptFinyearColumns =
-    {
-        "Prov Reg Number",
-        "GG Number",
-        "Garage",
-        "Fin Year",
-        "Accid Date",
-        "Accid Place",
-        "Accident Category",
-        "Trip Auth",
-        "Driver Name",
-        "Dept/Site ID",
-        "Dept/Site",
-        "Trans Officer",
-        "TO Tel",
-        "HQ Ref",
-        "GG Ref",
-        "Case Num",
-        "GG Car Damage",
-        "Priv Car Damage",
-        "Cost Claim Agains Dept",
         "Notes"
     };
 
