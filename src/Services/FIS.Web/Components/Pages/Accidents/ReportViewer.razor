@@ -6,7 +6,6 @@
 @page "/Accident/RPT_allgar_main_Accident.htm"
 @page "/Accident/RPT_flagnew_main_Accident.htm"
 @page "/Accident/RPT_flagnew_report_Accident.aspx"
-@page "/Accident/RPT_Dept_finyear_cost_main_Accident.aspx"
 @page "/Accident/RPT_letter_outstanddoc_main_Accident.aspx"
 @page "/Accident/RPT_letter_inspection_main_Accident.aspx"
 @page "/Accident/RPT_categories_Accident.aspx"
@@ -440,58 +439,6 @@
                                             </tr>
                                         }
                                     }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
-            else if (CurrentMode == "accident-costs-finyear")
-            {
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Costs Financial Year</h2>
-                    <div class="form-grid">
-                        <div class="form-field">
-                            <label class="form-label">Financial Year (e.g. 04/05)</label>
-                            <input class="form-input" />
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button class="btn btn-primary btn-sm" @onclick="LoadReports">Submit</button>
-                        <a class="btn btn-secondary btn-sm" href="/accidents/reports">Report Menu</a>
-                    </div>
-                </div>
-                <div class="form-section">
-                    <h2 class="form-section-title">Accident Costs Output</h2>
-                    <div class="table-container">
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        @foreach (var column in AccidentCostsColumns)
-                                        {
-                                            <th>@column</th>
-                                        }
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>GPA-0101</td>
-                                        <td>GG88888</td>
-                                        <td>2023/24</td>
-                                        <td>2024/01/30</td>
-                                        <td>2024/02/01</td>
-                                        <td>Infrastructure</td>
-                                        <td>HQ-7701</td>
-                                        <td>GG-7701</td>
-                                        <td>42000</td>
-                                        <td>15000</td>
-                                        <td>Yes</td>
-                                        <td>23000</td>
-                                        <td>12000</td>
-                                        <td>2024/03/28</td>
-                                        <td>Paid in part</td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
@@ -1130,7 +1077,6 @@
             "all-detail" => "All Accidents - ALL DETAIL",
             "all-garage-detail" => "All Accidents - GARAGE DETAIL",
             "new-accidents" => "Report on New Accident's",
-            "accident-costs-finyear" => "Report on Accident Costs for a Financial Year",
             "letter-outstanding-docs" => "LETTER for Outstanding Accident documents",
             "letter-inspection" => "LETTER for Inspection",
             "categories" => "List of Accident Categories",
@@ -1161,7 +1107,6 @@
             "accident/rpt_allgar_main_accident.htm" => "all-garage-detail",
             "accident/rpt_flagnew_main_accident.htm" => "new-accidents",
             "accident/rpt_flagnew_report_accident.aspx" => "new-accidents",
-            "accident/rpt_dept_finyear_cost_main_accident.aspx" => "accident-costs-finyear",
             "accident/rpt_letter_outstanddoc_main_accident.aspx" => "letter-outstanding-docs",
             "accident/rpt_letter_inspection_main_accident.aspx" => "letter-inspection",
             "accident/rpt_categories_accident.aspx" => "categories",
@@ -1362,25 +1307,6 @@
         "Private Party Regno",
         "Private Party",
         "Priv Car Damage",
-        "File Close Date",
-        "Notes"
-    };
-
-    private static readonly string[] AccidentCostsColumns =
-    {
-        "Prov Reg Number",
-        "GG Number",
-        "Fin Year",
-        "Accid Date",
-        "Date Reported",
-        "Dept/Site",
-        "HQ Ref",
-        "GG Ref",
-        "GG cost of Damages",
-        "Value Written Off",
-        "Third Party Claim ?",
-        "Third Party Damages",
-        "Third Party Claim Amount",
         "File Close Date",
         "Notes"
     };
