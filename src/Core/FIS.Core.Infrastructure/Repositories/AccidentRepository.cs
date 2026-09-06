@@ -327,6 +327,22 @@ public sealed class AccidentRepository : IAccidentRepository
             periodEndDate: endDate.Date,
             hireTypeMode: hireTypeMode);
 
+    public Task<IEnumerable<AccidentVehicleReportRow>> GetDepartmentMonthReportAsync(
+        string departmentNumber,
+        string garageMode,
+        string periodMode,
+        int? year,
+        int? month)
+        => GetVehicleReportCoreAsync(
+            string.Empty,
+            string.Empty,
+            containsSearch: false,
+            garageMode: garageMode,
+            departmentNumber: departmentNumber?.Trim() ?? string.Empty,
+            calendarPeriodMode: periodMode,
+            accidentYear: year,
+            accidentMonth: month);
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
@@ -503,11 +519,15 @@ public sealed class AccidentRepository : IAccidentRepository
         string? departmentNumber = null,
         DateTime? periodStartDate = null,
         DateTime? periodEndDate = null,
-        string? hireTypeMode = null)
+        string? hireTypeMode = null,
+        string? calendarPeriodMode = null,
+        int? accidentYear = null,
+        int? accidentMonth = null)
     {
         var normalizedSearchTerm = searchTerm?.Trim() ?? string.Empty;
         var normalizedDepartmentNumber = departmentNumber?.Trim() ?? string.Empty;
-        var hasDepartmentPeriodFilter = departmentNumber is not null || periodStartDate.HasValue || periodEndDate.HasValue;
+        var hasCalendarPeriodFilter = calendarPeriodMode is not null;
+        var hasDepartmentPeriodFilter = departmentNumber is not null || periodStartDate.HasValue || periodEndDate.HasValue || hasCalendarPeriodFilter;
         if (flagMode is null && dateRangeMode is null && garageMode is null && !hasDepartmentPeriodFilter && normalizedSearchTerm.Length == 0)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -522,8 +542,14 @@ public sealed class AccidentRepository : IAccidentRepository
         var siteJoinAvailable = accidentColumns.Contains("driver_site_code") && siteColumns.Contains("site_code");
         var siteDepartmentAvailable = siteJoinAvailable && siteColumns.Contains("Department_number");
         var periodAvailable = periodStartDate.HasValue && periodEndDate.HasValue && accidentColumns.Contains("occurence_date");
+        var calendarPeriodAvailable = hasCalendarPeriodFilter && accidentColumns.Contains("occurence_date");
         var typeJoinAvailable = vehicleColumns.Contains("type_code") && typeColumns.Contains("type_code");
-        if (hasDepartmentPeriodFilter && (!periodAvailable || (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)))
+        if (hasDepartmentPeriodFilter && ((!periodAvailable && !calendarPeriodAvailable) || (normalizedDepartmentNumber.Length > 0 && !siteDepartmentAvailable)))
+        {
+            return Array.Empty<AccidentVehicleReportRow>();
+        }
+
+        if (hasCalendarPeriodFilter && !calendarPeriodAvailable)
         {
             return Array.Empty<AccidentVehicleReportRow>();
         }
@@ -554,7 +580,7 @@ public sealed class AccidentRepository : IAccidentRepository
             return Array.Empty<AccidentVehicleReportRow>();
         }
 
-        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null || periodAvailable;
+        var hasFilter = searchAvailable || flagAvailable || dateAvailable || garageMode is not null || periodAvailable || calendarPeriodAvailable;
         if (!hasFilter)
         {
             return Array.Empty<AccidentVehicleReportRow>();
@@ -633,19 +659,23 @@ public sealed class AccidentRepository : IAccidentRepository
             {
                 conditions.Add(GetAllAccidentDateFilter(dateRangeMode));
             }
-            else if (garageMode is not null)
-            {
-                conditions.Add(GetGarageFilter(garageMode));
-            }
-            else if (hasDepartmentPeriodFilter)
+            else if (periodAvailable)
             {
                 conditions.Add("[a].[occurence_date] >= @periodStartDate AND [a].[occurence_date] <= @periodEndDate");
             }
-            else
+            else if (calendarPeriodAvailable)
+            {
+                conditions.Add(GetCalendarPeriodFilter(calendarPeriodMode!));
+            }
+            else if (garageMode is null)
             {
                 conditions.Add(containsSearch
                     ? $"[a].[{searchColumn}] LIKE @searchTerm"
                     : $"[v].[{searchColumn}] = @searchTerm");
+            }
+            if (garageMode is not null)
+            {
+                conditions.Add(GetGarageFilter(garageMode));
             }
             if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
             {
@@ -677,6 +707,8 @@ public sealed class AccidentRepository : IAccidentRepository
                     AddParameter(command, "@periodStartDate", DbType.Date, periodStartDate.Value.Date);
                     AddParameter(command, "@periodEndDate", DbType.Date, periodEndDate.Value.Date);
                 }
+
+                AddCalendarPeriodParameters(command, calendarPeriodMode, accidentYear, accidentMonth);
 
                 if (hasDepartmentPeriodFilter && normalizedDepartmentNumber.Length > 0)
                 {
@@ -1450,6 +1482,42 @@ public sealed class AccidentRepository : IAccidentRepository
                 break;
             case "2002-current":
                 AddParameter(command, "@currentStartDate", DbType.Date, new DateTime(2002, 1, 1));
+                break;
+        }
+    }
+
+    private static string GetCalendarPeriodFilter(string mode)
+        => mode switch
+        {
+            "month" => "MONTH([a].[occurence_date]) = @accidentMonth AND YEAR([a].[occurence_date]) = @accidentYear",
+            "year" => "YEAR([a].[occurence_date]) = @accidentYear",
+            "02/03" => "[a].[occurence_date] >= @financialPeriodStartDate AND [a].[occurence_date] < @financialPeriodEndDate",
+            "01/02" => "[a].[occurence_date] >= @financialPeriodStartDate AND [a].[occurence_date] < @financialPeriodEndDate",
+            _ => "1 = 0"
+        };
+
+    private static void AddCalendarPeriodParameters(
+        DbCommand command,
+        string? mode,
+        int? year,
+        int? month)
+    {
+        switch (mode)
+        {
+            case "month":
+                AddParameter(command, "@accidentYear", DbType.Int32, year);
+                AddParameter(command, "@accidentMonth", DbType.Int32, month);
+                break;
+            case "year":
+                AddParameter(command, "@accidentYear", DbType.Int32, year);
+                break;
+            case "02/03":
+                AddParameter(command, "@financialPeriodStartDate", DbType.Date, new DateTime(2002, 3, 1));
+                AddParameter(command, "@financialPeriodEndDate", DbType.Date, new DateTime(2003, 3, 1));
+                break;
+            case "01/02":
+                AddParameter(command, "@financialPeriodStartDate", DbType.Date, new DateTime(2001, 3, 1));
+                AddParameter(command, "@financialPeriodEndDate", DbType.Date, new DateTime(2002, 3, 1));
                 break;
         }
     }

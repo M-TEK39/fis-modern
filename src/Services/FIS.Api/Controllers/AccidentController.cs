@@ -355,6 +355,65 @@ public class AccidentController : BaseApiController
         }
     }
 
+    [HttpGet("reports/department-month")]
+    public async Task<ActionResult<IEnumerable<AccidentVehicleReportRow>>> GetDepartmentMonthReport(
+        [FromQuery] string? departmentNumber,
+        [FromQuery] string garage = "jhb",
+        [FromQuery] string period = "month",
+        [FromQuery] int? year = null,
+        [FromQuery] int? month = null)
+    {
+        var normalizedGarage = garage.Trim().ToLowerInvariant() switch
+        {
+            "jhb" or "radiojhb" => "jhb",
+            "pta" or "radiopta" => "pta",
+            "all" or "radioall" => "all",
+            _ => string.Empty
+        };
+        if (normalizedGarage.Length == 0)
+        {
+            return BadRequest(new { error = "Garage must be jhb, pta, or all." });
+        }
+
+        var normalizedPeriod = period.Trim().ToLowerInvariant() switch
+        {
+            "month" or "radiomon" => "month",
+            "year" or "radioyear" => "year",
+            "02/03" or "radiof23" => "02/03",
+            "01/02" or "radioy12" => "01/02",
+            _ => string.Empty
+        };
+        if (normalizedPeriod.Length == 0)
+        {
+            return BadRequest(new { error = "Period must be month, year, 02/03, or 01/02." });
+        }
+
+        if (normalizedPeriod is "month" or "year" && (!year.HasValue || year.Value is < 1 or > 9999))
+        {
+            return BadRequest(new { error = "Year must be between 1 and 9999 for the selected period." });
+        }
+
+        if (normalizedPeriod == "month" && (!month.HasValue || month.Value is < 1 or > 12))
+        {
+            return BadRequest(new { error = "Month must be between 1 and 12 for a monthly report." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetDepartmentMonthReportAsync(
+                departmentNumber ?? string.Empty,
+                normalizedGarage,
+                normalizedPeriod,
+                year,
+                month));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving accident department month report");
+            return StatusCode(500);
+        }
+    }
+
     [HttpGet("reports/period-status")]
     public async Task<ActionResult<IEnumerable<Dictionary<string, string>>>> GetPeriodStatusReport(
         [FromQuery] string? departmentNumber,

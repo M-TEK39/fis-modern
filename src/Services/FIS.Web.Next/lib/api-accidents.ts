@@ -232,6 +232,10 @@ export type AccidentGarageReportMode = "jhb" | "pta" | "all";
 
 export type AccidentDepartmentPeriodVipMode = "all" | "vip" | "pool" | "permanent";
 
+export type AccidentDepartmentMonthGarageMode = "jhb" | "pta" | "all";
+
+export type AccidentDepartmentMonthPeriodMode = "month" | "year" | "02/03" | "01/02";
+
 export type AccidentPeriodReportStatus = "open" | "closed";
 
 export type AccidentVehicleReportRow = {
@@ -749,6 +753,26 @@ export async function getAccidentDepartmentPeriodVipReport(
   });
   return mapPresent(
     getCollection(await requestApi(`api/accidents/reports/department-period-vip?${query.toString()}`)),
+    mapAccidentVehicleReportRow,
+  );
+}
+
+export async function getAccidentDepartmentMonthReport(
+  departmentNumber: string,
+  garage: AccidentDepartmentMonthGarageMode,
+  period: AccidentDepartmentMonthPeriodMode,
+  year: number | null,
+  month: number | null,
+) {
+  const query = new URLSearchParams({
+    departmentNumber: departmentNumber.trim(),
+    garage,
+    period,
+    ...(year === null ? {} : { year: String(year) }),
+    ...(month === null ? {} : { month: String(month) }),
+  });
+  return mapPresent(
+    getCollection(await requestApi(`api/accidents/reports/department-month?${query.toString()}`)),
     mapAccidentVehicleReportRow,
   );
 }
