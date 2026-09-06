@@ -62,6 +62,60 @@ public sealed class GgBlockRangeConflictException : Exception
 }
 
 /// <summary>
+/// Repository interface for vehicle source maintenance.
+/// </summary>
+public interface IVehicleSourceRepository
+{
+    Task<VehicleSourcePage> GetPageAsync();
+    Task<VehicleSourceCapabilities> GetCapabilitiesAsync();
+    Task<VehicleSourceRecord?> GetByIdAsync(byte sourceCode);
+    Task<VehicleSourceRecord> CreateAsync(VehicleSourceInput source, int currentUserId);
+    Task<VehicleSourceRecord> UpdateAsync(byte sourceCode, VehicleSourceInput source, int currentUserId);
+}
+
+public sealed record VehicleSourceInput(
+    string Name,
+    string PhysicalAddress,
+    string PostalAddress,
+    string TelephoneNumber,
+    string FaxNumber,
+    string EmailAddress,
+    string ContactPerson);
+
+public sealed record VehicleSourceRecord(
+    byte SourceCode,
+    string? Name,
+    string? PhysicalAddress,
+    string? PostalAddress,
+    string? TelephoneNumber,
+    string? FaxNumber,
+    string? EmailAddress,
+    string? ContactPerson,
+    DateTime? DateCreated,
+    DateTime? DateUpdated,
+    int? CreatedByUserCode,
+    int? ModifiedByUserCode);
+
+public sealed record VehicleSourceCapabilities(
+    bool HasEmailAddress,
+    bool HasContactPerson);
+
+public sealed record VehicleSourcePage(
+    IReadOnlyList<VehicleSourceRecord> Items,
+    VehicleSourceCapabilities Capabilities);
+
+public sealed class VehicleSourceFieldUnavailableException : Exception
+{
+    public VehicleSourceFieldUnavailableException(string fieldName)
+        : base($"The vehicle source {fieldName} field is not available in this database.")
+    {
+        FieldName = fieldName;
+    }
+
+    public string FieldName { get; }
+}
+
+/// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
 /// </summary>
 public interface IVehicleAuthorizationRepository

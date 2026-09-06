@@ -219,6 +219,7 @@ builder.Services.AddScoped<IUserClaimsService, UserClaimsService>();
 // Register repositories
 builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IGgBlockRepository, GgBlockRepository>();
+builder.Services.AddScoped<IVehicleSourceRepository, VehicleSourceRepository>();
 builder.Services.AddScoped<IVehicleAuthorizationRepository, VehicleAuthorizationRepository>();
 builder.Services.AddScoped<IContractRepository, ContractRepository>();
 builder.Services.AddScoped<IContractAuditLogRepository, ContractAuditLogRepository>();
