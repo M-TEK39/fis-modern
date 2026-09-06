@@ -14,8 +14,9 @@ import { getSession } from "@/lib/session";
 
 const ACCIDENTS_ROLE = "Accidents";
 
-type HqPageProps = {
+export type HqPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+  locationCode?: number;
 };
 
 function hasRole(roles: readonly string[], role: string) {
@@ -35,15 +36,21 @@ function getPage(value: string | undefined) {
   return Number.isFinite(parsed) ? parsed : 1;
 }
 
-function buildHqHref(searchType: GarageSearchType, searchTerm: string, page: number) {
+function buildHqHref(searchType: GarageSearchType, searchTerm: string, page: number, locationCode?: number) {
   const params = new URLSearchParams({ type: searchType, page: String(page) });
   if (searchTerm) params.set("q", searchTerm);
-  return `/accidents/hq?${params.toString()}`;
+  const path = locationCode === 2 ? "/Accident/MNT_accidentp_getreg.aspx" : "/accidents/hq";
+  return `${path}?${params.toString()}`;
 }
 
-function buildHqAddHref(searchType: GarageSearchType, searchTerm: string) {
+function buildHqAddHref(searchType: GarageSearchType, searchTerm: string, locationCode?: number) {
   const params = new URLSearchParams({ type: searchType });
   if (searchTerm) params.set("q", searchTerm);
+  if (locationCode === 2) {
+    params.set("Action", "ADD");
+    return `/Accident/MNT_accidentp_getdetail.aspx?${params.toString()}`;
+  }
+
   return `/accidents/hq/add?${params.toString()}`;
 }
 
@@ -92,7 +99,7 @@ function NoRecords({ searchTerm }: { searchTerm: string }) {
   );
 }
 
-async function HqContent({ searchParams }: HqPageProps) {
+async function HqContent({ searchParams, locationCode }: HqPageProps) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") return <SessionRecovery returnPath="/accidents/hq" />;
@@ -108,7 +115,7 @@ async function HqContent({ searchParams }: HqPageProps) {
 
   let pageData;
   try {
-    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm);
+    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm, 12, locationCode);
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized") {
       return <SessionRecovery returnPath="/accidents/hq" />;
@@ -158,9 +165,9 @@ async function HqContent({ searchParams }: HqPageProps) {
           </div>
           {pageData.totalPages > 1 ? (
             <nav className="vehicle-pagination" aria-label="HQ accident pages">
-              {pageData.page > 1 ? <Link className="vehicle-pagination-button" href={buildHqHref(searchType, searchTerm, pageData.page - 1)}>Previous</Link> : <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">Previous</span>}
+              {pageData.page > 1 ? <Link className="vehicle-pagination-button" href={buildHqHref(searchType, searchTerm, pageData.page - 1, locationCode)}>Previous</Link> : <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">Previous</span>}
               <span>Page {pageData.page} of {pageData.totalPages}</span>
-              {pageData.page < pageData.totalPages ? <Link className="vehicle-pagination-button" href={buildHqHref(searchType, searchTerm, pageData.page + 1)}>Next</Link> : <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">Next</span>}
+              {pageData.page < pageData.totalPages ? <Link className="vehicle-pagination-button" href={buildHqHref(searchType, searchTerm, pageData.page + 1, locationCode)}>Next</Link> : <span className="vehicle-pagination-button vehicle-pagination-disabled" aria-disabled="true">Next</span>}
             </nav>
           ) : null}
           <p className="vehicle-pagination-meta">Total records: {pageData.totalRecords} | Page size: {pageData.pageSize}</p>
@@ -168,7 +175,7 @@ async function HqContent({ searchParams }: HqPageProps) {
       )}
 
       <div className="vehicle-footer-actions">
-        <Link className="button button-primary" href={buildHqAddHref(searchType, searchTerm)}>Add New</Link>
+        <Link className="button button-primary" href={buildHqAddHref(searchType, searchTerm, locationCode)}>Add New</Link>
         <Link className="button button-secondary" href="/accidents">Menu</Link>
         <Link className="button button-secondary" href="/home">Home</Link>
         <form action={logoutAction}><button className="button button-secondary" type="submit">Sign out</button></form>
@@ -177,7 +184,7 @@ async function HqContent({ searchParams }: HqPageProps) {
   );
 }
 
-export default async function HqAccidentPage({ searchParams }: HqPageProps) {
+export default async function HqAccidentPage({ searchParams, locationCode }: HqPageProps) {
   await connection();
   return (
     <main className="page-shell vehicle-page-shell">
@@ -186,7 +193,7 @@ export default async function HqAccidentPage({ searchParams }: HqPageProps) {
           <div><p className="eyebrow">Accident maintenance</p><h1 id="hq-accidents-title">Accident Maintenance (HQ)</h1><p>Search by GG or GP number, then edit or add HQ accidents.</p></div>
           <Link className="button button-secondary" href="/accidents">Accident Menu</Link>
         </header>
-        <Suspense fallback={<LoadingState />}><HqContent searchParams={searchParams} /></Suspense>
+        <Suspense fallback={<LoadingState />}><HqContent searchParams={searchParams} locationCode={locationCode} /></Suspense>
       </section>
     </main>
   );

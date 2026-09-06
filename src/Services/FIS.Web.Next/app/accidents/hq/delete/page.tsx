@@ -64,7 +64,7 @@ async function HqDeleteContent({ searchParams }: HqDeletePageProps) {
 
   let pageData;
   try {
-    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm);
+    pageData = await getHqAccidentPage(pageNumber, searchType, searchTerm, 12, 2);
   } catch (error) {
     if (error instanceof AccidentApiError && error.reason === "unauthorized") return <SessionRecovery returnPath="/accidents/hq/delete" />;
     console.error("FIS HQ accident delete lookup failed", error instanceof Error ? error.message : "unknown error");

@@ -481,6 +481,7 @@ type VehicleLookup = {
   fleetNumber: string | null;
   registrationNumber: string | null;
   typeCode: number | null;
+  locationCode: number | null;
 };
 
 function mapVehicle(value: unknown): VehicleLookup | null {
@@ -498,10 +499,15 @@ function mapVehicle(value: unknown): VehicleLookup | null {
     fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
     registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
     typeCode: asNumber(getValue(value, "type_code", "typeCode")),
+    locationCode: asNumber(getValue(value, "location_code", "locationCode")),
   };
 }
 
-export async function getAccidentVehicleOptions(searchType: GarageSearchType, searchTerm = "") {
+export async function getAccidentVehicleOptions(
+  searchType: GarageSearchType,
+  searchTerm = "",
+  locationCode?: number,
+) {
   const normalizedSearchTerm = searchTerm.trim();
   const path = normalizedSearchTerm
     ? `api/vehicles/search?searchTerm=${encodeURIComponent(normalizedSearchTerm)}`
@@ -511,6 +517,10 @@ export async function getAccidentVehicleOptions(searchType: GarageSearchType, se
   const normalizedLowerTerm = normalizedSearchTerm.toLowerCase();
   return vehicles
     .filter((vehicle) => {
+      if (locationCode !== undefined && vehicle.locationCode !== locationCode) {
+        return false;
+      }
+
       if (!normalizedLowerTerm) {
         return true;
       }
@@ -1121,6 +1131,7 @@ export async function getGarageAccidentPage(
   searchType: GarageSearchType,
   searchTerm: string,
   pageSize = 12,
+  locationCode?: number,
 ): Promise<GarageAccidentPage> {
   const normalizedSearchTerm = searchTerm.trim();
   const vehiclePath = normalizedSearchTerm
@@ -1133,7 +1144,9 @@ export async function getGarageAccidentPage(
     requestApi("api/type"),
   ]);
 
-  const vehicles = mapPresent(getCollection(vehiclePayload), mapVehicle);
+  const vehicles = mapPresent(getCollection(vehiclePayload), mapVehicle).filter(
+    (vehicle) => locationCode === undefined || vehicle.locationCode === locationCode,
+  );
   const vehicleByCode = new Map(vehicles.map((vehicle) => [vehicle.vmfCode, vehicle]));
   const typesByCode = new Map<number, string>();
   for (const type of mapPresent(getCollection(typePayload), mapType)) {
@@ -1157,6 +1170,10 @@ export async function getGarageAccidentPage(
     }
 
       const vehicle = accident.vmfCode === null ? undefined : vehicleByCode.get(accident.vmfCode);
+      if (locationCode !== undefined && vehicle === undefined) {
+        return rows;
+      }
+
       const vehicleNumber = searchType === "GG" ? vehicle?.fleetNumber : vehicle?.registrationNumber;
 
       rows.push({
@@ -1190,8 +1207,9 @@ export async function getHqAccidentPage(
   searchType: GarageSearchType,
   searchTerm: string,
   pageSize = 12,
+  locationCode?: number,
 ) {
-  return getGarageAccidentPage(page, searchType, searchTerm, pageSize);
+  return getGarageAccidentPage(page, searchType, searchTerm, pageSize, locationCode);
 }
 
 export async function createAccidentAgainstApi(request: CreateAccidentRequest) {

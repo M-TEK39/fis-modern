@@ -18,6 +18,7 @@ const ACCIDENTS_ROLE = "Accidents";
 
 type HqAddPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+  locationCode?: number;
 };
 
 function getQueryValue(value: string | string[] | undefined) {
@@ -67,7 +68,7 @@ function NoVehicles({ searchTerm }: { searchTerm: string }) {
   );
 }
 
-async function HqAddContent({ searchParams }: HqAddPageProps) {
+async function HqAddContent({ searchParams, locationCode }: HqAddPageProps) {
   const session = await getSession();
   if (session.status === "anonymous") redirect("/login");
   if (session.status === "expired") return <SessionRecovery returnPath="/accidents/hq/add" />;
@@ -79,12 +80,14 @@ async function HqAddContent({ searchParams }: HqAddPageProps) {
   const query = await searchParams;
   const searchType = getSearchType(getQueryValue(query.type) ?? getQueryValue(query.Radio1));
   const searchTerm = (getQueryValue(query.q) ?? getQueryValue(query.txtGGNum) ?? "").trim();
-  const initialVehicleCode = getInitialVehicleCode(getQueryValue(query.vmfCode) ?? getQueryValue(query.vmf));
+  const initialVehicleCode = getInitialVehicleCode(
+    getQueryValue(query.vmfCode) ?? getQueryValue(query.vmf_code) ?? getQueryValue(query.vmf),
+  );
   const today = new Date().toISOString().slice(0, 10);
 
   try {
     const [vehicleOptions, referenceData] = await Promise.all([
-      getAccidentVehicleOptions(searchType, searchTerm),
+      getAccidentVehicleOptions(searchType, searchTerm, locationCode),
       getAccidentReferenceData(),
     ]);
     if (vehicleOptions.length === 0) return <NoVehicles searchTerm={searchTerm} />;
@@ -113,7 +116,7 @@ async function HqAddContent({ searchParams }: HqAddPageProps) {
   }
 }
 
-export default async function HqAddPage({ searchParams }: HqAddPageProps) {
+export default async function HqAddPage({ searchParams, locationCode }: HqAddPageProps) {
   await connection();
   return (
     <main className="page-shell vehicle-page-shell">
@@ -122,7 +125,7 @@ export default async function HqAddPage({ searchParams }: HqAddPageProps) {
           <div><p className="eyebrow">Accident maintenance</p><h1 id="hq-add-title">Accident Maintenance (HQ) - Add</h1><p>Capture a new HQ accident for a fleet vehicle.</p></div>
           <Link className="button button-secondary" href="/accidents/hq">Back to Search</Link>
         </header>
-        <Suspense fallback={<LoadingState />}><HqAddContent searchParams={searchParams} /></Suspense>
+        <Suspense fallback={<LoadingState />}><HqAddContent searchParams={searchParams} locationCode={locationCode} /></Suspense>
       </section>
     </main>
   );
