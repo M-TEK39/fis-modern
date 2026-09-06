@@ -324,6 +324,81 @@ public class VehiclesController : BaseApiController
     }
 
     /// <summary>
+    /// Update the barcode stored on a vehicle_master row by VMF code.
+    /// This keeps the legacy barcode maintenance contract isolated from the
+    /// broader vehicle update payload.
+    /// </summary>
+    [HttpPut("{vmfCode:int}/barcode")]
+    public async Task<ActionResult<VehicleBarcodeUpdateResponse>> UpdateVehicleBarcode(
+        int vmfCode,
+        [FromBody] VehicleBarcodeUpdateRequest request
+    )
+    {
+        try
+        {
+            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
+            if (vehicle == null)
+            {
+                return NotFound($"Vehicle with vmf_code {vmfCode} not found");
+            }
+
+            return Ok(await SaveVehicleBarcodeAsync(vehicle, request.barcode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating barcode for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, "An error occurred while updating the vehicle barcode");
+        }
+    }
+
+    /// <summary>
+    /// Preserve the legacy barcode endpoint, which identifies the vehicle by
+    /// its GG/fleet number rather than VMF code.
+    /// </summary>
+    [HttpPut("barcode")]
+    public async Task<ActionResult<VehicleBarcodeUpdateResponse>> UpdateVehicleBarcodeByFleetNumber(
+        [FromBody] VehicleBarcodeUpdateByFleetNumberRequest request
+    )
+    {
+        if (string.IsNullOrWhiteSpace(request.ggNumber))
+        {
+            return BadRequest("A GG number is required");
+        }
+
+        try
+        {
+            var vehicle = await _vehicleRepository.GetByFleetNumberAsync(request.ggNumber.Trim());
+            if (vehicle == null)
+            {
+                return NotFound($"Vehicle with fleet number {request.ggNumber} not found");
+            }
+
+            return Ok(await SaveVehicleBarcodeAsync(vehicle, request.barcode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating barcode for fleet number {FleetNumber}", request.ggNumber);
+            return StatusCode(500, "An error occurred while updating the vehicle barcode");
+        }
+    }
+
+    private async Task<VehicleBarcodeUpdateResponse> SaveVehicleBarcodeAsync(Vehicle vehicle, string? barcode)
+    {
+        var currentUserId = GetCurrentUserId();
+        vehicle.barcode = barcode;
+        vehicle.date_updated = DateTime.UtcNow;
+        vehicle.modified_by_user_code = currentUserId;
+        await _vehicleRepository.UpdateAsync(vehicle, currentUserId);
+
+        return new VehicleBarcodeUpdateResponse
+        {
+            vmf_code = vehicle.vmf_code,
+            fleet_number = vehicle.fleet_number,
+            barcode = vehicle.barcode
+        };
+    }
+
+    /// <summary>
     /// Correct model code on a NEW vehicle (no active contract).
     /// Capturer/authorizer self-service — no RFC to admin required.
     /// </summary>
@@ -1027,6 +1102,30 @@ public class VehicleUpdateApiRequest
     /// Flag to trigger tariff recalculation for this vehicle
     /// </summary>
     public bool recalculate_tariff { get; set; } = false;
+}
+
+/// <summary>
+/// Request for updating a vehicle barcode by VMF code.
+/// </summary>
+public class VehicleBarcodeUpdateRequest
+{
+    public string? barcode { get; set; }
+}
+
+/// <summary>
+/// Legacy-compatible request for updating a vehicle barcode by GG number.
+/// </summary>
+public class VehicleBarcodeUpdateByFleetNumberRequest
+{
+    public string? ggNumber { get; set; }
+    public string? barcode { get; set; }
+}
+
+public class VehicleBarcodeUpdateResponse
+{
+    public int vmf_code { get; set; }
+    public string? fleet_number { get; set; }
+    public string? barcode { get; set; }
 }
 
 /// <summary>
