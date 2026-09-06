@@ -7,19 +7,15 @@ import SessionRecovery from "@/app/home/session-recovery";
 import { getSession } from "@/lib/session";
 
 const VALIDATION_LINKS = [
-  ["Organisation Departments", "/validation-data/departments"],
-  ["Organisation Sites", "/validation-data/sites"],
-  ["Vehicle Makes", "/validation-data/makes"],
-  ["Vehicle Models", "/validation-data/models"],
-  ["Vehicle Types", "/reference-data?tab=types"],
-  ["Vehicle Classes", "/validation-data/classes"],
-  ["Fuel Types", "/reference-data?tab=fueltypes"],
-  ["Units of Measure", "/reference-data?tab=units"],
-  ["License Types", "/reference-data?tab=licenses"],
-  ["License Fees", "/validation-data/license-fees"],
-  ["Driver Licenses", "/validation-data/driver-licenses"],
-  ["Extra Codes", "/validation-data/extras"],
-  ["Loss Descriptions", "/validation-data/loss-types"],
+  ["1) Department Maintenance", "/validation-data/departments"],
+  ["2) Make Maintenance", "/validation-data/makes"],
+  ["3) Model Maintenance", "/validation-data/models"],
+  ["4) Site Maintenance", "/validation-data/sites"],
+  ["5) Class codes Maintenance", "/validation-data/classes"],
+  ["6) License Fees Maintenance", "/validation-data/license-fees"],
+  ["7) Drivers license Maintenance", "/validation-data/driver-licenses"],
+  ["9) Extras Maintenance", "/validation-data/extras"],
+  ["10) Loss Description Maintenance", "/validation-data/loss-types"],
 ] as const;
 
 function AccessRestricted() {
@@ -53,13 +49,18 @@ export default async function ValidationDataPage() {
           <Link className="button button-secondary" href="/home">Home</Link>
         </header>
         <div className="vehicle-menu-tiles">
-          {VALIDATION_LINKS.map(([label, href]) => (
-            <section className="vehicle-menu-tile" key={href}>
-              <div className="vehicle-menu-body">
-                <Link className="vehicle-menu-link" href={href}>{label}</Link>
-              </div>
-            </section>
-          ))}
+          <section className="vehicle-menu-tile">
+            <h2 className="vehicle-menu-header">Validation Maintenance Information</h2>
+            <div className="vehicle-menu-body">
+              <Link className="vehicle-menu-link" href="/validation-data/help">Validation Data Maintenance Information / Help</Link>
+            </div>
+          </section>
+          <section className="vehicle-menu-tile">
+            <h2 className="vehicle-menu-header">Validation Maintenance</h2>
+            <div className="vehicle-menu-body">
+              {VALIDATION_LINKS.map(([label, href]) => <Link className="vehicle-menu-link" href={href} key={href}>{label}</Link>)}
+            </div>
+          </section>
         </div>
       </section>
     </main>
