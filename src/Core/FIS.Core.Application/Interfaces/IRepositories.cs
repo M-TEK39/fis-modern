@@ -172,6 +172,49 @@ public sealed record VehicleStatusReportPage(
     bool RemarksAvailable);
 
 /// <summary>
+/// Repository interface for the recovered-vehicle renumbering workflow.
+/// Updating a recovered vehicle changes the original vehicle, creates a new
+/// vehicle row, and appends the legacy history records in one transaction.
+/// </summary>
+public interface IRecoveredVehicleRepository
+{
+    Task<IReadOnlyList<RecoveredVehicleSearchRecord>> SearchAsync(string searchTerm, bool byRegistration);
+    Task<RecoveredVehicleDetails?> GetDetailsAsync(int vmfCode);
+    Task<RecoveredVehicleUpdateResult> UpdateAsync(RecoveredVehicleUpdate update, int currentUserId);
+}
+
+public sealed record RecoveredVehicleSearchRecord(
+    int VmfCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    short VehicleStatusCode,
+    string? StatusDescription,
+    string? RenumberedTo);
+
+public sealed record RecoveredVehicleStatusOption(short Code, string Description);
+
+public sealed record RecoveredVehicleDetails(
+    int VmfCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    short VehicleStatusCode,
+    string? StatusDescription,
+    string? RenumberedTo,
+    string? PreviousFleetNumber,
+    DateTime? PreviousDateChanged,
+    IReadOnlyList<RecoveredVehicleStatusOption> StatusOptions);
+
+public sealed record RecoveredVehicleUpdate(
+    int VmfCode,
+    string RecoveredFleetNumber,
+    DateTime DateChanged,
+    short NewStatusCode);
+
+public sealed record RecoveredVehicleUpdateResult(
+    RecoveredVehicleDetails UpdatedVehicle,
+    int NewVmfCode);
+
+/// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
 /// </summary>
 public interface IVehicleAuthorizationRepository

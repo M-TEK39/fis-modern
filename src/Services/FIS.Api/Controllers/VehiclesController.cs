@@ -6,6 +6,7 @@ using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -15,6 +16,7 @@ namespace FIS.Api.Controllers;
 public class VehiclesController : BaseApiController
 {
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly IRecoveredVehicleRepository _recoveredVehicleRepository;
     private readonly VehicleService _vehicleService;
     private readonly FisDbContext _context; // Keep for db-status endpoint
     private readonly IVehicleTariffRepository _tariffRepository;
@@ -25,6 +27,7 @@ public class VehiclesController : BaseApiController
 
     public VehiclesController(
         IVehicleRepository vehicleRepository,
+        IRecoveredVehicleRepository recoveredVehicleRepository,
         VehicleService vehicleService,
         FisDbContext context,
         IVehicleTariffRepository tariffRepository,
@@ -35,6 +38,7 @@ public class VehiclesController : BaseApiController
     )
     {
         _vehicleRepository = vehicleRepository;
+        _recoveredVehicleRepository = recoveredVehicleRepository;
         _vehicleService = vehicleService;
         _context = context;
         _tariffRepository = tariffRepository;
@@ -112,6 +116,157 @@ public class VehiclesController : BaseApiController
             _logger.LogError(ex, "Error searching vehicles with term '{SearchTerm}'", searchTerm);
             return StatusCode(500, "An error occurred while searching vehicles");
         }
+    }
+
+    /// <summary>
+    /// Search the legacy recovered-vehicle workflow by GG or GP number.
+    /// </summary>
+    [HttpGet("recovered/search")]
+    public async Task<ActionResult<IReadOnlyList<RecoveredVehicleSearchRecord>>> SearchRecoveredVehicles(
+        [FromQuery] string? mode,
+        [FromQuery] string? search)
+    {
+        if (!HasDemoVehicleRole())
+        {
+            return Forbid();
+        }
+
+        var normalizedMode = (mode ?? "GG").Trim().ToUpperInvariant();
+        var searchTerm = (search ?? string.Empty).Trim();
+        if (normalizedMode is not ("GG" or "GP"))
+        {
+            return BadRequest(new { message = "Search mode must be GG or GP." });
+        }
+
+        if (searchTerm.Length == 0)
+        {
+            return Ok(Array.Empty<RecoveredVehicleSearchRecord>());
+        }
+
+        try
+        {
+            return Ok(await _recoveredVehicleRepository.SearchAsync(searchTerm, normalizedMode == "GP"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching recovered vehicles in {Mode} mode", normalizedMode);
+            return StatusCode(500, new { message = "The recovered vehicle search could not be completed." });
+        }
+    }
+
+    /// <summary>
+    /// Load the recovered-vehicle form and its latest legacy history value.
+    /// </summary>
+    [HttpGet("recovered/{vmfCode:int}")]
+    public async Task<ActionResult<RecoveredVehicleDetails>> GetRecoveredVehicle(int vmfCode)
+    {
+        if (!HasDemoVehicleRole())
+        {
+            return Forbid();
+        }
+
+        try
+        {
+            var details = await _recoveredVehicleRepository.GetDetailsAsync(vmfCode);
+            return details is null ? NotFound(new { message = "Vehicle not found." }) : Ok(details);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error loading recovered vehicle {VmfCode}", vmfCode);
+            return StatusCode(500, new { message = "The recovered vehicle could not be loaded." });
+        }
+    }
+
+    /// <summary>
+    /// Preserve the legacy recovered-GG transaction: mark the stolen row,
+    /// create the recovered row, and append both vehicle history records.
+    /// </summary>
+    [HttpPost("recovered")]
+    public async Task<ActionResult<RecoveredVehicleUpdateResult>> UpdateRecoveredVehicle(
+        [FromBody] RecoveredVehicleUpdateRequest request)
+    {
+        if (!HasDemoVehicleRole())
+        {
+            return Forbid();
+        }
+
+        var recoveredFleetNumber = request.RecoveredFleetNumber?.Trim().ToUpperInvariant() ?? string.Empty;
+        if (!IsValidRecoveredFleetNumber(recoveredFleetNumber))
+        {
+            return BadRequest(new { message = "The recovered GG number must start with G and contain a valid numeric suffix." });
+        }
+
+        if (!request.DateChanged.HasValue)
+        {
+            return BadRequest(new { message = "A date changed value is required." });
+        }
+
+        if (request.NewStatusCode == 4)
+        {
+            return BadRequest(new { message = "A recovered vehicle cannot be saved with the Stolen status." });
+        }
+
+        try
+        {
+            var result = await _recoveredVehicleRepository.UpdateAsync(
+                new RecoveredVehicleUpdate(
+                    request.VmfCode,
+                    recoveredFleetNumber,
+                    request.DateChanged.Value.Date,
+                    request.NewStatusCode),
+                GetCurrentUserId());
+            return Ok(result);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            _logger.LogWarning(ex, "Recovered vehicle {VmfCode} was not found", request.VmfCode);
+            return NotFound(new { message = "Vehicle not found." });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("must be different", StringComparison.OrdinalIgnoreCase)
+            || ex.Message.Contains("already been renumbered", StringComparison.OrdinalIgnoreCase))
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating recovered vehicle {VmfCode}", request.VmfCode);
+            return StatusCode(500, new { message = "The recovered vehicle could not be updated." });
+        }
+    }
+
+    private static bool IsValidRecoveredFleetNumber(string value)
+    {
+        if (value.Length is < 4 or > 8 || value[0] != 'G')
+        {
+            return false;
+        }
+
+        for (var index = 3; index < Math.Min(value.Length, 6); index++)
+        {
+            if (!char.IsDigit(value[index]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool HasDemoVehicleRole()
+    {
+        if (User.IsInRole("Demo Vehicles"))
+        {
+            return true;
+        }
+
+        var roleClaims = User.Claims
+            .Where(claim => claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(claim => claim.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+
+        return roleClaims.Any(role => string.Equals(role, "Demo Vehicles", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -1102,6 +1257,25 @@ public class VehicleUpdateApiRequest
     /// Flag to trigger tariff recalculation for this vehicle
     /// </summary>
     public bool recalculate_tariff { get; set; } = false;
+}
+
+/// <summary>
+/// Request for the legacy recovered-GG renumbering transaction.
+/// </summary>
+public class RecoveredVehicleUpdateRequest
+{
+    [Range(1, int.MaxValue)]
+    public int VmfCode { get; set; }
+
+    [Required]
+    [StringLength(20)]
+    public string? RecoveredFleetNumber { get; set; }
+
+    [Required]
+    public DateTime? DateChanged { get; set; }
+
+    [Range(1, short.MaxValue)]
+    public short NewStatusCode { get; set; }
 }
 
 /// <summary>
