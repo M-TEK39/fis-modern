@@ -368,11 +368,6 @@ builder.Services.AddHttpClient<ThirdPartyApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<LeaseContractTermsApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<JobCardApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

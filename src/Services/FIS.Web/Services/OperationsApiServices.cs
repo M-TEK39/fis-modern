@@ -343,14 +343,3 @@ public class SupplierApiService(HttpClient httpClient, TokenService tokenService
     public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
     public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
 }
-
-public class LeaseContractTermsApiService(HttpClient httpClient, TokenService tokenService, ILogger<LeaseContractTermsApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/leasecontractterms";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
