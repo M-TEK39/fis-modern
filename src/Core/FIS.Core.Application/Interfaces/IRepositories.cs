@@ -271,6 +271,7 @@ public interface IVehicleAuthorizationRepository
     Task<IEnumerable<PreVehicleMaster>> GetRejectedVehiclesAsync();
     Task<IEnumerable<PreVehicleMaster>> GetByStatusAsync(string status);
     Task<IEnumerable<PreVehicleMaster>> GetAuthorizationHistoryAsync(DateTime? startDate = null, DateTime? endDate = null);
+    Task<IReadOnlyList<VehicleMaintenanceTypeOption>> GetMaintenanceTypesAsync();
     Task<PreVehicleMaster> CreateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
     Task UpdateAsync(PreVehicleMaster vehicleAuth, int currentUserId);
     Task ApproveAsync(int tempVmfCode, int authorizedByUserId, string? comment = null);
@@ -278,6 +279,8 @@ public interface IVehicleAuthorizationRepository
     Task AddCommentAsync(int tempVmfCode, string comment, int modifiedByUserId);
     Task DeleteAsync(int tempVmfCode, int currentUserId);
 }
+
+public sealed record VehicleMaintenanceTypeOption(short Code, string Name);
 
 /// <summary>
 /// Repository interface for the contract audit log (append-only event trail)
