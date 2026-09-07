@@ -383,11 +383,6 @@ builder.Services.AddHttpClient<LicenseReportApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<VehicleOrderApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<VehiclePhotoApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

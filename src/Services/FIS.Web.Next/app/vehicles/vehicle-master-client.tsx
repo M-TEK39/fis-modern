@@ -8,7 +8,7 @@ import type { VehicleSnapshotPage } from "@/lib/api-vehicles";
 
 type VehicleMasterClientProps = {
   pageData: VehicleSnapshotPage;
-  routePath: "/vehicles" | "/Master-File/Vehicle_Master.aspx";
+  routePath: "/vehicles" | "/vehicle-orders" | "/Master-File/Vehicle_Master.aspx";
   menu: {
     canCaptureInception: boolean;
     canAuthorizeInception: boolean;

@@ -10,9 +10,11 @@ import { getSession } from "@/lib/session";
 
 const VEHICLE_MANAGEMENT_PERMISSION = 1;
 
-type VehicleMasterPageProps = {
+export type VehicleMasterPageProps = {
   searchParams: Promise<{ page?: string | string[] }>;
-  routePath?: "/vehicles" | "/Master-File/Vehicle_Master.aspx";
+  routePath?: "/vehicles" | "/vehicle-orders" | "/Master-File/Vehicle_Master.aspx";
+  pageTitle?: string;
+  pageDescription?: string;
 };
 
 function VehicleMasterFallback() {
@@ -140,15 +142,15 @@ async function VehicleMasterContent({ searchParams, routePath }: VehicleMasterPa
   );
 }
 
-export default function VehicleMasterPage(props: VehicleMasterPageProps) {
+export default function VehicleMasterPage({ pageTitle = "Vehicle Master Menu", pageDescription = "Vehicle master navigation and maintenance options.", ...props }: VehicleMasterPageProps) {
   return (
     <main className="page-shell vehicle-page-shell">
       <section className="vehicle-card" aria-labelledby="vehicle-master-title">
         <header className="vehicle-page-header">
           <div>
             <p className="eyebrow">Fleet administration</p>
-            <h1 id="vehicle-master-title">Vehicle Master Menu</h1>
-            <p>Vehicle master navigation and maintenance options.</p>
+            <h1 id="vehicle-master-title">{pageTitle}</h1>
+            <p>{pageDescription}</p>
           </div>
         </header>
         <Suspense fallback={<VehicleMasterFallback />}>

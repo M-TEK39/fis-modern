@@ -342,17 +342,6 @@ public class LicenseReportApiService(HttpClient httpClient, TokenService tokenSe
         await PostAsync<object, List<T>>($"{BasePath}/site", payload) ?? new List<T>();
 }
 
-public class VehicleOrderApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleOrderApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/vehicleorder";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
-
 public class VehiclePhotoApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehiclePhotoApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehiclephoto";
