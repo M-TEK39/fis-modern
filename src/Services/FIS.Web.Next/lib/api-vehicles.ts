@@ -23,6 +23,7 @@ export type VehicleOption = {
   vmfCode: number;
   fleetNumber: string | null;
   registrationNumber: string | null;
+  modelCode: number | null;
 };
 
 export type ContractSnapshot = {
@@ -320,6 +321,7 @@ export async function getVehicleOptions(): Promise<VehicleOption[]> {
         vmfCode,
         fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
         registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+        modelCode: asNumber(getValue(value, "model_code", "modelCode")),
       } satisfies VehicleOption;
     })
     .filter((vehicle): vehicle is VehicleOption => vehicle !== null);
