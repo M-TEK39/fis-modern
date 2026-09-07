@@ -14,6 +14,9 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [{ source: "/Manuals/Allmanuals.htm", destination: "/manuals/Allmanuals.htm" }];
   },
+  async redirects() {
+    return [{ source: "/Losses/Doc/Doc_Losses.htm", destination: "/manuals", permanent: false }];
+  },
 };
 
 export default nextConfig;
