@@ -341,6 +341,20 @@ public class FisDbContext : DbContext
             entity.Ignore(e => e.ModifiedByUser);
         });
 
+        // VehiclePhotoInfo predates the expanded audit columns. The photo
+        // repository negotiates those columns explicitly so EF never emits
+        // a legacy-breaking projection for the original client table.
+        modelBuilder.Entity<VehiclePhoto>(entity =>
+        {
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity

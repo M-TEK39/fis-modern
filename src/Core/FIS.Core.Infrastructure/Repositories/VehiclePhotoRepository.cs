@@ -1,18 +1,489 @@
+using System.Data;
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+
 namespace FIS.Core.Infrastructure.Repositories;
 
+/// <summary>
+/// Reads and writes the original VehiclePhotoInfo columns against both the
+/// client schema and databases with the optional audit columns.
+/// </summary>
 public class VehiclePhotoRepository : IVehiclePhotoRepository
 {
-    private readonly FisDbContext _context;
-    public VehiclePhotoRepository(FisDbContext context) { _context = context; }
+    private const string TableName = "VehiclePhotoInfo";
 
-    public async Task<VehiclePhoto?> GetByIdAsync(int code) => await _context.Set<VehiclePhoto>().FirstOrDefaultAsync(t => t.VehiclePhotoInfoCode == code);
-    public async Task<IEnumerable<VehiclePhoto>> GetAllAsync() => await _context.Set<VehiclePhoto>().ToListAsync();
-    public async Task<IEnumerable<VehiclePhoto>> GetByVehicleAsync(int vmfCode) => await _context.Set<VehiclePhoto>().Where(p => p.VehicleMasterCode == vmfCode).ToListAsync();
-    public async Task<VehiclePhoto> CreateAsync(VehiclePhoto item, int currentUserId) { await _context.Set<VehiclePhoto>().AddAsync(item); await _context.SaveChangesAsync(); return item; }
-    public async Task<VehiclePhoto> UpdateAsync(VehiclePhoto item, int currentUserId) { if (item == null) throw new ArgumentNullException(nameof(item)); var existing = await _context.Set<VehiclePhoto>().FindAsync(item.VehiclePhotoInfoCode); if (existing == null) throw new InvalidOperationException($"VehiclePhoto with VehiclePhotoInfoCode {item.VehiclePhotoInfoCode} not found"); _context.Entry(existing).CurrentValues.SetValues(item); await _context.SaveChangesAsync(); return existing; }
-    public async Task DeleteAsync(int code, int currentUserId) { var item = await GetByIdAsync(code); if (item != null) { _context.Set<VehiclePhoto>().Remove(item); await _context.SaveChangesAsync(); } }
+    private static readonly string[] LegacyColumns =
+    [
+        "VehiclePhotoInfoCode",
+        "VehicleMasterCode",
+        "FileUrl",
+        "Orientation",
+        "Description"
+    ];
+
+    private static readonly string[] OptionalColumns =
+    [
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted"
+    ];
+
+    private static readonly string[] RequiredColumns =
+    [
+        "VehiclePhotoInfoCode",
+        "VehicleMasterCode",
+        "FileUrl",
+        "Orientation",
+        "Description"
+    ];
+
+    private readonly FisDbContext _context;
+
+    public VehiclePhotoRepository(FisDbContext context)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+    }
+
+    public async Task<VehiclePhoto?> GetByIdAsync(int code)
+        => (await QueryAsync(
+            "WHERE [VehiclePhotoInfoCode] = @photoCode",
+            command => AddParameter(command, "@photoCode", DbType.Int32, code)))
+            .SingleOrDefault();
+
+    public async Task<IEnumerable<VehiclePhoto>> GetAllAsync()
+        => await QueryAsync();
+
+    public async Task<IEnumerable<VehiclePhoto>> GetByVehicleAsync(int vmfCode)
+        => await QueryAsync(
+            "WHERE [VehicleMasterCode] = @vmfCode",
+            command => AddParameter(command, "@vmfCode", DbType.Int32, vmfCode));
+
+    public async Task<VehiclePhoto> CreateAsync(VehiclePhoto item, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var values = BuildLegacyWriteValues(item)
+            .Where(value => availableColumns.Contains(value.Column))
+            .ToList();
+        var now = DateTime.UtcNow;
+
+        AddOptionalValue(values, availableColumns, "date_created", "@dateCreated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "created_by_user_code",
+            "@createdByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null);
+        AddOptionalValue(values, availableColumns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        item.VehiclePhotoInfoCode = await ExecuteInsertAsync(values);
+        item.date_created = now;
+        item.created_by_user_code = currentUserId > 0 ? currentUserId : null;
+        item.is_deleted = false;
+        return item;
+    }
+
+    public async Task<VehiclePhoto> UpdateAsync(VehiclePhoto item, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var existing = await GetByIdAsync(item.VehiclePhotoInfoCode)
+            ?? throw new InvalidOperationException(
+                $"VehiclePhoto with VehiclePhotoInfoCode {item.VehiclePhotoInfoCode} not found");
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var values = BuildLegacyWriteValues(item)
+            .Where(value => availableColumns.Contains(value.Column))
+            .ToList();
+        var now = DateTime.UtcNow;
+
+        AddOptionalValue(values, availableColumns, "date_updated", "@dateUpdated", DbType.DateTime2, now);
+        AddOptionalValue(
+            values,
+            availableColumns,
+            "modified_by_user_code",
+            "@modifiedByUserCode",
+            DbType.Int32,
+            currentUserId > 0 ? currentUserId : null);
+
+        await ExecuteUpdateAsync(item.VehiclePhotoInfoCode, values, availableColumns);
+        item.date_created = existing.date_created;
+        item.created_by_user_code = existing.created_by_user_code;
+        item.date_updated = now;
+        item.modified_by_user_code = currentUserId > 0 ? currentUserId : null;
+        return item;
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The statement is selected from fixed compatibility branches and uses a parameter for the record identifier.")]
+    public async Task DeleteAsync(int code, int currentUserId)
+    {
+        var availableColumns = await GetAvailableColumnsAsync();
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            if (availableColumns.Contains("is_deleted"))
+            {
+                var assignments = new List<string> { "[is_deleted] = 1" };
+                if (availableColumns.Contains("date_updated"))
+                {
+                    assignments.Add("[date_updated] = @dateUpdated");
+                    AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+                }
+
+                if (availableColumns.Contains("modified_by_user_code"))
+                {
+                    assignments.Add("[modified_by_user_code] = @modifiedByUserCode");
+                    AddParameter(
+                        command,
+                        "@modifiedByUserCode",
+                        DbType.Int32,
+                        currentUserId > 0 ? currentUserId : null);
+                }
+
+                command.CommandText = $"""
+                    UPDATE [dbo].[{TableName}]
+                    SET {string.Join(", ", assignments)}
+                    WHERE [VehiclePhotoInfoCode] = @photoCode
+                    AND {GetActiveFilter(availableColumns)}
+                    """;
+            }
+            else
+            {
+                command.CommandText = $"""
+                    DELETE FROM [dbo].[{TableName}]
+                    WHERE [VehiclePhotoInfoCode] = @photoCode
+                    """;
+            }
+
+            AddParameter(command, "@photoCode", DbType.Int32, code);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The projection and filter use only fixed legacy columns and allowlisted optional columns; values are parameters.")]
+    private async Task<List<VehiclePhoto>> QueryAsync(
+        string? predicate = null,
+        Action<DbCommand>? configure = null)
+    {
+        var availableColumns = await GetAvailableColumnsAsync();
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            var projection = LegacyColumns
+                .Select(column => GetColumnProjection(availableColumns, column))
+                .Concat(OptionalColumns.Select(column => GetOptionalProjection(availableColumns, column)))
+                .ToArray();
+            var whereClause = string.IsNullOrWhiteSpace(predicate)
+                ? $"WHERE {GetActiveFilter(availableColumns)}"
+                : $"{predicate} AND {GetActiveFilter(availableColumns)}";
+
+            command.CommandText = $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{TableName}]
+                {whereClause}
+                ORDER BY [VehiclePhotoInfoCode]
+                """;
+            configure?.Invoke(command);
+
+            var results = new List<VehiclePhoto>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                results.Add(MapPhoto(reader, availableColumns));
+            }
+
+            return results;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The INSERT statement is composed from fixed compatibility columns and parameterized values.")]
+    private async Task<int> ExecuteInsertAsync(IReadOnlyList<WriteValue> values)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                INSERT INTO [dbo].[{TableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+                OUTPUT INSERTED.[VehiclePhotoInfoCode]
+                VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
+                """;
+            AddParameters(command, values);
+            return Convert.ToInt32(await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The UPDATE statement is composed from fixed compatibility columns and parameterized values.")]
+    private async Task ExecuteUpdateAsync(
+        int code,
+        IReadOnlyList<WriteValue> values,
+        IReadOnlySet<string> availableColumns)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                UPDATE [dbo].[{TableName}]
+                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                WHERE [VehiclePhotoInfoCode] = @photoCode
+                AND {GetActiveFilter(availableColumns)}
+                """;
+            AddParameters(command, values);
+            AddParameter(command, "@photoCode", DbType.Int32, code);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<HashSet<string>> GetAvailableColumnsAsync()
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = """
+                SELECT [COLUMN_NAME]
+                FROM [INFORMATION_SCHEMA].[COLUMNS]
+                WHERE [TABLE_SCHEMA] = @schema
+                  AND [TABLE_NAME] = @table
+                """;
+            AddParameter(command, "@schema", DbType.String, "dbo");
+            AddParameter(command, "@table", DbType.String, TableName);
+
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                columns.Add(reader.GetString(0));
+            }
+
+            var missingColumns = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+            if (missingColumns.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    $"The required VehiclePhotoInfo compatibility columns are not available: {string.Join(", ", missingColumns)}");
+            }
+
+            return columns;
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private static VehiclePhoto MapPhoto(DbDataReader reader, IReadOnlySet<string> availableColumns)
+        => new()
+        {
+            VehiclePhotoInfoCode = ReadInt32(reader, "VehiclePhotoInfoCode") ?? 0,
+            VehicleMasterCode = ReadInt32(reader, "VehicleMasterCode") ?? 0,
+            FileUrl = ReadString(reader, "FileUrl"),
+            Orientation = ReadInt32(reader, "Orientation"),
+            Description = ReadString(reader, "Description"),
+            date_created = ReadDateTimeIfAvailable(reader, availableColumns, "date_created") ?? DateTime.MinValue,
+            date_updated = ReadDateTimeIfAvailable(reader, availableColumns, "date_updated"),
+            created_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "created_by_user_code"),
+            modified_by_user_code = ReadInt32IfAvailable(reader, availableColumns, "modified_by_user_code"),
+            is_deleted = ReadBooleanIfAvailable(reader, availableColumns, "is_deleted") ?? false
+        };
+
+    private static List<WriteValue> BuildLegacyWriteValues(VehiclePhoto item)
+        =>
+        [
+            new("VehicleMasterCode", "@vmfCode", DbType.Int32, item.VehicleMasterCode),
+            new("FileUrl", "@fileUrl", DbType.String, item.FileUrl),
+            new("Orientation", "@orientation", DbType.Int32, item.Orientation),
+            new("Description", "@description", DbType.String, item.Description)
+        ];
+
+    private static void AddOptionalValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> availableColumns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value)
+    {
+        if (availableColumns.Contains(column))
+        {
+            values.Add(new WriteValue(column, parameter, type, value));
+        }
+    }
+
+    private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)
+    {
+        foreach (var value in values)
+        {
+            AddParameter(command, value.Parameter, value.Type, value.Value);
+        }
+    }
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object? value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value ?? DBNull.Value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static string GetActiveFilter(IReadOnlySet<string> availableColumns)
+        => availableColumns.Contains("is_deleted") ? "ISNULL([is_deleted], 0) = 0" : "1 = 1";
+
+    private static string GetOptionalProjection(IReadOnlySet<string> columns, string column)
+    {
+        if (columns.Contains(column))
+        {
+            return $"[{column}] AS [{column}]";
+        }
+
+        var sqlType = column switch
+        {
+            "date_created" or "date_updated" => "datetime2",
+            "created_by_user_code" or "modified_by_user_code" => "int",
+            "is_deleted" => "bit",
+            _ => "sql_variant"
+        };
+        return $"CAST(NULL AS {sqlType}) AS [{column}]";
+    }
+
+    private static string GetColumnProjection(IReadOnlySet<string> columns, string column)
+        => columns.Contains(column)
+            ? $"[{column}] AS [{column}]"
+            : $"CAST(NULL AS {GetLegacySqlType(column)}) AS [{column}]";
+
+    private static string GetLegacySqlType(string column)
+        => column switch
+        {
+            "VehiclePhotoInfoCode" or "VehicleMasterCode" or "Orientation" => "int",
+            "FileUrl" => "varchar(500)",
+            "Description" => "varchar(200)",
+            _ => "sql_variant"
+        };
+
+    private static string? ReadString(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal))?.TrimEnd();
+    }
+
+    private static int? ReadInt32(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToInt32(reader.GetValue(ordinal));
+    }
+
+    private static DateTime? ReadDateTime(DbDataReader reader, string column)
+    {
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToDateTime(reader.GetValue(ordinal));
+    }
+
+    private static DateTime? ReadDateTimeIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+        => columns.Contains(column) ? ReadDateTime(reader, column) : null;
+
+    private static int? ReadInt32IfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+        => columns.Contains(column) ? ReadInt32(reader, column) : null;
+
+    private static bool? ReadBooleanIfAvailable(DbDataReader reader, IReadOnlySet<string> columns, string column)
+    {
+        if (!columns.Contains(column))
+        {
+            return null;
+        }
+
+        var ordinal = reader.GetOrdinal(column);
+        return reader.IsDBNull(ordinal) ? null : Convert.ToBoolean(reader.GetValue(ordinal));
+    }
+
+    private sealed record WriteValue(string Column, string Parameter, DbType Type, object? Value);
 }
