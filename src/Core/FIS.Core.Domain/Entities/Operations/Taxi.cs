@@ -131,6 +131,96 @@ public class Taxi
     [Column("flight")]
     public string? flight { get; set; }
 
+    // Legacy request fields. These are intentionally kept out of the EF model because
+    // the expanded schema does not contain them. TaxiRepository reads/writes them via
+    // guarded compatibility SQL when the client schema provides them.
+    [NotMapped]
+    public string? instructions { get; set; }
+
+    [NotMapped]
+    public string? destination_1 { get; set; }
+
+    [NotMapped]
+    public string? destination_2 { get; set; }
+
+    [NotMapped]
+    public string? destination_3 { get; set; }
+
+    [NotMapped]
+    public short? user_access_code { get; set; }
+
+    [NotMapped]
+    public DateTime? request_date { get; set; }
+
+    [NotMapped]
+    public string? resp_code { get; set; }
+
+    [NotMapped]
+    public string? object_code { get; set; }
+
+    [NotMapped]
+    public string? fms_code { get; set; }
+
+    [NotMapped]
+    public DateTime? date_required_2 { get; set; }
+
+    [NotMapped]
+    public DateTime? time_required_2 { get; set; }
+
+    [NotMapped]
+    public string? address_12 { get; set; }
+
+    [NotMapped]
+    public string? address_22 { get; set; }
+
+    [NotMapped]
+    public string? address_32 { get; set; }
+
+    [NotMapped]
+    public string? destination_12 { get; set; }
+
+    [NotMapped]
+    public string? destination_22 { get; set; }
+
+    [NotMapped]
+    public string? destination_32 { get; set; }
+
+    [NotMapped]
+    public string? trans_man_name { get; set; }
+
+    [NotMapped]
+    public DateTime? trans_man_date { get; set; }
+
+    [NotMapped]
+    public string? trans_man_rank { get; set; }
+
+    [NotMapped]
+    public string? trans_man_tel { get; set; }
+
+    [NotMapped]
+    public string? booking_by { get; set; }
+
+    [NotMapped]
+    public DateTime? arrival_time { get; set; }
+
+    [NotMapped]
+    public string? project { get; set; }
+
+    [NotMapped]
+    public bool? driver_available { get; set; }
+
+    [NotMapped]
+    public string? persal { get; set; }
+
+    [NotMapped]
+    public bool? JIA_pickup { get; set; }
+
+    [NotMapped]
+    public string? official_tel_num { get; set; }
+
+    [NotMapped]
+    public string? fund_code { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Associated department
