@@ -277,20 +277,6 @@ public class AuctionApiService(HttpClient httpClient, TokenService tokenService,
            ?? new AuctionReportDto();
 }
 
-public class LossApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/loss";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<List<T>> GetByVehicleAsync<T>(string vehicleIdentifier) =>
-        GetListAsync<T>($"{BasePath}/vehicle/{Uri.EscapeDataString(vehicleIdentifier)}");
-    public Task<List<T>> GetByVmfCodeAsync<T>(int vmfCode) => GetListAsync<T>($"{BasePath}/vmf/{vmfCode}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
-
 public class LossReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossReportApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/report/losses";
