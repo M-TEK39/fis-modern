@@ -182,38 +182,6 @@ public class RegistrationApiService(HttpClient httpClient, TokenService tokenSer
         => GetAsync<RegistrationHistoryResponseDto>($"{BasePath}/vehicle/{vmfCode}");
 }
 
-public class TrackingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TrackingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/tracking";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-    public async Task<TrackingReportDto> GetOneVehicleReportAsync(TrackingOneVehicleReportRequestDto request)
-        => await PostAsync<TrackingOneVehicleReportRequestDto, TrackingReportDto>($"{BasePath}/reports/one-vehicle", request)
-           ?? new TrackingReportDto();
-    public async Task<TrackingReportDto> GetOneDeviceReportAsync(TrackingOneDeviceReportRequestDto request)
-        => await PostAsync<TrackingOneDeviceReportRequestDto, TrackingReportDto>($"{BasePath}/reports/one-device", request)
-           ?? new TrackingReportDto();
-    public async Task<TrackingReportDto> GetAllVehiclesReportAsync(TrackingAllVehiclesReportRequestDto request)
-        => await PostAsync<TrackingAllVehiclesReportRequestDto, TrackingReportDto>($"{BasePath}/reports/all-vehicles", request)
-           ?? new TrackingReportDto();
-    public async Task<TrackingReportDto> GetAllDevicesReportAsync(TrackingAllDevicesReportRequestDto request)
-        => await PostAsync<TrackingAllDevicesReportRequestDto, TrackingReportDto>($"{BasePath}/reports/all-devices", request)
-           ?? new TrackingReportDto();
-    public async Task<TrackingReportDto> GetInstallPeriodReportAsync(TrackingInstallPeriodReportRequestDto request)
-        => await PostAsync<TrackingInstallPeriodReportRequestDto, TrackingReportDto>($"{BasePath}/reports/install-period", request)
-           ?? new TrackingReportDto();
-    public async Task<TrackingReportDto> GetSitePeriodReportAsync(TrackingSitePeriodReportRequestDto request)
-        => await PostAsync<TrackingSitePeriodReportRequestDto, TrackingReportDto>($"{BasePath}/reports/site-period", request)
-           ?? new TrackingReportDto();
-    public async Task<TrackingReportDto> GetDeptPeriodReportAsync(TrackingDeptPeriodReportRequestDto request)
-        => await PostAsync<TrackingDeptPeriodReportRequestDto, TrackingReportDto>($"{BasePath}/reports/dept-period", request)
-           ?? new TrackingReportDto();
-}
-
 public class AuctionApiService(HttpClient httpClient, TokenService tokenService, ILogger<AuctionApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/auction";

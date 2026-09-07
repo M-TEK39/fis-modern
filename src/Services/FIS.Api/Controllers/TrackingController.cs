@@ -38,10 +38,34 @@ public class TrackingController : BaseApiController
     public async Task<ActionResult<IEnumerable<Tracking>>> GetActive() { try { return Ok(await _repository.GetActiveTrackingAsync()); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
 
     [HttpPost]
-    public async Task<ActionResult<Tracking>> Create([FromBody] Tracking item) { try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.track_code }, created); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<Tracking>> Create([FromBody] Tracking item)
+    {
+        var validation = Validate(item);
+        if (validation is not null) return BadRequest(validation);
+
+        try
+        {
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.track_code }, created);
+        }
+        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+    }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<Tracking>> Update(short id, [FromBody] Tracking item) { try { if (id != item.track_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
+    public async Task<ActionResult<Tracking>> Update(short id, [FromBody] Tracking item)
+    {
+        if (item is null) return BadRequest("Tracking data is required.");
+        if (id != item.track_code) return BadRequest("Tracking code does not match the route.");
+        var validation = Validate(item);
+        if (validation is not null) return BadRequest(validation);
+
+        try
+        {
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
+        catch (KeyNotFoundException) { return NotFound(); }
+        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+    }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id) { try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); } catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); } }
@@ -93,6 +117,18 @@ public class TrackingController : BaseApiController
     }
 
     #endregion
+
+    private static string? Validate(Tracking? item)
+    {
+        if (item is null) return "Tracking data is required.";
+        if (item.vmf_code is <= 0) return "Vehicle code must be positive when supplied.";
+        if (item.track_num?.Length > 50) return "Tracker number must be 50 characters or fewer.";
+        if (item.gg_previous?.Length > 50) return "Previous GG must be 50 characters or fewer.";
+        if (item.gg_follow?.Length > 50) return "Follow GG must be 50 characters or fewer.";
+        if (item.track_status?.Length > 100) return "Tracker status must be 100 characters or fewer.";
+        if (item.track_type?.Length > 100) return "Tracker type must be 100 characters or fewer.";
+        return item.track_note?.Length > 4000 ? "Tracking notes must be 4000 characters or fewer." : null;
+    }
 
     #region Reports
 
