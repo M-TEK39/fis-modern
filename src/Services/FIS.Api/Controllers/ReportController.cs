@@ -27,6 +27,7 @@ public class ReportController : BaseApiController
     private readonly IVehicleStatusReportRepository _vehicleStatusReportRepository;
     private readonly IFmlReportRepository _fmlReportRepository;
     private readonly IJobCardRepository _jobCardRepository;
+    private readonly ILogbookRepository _logbookRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
 
@@ -38,6 +39,7 @@ public class ReportController : BaseApiController
         IVehicleStatusReportRepository vehicleStatusReportRepository,
         IFmlReportRepository fmlReportRepository,
         IJobCardRepository jobCardRepository,
+        ILogbookRepository logbookRepository,
         FisDbContext context,
         ILogger<ReportController> logger)
     {
@@ -48,6 +50,7 @@ public class ReportController : BaseApiController
         _vehicleStatusReportRepository = vehicleStatusReportRepository ?? throw new ArgumentNullException(nameof(vehicleStatusReportRepository));
         _fmlReportRepository = fmlReportRepository ?? throw new ArgumentNullException(nameof(fmlReportRepository));
         _jobCardRepository = jobCardRepository ?? throw new ArgumentNullException(nameof(jobCardRepository));
+        _logbookRepository = logbookRepository ?? throw new ArgumentNullException(nameof(logbookRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -1500,14 +1503,14 @@ public class ReportController : BaseApiController
             // ── Logbooks ─────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Logbooks")
             {
-                var q = _context.Logbooks
+                var rows = (await _logbookRepository.GetAllAsync())
                     .Where(l => !l.is_deleted
-                        && l.date_created >= fromDate && l.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(l => l.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(l => l.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(l => l.date_created)
+                        && l.date_created >= fromDate && l.date_created <= toDate)
+                    .Where(l => !captured_by.HasValue || l.created_by_user_code == captured_by.Value)
+                    .Where(l => !vmf_code.HasValue || l.vmf_code == vmf_code.Value)
+                    .OrderByDescending(l => l.date_created)
                     .Select(l => new { l.logbookcode, l.vmf_code, l.date_created, l.created_by_user_code })
-                    .ToListAsync();
+                    .ToList();
                 var mapped = rows.Where(l => VehicleInScope(l.vmf_code))
                     .Select(l => (object)new CaptureActivityEntry
                     {

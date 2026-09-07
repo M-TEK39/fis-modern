@@ -56,7 +56,7 @@ const MANUAL_GROUPS: readonly ManualGroup[] = [
   },
   {
     title: "Logbook",
-    links: [{ label: "Logbook User Manual", href: "/Logbook/Doc/Doc_logbooks.htm" }],
+    links: [{ label: "Logbook User Manual", href: "/Logbook/Doc/Doc_Logbooks.htm" }],
   },
   {
     title: "Logs",

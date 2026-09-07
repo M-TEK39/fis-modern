@@ -27,14 +27,14 @@ public class Logbook
     /// <summary>
     /// Beginning logbook number
     /// </summary>
-    [StringLength(50)]
+    [StringLength(8)]
     [Column("begin_num")]
     public string? begin_num { get; set; }
 
     /// <summary>
     /// Ending logbook number
     /// </summary>
-    [StringLength(50)]
+    [StringLength(8)]
     [Column("end_num")]
     public string? end_num { get; set; }
 
@@ -53,20 +53,21 @@ public class Logbook
     /// <summary>
     /// Name of logbook receiver
     /// </summary>
-    [StringLength(100)]
+    [StringLength(25)]
     [Column("lb_receiver_name")]
     public string? lb_receiver_name { get; set; }
 
     /// <summary>
     /// Telephone number of receiver
     /// </summary>
-    [StringLength(50)]
+    [StringLength(20)]
     [Column("lb_tel_num")]
     public string? lb_tel_num { get; set; }
 
     /// <summary>
     /// Logbook comments/notes
     /// </summary>
+    [StringLength(60)]
     [Column("lb_comment")]
     public string? lb_comment { get; set; }
 

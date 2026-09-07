@@ -308,11 +308,6 @@ builder.Services.AddHttpClient<RegistrationApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<LogbookApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<LogsheetApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

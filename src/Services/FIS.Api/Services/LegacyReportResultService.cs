@@ -24,6 +24,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private readonly IWorkshopMerchantRepository _workshopMerchantRepository;
     private readonly ITaxiRepository _taxiRepository;
     private readonly IVehicleRepository _vehicleRepository;
+    private readonly ILogbookRepository _logbookRepository;
     private readonly ILogger<LegacyReportResultService> _logger;
     private readonly IReadOnlyDictionary<string, LegacyReportDefinition> _definitions;
 
@@ -34,6 +35,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         IWorkshopMerchantRepository workshopMerchantRepository,
         ITaxiRepository taxiRepository,
         IVehicleRepository vehicleRepository,
+        ILogbookRepository logbookRepository,
         ILogger<LegacyReportResultService> logger)
     {
         _context = context;
@@ -42,6 +44,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         _workshopMerchantRepository = workshopMerchantRepository;
         _taxiRepository = taxiRepository;
         _vehicleRepository = vehicleRepository;
+        _logbookRepository = logbookRepository;
         _logger = logger;
         _definitions = BuildDefinitions();
     }
@@ -1301,21 +1304,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 $"Month {logsheet.month:yyyy-MM}"))
             .ToListAsync(cancellationToken);
 
-        var logbookRows = await (
-            from logbook in _context.Logbooks.AsNoTracking()
-            join vehicleMaster in _context.Vehicles.AsNoTracking() on logbook.vmf_code equals vehicleMaster.vmf_code into logbookVehicles
-            from vehicleMaster in logbookVehicles.DefaultIfEmpty()
-            where !logbook.is_deleted && logbook.date_created.Date >= startDate && logbook.date_created.Date <= endDate
-            select new CaptureActivityRow(
-                "Logbook",
-                logbook.logbookcode.ToString(),
-                vehicleMaster != null ? vehicleMaster.fleet_number : null,
-                vehicleMaster != null ? vehicleMaster.registration_number : null,
-                logbook.site_code,
-                logbook.created_by_user_code,
-                logbook.date_created,
-                logbook.lb_comment))
-            .ToListAsync(cancellationToken);
+        var vehicles = (await _vehicleRepository.GetAllAsync()).ToDictionary(vehicle => vehicle.vmf_code);
+        var logbookRows = (await _logbookRepository.GetAllAsync())
+            .Where(logbook => !logbook.is_deleted
+                && logbook.date_created.Date >= startDate
+                && logbook.date_created.Date <= endDate)
+            .Select(logbook =>
+            {
+                vehicles.TryGetValue(logbook.vmf_code ?? 0, out var vehicle);
+                return new CaptureActivityRow(
+                    "Logbook",
+                    logbook.logbookcode.ToString(),
+                    vehicle?.fleet_number,
+                    vehicle?.registration_number,
+                    logbook.site_code,
+                    logbook.created_by_user_code,
+                    logbook.date_created,
+                    logbook.lb_comment);
+            })
+            .ToList();
 
         IEnumerable<CaptureActivityRow> rows = contractRows
             .Concat(tripRows)
