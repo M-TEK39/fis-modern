@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Net;
 using FIS.Web.Models;
 using Microsoft.Extensions.Logging;
-using System.Net.Http.Headers;
 
 namespace FIS.Web.Services;
 
@@ -340,55 +339,6 @@ public class LicenseReportApiService(HttpClient httpClient, TokenService tokenSe
         await PostAsync<object, List<T>>($"{BasePath}/ggmt-received", payload) ?? new List<T>();
     public async Task<List<T>> GetSiteAsync<T>(object payload) =>
         await PostAsync<object, List<T>>($"{BasePath}/site", payload) ?? new List<T>();
-}
-
-public class VehiclePhotoApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehiclePhotoApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/vehiclephoto";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<List<T>> GetByVehicleAsync<T>(int vmfCode) => GetListAsync<T>($"{BasePath}/vehicle/{vmfCode}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-    public string GetFileUrl(int id) => new Uri(HttpClient.BaseAddress!, $"{BasePath}/{id}/file").ToString();
-
-    public async Task<T?> UploadAsync<T>(
-        int vmfCode,
-        Stream fileStream,
-        string fileName,
-        string contentType,
-        string? description,
-        int? orientation)
-    {
-        try
-        {
-            using var form = new MultipartFormDataContent();
-            form.Add(new StringContent(vmfCode.ToString()), "vmfCode");
-            if (!string.IsNullOrWhiteSpace(description))
-            {
-                form.Add(new StringContent(description), "description");
-            }
-            if (orientation.HasValue && orientation.Value > 0)
-            {
-                form.Add(new StringContent(orientation.Value.ToString()), "orientation");
-            }
-
-            using var streamContent = new StreamContent(fileStream);
-            streamContent.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrWhiteSpace(contentType) ? "image/jpeg" : contentType);
-            form.Add(streamContent, "file", string.IsNullOrWhiteSpace(fileName) ? "image.jpg" : fileName);
-
-            var response = await HttpClient.PostAsync($"{BasePath}/upload", form);
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<T>();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to upload vehicle photo for vmfCode {VmfCode}", vmfCode);
-            throw;
-        }
-    }
 }
 
 public class WorkshopApiService(HttpClient httpClient, TokenService tokenService, ILogger<WorkshopApiService> logger) : BaseApiService(httpClient, tokenService, logger)

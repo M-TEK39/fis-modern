@@ -11,11 +11,18 @@ export default async function LegacyAngularEntryPage({ searchParams }: Readonly<
   const sub = (getQueryValue(query.sub) ?? "SiteStaff").trim().toLowerCase();
   const departmentCode = getQueryValue(query.departmentCode);
   const siteCode = getQueryValue(query.siteCode);
+  const keyword = getQueryValue(query.keyword) ?? getQueryValue(query.q);
   const context = new URLSearchParams();
   if (departmentCode) context.set("departmentCode", departmentCode);
   if (siteCode) context.set("siteCode", siteCode);
+  if (keyword) context.set("q", keyword);
   const suffix = context.size > 0 ? `?${context.toString()}` : "";
 
+  if (sub === "vehiclephotoupload") redirect(`/vehicle-photos${suffix}`);
+  if (sub === "vehiclephotoedit") {
+    const vehicleId = getQueryValue(query.vehicleId);
+    if (vehicleId && /^\d+$/.test(vehicleId)) redirect(`/vehicle-photos/manage/${vehicleId}${suffix}`);
+  }
   if (sub === "authorisermanagement") redirect(`/drivers/authorisers${suffix}`);
   if (sub === "authoriseredit") redirect(`/drivers/authorisers/edit${suffix}`);
   if (sub === "sitedrivermanagement") redirect(`/drivers/site-drivers${suffix}`);
