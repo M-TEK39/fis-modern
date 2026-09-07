@@ -134,6 +134,18 @@ namespace FIS.Api.DTOs
     }
 
     /// <summary>
+    /// DTO for changing only the licence fee assigned to an existing model.
+    /// </summary>
+    public class UpdateModelLicenceFeeDto
+    {
+        [Required]
+        public short model_code { get; set; }
+
+        [Required]
+        public short licence_fee_code { get; set; }
+    }
+
+    /// <summary>
     /// DTO for creating a new Type entity
     /// Excludes auto-generated ID fields
     /// </summary>

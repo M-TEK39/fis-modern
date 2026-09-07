@@ -547,6 +547,7 @@ public interface IModelRepository
     Task<ModelDeleteCheck> GetDeleteCheckAsync(short modelCode);
     Task<Model> CreateAsync(Model model, int currentUserId);
     Task<Model> UpdateAsync(Model model, int currentUserId);
+    Task<Model> UpdateLicenceFeeAsync(short modelCode, short licenceFeeCode, int currentUserId);
     Task DeleteAsync(short modelCode, int currentUserId);
 }
 

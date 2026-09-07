@@ -181,6 +181,21 @@ public sealed class ModelRepository : IModelRepository
         return model;
     }
 
+    public async Task<Model> UpdateLicenceFeeAsync(short modelCode, short licenceFeeCode, int currentUserId)
+    {
+        var existing = await GetByIdAsync(modelCode)
+            ?? throw new InvalidOperationException($"Model with model_code {modelCode} not found");
+        var availableColumns = await GetAvailableColumnsAsync();
+        var values = new List<WriteValue>
+        {
+            new("licence_fee_code", "@licenceFeeCode", DbType.Int16, licenceFeeCode)
+        };
+        AddUpdateAuditValues(values, availableColumns, currentUserId, DateTime.UtcNow);
+
+        await ExecuteUpdateAsync(modelCode, values);
+        return await GetByIdAsync(modelCode) ?? existing;
+    }
+
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",

@@ -293,6 +293,14 @@ export async function updateModel(modelCode: number, input: ModelWriteInput) {
   })));
 }
 
+export async function updateModelLicenceFee(modelCode: number, licenceFeeCode: number) {
+  return mapModel(await readJson(await requestApi(`api/model/${encodeURIComponent(modelCode)}/licence-fee`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ model_code: modelCode, licence_fee_code: licenceFeeCode }),
+  })));
+}
+
 export async function deleteModel(modelCode: number) {
   await requestApi(`api/model/${encodeURIComponent(modelCode)}`, { method: "DELETE" });
 }

@@ -312,6 +312,36 @@ public class ModelController : BaseApiController
     }
 
     /// <summary>
+    /// Updates only the model's licence fee without rewriting unrelated legacy fields.
+    /// </summary>
+    [HttpPatch("{modelCode}/licence-fee")]
+    public async Task<ActionResult<ModelResponseDto>> UpdateModelLicenceFee(short modelCode, [FromBody] UpdateModelLicenceFeeDto updateDto)
+    {
+        try
+        {
+            if (!ModelState.IsValid || modelCode != updateDto.model_code || updateDto.licence_fee_code <= 0)
+            {
+                return BadRequest("Model and licence fee codes must be positive and match the route.");
+            }
+
+            var updatedModel = await _modelRepository.UpdateLicenceFeeAsync(
+                modelCode,
+                updateDto.licence_fee_code,
+                GetCurrentUserId());
+            return Ok(MapToDto(updatedModel));
+        }
+        catch (InvalidOperationException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating licence fee for model {ModelCode}", modelCode);
+            return StatusCode(500, "An error occurred while updating the model licence fee");
+        }
+    }
+
+    /// <summary>
     /// Delete a model
     /// </summary>
     [HttpDelete("{modelCode}")]
