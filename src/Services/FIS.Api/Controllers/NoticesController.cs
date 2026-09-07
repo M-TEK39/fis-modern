@@ -39,7 +39,7 @@ public class NoticesController : BaseApiController
     {
         var notice = new Notice
         {
-            notice_date = DateTime.UtcNow,
+            notice_date = request.NoticeDate ?? DateTime.UtcNow,
             notice_from = request.NoticeFrom,
             notice_title = request.NoticeTitle,
             notice_body = request.NoticeBody,
@@ -61,6 +61,7 @@ public class NoticesController : BaseApiController
         if (existing == null)
             return NotFound(new { message = $"Notice with ID {id} not found" });
 
+        existing.notice_date = request.NoticeDate;
         existing.notice_from = request.NoticeFrom;
         existing.notice_title = request.NoticeTitle;
         existing.notice_body = request.NoticeBody;

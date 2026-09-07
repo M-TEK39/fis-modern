@@ -241,7 +241,7 @@ public class NoticeManagementController : BaseApiController
 
             var notice = new Notice
             {
-                notice_date = DateTime.UtcNow,
+                notice_date = request.NoticeDate ?? DateTime.UtcNow,
                 notice_from = request.NoticeFrom,
                 notice_title = request.NoticeTitle,
                 notice_body = request.NoticeBody,
@@ -389,6 +389,7 @@ public class NoticeDto
 
 public class CreateNoticeDto
 {
+    public DateTime? NoticeDate { get; set; }
     public string? NoticeFrom { get; set; }
     public string? NoticeTitle { get; set; }
     public string? NoticeBody { get; set; }

@@ -243,12 +243,6 @@ builder.Services.AddHttpClient<TroubleshootApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-builder.Services.AddHttpClient<NoticeApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-
 builder.Services.AddHttpClient<ReportCatalogApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
