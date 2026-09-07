@@ -215,6 +215,51 @@ public sealed record RecoveredVehicleUpdateResult(
     int NewVmfCode);
 
 /// <summary>
+/// Repository interface for the legacy Demo Vehicles module. The demo vehicle
+/// table exists in both the original client schema and the expanded schema,
+/// so the implementation must negotiate optional audit columns at runtime.
+/// </summary>
+public interface IDemoVehicleRepository
+{
+    Task<IReadOnlyList<DemoVehicleRecord>> GetAllAsync();
+    Task<IReadOnlyList<DemoVehicleRecord>> SearchAsync(string searchTerm, bool byRegistration);
+    Task<DemoVehicleRecord?> GetByIdAsync(int demoVehicleCode);
+    Task<DemoVehicleRecord> CreateAsync(DemoVehicleInput input, int currentUserId);
+    Task<DemoVehicleRecord> UpdateAsync(int demoVehicleCode, DemoVehicleInput input, int currentUserId);
+    Task DeleteAsync(int demoVehicleCode, int currentUserId);
+}
+
+public sealed record DemoVehicleInput(
+    string? GgNumber,
+    string? RegistrationNumber,
+    string ModelDescription,
+    short? SiteCode,
+    int? YearManufactured,
+    string? BankCode,
+    short? Tank,
+    string? Colour,
+    string? EngineNumber,
+    string? ChassisNumber);
+
+public sealed record DemoVehicleRecord(
+    int DemoVehicleCode,
+    string? GgNumber,
+    string? RegistrationNumber,
+    string? ModelDescription,
+    int? YearManufactured,
+    short? SiteCode,
+    string? SiteDescription,
+    string? BankCode,
+    short? Tank,
+    string? Colour,
+    string? EngineNumber,
+    string? ChassisNumber,
+    DateTime? DateCreated,
+    DateTime? DateUpdated,
+    int? CreatedByUserCode,
+    int? ModifiedByUserCode);
+
+/// <summary>
 /// Repository interface for vehicle authorization (pre-capture) operations
 /// </summary>
 public interface IVehicleAuthorizationRepository

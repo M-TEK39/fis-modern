@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -183,13 +184,16 @@ public class AuthController : ControllerBase
 
         var accessLevel = profile.UserAccessOld?.AccessLevel ?? 0L;
 
-        var grantedRoles = LegacyRoleMap.RolesForAccessLevel(accessLevel).ToArray();
+        var grantedRoles = LegacyRoleMap.RolesForAccessLevel(accessLevel)
+            .Concat(await TryGetLegacyNamedRolesAsync(profile.ResolvedUsername))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         _logger.LogInformation(
             "Login: user_access_code={UserAccessCode} access_level={AccessLevel} roles={Roles}",
             profile.UserAccessCode, accessLevel, string.Join(",", grantedRoles));
 
         var email = profile.User?.email ?? profile.UserAccessOld?.E_Mail ?? request.Username.Trim();
-        var authClaims = BuildAuthClaims(profile.UserAccessCode, email, accessLevel, passwordExpired);
+        var authClaims = BuildAuthClaims(profile.UserAccessCode, email, accessLevel, passwordExpired, grantedRoles);
         var tokens = _sessionTokenStore.IssueTokens(authClaims);
 
         WriteAuthCookies(tokens.AccessToken, tokens.AccessExpiresAt, tokens.RefreshToken, tokens.RefreshExpiresAt);
@@ -1380,6 +1384,73 @@ public class AuthController : ControllerBase
         return exception.Number is 207 or 208;
     }
 
+    /// <summary>
+    /// The original application stored fine-grained named roles in the
+    /// ASP.NET membership tables. Those tables are absent from some expanded
+    /// databases, so role hydration is deliberately optional and never makes
+    /// legacy or modern-only login fail.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> TryGetLegacyNamedRolesAsync(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return [];
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT r.[RoleName]
+                FROM [dbo].[aspnet_Users] AS u
+                INNER JOIN [dbo].[aspnet_UsersInRoles] AS ur ON ur.[UserId] = u.[UserId]
+                INNER JOIN [dbo].[aspnet_Roles] AS r
+                    ON r.[RoleId] = ur.[RoleId]
+                   AND r.[ApplicationId] = u.[ApplicationId]
+                WHERE LOWER(u.[UserName]) = @username
+                """;
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "@username";
+            parameter.DbType = DbType.String;
+            parameter.Value = username.Trim().ToLowerInvariant();
+            command.Parameters.Add(parameter);
+
+            var roles = new List<string>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var role = reader.IsDBNull(0) ? null : reader.GetString(0).Trim();
+                if (!string.IsNullOrWhiteSpace(role))
+                {
+                    roles.Add(role);
+                }
+            }
+
+            return roles;
+        }
+        catch (SqlException ex) when (IsMissingSchemaObject(ex))
+        {
+            _logger.LogInformation(
+                "Legacy ASP.NET role tables are unavailable; continuing with access-level role claims for {Username}",
+                username);
+            return [];
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     private async Task<ResolvedUserProfile?> ResolveUserProfileAsync(string username)
     {
         if (string.IsNullOrWhiteSpace(username))
@@ -1634,7 +1705,12 @@ public class AuthController : ControllerBase
 
     private static readonly string RefreshTokenCookieName = "FIS_Refresh_Token";
 
-    internal static List<Claim> BuildAuthClaims(int userAccessCode, string email, long accessLevel = 0, bool passwordExpired = false)
+    internal static List<Claim> BuildAuthClaims(
+        int userAccessCode,
+        string email,
+        long accessLevel = 0,
+        bool passwordExpired = false,
+        IEnumerable<string>? additionalRoles = null)
     {
         var claims = new List<Claim>
         {
@@ -1646,7 +1722,9 @@ public class AuthController : ControllerBase
         };
 
         // Derive named legacy role claims from the bitmask so pages using IsInRole() work
-        foreach (var role in LegacyRoleMap.RolesForAccessLevel(accessLevel))
+        foreach (var role in LegacyRoleMap.RolesForAccessLevel(accessLevel)
+            .Concat(additionalRoles ?? [])
+            .Distinct(StringComparer.OrdinalIgnoreCase))
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
         }
