@@ -288,6 +288,7 @@ builder.Services.AddScoped<ITowingRepository, TowingRepository>();
 builder.Services.AddScoped<IVehicleOrderRepository, VehicleOrderRepository>();
 builder.Services.AddScoped<IVehiclePhotoRepository, VehiclePhotoRepository>();
 builder.Services.AddScoped<IWorkshopRepository, WorkshopRepository>();
+builder.Services.AddScoped<IWorkshopMerchantRepository, WorkshopMerchantRepository>();
 
 // Batch 3 repositories (Accident management and vehicle tracking)
 builder.Services.AddScoped<IAccidentRepository, AccidentRepository>();
