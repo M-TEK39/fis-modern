@@ -73,8 +73,42 @@ public class LeaseContractTerms
     [Column("is_deleted")]
     public bool is_deleted { get; set; } = false;
 
-    // Navigation properties for audit trail
-    
+    // Legacy FML columns that are still returned when the client schema is
+    // not expanded. These are populated by the compatibility repository and
+    // deliberately excluded from EF mapping.
+    [NotMapped]
+    public int? AgreedOverallKilo { get; set; }
 
-    
+    [NotMapped]
+    public decimal? ExcessKilosTarrif { get; set; }
+
+    [NotMapped]
+    public bool? RelieveVehicle { get; set; }
+
+    [NotMapped]
+    public short? lease_site_code { get; set; }
+
+    [NotMapped]
+    public string? Comments { get; set; }
+
+    [NotMapped]
+    public int? Rejected { get; set; }
+
+    [NotMapped]
+    public int? AuthorisedBy { get; set; }
+
+    [NotMapped]
+    public DateTime? AuthorisedDate { get; set; }
+
+    [NotMapped]
+    public string? authority_comment { get; set; }
+
+    [NotMapped]
+    public string? rejection_reason { get; set; }
+
+    [NotMapped]
+    public string? lease_status { get; set; }
+
+    [NotMapped]
+    public string? lease_notes { get; set; }
 }
