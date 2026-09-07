@@ -27,6 +27,47 @@ public class ContractorTaxiClass
     [Column("daily_tariff")]
     public decimal? daily_tariff { get; set; }
 
+    // Legacy tariff fields. The reference repository negotiates these columns
+    // because the expanded table only carries the three active tariff values.
+    [NotMapped]
+    public decimal? half_day_tariff { get; set; }
+
+    [NotMapped]
+    public string? tariff_type { get; set; }
+
+    [NotMapped]
+    public DateTime? tariff_date { get; set; }
+
+    [NotMapped]
+    public short? model_code { get; set; }
+
+    [NotMapped]
+    public decimal? km_tariff_bus { get; set; }
+
+    [NotMapped]
+    public bool? active { get; set; }
+
+    [NotMapped]
+    public DateTime? tariff_end_date { get; set; }
+
+    [NotMapped]
+    public TimeSpan? normalhours_start_time { get; set; }
+
+    [NotMapped]
+    public TimeSpan? normalhours_end_time { get; set; }
+
+    [NotMapped]
+    public TimeSpan? midweekovertime_start_time { get; set; }
+
+    [NotMapped]
+    public TimeSpan? midweekovertime_end_time { get; set; }
+
+    [NotMapped]
+    public TimeSpan? holidayhours_start_time { get; set; }
+
+    [NotMapped]
+    public TimeSpan? holidayhours_end_time { get; set; }
+
     // Global audit fields
     [Column("date_created")]
     public DateTime date_created { get; set; }

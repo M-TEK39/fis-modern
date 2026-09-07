@@ -283,6 +283,7 @@ builder.Services.AddScoped<ITaxiRepository, TaxiRepository>();
 builder.Services.AddScoped<ITaxiLogRepository, TaxiLogRepository>();
 builder.Services.AddScoped<ITaxiLogNoteRepository, TaxiLogNoteRepository>();
 builder.Services.AddScoped<ITaxiWhiteLogRepository, TaxiWhiteLogRepository>();
+builder.Services.AddScoped<IContractorTaxiClassRepository, ContractorTaxiClassRepository>();
 builder.Services.AddScoped<ITowingRepository, TowingRepository>();
 // TripAuthorityRepository removed - conflicts with existing Trip entity
 builder.Services.AddScoped<IVehicleOrderRepository, VehicleOrderRepository>();
