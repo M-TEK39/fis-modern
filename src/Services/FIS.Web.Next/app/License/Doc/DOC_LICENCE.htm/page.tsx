@@ -1,5 +1,1 @@
-import { redirect } from "next/navigation";
-
-export default function LegacyManualRedirect() {
-  redirect("/manuals");
-}
+export { default } from "@/app/licenses/help/page";
