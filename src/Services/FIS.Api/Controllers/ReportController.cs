@@ -26,6 +26,7 @@ public class ReportController : BaseApiController
     private readonly IVehicleSourceRepository _vehicleSourceRepository;
     private readonly IVehicleStatusReportRepository _vehicleStatusReportRepository;
     private readonly IFmlReportRepository _fmlReportRepository;
+    private readonly IJobCardRepository _jobCardRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
 
@@ -36,6 +37,7 @@ public class ReportController : BaseApiController
         IVehicleSourceRepository vehicleSourceRepository,
         IVehicleStatusReportRepository vehicleStatusReportRepository,
         IFmlReportRepository fmlReportRepository,
+        IJobCardRepository jobCardRepository,
         FisDbContext context,
         ILogger<ReportController> logger)
     {
@@ -45,6 +47,7 @@ public class ReportController : BaseApiController
         _vehicleSourceRepository = vehicleSourceRepository ?? throw new ArgumentNullException(nameof(vehicleSourceRepository));
         _vehicleStatusReportRepository = vehicleStatusReportRepository ?? throw new ArgumentNullException(nameof(vehicleStatusReportRepository));
         _fmlReportRepository = fmlReportRepository ?? throw new ArgumentNullException(nameof(fmlReportRepository));
+        _jobCardRepository = jobCardRepository ?? throw new ArgumentNullException(nameof(jobCardRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -1466,14 +1469,18 @@ public class ReportController : BaseApiController
             // ── Job Cards ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "JobCards")
             {
-                var q = _context.JobCards
+                // Use the compatibility repository here instead of querying
+                // the expanded job_cards table directly. The client database
+                // uses dbo.Jobcards and must remain reportable before the
+                // expanded schema is installed.
+                var rows = (await _jobCardRepository.GetAllAsync())
                     .Where(j => !j.is_deleted
-                        && j.date_created >= fromDate && j.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(j => j.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(j => j.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(j => j.date_created)
+                        && j.date_created >= fromDate && j.date_created <= toDate)
+                    .Where(j => !captured_by.HasValue || j.created_by_user_code == captured_by.Value)
+                    .Where(j => !vmf_code.HasValue || j.vmf_code == vmf_code.Value)
+                    .OrderByDescending(j => j.date_created)
                     .Select(j => new { j.job_card_id, j.vmf_code, j.jcs_comment, j.status_code, j.date_created, j.created_by_user_code })
-                    .ToListAsync();
+                    .ToList();
                 var mapped = rows.Where(j => VehicleInScope(j.vmf_code))
                     .Select(j => (object)new CaptureActivityEntry
                     {
