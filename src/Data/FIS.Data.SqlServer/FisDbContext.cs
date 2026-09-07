@@ -355,6 +355,22 @@ public class FisDbContext : DbContext
             entity.Ignore(e => e.ModifiedByUser);
         });
 
+        // Loss records have a long legacy field set, while status and audit
+        // columns are only present in expanded databases. LossRepository
+        // negotiates the live table shape with parameterized SQL so EF never
+        // emits a legacy-breaking projection for this table.
+        modelBuilder.Entity<Loss>(entity =>
+        {
+            entity.Ignore(e => e.loss_status);
+            entity.Ignore(e => e.date_created);
+            entity.Ignore(e => e.date_updated);
+            entity.Ignore(e => e.created_by_user_code);
+            entity.Ignore(e => e.modified_by_user_code);
+            entity.Ignore(e => e.is_deleted);
+            entity.Ignore(e => e.CreatedByUser);
+            entity.Ignore(e => e.ModifiedByUser);
+        });
+
         modelBuilder.Entity<Vehicle>(entity =>
         {
             entity

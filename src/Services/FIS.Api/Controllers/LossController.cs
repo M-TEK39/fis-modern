@@ -11,11 +11,16 @@ namespace FIS.Api.Controllers;
 public class LossController : BaseApiController
 {
     private readonly ILossRepository _repository;
+    private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<LossController> _logger;
 
-    public LossController(ILossRepository repository, ILogger<LossController> logger)
+    public LossController(
+        ILossRepository repository,
+        IVehicleRepository vehicleRepository,
+        ILogger<LossController> logger)
     {
         _repository = repository;
+        _vehicleRepository = vehicleRepository;
         _logger = logger;
     }
 
@@ -31,6 +36,53 @@ public class LossController : BaseApiController
     {
         try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+    }
+
+    [HttpGet("vehicle/{identifier}")]
+    public async Task<ActionResult<IEnumerable<Loss>>> GetByVehicleIdentifier(
+        string identifier,
+        [FromQuery] string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(identifier))
+        {
+            return Ok(Array.Empty<Loss>());
+        }
+
+        try
+        {
+            var normalizedIdentifier = identifier.Trim();
+            var normalizedMode = mode?.Trim().ToUpperInvariant();
+            var vehicle = normalizedMode == "GP"
+                ? await _vehicleRepository.GetByRegistrationNumberAsync(normalizedIdentifier)
+                : await _vehicleRepository.GetByFleetNumberAsync(normalizedIdentifier);
+            return vehicle is null
+                ? Ok(Array.Empty<Loss>())
+                : Ok(await _repository.GetByVehicleAsync(vehicle.vmf_code));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving losses for vehicle identifier {Identifier}", identifier);
+            return StatusCode(500);
+        }
+    }
+
+    [HttpGet("vmf/{vmfCode:int}")]
+    public async Task<ActionResult<IEnumerable<Loss>>> GetByVehicleCode(int vmfCode)
+    {
+        if (vmfCode <= 0)
+        {
+            return BadRequest(new { message = "A valid vehicle code is required." });
+        }
+
+        try
+        {
+            return Ok(await _repository.GetByVehicleAsync(vmfCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving losses for vehicle {VmfCode}", vmfCode);
+            return StatusCode(500);
+        }
     }
 
     [HttpPost]
