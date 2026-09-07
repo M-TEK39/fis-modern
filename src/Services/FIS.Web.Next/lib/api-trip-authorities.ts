@@ -21,14 +21,77 @@ export type TripAuthorityRecord = {
   contractCode: number;
   vmfCode: number | null;
   siteCode: number | null;
+  approverName: string | null;
+  approverRank: string | null;
+  approverTelephone: string | null;
+  tripReason: string | null;
+  tripRequestNumber: string | null;
+  tripTypeCode: number | null;
+  tripIncidentTypeCode: number | null;
+  userAccessCode: number | null;
+  lockedForTransfer: boolean;
+  tripIsMonthly: boolean;
   endOdometer: number | null;
   issueDate: string | null;
   expiryDate: string | null;
 };
 
+export type TripAuthorityDriver = {
+  tripDriverCode: number;
+  name: string | null;
+  identityNumber: string | null;
+  isPrimary: boolean;
+  siteCode: number | null;
+  licenceTypeCode: number | null;
+  passportNumber: string | null;
+  persalNumber: string | null;
+  contractNumber: string | null;
+  licenceNumber: string | null;
+  licenceIssueDate: string | null;
+  licenceLastVerifiedDate: string | null;
+  hasPdp: boolean;
+  pdpExpiryDate: string | null;
+  licenceExpiryDate: string | null;
+  isActive: boolean;
+};
+
+export type TripAuthorityPassenger = {
+  tripPassengerCode: number;
+  name: string | null;
+};
+
+export type TripAuthorityRoute = {
+  routeCode: number;
+  startDate: string | null;
+  endDate: string | null;
+  startOdometer: number | null;
+  endOdometer: number | null;
+  responsibilityCode: string | null;
+  objectiveCode: string | null;
+  startLocation: string | null;
+  endLocation: string | null;
+  estimatedDistance: number | null;
+  distance: number | null;
+  projectNumber: string | null;
+  fundCode: string | null;
+  editedByUserCode: number | null;
+};
+
+export type TripAuthorityDetails = {
+  trip: TripAuthorityRecord;
+  drivers: TripAuthorityDriver[];
+  passengers: TripAuthorityPassenger[];
+  routes: TripAuthorityRoute[];
+};
+
+export type CloseTripAuthorityRequest = {
+  endOdometer: number | null;
+  routes: Array<{ routeCode: number; endOdometer: number }>;
+};
+
 export class TripAuthorityApiError extends Error {
   constructor(
-    public readonly reason: "unauthorized" | "unavailable" | "invalid-response",
+    public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found",
     message: string,
   ) {
     super(message);
@@ -67,6 +130,12 @@ function asString(value: unknown) {
   if (typeof value === "string") return value.trim() || null;
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   return null;
+}
+
+function asBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  return ["true", "1", "yes", "y"].includes(String(value).trim().toLowerCase());
 }
 
 function getCollection(payload: unknown) {
@@ -129,13 +198,77 @@ function mapTrip(value: unknown): TripAuthorityRecord | null {
     contractCode,
     vmfCode: asNumber(getValue(value, "vmfCode", "vmf_code")),
     siteCode: asNumber(getValue(value, "siteCode", "site_code")),
+    approverName: asString(getValue(value, "approverName", "approver_name")),
+    approverRank: asString(getValue(value, "approverRank", "approver_rank")),
+    approverTelephone: asString(getValue(value, "approverTelephone", "approver_tel")),
+    tripReason: asString(getValue(value, "tripReason", "trip_reason")),
+    tripRequestNumber: asString(getValue(value, "tripRequestNumber", "trip_request_number")),
+    tripTypeCode: asNumber(getValue(value, "tripTypeCode", "trip_type_code")),
+    tripIncidentTypeCode: asNumber(getValue(value, "tripIncidentTypeCode", "trip_incident_type_code")),
+    userAccessCode: asNumber(getValue(value, "userAccessCode", "user_access_code")),
+    lockedForTransfer: asBoolean(getValue(value, "lockedForTransfer", "locked_for_transfer")),
+    tripIsMonthly: asBoolean(getValue(value, "tripIsMonthly", "Trip_Is_Monthly", "trip_is_monthly")),
     endOdometer: asNumber(getValue(value, "endOdometer", "end_odo_meter")),
     issueDate: asString(getValue(value, "issueDate", "issue_date")),
     expiryDate: asString(getValue(value, "expiryDate", "expiry_date")),
   };
 }
 
-async function requestApi(path: string) {
+function mapDriver(value: unknown): TripAuthorityDriver | null {
+  if (!isRecord(value)) return null;
+  const tripDriverCode = asNumber(getValue(value, "tripDriverCode", "trip_driver_code"));
+  if (tripDriverCode === null) return null;
+  return {
+    tripDriverCode,
+    name: asString(getValue(value, "name", "trip_driver_name")),
+    identityNumber: asString(getValue(value, "identityNumber", "trip_driver_id")),
+    isPrimary: asBoolean(getValue(value, "isPrimary", "trip_driver_primary")),
+    siteCode: asNumber(getValue(value, "siteCode", "site_code")),
+    licenceTypeCode: asNumber(getValue(value, "licenceTypeCode", "driver_licence_type_id")),
+    passportNumber: asString(getValue(value, "passportNumber", "driver_passportnumber")),
+    persalNumber: asString(getValue(value, "persalNumber", "driver_persalnumber")),
+    contractNumber: asString(getValue(value, "contractNumber", "driver_contractnumber")),
+    licenceNumber: asString(getValue(value, "licenceNumber", "driver_licence_number")),
+    licenceIssueDate: asString(getValue(value, "licenceIssueDate", "driver_licence_issuedate")),
+    licenceLastVerifiedDate: asString(getValue(value, "licenceLastVerifiedDate", "driver_licence_lastVerifiedDate")),
+    hasPdp: asBoolean(getValue(value, "hasPdp", "driver_hasPDP")),
+    pdpExpiryDate: asString(getValue(value, "pdpExpiryDate", "driver_PDP_ExpiryDate")),
+    licenceExpiryDate: asString(getValue(value, "licenceExpiryDate", "driver_licence_ExpiryDate")),
+    isActive: asBoolean(getValue(value, "isActive", "driver_active")),
+  };
+}
+
+function mapPassenger(value: unknown): TripAuthorityPassenger | null {
+  if (!isRecord(value)) return null;
+  const tripPassengerCode = asNumber(getValue(value, "tripPassengerCode", "trip_passenger_code"));
+  return tripPassengerCode === null
+    ? null
+    : { tripPassengerCode, name: asString(getValue(value, "name", "trip_passenger_name")) };
+}
+
+function mapRoute(value: unknown): TripAuthorityRoute | null {
+  if (!isRecord(value)) return null;
+  const routeCode = asNumber(getValue(value, "routeCode", "route_code"));
+  if (routeCode === null) return null;
+  return {
+    routeCode,
+    startDate: asString(getValue(value, "startDate", "start_date")),
+    endDate: asString(getValue(value, "endDate", "end_date")),
+    startOdometer: asNumber(getValue(value, "startOdometer", "start_odo_meter")),
+    endOdometer: asNumber(getValue(value, "endOdometer", "end_odo_meter")),
+    responsibilityCode: asString(getValue(value, "responsibilityCode", "bas_responsibility_code")),
+    objectiveCode: asString(getValue(value, "objectiveCode", "bas_object_code")),
+    startLocation: asString(getValue(value, "startLocation", "start_route_location_name")),
+    endLocation: asString(getValue(value, "endLocation", "end_route_location_name")),
+    estimatedDistance: asNumber(getValue(value, "estimatedDistance", "estimated_distance")),
+    distance: asNumber(getValue(value, "distance")),
+    projectNumber: asString(getValue(value, "projectNumber", "project_number", "bas_project_number")),
+    fundCode: asString(getValue(value, "fundCode", "fund_code", "bas_fund_code")),
+    editedByUserCode: asNumber(getValue(value, "editedByUserCode", "modified_by_user_code")),
+  };
+}
+
+async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) {
     throw new TripAuthorityApiError("unauthorized", "No FIS access cookie is available.");
@@ -146,16 +279,22 @@ async function requestApi(path: string) {
 
   try {
     const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
+      ...init,
       cache: "no-store",
       headers: {
         accept: "application/json",
         cookie: cookieHeader,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...init.headers,
       },
       signal: controller.signal,
     });
 
     if (response.status === 401 || response.status === 403) {
       throw new TripAuthorityApiError("unauthorized", "The FIS access cookie was rejected.");
+    }
+    if (response.status === 404) {
+      throw new TripAuthorityApiError("not-found", "The requested trip authority was not found.");
     }
 
     if (!response.ok) {
@@ -187,4 +326,50 @@ export async function getTripAuthorities() {
   return getCollection(payload)
     .map(mapTrip)
     .filter((trip): trip is TripAuthorityRecord => trip !== null);
+}
+
+export async function getTripAuthorityDetails(tripId: number) {
+  const payload = await requestApi(`api/Trip/${tripId}/details`);
+  if (!isRecord(payload)) {
+    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid trip authority detail response.");
+  }
+
+  const trip = mapTrip(getValue(payload, "trip"));
+  if (trip === null) {
+    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid trip authority.");
+  }
+
+  const mapDetailCollection = <T>(key: string, mapper: (value: unknown) => T | null) => {
+    const collection = getValue(payload, key);
+    return Array.isArray(collection)
+      ? collection.map(mapper).filter((item): item is T => item !== null)
+      : [];
+  };
+
+  return {
+    trip,
+    drivers: mapDetailCollection("drivers", mapDriver),
+    passengers: mapDetailCollection("passengers", mapPassenger),
+    routes: mapDetailCollection("routes", mapRoute),
+  } satisfies TripAuthorityDetails;
+}
+
+export async function closeTripAuthority(tripId: number, request: CloseTripAuthorityRequest) {
+  const payload = await requestApi(`api/Trip/${encodeURIComponent(tripId)}/close`, {
+    method: "POST",
+    body: JSON.stringify({
+      EndOdometer: request.endOdometer,
+      Routes: request.routes.map((route) => ({
+        RouteCode: route.routeCode,
+        EndOdometer: route.endOdometer,
+      })),
+    }),
+  });
+
+  const trip = mapTrip(payload);
+  if (!trip) {
+    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid closed trip authority.");
+  }
+
+  return trip;
 }
