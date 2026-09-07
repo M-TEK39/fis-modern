@@ -24,9 +24,21 @@ public interface ITripService
     Task UpdateTripAsync(Trip trip);
 
     /// <summary>
+    /// Close a trip authority and persist its route end odometer readings.
+    /// </summary>
+    Task CloseTripAsync(int tripAuthorityCode, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer = null);
+
+    /// <summary>
     /// Get trip authority by ID
     /// </summary>
     Task<Trip?> GetTripByIdAsync(int tripAuthorityCode);
+
+    /// <summary>
+    /// Get the complete persisted trip authority record and its related legacy
+    /// rows. Related tables are negotiated at runtime because older client
+    /// databases do not contain every later table or column.
+    /// </summary>
+    Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(int tripAuthorityCode);
 
     /// <summary>
     /// Get all trip authorities with their contract vehicle context.
@@ -135,3 +147,52 @@ public sealed record TripAuthorityVehicle(
     string? MakeDescription,
     string? ModelDescription,
     string? ContractType);
+
+public sealed record TripAuthorityDetails(
+    Trip Trip,
+    IReadOnlyList<TripAuthorityDriver> Drivers,
+    IReadOnlyList<TripAuthorityPassenger> Passengers,
+    IReadOnlyList<TripAuthorityRoute> Routes);
+
+public sealed record TripAuthorityDriver(
+    int TripDriverCode,
+    string? Name,
+    string? IdentityNumber,
+    bool IsPrimary,
+    int? SiteCode,
+    int? LicenceTypeCode,
+    string? PassportNumber,
+    string? PersalNumber,
+    string? ContractNumber,
+    string? LicenceNumber,
+    DateTime? LicenceIssueDate,
+    DateTime? LicenceLastVerifiedDate,
+    bool HasPdp,
+    DateTime? PdpExpiryDate,
+    DateTime? LicenceExpiryDate,
+    bool IsActive);
+
+public sealed record TripAuthorityPassenger(
+    int TripPassengerCode,
+    string? Name);
+
+public sealed record TripAuthorityRoute(
+    int RouteCode,
+    DateTime? StartDate,
+    DateTime? EndDate,
+    int? StartOdometer,
+    int? EndOdometer,
+    string? ResponsibilityCode,
+    string? ObjectiveCode,
+    string? StartLocation,
+    string? EndLocation,
+    int? EstimatedDistance,
+    int? Distance,
+    string? ProjectNumber,
+    string? FundCode,
+    int? EditedByUserCode);
+
+public sealed record TripAuthorityRouteUpdate(
+    int RouteCode,
+    int EndOdometer,
+    int Distance);

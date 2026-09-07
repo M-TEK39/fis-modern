@@ -106,12 +106,84 @@ public class TripService : ITripService
         }
     }
 
+    public async Task CloseTripAsync(int tripAuthorityCode, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer = null)
+    {
+        var details = await _tripRepository.GetDetailsAsync(tripAuthorityCode)
+            ?? throw new InvalidOperationException($"Trip {tripAuthorityCode} not found");
+
+        if (details.Trip.locked_for_transfer)
+        {
+            throw new InvalidOperationException($"Trip {tripAuthorityCode} is locked for transfer and cannot be modified");
+        }
+
+        var submittedByCode = routes.ToDictionary(route => route.RouteCode);
+        if (details.Routes.Count == 0 && routes.Count > 0)
+        {
+            throw new InvalidOperationException("The trip has no persisted routes to close");
+        }
+
+        if (routes.Any(route => !details.Routes.Any(existing => existing.RouteCode == route.RouteCode)))
+        {
+            throw new InvalidOperationException("One or more submitted routes do not belong to this trip");
+        }
+
+        var validatedRoutes = new List<TripAuthorityRouteUpdate>(details.Routes.Count);
+        var maxEndOdometer = endOdometer ?? details.Trip.end_odo_meter ?? 0;
+        int? previousEndOdometer = null;
+        foreach (var route in details.Routes)
+        {
+            if (!submittedByCode.TryGetValue(route.RouteCode, out var submitted))
+            {
+                throw new InvalidOperationException($"End odometer is required for route {route.RouteCode}");
+            }
+
+            var startOdometer = route.StartOdometer ?? previousEndOdometer;
+            if (startOdometer.HasValue && submitted.EndOdometer < startOdometer.Value)
+            {
+                throw new InvalidOperationException(
+                    $"The end odometer for route {route.RouteCode} must be greater than or equal to {startOdometer.Value}");
+            }
+
+            var distance = (long)submitted.EndOdometer - (startOdometer ?? submitted.EndOdometer);
+            if (distance < 0 || distance > 25_000)
+            {
+                throw new InvalidOperationException(
+                    $"The distance for route {route.RouteCode} must be between 0 and 25000 kilometres");
+            }
+
+            if (string.IsNullOrWhiteSpace(route.ResponsibilityCode) ||
+                string.IsNullOrWhiteSpace(route.ObjectiveCode) ||
+                string.IsNullOrWhiteSpace(route.ProjectNumber) ||
+                string.IsNullOrWhiteSpace(route.FundCode))
+            {
+                throw new InvalidOperationException(
+                    $"Responsibility, Objective, Project, and Fund are required before closing route {route.RouteCode}");
+            }
+
+            validatedRoutes.Add(new TripAuthorityRouteUpdate(route.RouteCode, submitted.EndOdometer, (int)distance));
+            previousEndOdometer = submitted.EndOdometer;
+            maxEndOdometer = Math.Max(maxEndOdometer, submitted.EndOdometer);
+        }
+
+        details.Trip.end_odo_meter = maxEndOdometer > 0 ? maxEndOdometer : details.Trip.end_odo_meter;
+        await _tripRepository.CloseAsync(
+            tripAuthorityCode,
+            validatedRoutes,
+            details.Trip.end_odo_meter,
+            _currentUserContext.GetCurrentUserIdOrDefault());
+    }
+
     /// <summary>
     /// Get trip authority by ID
     /// </summary>
     public async Task<Trip?> GetTripByIdAsync(int tripAuthorityCode)
     {
         return await _tripRepository.GetByIdAsync(tripAuthorityCode);
+    }
+
+    public async Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(int tripAuthorityCode)
+    {
+        return await _tripRepository.GetDetailsAsync(tripAuthorityCode);
     }
 
     public async Task<IEnumerable<Trip>> GetAllTripsAsync()

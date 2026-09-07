@@ -65,6 +65,70 @@ public class TripAuthorityVehicleDto
     public string? ContractType { get; set; }
 }
 
+public class TripAuthorityDetailsDto
+{
+    public TripDto Trip { get; set; } = new();
+    public IReadOnlyList<TripAuthorityDriverDto> Drivers { get; set; } = [];
+    public IReadOnlyList<TripAuthorityPassengerDto> Passengers { get; set; } = [];
+    public IReadOnlyList<TripAuthorityRouteDto> Routes { get; set; } = [];
+}
+
+public class TripAuthorityDriverDto
+{
+    public int TripDriverCode { get; set; }
+    public string? Name { get; set; }
+    public string? IdentityNumber { get; set; }
+    public bool IsPrimary { get; set; }
+    public int? SiteCode { get; set; }
+    public int? LicenceTypeCode { get; set; }
+    public string? PassportNumber { get; set; }
+    public string? PersalNumber { get; set; }
+    public string? ContractNumber { get; set; }
+    public string? LicenceNumber { get; set; }
+    public DateTime? LicenceIssueDate { get; set; }
+    public DateTime? LicenceLastVerifiedDate { get; set; }
+    public bool HasPdp { get; set; }
+    public DateTime? PdpExpiryDate { get; set; }
+    public DateTime? LicenceExpiryDate { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public class TripAuthorityPassengerDto
+{
+    public int TripPassengerCode { get; set; }
+    public string? Name { get; set; }
+}
+
+public class TripAuthorityRouteDto
+{
+    public int RouteCode { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public int? StartOdometer { get; set; }
+    public int? EndOdometer { get; set; }
+    public string? ResponsibilityCode { get; set; }
+    public string? ObjectiveCode { get; set; }
+    public string? StartLocation { get; set; }
+    public string? EndLocation { get; set; }
+    public int? EstimatedDistance { get; set; }
+    public int? Distance { get; set; }
+    public string? ProjectNumber { get; set; }
+    public string? FundCode { get; set; }
+    public int? EditedByUserCode { get; set; }
+}
+
+public class CloseTripDto
+{
+    public int? EndOdometer { get; set; }
+    public IReadOnlyList<CloseTripRouteDto> Routes { get; set; } = [];
+}
+
+public class CloseTripRouteDto
+{
+    public int RouteCode { get; set; }
+    public int? EndOdometer { get; set; }
+}
+
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
@@ -157,6 +221,70 @@ public class TripController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("{id}/details")]
+    public async Task<ActionResult<TripAuthorityDetailsDto>> GetTripDetails(int id)
+    {
+        try
+        {
+            var details = await _tripService.GetTripAuthorityDetailsAsync(id);
+            if (details == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(new TripAuthorityDetailsDto
+            {
+                Trip = MapTrip(details.Trip),
+                Drivers = details.Drivers.Select(driver => new TripAuthorityDriverDto
+                {
+                    TripDriverCode = driver.TripDriverCode,
+                    Name = driver.Name,
+                    IdentityNumber = driver.IdentityNumber,
+                    IsPrimary = driver.IsPrimary,
+                    SiteCode = driver.SiteCode,
+                    LicenceTypeCode = driver.LicenceTypeCode,
+                    PassportNumber = driver.PassportNumber,
+                    PersalNumber = driver.PersalNumber,
+                    ContractNumber = driver.ContractNumber,
+                    LicenceNumber = driver.LicenceNumber,
+                    LicenceIssueDate = driver.LicenceIssueDate,
+                    LicenceLastVerifiedDate = driver.LicenceLastVerifiedDate,
+                    HasPdp = driver.HasPdp,
+                    PdpExpiryDate = driver.PdpExpiryDate,
+                    LicenceExpiryDate = driver.LicenceExpiryDate,
+                    IsActive = driver.IsActive
+                }).ToArray(),
+                Passengers = details.Passengers.Select(passenger => new TripAuthorityPassengerDto
+                {
+                    TripPassengerCode = passenger.TripPassengerCode,
+                    Name = passenger.Name
+                }).ToArray(),
+                Routes = details.Routes.Select(route => new TripAuthorityRouteDto
+                {
+                    RouteCode = route.RouteCode,
+                    StartDate = route.StartDate,
+                    EndDate = route.EndDate,
+                    StartOdometer = route.StartOdometer,
+                    EndOdometer = route.EndOdometer,
+                    ResponsibilityCode = route.ResponsibilityCode,
+                    ObjectiveCode = route.ObjectiveCode,
+                    StartLocation = route.StartLocation,
+                    EndLocation = route.EndLocation,
+                    EstimatedDistance = route.EstimatedDistance,
+                    Distance = route.Distance,
+                    ProjectNumber = route.ProjectNumber,
+                    FundCode = route.FundCode,
+                    EditedByUserCode = route.EditedByUserCode
+                }).ToArray()
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving trip details for id {TripId}", id);
             return StatusCode(500, "Internal server error");
         }
     }
@@ -394,6 +522,63 @@ public class TripController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating trip with id {TripId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpPost("{id}/close")]
+    public async Task<ActionResult<TripDto>> CloseTrip(int id, [FromBody] CloseTripDto closeTripDto)
+    {
+        try
+        {
+            if (closeTripDto.EndOdometer is < 0)
+            {
+                return BadRequest("End odometer cannot be negative.");
+            }
+
+            var routeUpdates = new List<TripAuthorityRouteUpdate>();
+            var details = await _tripService.GetTripAuthorityDetailsAsync(id);
+            if (details is null)
+            {
+                return NotFound();
+            }
+
+            foreach (var route in closeTripDto.Routes ?? [])
+            {
+                if (route.RouteCode <= 0 || route.EndOdometer is null || route.EndOdometer < 0)
+                {
+                    return BadRequest("Every route must include a valid end odometer.");
+                }
+
+                var existingRoute = details.Routes.FirstOrDefault(item => item.RouteCode == route.RouteCode);
+                if (existingRoute is null)
+                {
+                    return BadRequest($"Route {route.RouteCode} does not belong to trip {id}.");
+                }
+
+                var distance = existingRoute.StartOdometer.HasValue
+                    ? route.EndOdometer.Value - existingRoute.StartOdometer.Value
+                    : route.EndOdometer.Value;
+                routeUpdates.Add(new TripAuthorityRouteUpdate(route.RouteCode, route.EndOdometer.Value, distance));
+            }
+
+            await _tripService.CloseTripAsync(id, routeUpdates, closeTripDto.EndOdometer);
+            var trip = await _tripService.GetTripByIdAsync(id);
+            return trip is null ? NotFound() : Ok(MapTrip(trip));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip {TripId} could not be closed", id);
+            return BadRequest(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Trip {TripId} close request contained duplicate or invalid routes", id);
+            return BadRequest("The trip close request contains duplicate or invalid routes.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error closing trip with id {TripId}", id);
             return StatusCode(500, "Internal server error");
         }
     }

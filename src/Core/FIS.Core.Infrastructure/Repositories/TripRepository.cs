@@ -26,6 +26,9 @@ public sealed class TripRepository : ITripRepository
     private const string VehicleTableName = "vehicle_master";
     private const string ModelTableName = "model";
     private const string MakeTableName = "make";
+    private static readonly string[] TripDriverTableNames = ["trip_driver", "trip_drivers"];
+    private const string TripPassengerTableName = "trip_passengers";
+    private const string RouteDetailTableName = "route_details";
 
     private static readonly string[] RequiredColumns =
     [
@@ -56,6 +59,20 @@ public sealed class TripRepository : ITripRepository
             command => AddParameter(command, "@tripId", DbType.Int32, tripId),
             includeDeleted: false,
             take: 1)).SingleOrDefault();
+
+    public async Task<TripAuthorityDetails?> GetDetailsAsync(int tripId)
+    {
+        var trip = await GetByIdAsync(tripId);
+        if (trip is null)
+        {
+            return null;
+        }
+
+        var drivers = await GetTripDriversAsync(tripId);
+        var passengers = await GetTripPassengersAsync(tripId);
+        var routes = await GetRouteDetailsAsync(tripId);
+        return new TripAuthorityDetails(trip, drivers, passengers, routes);
+    }
 
     public async Task<IEnumerable<Trip>> GetAllAsync()
         => await QueryAsync(orderBy: "[t].[issue_date] DESC, [t].[trip_authority_code] DESC");
@@ -320,6 +337,105 @@ public sealed class TripRepository : ITripRepository
         }
     }
 
+    public async Task CloseAsync(
+        int tripId,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer,
+        int currentUserId)
+    {
+        var routeColumns = await GetTableColumnsAsync(RouteDetailTableName);
+        if (routes.Count > 0)
+        {
+            var requiredRouteColumns = new[] { "route_code", "trip_authority_code", "end_odo_meter" };
+            if (!requiredRouteColumns.All(routeColumns.Contains))
+            {
+                throw new InvalidOperationException(
+                    "The route_details compatibility columns are not available for closing this trip");
+            }
+        }
+
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var transaction = existingTransaction is null
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+
+        try
+        {
+            foreach (var route in routes)
+            {
+                var updates = new List<string> { "[end_odo_meter] = @endOdometer" };
+                await using var command = _context.Database.GetDbConnection().CreateCommand();
+                command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+                if (routeColumns.Contains("distance"))
+                {
+                    updates.Add("[distance] = @distance");
+                    AddParameter(command, "@distance", DbType.Int32, route.Distance);
+                }
+
+                if (routeColumns.Contains("date_updated"))
+                {
+                    updates.Add("[date_updated] = @dateUpdated");
+                    AddParameter(command, "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+                }
+
+                if (routeColumns.Contains("modified_by_user_code"))
+                {
+                    updates.Add("[modified_by_user_code] = @modifiedByUserCode");
+                    AddParameter(command, "@modifiedByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+                }
+
+                var conditions = new List<string>
+                {
+                    "[route_code] = @routeCode",
+                    "[trip_authority_code] = @tripId"
+                };
+                if (routeColumns.Contains("is_deleted"))
+                {
+                    conditions.Add("ISNULL([is_deleted], 0) = 0");
+                }
+
+                command.CommandText = $"UPDATE [dbo].[{RouteDetailTableName}] SET {string.Join(", ", updates)} WHERE {string.Join(" AND ", conditions)}";
+                AddParameter(command, "@endOdometer", DbType.Int32, route.EndOdometer);
+                AddParameter(command, "@routeCode", DbType.Int32, route.RouteCode);
+                AddParameter(command, "@tripId", DbType.Int32, tripId);
+                var affected = await command.ExecuteNonQueryAsync();
+                if (affected != 1)
+                {
+                    throw new InvalidOperationException($"Route {route.RouteCode} was not found for trip {tripId}");
+                }
+            }
+
+            var trip = await GetByIdAsync(tripId)
+                ?? throw new InvalidOperationException($"Trip {tripId} not found");
+            if (endOdometer.HasValue)
+            {
+                trip.end_odo_meter = endOdometer;
+            }
+
+            await UpdateAsync(trip, currentUserId);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync();
+            }
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync();
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+    }
+
     public async Task DeleteAsync(int tripId, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -359,6 +475,203 @@ public sealed class TripRepository : ITripRepository
 
             AddParameter(command, "@tripId", DbType.Int32, tripId);
             await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityDriver>> GetTripDriversAsync(int tripId)
+    {
+        var results = new List<TripAuthorityDriver>();
+        foreach (var tableName in TripDriverTableNames)
+        {
+            var columns = await GetTableColumnsAsync(tableName);
+            var requiredColumns = new[] { "trip_driver_code", "trip_driver_name", "trip_authority_code", "trip_driver_primary" };
+            if (!requiredColumns.All(columns.Contains))
+            {
+                continue;
+            }
+
+            var projection = new List<string>
+            {
+                GetColumnProjection("d", "trip_driver_code", columns),
+                GetColumnProjection("d", "trip_driver_name", columns),
+                GetColumnProjection("d", "trip_driver_id", columns),
+                GetColumnProjection("d", "trip_driver_primary", columns),
+                GetColumnProjection("d", "site_code", columns),
+                GetColumnProjection("d", "driver_licence_type_id", columns),
+                GetColumnProjection("d", "driver_passportnumber", columns),
+                GetColumnProjection("d", "driver_persalnumber", columns),
+                GetColumnProjection("d", "driver_contractnumber", columns),
+                GetColumnProjection("d", "driver_licence_number", columns),
+                GetColumnProjection("d", "driver_licence_issuedate", columns),
+                GetColumnProjection("d", "driver_licence_lastVerifiedDate", columns),
+                GetColumnProjection("d", "driver_hasPDP", columns),
+                GetColumnProjection("d", "driver_PDP_ExpiryDate", columns),
+                GetColumnProjection("d", "driver_licence_ExpiryDate", columns),
+                GetColumnProjection("d", "driver_active", columns)
+            };
+
+            var conditions = new List<string> { "[d].[trip_authority_code] = @tripId" };
+            if (columns.Contains("is_deleted"))
+            {
+                conditions.Add("ISNULL([d].[is_deleted], 0) = 0");
+            }
+
+            await ReadRowsAsync(
+                $"""
+                SELECT {string.Join(", ", projection)}
+                FROM [dbo].[{tableName}] AS [d]
+                WHERE {string.Join(" AND ", conditions)}
+                ORDER BY [d].[trip_driver_primary] DESC, [d].[trip_driver_code]
+                """,
+                command => AddParameter(command, "@tripId", DbType.Int32, tripId),
+                reader => results.Add(new TripAuthorityDriver(
+                    ReadInt32(reader, "trip_driver_code") ?? 0,
+                    ReadString(reader, "trip_driver_name"),
+                    ReadString(reader, "trip_driver_id"),
+                    ReadBoolean(reader, "trip_driver_primary"),
+                    ReadInt32(reader, "site_code"),
+                    ReadInt32(reader, "driver_licence_type_id"),
+                    ReadString(reader, "driver_passportnumber"),
+                    ReadString(reader, "driver_persalnumber"),
+                    ReadString(reader, "driver_contractnumber"),
+                    ReadString(reader, "driver_licence_number"),
+                    ReadDateTime(reader, "driver_licence_issuedate"),
+                    ReadDateTime(reader, "driver_licence_lastVerifiedDate"),
+                    ReadBoolean(reader, "driver_hasPDP"),
+                    ReadDateTime(reader, "driver_PDP_ExpiryDate"),
+                    ReadDateTime(reader, "driver_licence_ExpiryDate"),
+                    ReadBoolean(reader, "driver_active"))));
+        }
+
+        return results
+            .GroupBy(driver => driver.TripDriverCode)
+            .Select(group => group.First())
+            .ToArray();
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityPassenger>> GetTripPassengersAsync(int tripId)
+    {
+        var columns = await GetTableColumnsAsync(TripPassengerTableName);
+        var requiredColumns = new[] { "trip_passenger_code", "trip_passenger_name", "trip_authority_code" };
+        if (!requiredColumns.All(columns.Contains))
+        {
+            // The later EF-created lookup table does not carry the legacy
+            // trip_authority_code link. It cannot be safely attributed to a
+            // trip, so leave the related records empty rather than guessing.
+            return [];
+        }
+
+        var results = new List<TripAuthorityPassenger>();
+        var conditions = new List<string> { "[p].[trip_authority_code] = @tripId" };
+        if (columns.Contains("is_deleted"))
+        {
+            conditions.Add("ISNULL([p].[is_deleted], 0) = 0");
+        }
+
+        await ReadRowsAsync(
+            $"""
+            SELECT {GetColumnProjection("p", "trip_passenger_code", columns)},
+                   {GetColumnProjection("p", "trip_passenger_name", columns)}
+            FROM [dbo].[{TripPassengerTableName}] AS [p]
+            WHERE {string.Join(" AND ", conditions)}
+            ORDER BY [p].[trip_passenger_code]
+            """,
+            command => AddParameter(command, "@tripId", DbType.Int32, tripId),
+            reader => results.Add(new TripAuthorityPassenger(
+                ReadInt32(reader, "trip_passenger_code") ?? 0,
+                ReadString(reader, "trip_passenger_name"))));
+
+        return results;
+    }
+
+    private async Task<IReadOnlyList<TripAuthorityRoute>> GetRouteDetailsAsync(int tripId)
+    {
+        var columns = await GetTableColumnsAsync(RouteDetailTableName);
+        var requiredColumns = new[] { "route_code", "trip_authority_code", "start_date", "end_date" };
+        if (!requiredColumns.All(columns.Contains))
+        {
+            return [];
+        }
+
+        var projection = new List<string>
+        {
+            GetColumnProjection("r", "route_code", columns),
+            GetColumnProjection("r", "start_date", columns),
+            GetColumnProjection("r", "end_date", columns),
+            GetColumnProjection("r", "start_odo_meter", columns),
+            GetColumnProjection("r", "end_odo_meter", columns),
+            GetColumnProjection("r", "bas_responsibility_code", columns),
+            GetColumnProjection("r", "bas_object_code", columns),
+            GetColumnProjection("r", "start_route_location_name", columns),
+            GetColumnProjection("r", "end_route_location_name", columns),
+            GetColumnProjection("r", "estimated_distance", columns),
+            GetColumnProjection("r", "distance", columns),
+            GetFirstColumnProjection("r", "project_number", columns, "bas_project_number", "project_number"),
+            GetFirstColumnProjection("r", "fund_code", columns, "bas_fund_code", "fund_code"),
+            GetColumnProjection("r", "modified_by_user_code", columns)
+        };
+
+        var conditions = new List<string> { "[r].[trip_authority_code] = @tripId" };
+        if (columns.Contains("is_deleted"))
+        {
+            conditions.Add("ISNULL([r].[is_deleted], 0) = 0");
+        }
+
+        var results = new List<TripAuthorityRoute>();
+        await ReadRowsAsync(
+            $"""
+            SELECT {string.Join(", ", projection)}
+            FROM [dbo].[{RouteDetailTableName}] AS [r]
+            WHERE {string.Join(" AND ", conditions)}
+            ORDER BY [r].[start_date], [r].[route_code]
+            """,
+            command => AddParameter(command, "@tripId", DbType.Int32, tripId),
+            reader => results.Add(new TripAuthorityRoute(
+                ReadInt32(reader, "route_code") ?? 0,
+                ReadDateTime(reader, "start_date"),
+                ReadDateTime(reader, "end_date"),
+                ReadInt32(reader, "start_odo_meter"),
+                ReadInt32(reader, "end_odo_meter"),
+                ReadString(reader, "bas_responsibility_code"),
+                ReadString(reader, "bas_object_code"),
+                ReadString(reader, "start_route_location_name"),
+                ReadString(reader, "end_route_location_name"),
+                ReadInt32(reader, "estimated_distance"),
+                ReadInt32(reader, "distance"),
+                ReadString(reader, "project_number"),
+                ReadString(reader, "fund_code"),
+                ReadInt32(reader, "modified_by_user_code"))));
+
+        return results;
+    }
+
+    private async Task ReadRowsAsync(string commandText, Action<DbCommand> configure, Action<DbDataReader> readRow)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = commandText;
+            configure(command);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                readRow(reader);
+            }
         }
         finally
         {
@@ -592,6 +905,18 @@ public sealed class TripRepository : ITripRepository
         => availableColumns.Contains(column)
             ? $"[{alias}].[{column}] AS [{column}]"
             : $"CAST(NULL AS sql_variant) AS [{column}]";
+
+    private static string GetFirstColumnProjection(
+        string alias,
+        string outputColumn,
+        IReadOnlySet<string> availableColumns,
+        params string[] candidates)
+    {
+        var sourceColumn = candidates.FirstOrDefault(availableColumns.Contains);
+        return sourceColumn is null
+            ? $"CAST(NULL AS sql_variant) AS [{outputColumn}]"
+            : $"[{alias}].[{sourceColumn}] AS [{outputColumn}]";
+    }
 
     private static void AddValue(
         ICollection<WriteValue> values,

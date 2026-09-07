@@ -473,6 +473,7 @@ public interface IDriverRepository
 public interface ITripRepository
 {
     Task<Trip?> GetByIdAsync(int tripId);
+    Task<TripAuthorityDetails?> GetDetailsAsync(int tripId);
     Task<IEnumerable<Trip>> GetAllAsync();
     Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
     Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode);
@@ -481,6 +482,7 @@ public interface ITripRepository
     Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<Trip> CreateAsync(Trip trip, int currentUserId);
     Task UpdateAsync(Trip trip, int currentUserId);
+    Task CloseAsync(int tripId, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer, int currentUserId);
     Task DeleteAsync(int tripId, int currentUserId);
 }
 
