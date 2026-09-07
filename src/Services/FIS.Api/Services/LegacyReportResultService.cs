@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.Json;
+using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
@@ -18,12 +19,17 @@ public interface ILegacyReportResultService
 public sealed class LegacyReportResultService : ILegacyReportResultService
 {
     private readonly FisDbContext _context;
+    private readonly IAssetVerificationRepository _assetVerificationRepository;
     private readonly ILogger<LegacyReportResultService> _logger;
     private readonly IReadOnlyDictionary<string, LegacyReportDefinition> _definitions;
 
-    public LegacyReportResultService(FisDbContext context, ILogger<LegacyReportResultService> logger)
+    public LegacyReportResultService(
+        FisDbContext context,
+        IAssetVerificationRepository assetVerificationRepository,
+        ILogger<LegacyReportResultService> logger)
     {
         _context = context;
+        _assetVerificationRepository = assetVerificationRepository;
         _logger = logger;
         _definitions = BuildDefinitions();
     }
@@ -146,9 +152,9 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "by-site" => "asset-list-by-site",
 
             // Asset verification variants
-            "asset-verification-per-site-province-date" => "asset-verification",
-            "asset-verification-not-verified" => "asset-verification",
-            "asset-verification-verified-by-date-range" => "asset-verification",
+            "asset-verification-per-site-province-date" => "asset-verification-per-site-province-date",
+            "asset-verification-not-verified" => "asset-verification-not-verified",
+            "asset-verification-verified-by-date-range" => "asset-verification-verified-by-date-range",
             "per-site-province-date" => "asset-verification-per-site-province-date",
             "not-verified" => "asset-verification-not-verified",
             "verified-by-date-range" => "asset-verification-verified-by-date-range",
@@ -495,6 +501,30 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         return new Dictionary<string, LegacyReportDefinition>(StringComparer.OrdinalIgnoreCase)
         {
+            ["asset-verification-per-site-province-date"] = new(
+                "asset-verification-per-site-province-date",
+                "Report Per Site / Province / Verification Date",
+                "Asset_Verification/RPT_asset_verification_2a.aspx",
+                null,
+                BuildAssetVerificationPerSiteProvinceDateAsync,
+                "Rendered through the compatibility asset-verification repository so client-era columns remain available when expanded fields are absent."),
+
+            ["asset-verification-not-verified"] = new(
+                "asset-verification-not-verified",
+                "Vehicles Not Verified",
+                "Asset_Verification/RPT_Not_Verified.aspx",
+                null,
+                BuildAssetVerificationNotVerifiedAsync,
+                "Uses the legacy active-vehicle/current-contract rule and compatibility verification lookup without requiring modern Asset_Verification columns."),
+
+            ["asset-verification-verified-by-date-range"] = new(
+                "asset-verification-verified-by-date-range",
+                "Vehicles Verified By Date Range - Excel Report",
+                "Asset_Verification/RPT_vehicles_verified_by_date_2.aspx",
+                null,
+                BuildAssetVerificationVerifiedByDateRangeAsync,
+                "Rendered through the compatibility asset-verification repository so the date range works with both client-era and expanded verification fields."),
+
             ["asset-list"] = new(
                 "asset-list",
                 "Asset List: New & In-Service Vehicles",
@@ -881,6 +911,225 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Highest KM", row => row.highest_km),
             Column("Take On Date", row => row.take_on_date));
     }
+
+    private async Task<LegacyReportResultDto> BuildAssetVerificationPerSiteProvinceDateAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var siteCode = GetShort(filters, "site") ?? GetShort(filters, "cmbDeptNumber");
+        var province = GetString(filters, "province") ?? GetString(filters, "cmbDeptName");
+        var from = GetDate(filters, "from") ?? GetDate(filters, "sverdate");
+        var to = GetDate(filters, "to") ?? GetDate(filters, "everdate");
+        var rows = await GetAssetVerificationReportRowsAsync(cancellationToken);
+
+        var filteredRows = rows
+            .Where(row => !siteCode.HasValue || row.SiteCode == siteCode)
+            .Where(row => string.IsNullOrWhiteSpace(province)
+                || string.Equals(row.Province?.Trim(), province.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Where(row => !from.HasValue || (row.DateLastVerified?.Date >= from.Value.Date))
+            .Where(row => !to.HasValue || (row.DateLastVerified?.Date <= to.Value.Date))
+            .OrderBy(row => row.DepartmentName)
+            .ThenBy(row => row.SiteName)
+            .ThenBy(row => row.VehicleRegNo)
+            .Take(5000)
+            .ToList();
+
+        return CreateDynamicResult(
+            "Report Per Site / Province / Verification Date",
+            "Asset_Verification/RPT_asset_verification_2a.aspx",
+            true,
+            null,
+            filteredRows,
+            Column("Asset Verification Code", row => row.AssetVerificationCode),
+            Column("Vehicle Reg No", row => row.VehicleRegNo),
+            Column("Department", row => row.DepartmentName),
+            Column("Site", row => row.SiteName),
+            Column("Province", row => row.Province),
+            Column("Vehicle Make", row => row.VehicleMake),
+            Column("Vehicle Model", row => row.VehicleModel),
+            Column("Licence Expiry Date", row => row.LicenceExpiryDate),
+            Column("Last Verified", row => row.DateLastVerified),
+            Column("Status", row => row.Status),
+            Column("Responsible Manager", row => row.ResponsibleManager),
+            Column("Current KM", row => row.CurrentKm));
+    }
+
+    private async Task<LegacyReportResultDto> BuildAssetVerificationNotVerifiedAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var records = (await _assetVerificationRepository.GetAllAsync()).ToList();
+        var verifiedVmfCodes = records
+            .Where(record => record.vmf_code.HasValue && record.vmf_code.Value > 0)
+            .Select(record => record.vmf_code!.Value)
+            .ToHashSet();
+        var verifiedVehicleNumbers = records
+            .Select(record => NormalizeAssetIdentifier(record.vehicle_reg_no))
+            .Where(identifier => identifier is not null)
+            .Cast<string>()
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var vehicles = await _context.Vehicles
+            .AsNoTracking()
+            .Where(vehicle => vehicle.vehicle_status_code == 1)
+            .Select(vehicle => new AssetVerificationVehicleLookup(
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                vehicle.licence_due_date))
+            .ToListAsync(cancellationToken);
+
+        var currentContracts = await (
+            from contract in _context.Contracts.AsNoTracking()
+            join site in _context.Sites.AsNoTracking() on contract.site_code equals site.Site_code
+            join department in _context.Departments.AsNoTracking() on site.Depatrment_code equals department.department_code
+            where contract.still_current == "Y"
+            select new AssetVerificationContractLookup(
+                contract.vmf_code,
+                contract.site_code,
+                site.description,
+                department.description))
+            .ToListAsync(cancellationToken);
+
+        var contractByVehicle = currentContracts
+            .GroupBy(contract => contract.VmfCode)
+            .ToDictionary(group => group.Key, group => group.First());
+
+        var rows = new List<AssetVerificationNotVerifiedRow>();
+        foreach (var vehicle in vehicles)
+        {
+            if (!contractByVehicle.TryGetValue(vehicle.VmfCode, out var contract)
+                || verifiedVmfCodes.Contains(vehicle.VmfCode)
+                || IsVerifiedVehicleNumber(verifiedVehicleNumbers, vehicle.FleetNumber)
+                || IsVerifiedVehicleNumber(verifiedVehicleNumbers, vehicle.RegistrationNumber))
+            {
+                continue;
+            }
+
+            rows.Add(new AssetVerificationNotVerifiedRow(
+                vehicle.VmfCode,
+                vehicle.FleetNumber,
+                vehicle.RegistrationNumber,
+                contract.DepartmentName,
+                contract.SiteName,
+                contract.SiteCode));
+        }
+
+        return CreateDynamicResult(
+            "Vehicles Not Verified",
+            "Asset_Verification/RPT_Not_Verified.aspx",
+            true,
+            null,
+            rows.OrderBy(row => row.DepartmentName).ThenBy(row => row.FleetNumber).Take(5000),
+            Column("VMF Code", row => row.VmfCode),
+            Column("GG Number", row => row.FleetNumber),
+            Column("GP Number", row => row.RegistrationNumber),
+            Column("Department", row => row.DepartmentName),
+            Column("Site", row => row.SiteName),
+            Column("Site Code", row => row.SiteCode));
+    }
+
+    private async Task<LegacyReportResultDto> BuildAssetVerificationVerifiedByDateRangeAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var from = GetDate(filters, "from") ?? GetDate(filters, "startDate");
+        var to = GetDate(filters, "to") ?? GetDate(filters, "endDate");
+        var rows = await GetAssetVerificationReportRowsAsync(cancellationToken);
+
+        var filteredRows = rows
+            .Where(row => row.DateLastVerified.HasValue)
+            .Where(row => !from.HasValue || row.DateLastVerified!.Value.Date >= from.Value.Date)
+            .Where(row => !to.HasValue || row.DateLastVerified!.Value.Date <= to.Value.Date)
+            .OrderBy(row => row.DepartmentName)
+            .ThenBy(row => row.DateLastVerified)
+            .ThenBy(row => row.VehicleRegNo)
+            .Take(5000)
+            .ToList();
+
+        return CreateDynamicResult(
+            "Vehicles Verified By Date Range - Excel Report",
+            "Asset_Verification/RPT_vehicles_verified_by_date_2.aspx",
+            true,
+            null,
+            filteredRows,
+            Column("Vehicle Reg No", row => row.VehicleRegNo),
+            Column("Department", row => row.DepartmentName),
+            Column("Site", row => row.SiteName),
+            Column("Province", row => row.Province),
+            Column("Vehicle Make", row => row.VehicleMake),
+            Column("Vehicle Model", row => row.VehicleModel),
+            Column("Licence Expiry Date", row => row.LicenceExpiryDate),
+            Column("Barcode", row => row.Barcode),
+            Column("Last Verified", row => row.DateLastVerified),
+            Column("Status", row => row.Status));
+    }
+
+    private async Task<List<AssetVerificationReportRow>> GetAssetVerificationReportRowsAsync(CancellationToken cancellationToken)
+    {
+        var records = (await _assetVerificationRepository.GetAllAsync()).ToList();
+        var vehicles = await _context.Vehicles
+            .AsNoTracking()
+            .Select(vehicle => new AssetVerificationVehicleLookup(
+                vehicle.vmf_code,
+                vehicle.fleet_number,
+                vehicle.registration_number,
+                vehicle.licence_due_date))
+            .ToListAsync(cancellationToken);
+        var vehiclesByVmf = vehicles
+            .GroupBy(vehicle => vehicle.VmfCode)
+            .ToDictionary(group => group.Key, group => group.First());
+        var vehiclesByFleet = vehicles
+            .Where(vehicle => NormalizeAssetIdentifier(vehicle.FleetNumber) is not null)
+            .GroupBy(vehicle => NormalizeAssetIdentifier(vehicle.FleetNumber)!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var vehiclesByRegistration = vehicles
+            .Where(vehicle => NormalizeAssetIdentifier(vehicle.RegistrationNumber) is not null)
+            .GroupBy(vehicle => NormalizeAssetIdentifier(vehicle.RegistrationNumber)!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        return records.Select(record =>
+        {
+            AssetVerificationVehicleLookup? vehicle = null;
+            if (record.vmf_code.HasValue)
+            {
+                vehiclesByVmf.TryGetValue(record.vmf_code.Value, out vehicle);
+            }
+
+            if (vehicle is null && vehiclesByFleet.TryGetValue(NormalizeAssetIdentifier(record.vehicle_reg_no) ?? string.Empty, out var fleetMatch))
+            {
+                vehicle = fleetMatch;
+            }
+
+            if (vehicle is null && vehiclesByRegistration.TryGetValue(NormalizeAssetIdentifier(record.vehicle_reg_no) ?? string.Empty, out var registrationMatch))
+            {
+                vehicle = registrationMatch;
+            }
+
+            return new AssetVerificationReportRow(
+                record.asset_verification_code,
+                record.vehicle_reg_no ?? vehicle?.RegistrationNumber ?? vehicle?.FleetNumber,
+                record.vmf_code ?? vehicle?.VmfCode,
+                record.department_name,
+                record.site_name,
+                record.site_code,
+                record.province,
+                record.vehicle_make,
+                record.vehicle_model,
+                record.licence_expiry_date ?? vehicle?.LicenceDueDate,
+                record.date_last_verified ?? record.verification_date,
+                record.verification_status ?? ((record.date_last_verified ?? record.verification_date).HasValue ? "Verified" : "Pending"),
+                record.responsible_manager,
+                record.current_km,
+                record.barcode);
+        }).ToList();
+    }
+
+    private static bool IsVerifiedVehicleNumber(ISet<string> verifiedNumbers, string? vehicleNumber)
+        => NormalizeAssetIdentifier(vehicleNumber) is { } normalized && verifiedNumbers.Contains(normalized);
+
+    private static string? NormalizeAssetIdentifier(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private async Task<LegacyReportResultDto> BuildAuditTrailAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
@@ -3925,6 +4174,39 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private sealed record LegacyStoredProcedureParameter(string Name, object? Value, DbType DbType);
     private sealed record ReportParameter(string Name, DbType Type, object? Value);
     private sealed record LegacyProjectionColumn(string Header, Func<object, object?> Selector);
+    private sealed record AssetVerificationVehicleLookup(
+        int VmfCode,
+        string? FleetNumber,
+        string? RegistrationNumber,
+        DateTime? LicenceDueDate);
+    private sealed record AssetVerificationContractLookup(
+        int VmfCode,
+        short SiteCode,
+        string? SiteName,
+        string? DepartmentName);
+    private sealed record AssetVerificationReportRow(
+        int AssetVerificationCode,
+        string? VehicleRegNo,
+        int? VmfCode,
+        string? DepartmentName,
+        string? SiteName,
+        short? SiteCode,
+        string? Province,
+        string? VehicleMake,
+        string? VehicleModel,
+        DateTime? LicenceExpiryDate,
+        DateTime? DateLastVerified,
+        string? Status,
+        string? ResponsibleManager,
+        int? CurrentKm,
+        string? Barcode);
+    private sealed record AssetVerificationNotVerifiedRow(
+        int VmfCode,
+        string? FleetNumber,
+        string? RegistrationNumber,
+        string? DepartmentName,
+        string? SiteName,
+        short SiteCode);
     private sealed record CaptureActivityRow(string Module, string RecordId, string? GgNumber, string? GpNumber, short? SiteCode, int? CapturedByUserCode, DateTime DateCaptured, string? Description);
     private sealed record VehicleLogCompositeRow(
         string Section,
