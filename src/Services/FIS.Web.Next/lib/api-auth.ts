@@ -261,6 +261,8 @@ export type SessionState =
   | {
       status: "authenticated";
       email?: string;
+      departmentCode?: string;
+      siteCode?: string;
       userAccessCode?: string;
       accessLevel?: string;
       roles: string[];
@@ -302,6 +304,8 @@ export async function validateSession(): Promise<SessionState> {
 
     const claims = payload.claims ?? [];
     const email = claims.find((claim) => claim.type?.endsWith("/emailaddress") || claim.type === "email")?.value;
+    const departmentCode = claims.find((claim) => ["department_code", "department"].includes(claim.type ?? ""))?.value;
+    const siteCode = claims.find((claim) => ["site_code", "site"].includes(claim.type ?? ""))?.value;
     const userAccessCode = claims.find((claim) => claim.type === "user_access_code")?.value;
     const passwordChangeRequiredValue = claims.find((claim) => claim.type === "password_change_required")?.value;
     const passwordChangeRequired = ["true", "1", "y", "yes"].includes(
@@ -322,7 +326,7 @@ export async function validateSession(): Promise<SessionState> {
       }
     }
 
-    return { status: "authenticated", email, userAccessCode, accessLevel, roles, passwordChangeRequired };
+    return { status: "authenticated", email, departmentCode, siteCode, userAccessCode, accessLevel, roles, passwordChangeRequired };
   } catch (error) {
     console.error("FIS API session validation failed", error instanceof Error ? error.message : "unknown error");
     return { status: "unavailable" };
