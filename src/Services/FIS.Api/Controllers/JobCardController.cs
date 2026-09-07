@@ -1,10 +1,8 @@
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
-using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -18,16 +16,16 @@ namespace FIS.Api.Controllers;
 public class JobCardController : BaseApiController
 {
     private readonly IJobCardRepository _repository;
-    private readonly FisDbContext _context;
+    private readonly IContractRepository _contractRepository;
     private readonly ILogger<JobCardController> _logger;
 
     public JobCardController(
         IJobCardRepository repository,
-        FisDbContext context,
+        IContractRepository contractRepository,
         ILogger<JobCardController> logger)
     {
         _repository = repository;
-        _context = context;
+        _contractRepository = contractRepository;
         _logger = logger;
     }
 
@@ -477,36 +475,32 @@ public class JobCardController : BaseApiController
     {
         try
         {
-            var query = _context.JobCards
-                .Include(j => j.Vehicle)
-                .Where(j => !j.is_deleted && j.status_code == 5) // 5 = Complete
-                .AsQueryable();
+            var results = (await _repository.GetByStatusAsync(5)).AsEnumerable();
 
             if (vmfCode.HasValue)
-                query = query.Where(j => j.vmf_code == vmfCode.Value);
+                results = results.Where(j => j.vmf_code == vmfCode.Value);
 
             if (fromDate.HasValue)
-                query = query.Where(j => j.date_updated >= fromDate.Value);
+                results = results.Where(j => j.date_updated >= fromDate.Value);
 
             if (toDate.HasValue)
-                query = query.Where(j => j.date_updated <= toDate.Value.AddDays(1));
+                results = results.Where(j => j.date_updated <= toDate.Value.AddDays(1));
 
-            // Site filter: find vehicles currently or recently on contract to the given site
+            // Site filter: use the compatibility contract repository so the
+            // original contract table does not go through EF's static model.
             if (siteCode.HasValue)
             {
-                var vehiclesAtSite = await _context.Contracts
-                    .Where(c => c.site_code == siteCode.Value && !c.is_deleted)
+                var vehiclesAtSite = (await _contractRepository.GetAllAsync())
+                    .Where(c => c.site_code == siteCode.Value)
                     .Select(c => c.vmf_code)
                     .Distinct()
-                    .ToListAsync();
-                query = query.Where(j => vehiclesAtSite.Contains(j.vmf_code));
+                    .ToHashSet();
+                results = results.Where(j => vehiclesAtSite.Contains(j.vmf_code));
             }
 
-            var results = await query
-                .OrderByDescending(j => j.date_updated)
-                .ToListAsync();
+            var orderedResults = results.OrderByDescending(j => j.date_updated).ToList();
 
-            var lineItems = results.Select(j => new
+            var lineItems = orderedResults.Select(j => new
             {
                 job_card_id = j.job_card_id,
                 vmf_code = j.vmf_code,
