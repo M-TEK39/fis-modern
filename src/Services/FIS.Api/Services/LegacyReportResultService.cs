@@ -25,6 +25,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private readonly ITaxiRepository _taxiRepository;
     private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogbookRepository _logbookRepository;
+    private readonly ILogsheetRepository _logsheetRepository;
     private readonly ILogger<LegacyReportResultService> _logger;
     private readonly IReadOnlyDictionary<string, LegacyReportDefinition> _definitions;
 
@@ -36,6 +37,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         ITaxiRepository taxiRepository,
         IVehicleRepository vehicleRepository,
         ILogbookRepository logbookRepository,
+        ILogsheetRepository logsheetRepository,
         ILogger<LegacyReportResultService> logger)
     {
         _context = context;
@@ -45,6 +47,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         _taxiRepository = taxiRepository;
         _vehicleRepository = vehicleRepository;
         _logbookRepository = logbookRepository;
+        _logsheetRepository = logsheetRepository;
         _logger = logger;
         _definitions = BuildDefinitions();
     }
@@ -1288,23 +1291,26 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 trip.trip_reason))
             .ToListAsync(cancellationToken);
 
-        var logsheetRows = await (
-            from logsheet in _context.Logsheets.AsNoTracking()
-            join vehicleMaster in _context.Vehicles.AsNoTracking() on logsheet.vmf_code equals vehicleMaster.vmf_code into logsheetVehicles
-            from vehicleMaster in logsheetVehicles.DefaultIfEmpty()
-            where !logsheet.is_deleted && logsheet.date_created.Date >= startDate && logsheet.date_created.Date <= endDate
-            select new CaptureActivityRow(
-                "ELS Logsheet",
-                logsheet.log_code.ToString(),
-                vehicleMaster != null ? vehicleMaster.fleet_number : null,
-                vehicleMaster != null ? vehicleMaster.registration_number : null,
-                logsheet.site_code,
-                logsheet.created_by_user_code,
-                logsheet.date_created,
-                $"Month {logsheet.month:yyyy-MM}"))
-            .ToListAsync(cancellationToken);
-
         var vehicles = (await _vehicleRepository.GetAllAsync()).ToDictionary(vehicle => vehicle.vmf_code);
+        var logsheetRows = (await _logsheetRepository.GetAllAsync())
+            .Where(logsheet => !logsheet.is_deleted
+                && logsheet.date_created.Date >= startDate
+                && logsheet.date_created.Date <= endDate)
+            .Select(logsheet =>
+            {
+                vehicles.TryGetValue(logsheet.vmf_code, out var vehicle);
+                return new CaptureActivityRow(
+                    "ELS Logsheet",
+                    logsheet.log_code.ToString(),
+                    vehicle?.fleet_number,
+                    vehicle?.registration_number,
+                    logsheet.site_code,
+                    logsheet.created_by_user_code,
+                    logsheet.date_created,
+                    $"Month {logsheet.month:yyyy-MM}");
+            })
+            .ToList();
+
         var logbookRows = (await _logbookRepository.GetAllAsync())
             .Where(logbook => !logbook.is_deleted
                 && logbook.date_created.Date >= startDate
@@ -2707,32 +2713,33 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
 
-        var rows = await (
-            from logsheet in _context.Logsheets.AsNoTracking()
-            join vehicle in _context.Vehicles.AsNoTracking() on logsheet.vmf_code equals vehicle.vmf_code into logVehicles
-            from vehicle in logVehicles.DefaultIfEmpty()
-            join site in _context.Sites.AsNoTracking() on logsheet.site_code equals site.Site_code into logSites
-            from site in logSites.DefaultIfEmpty()
-            where !logsheet.is_deleted
+        var vehicles = (await _vehicleRepository.GetAllAsync()).ToDictionary(vehicle => vehicle.vmf_code);
+        var rows = (await _logsheetRepository.GetAllAsync())
+            .Where(logsheet => !logsheet.is_deleted
                 && GetFinancialYearKey(logsheet.date_created) == currentFinancialYear
-                && GetFinancialYearKey(logsheet.month) < currentFinancialYear
-            orderby logsheet.date_created descending, logsheet.log_code descending
-            select new
-            {
-                logsheet.log_code,
-                logsheet.vmf_code,
-                vehicle.fleet_number,
-                vehicle.registration_number,
-                logsheet.month,
-                logsheet.date_created,
-                logsheet.rek_num,
-                logsheet.start_odo,
-                logsheet.end_odo,
-                SiteCode = site != null ? site.Site_code : (short?)null,
-                Site = site != null ? site.description : null
-            })
+                && GetFinancialYearKey(logsheet.month) < currentFinancialYear)
+            .OrderByDescending(logsheet => logsheet.date_created)
+            .ThenByDescending(logsheet => logsheet.log_code)
             .Take(5000)
-            .ToListAsync(cancellationToken);
+            .Select(logsheet =>
+            {
+                vehicles.TryGetValue(logsheet.vmf_code, out var vehicle);
+                return new
+                {
+                    logsheet.log_code,
+                    logsheet.vmf_code,
+                    fleet_number = vehicle?.fleet_number,
+                    registration_number = vehicle?.registration_number,
+                    logsheet.month,
+                    logsheet.date_created,
+                    logsheet.rek_num,
+                    logsheet.start_odo,
+                    logsheet.end_odo,
+                    SiteCode = logsheet.Site?.Site_code ?? logsheet.site_code,
+                    Site = logsheet.Site?.description
+                };
+            })
+            .ToList();
 
         return CreateDynamicResult(
             "Previous Fin Year Manual Logsheet Kilos Captured in Current Fin Year",

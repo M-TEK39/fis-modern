@@ -91,6 +91,10 @@ public class LogsheetController : BaseApiController
     {
         try
         {
+            var validationError = ValidateEntry(request);
+            if (validationError != null)
+                return BadRequest(new { message = validationError });
+
             var logsheet = new Logsheet
             {
                 vmf_code = request.VmfCode,
@@ -128,6 +132,10 @@ public class LogsheetController : BaseApiController
     {
         try
         {
+            var validationError = ValidateEntry(request);
+            if (validationError != null)
+                return BadRequest(new { message = validationError });
+
             var existing = await _repository.GetByIdAsync(id);
             if (existing == null)
                 return NotFound(new { message = $"Logsheet entry with code {id} not found" });
@@ -181,6 +189,22 @@ public class LogsheetController : BaseApiController
     }
 
     #endregion
+
+    private static string? ValidateEntry(LogsheetEntryDto request)
+    {
+        if (request.VmfCode <= 0) return "A vehicle is required.";
+        if (double.IsNaN(request.StartOdometer) || double.IsInfinity(request.StartOdometer) || request.StartOdometer < 0)
+            return "Start odometer must be a non-negative number.";
+        if (double.IsNaN(request.EndOdometer) || double.IsInfinity(request.EndOdometer) || request.EndOdometer < request.StartOdometer)
+            return "End odometer must be greater than or equal to start odometer.";
+        if (request.Month == default) return "A logsheet month is required.";
+        if (request.SiteCode <= 0) return "A site is required.";
+        if (string.IsNullOrWhiteSpace(request.RequisitionNumber) || request.RequisitionNumber.Length > 10)
+            return "Requisition number is required and must be 10 characters or fewer.";
+        if (request.DaysUsed is < 0) return "Days used cannot be negative.";
+        if (request.BundleNumber is < 0) return "Batch number cannot be negative.";
+        return null;
+    }
 
     #region Reports
 
