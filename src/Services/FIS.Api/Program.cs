@@ -221,6 +221,7 @@ builder.Services.AddScoped<IVehicleRepository, VehicleRepository>();
 builder.Services.AddScoped<IGgBlockRepository, GgBlockRepository>();
 builder.Services.AddScoped<IVehicleSourceRepository, VehicleSourceRepository>();
 builder.Services.AddScoped<IVehicleStatusReportRepository, VehicleStatusReportRepository>();
+builder.Services.AddScoped<IFmlReportRepository, FmlReportRepository>();
 builder.Services.AddScoped<IRecoveredVehicleRepository, RecoveredVehicleRepository>();
 builder.Services.AddScoped<IDemoVehicleRepository, DemoVehicleRepository>();
 builder.Services.AddScoped<IVehicleAuthorizationRepository, VehicleAuthorizationRepository>();

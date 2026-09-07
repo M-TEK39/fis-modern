@@ -77,6 +77,24 @@ public sealed class LeaseTariffsController : BaseApiController
         }
     }
 
+    [HttpPost("import")]
+    public async Task<ActionResult<LeaseTariffImportResult>> Import([FromBody] IReadOnlyList<LeaseTariffImportRow> rows)
+    {
+        try
+        {
+            return Ok(await _repository.ImportAsync(rows, GetCurrentUserId()));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error importing lease tariffs");
+            return StatusCode(500, new { error = "Failed to import lease tariffs" });
+        }
+    }
+
     [HttpPut("{id:int}")]
     public async Task<ActionResult<LeaseTariff>> Update(int id, [FromBody] LeaseTariff tariff)
     {

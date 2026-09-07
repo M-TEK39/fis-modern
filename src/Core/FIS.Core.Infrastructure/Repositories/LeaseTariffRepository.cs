@@ -161,6 +161,82 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
         await UpdateAsync(tariff, 0);
     }
 
+    public async Task<LeaseTariffImportResult> ImportAsync(IReadOnlyList<LeaseTariffImportRow> rows, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        var validRows = rows
+            .Where(row => row.VmfCode > 0 &&
+                          row.EndDate >= row.StartDate &&
+                          row.FixedTariff >= 0 &&
+                          (!row.ExcessKiloTariff.HasValue || row.ExcessKiloTariff >= 0))
+            .ToList();
+        var failed = rows.Count - validRows.Count;
+        if (validRows.Count == 0)
+        {
+            return new LeaseTariffImportResult(0, failed);
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose) await connection.OpenAsync();
+
+        try
+        {
+            await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.Serializable);
+            try
+            {
+                var fileColumns = await GetColumnsAsync(connection, "LeaseTariff_File", transaction);
+                var canUseLegacyImport = HasColumns(
+                        fileColumns,
+                        "No",
+                        "VMF_Code",
+                        "GGNumber",
+                        "GPNumber",
+                        "Start_Date",
+                        "End_Date",
+                        "Fixed_Tariff",
+                        "Excess_Kilo_Tariff") &&
+                    await ObjectExistsAsync(connection, "dbo.ADM_IMPORT_LeaseTariffFile", transaction);
+
+                if (canUseLegacyImport)
+                {
+                    await ExecuteNonQueryAsync(connection, transaction, "DELETE FROM [dbo].[LeaseTariff_File]");
+                    foreach (var (row, index) in validRows.Select((row, index) => (row, index)))
+                    {
+                        await InsertImportFileRowAsync(connection, transaction, fileColumns, row, index + 1, currentUserId);
+                    }
+
+                    await ExecuteStoredProcedureAsync(connection, transaction, "ADM_IMPORT_LeaseTariffFile");
+                    if (await ObjectExistsAsync(connection, "dbo.ADM_UPD_LeaseFixedTariff", transaction))
+                    {
+                        await ExecuteStoredProcedureAsync(connection, transaction, "ADM_UPD_LeaseFixedTariff");
+                    }
+                }
+                else
+                {
+                    var tariffColumns = await GetAvailableColumnsAsync(connection, transaction);
+                    foreach (var row in validRows)
+                    {
+                        await InsertTariffRowAsync(connection, transaction, tariffColumns, row, currentUserId);
+                    }
+                }
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            return new LeaseTariffImportResult(validRows.Count, failed);
+        }
+        finally
+        {
+            if (shouldClose) await connection.CloseAsync();
+        }
+    }
+
     private async Task<List<LeaseTariff>> QueryAsync(string? predicate = null, Action<DbCommand>? configure = null)
     {
         var columns = await GetAvailableColumnsAsync();
@@ -240,6 +316,127 @@ public sealed class LeaseTariffRepository : ILeaseTariffRepository
         {
             if (shouldClose) await connection.CloseAsync();
         }
+    }
+
+    private static async Task<HashSet<string>> GetColumnsAsync(
+        DbConnection connection,
+        string tableName,
+        DbTransaction? transaction)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT [COLUMN_NAME]
+            FROM [INFORMATION_SCHEMA].[COLUMNS]
+            WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table
+            """;
+        AddParameter(command, "@schema", DbType.String, "dbo");
+        AddParameter(command, "@table", DbType.String, tableName);
+
+        var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) columns.Add(reader.GetString(0));
+        return columns;
+    }
+
+    private async Task<HashSet<string>> GetAvailableColumnsAsync(DbConnection connection, DbTransaction transaction)
+    {
+        var columns = await GetColumnsAsync(connection, TableName, transaction);
+        var missing = RequiredColumns.Where(column => !columns.Contains(column)).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new InvalidOperationException($"The required LeaseTariff compatibility columns are not available: {string.Join(", ", missing)}");
+        }
+
+        return columns;
+    }
+
+    private static bool HasColumns(IReadOnlySet<string> columns, params string[] required)
+        => required.All(columns.Contains);
+
+    private static async Task<bool> ObjectExistsAsync(DbConnection connection, string objectName, DbTransaction? transaction)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT CASE WHEN OBJECT_ID(@objectName) IS NULL THEN 0 ELSE 1 END";
+        AddParameter(command, "@objectName", DbType.String, objectName);
+        return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
+    }
+
+    private static async Task ExecuteNonQueryAsync(DbConnection connection, DbTransaction transaction, string sql)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task ExecuteStoredProcedureAsync(DbConnection connection, DbTransaction transaction, string procedureName)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandType = CommandType.StoredProcedure;
+        command.CommandText = procedureName;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task InsertImportFileRowAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlySet<string> columns,
+        LeaseTariffImportRow row,
+        int rowNumber,
+        int currentUserId)
+    {
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "No", "@no", DbType.Int16, rowNumber);
+        AddValue(values, columns, "VMF_Code", "@vmfCode", DbType.Int32, row.VmfCode);
+        AddValue(values, columns, "GGNumber", "@ggNumber", DbType.String, row.GgNumber);
+        AddValue(values, columns, "GPNumber", "@gpNumber", DbType.String, row.GpNumber);
+        AddValue(values, columns, "Start_Date", "@startDate", DbType.DateTime2, row.StartDate);
+        AddValue(values, columns, "End_Date", "@endDate", DbType.DateTime2, row.EndDate);
+        AddValue(values, columns, "Fixed_Tariff", "@fixedTariff", DbType.Decimal, row.FixedTariff);
+        AddValue(values, columns, "Excess_Kilo_Tariff", "@excessKiloTariff", DbType.Decimal, row.ExcessKiloTariff);
+        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+        await InsertRowAsync(connection, transaction, "LeaseTariff_File", values);
+    }
+
+    private static async Task InsertTariffRowAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        IReadOnlySet<string> columns,
+        LeaseTariffImportRow row,
+        int currentUserId)
+    {
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "vmf_code", "@vmfCode", DbType.Int32, row.VmfCode);
+        AddValue(values, columns, "start_date", "@startDate", DbType.DateTime2, row.StartDate);
+        AddValue(values, columns, "end_date", "@endDate", DbType.DateTime2, row.EndDate);
+        AddValue(values, columns, "fixed_tariff", "@fixedTariff", DbType.Decimal, row.FixedTariff);
+        AddValue(values, columns, "excess_kilo_tariff", "@excessKiloTariff", DbType.Decimal, row.ExcessKiloTariff);
+        AddValue(values, columns, "active", "@active", DbType.Boolean, true);
+        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+        await InsertRowAsync(connection, transaction, TableName, values);
+    }
+
+    private static async Task InsertRowAsync(
+        DbConnection connection,
+        DbTransaction transaction,
+        string tableName,
+        IReadOnlyList<WriteValue> values)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            INSERT INTO [dbo].[{tableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))})
+            VALUES ({string.Join(", ", values.Select(value => value.Parameter))})
+            """;
+        AddParameters(command, values);
+        await command.ExecuteNonQueryAsync();
     }
 
     private static List<WriteValue> BuildWriteValues(LeaseTariff tariff, IReadOnlySet<string> columns)

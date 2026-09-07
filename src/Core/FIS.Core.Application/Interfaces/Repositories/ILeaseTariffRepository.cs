@@ -75,4 +75,21 @@ public interface ILeaseTariffRepository
     /// </summary>
     /// <param name="leaseTariffCode">Lease tariff identifier</param>
     Task DeactivateAsync(int leaseTariffCode);
+
+    /// <summary>
+    /// Imports a validated tariff file using the legacy staging/procedure
+    /// workflow when it is available, or a compatible direct insert otherwise.
+    /// </summary>
+    Task<LeaseTariffImportResult> ImportAsync(IReadOnlyList<LeaseTariffImportRow> rows, int currentUserId);
 }
+
+public sealed record LeaseTariffImportRow(
+    int VmfCode,
+    string? GgNumber,
+    string? GpNumber,
+    DateTime StartDate,
+    DateTime EndDate,
+    decimal FixedTariff,
+    decimal? ExcessKiloTariff);
+
+public sealed record LeaseTariffImportResult(int Imported, int Failed);

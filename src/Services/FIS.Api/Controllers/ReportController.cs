@@ -25,6 +25,7 @@ public class ReportController : BaseApiController
     private readonly IFineRepository _fineRepository;
     private readonly IVehicleSourceRepository _vehicleSourceRepository;
     private readonly IVehicleStatusReportRepository _vehicleStatusReportRepository;
+    private readonly IFmlReportRepository _fmlReportRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
 
@@ -34,6 +35,7 @@ public class ReportController : BaseApiController
         IFineRepository fineRepository,
         IVehicleSourceRepository vehicleSourceRepository,
         IVehicleStatusReportRepository vehicleStatusReportRepository,
+        IFmlReportRepository fmlReportRepository,
         FisDbContext context,
         ILogger<ReportController> logger)
     {
@@ -42,6 +44,7 @@ public class ReportController : BaseApiController
         _fineRepository = fineRepository ?? throw new ArgumentNullException(nameof(fineRepository));
         _vehicleSourceRepository = vehicleSourceRepository ?? throw new ArgumentNullException(nameof(vehicleSourceRepository));
         _vehicleStatusReportRepository = vehicleStatusReportRepository ?? throw new ArgumentNullException(nameof(vehicleStatusReportRepository));
+        _fmlReportRepository = fmlReportRepository ?? throw new ArgumentNullException(nameof(fmlReportRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -802,354 +805,49 @@ public class ReportController : BaseApiController
         [FromQuery] string? mode = null,
         [FromQuery] string? search = null)
     {
-        var from = startDate?.Date ?? DateTime.MinValue.Date;
-        var to = endDate?.Date ?? DateTime.MaxValue.Date;
+        var parsedFinancialYear = int.TryParse(finYear, out var financialYear) ? financialYear : (int?)null;
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? ggNum?.Trim() : search.Trim();
+        var report = await _fmlReportRepository.GetMaintenanceHistoryAsync(
+            startDate,
+            endDate,
+            parsedFinancialYear,
+            normalizedSearch);
+        return Ok(report);
 
-        var maintenance = _context.MaintenanceRecords
-            .AsNoTracking()
-            .Where(x => !x.is_deleted && x.MaintenanceDate.Date >= from && x.MaintenanceDate.Date <= to)
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(normalizedSearch))
-        {
-            maintenance = maintenance.Where(m =>
-                _context.Vehicles.Any(v =>
-                    !v.is_deleted &&
-                    v.vmf_code == m.VmfCode &&
-                    ((v.fleet_number != null && v.fleet_number.Contains(normalizedSearch)) ||
-                     (v.registration_number != null && v.registration_number.Contains(normalizedSearch)))));
-        }
-
-        var rows = await maintenance
-            .Join(_context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
-                m => m.VmfCode,
-                v => v.vmf_code,
-                (m, v) => new { m, v })
-            .GroupJoin(_context.VehicleStatuses.AsNoTracking(),
-                mv => mv.v.vehicle_status_code,
-                s => s.vehicle_status_code,
-                (mv, status) => new { mv, status = status.FirstOrDefault() })
-            .GroupJoin(_context.VehicleSources.AsNoTracking(),
-                mvs => mvs.mv.v.vs_code,
-                src => src.vs_code,
-                (mvs, source) => new { mvs, source = source.FirstOrDefault() })
-            .GroupJoin(_context.Models.AsNoTracking(),
-                mvss => mvss.mvs.mv.v.model_code,
-                model => model.model_code,
-                (mvss, model) => new { mvss, model = model.FirstOrDefault() })
-            .Select(x => new
-            {
-                x.mvss.mvs.mv.v.fleet_number,
-                x.mvss.mvs.mv.v.year_manufactured,
-                model_description = x.model != null ? x.model.model_description : null,
-                current_status = x.mvss.mvs.status != null ? x.mvss.mvs.status.status_description : null,
-                current_status_date = x.mvss.mvs.mv.v.date_updated ?? x.mvss.mvs.mv.v.date_created,
-                hired_from = x.mvss.source != null ? x.mvss.source.name : null,
-                maintenance_type = x.mvss.mvs.mv.m.MaintenanceType,
-                total_cost = x.mvss.mvs.mv.m.TotalCost
-            })
-            .ToListAsync();
-
-        var grouped = rows
-            .GroupBy(x => new
-            {
-                x.fleet_number,
-                x.year_manufactured,
-                x.model_description,
-                x.current_status,
-                x.current_status_date,
-                x.hired_from,
-                x.maintenance_type
-            })
-            .Select(g => new
-            {
-                GgNumber = g.Key.fleet_number,
-                YearManufactured = g.Key.year_manufactured,
-                ModelDescription = g.Key.model_description,
-                CurrentStatus = g.Key.current_status,
-                CurrentStatusDate = g.Key.current_status_date,
-                HiredFrom = g.Key.hired_from,
-                MaintenanceExpenseType = g.Key.maintenance_type,
-                TotalCostOverDateRange = g.Sum(x => x.total_cost)
-            })
-            .OrderBy(x => x.GgNumber)
-            .ToList();
-
-        return Ok(new
-        {
-            Records = grouped,
-            GrandTotal = grouped.Sum(x => x.TotalCostOverDateRange),
-            TotalCount = grouped.Count
-        });
     }
 
     [HttpGet("fml/contracts-expiring")]
     public async Task<ActionResult> GetFmlContractsExpiring()
     {
-        var today = DateTime.Today;
-        var cutoff = today.AddMonths(3);
+        var report = await _fmlReportRepository.GetContractsExpiringAsync();
+        return Ok(report);
 
-        var contracts = await BuildFmlContractRowsAsync(
-            c => !c.is_deleted &&
-                 (c.still_current == "Y" || c.end_date == null || c.end_date >= today) &&
-                 c.target_return_date.HasValue &&
-                 c.target_return_date.Value.Date >= today &&
-                 c.target_return_date.Value.Date <= cutoff);
-
-        return Ok(new
-        {
-            Contracts = contracts,
-            TotalCount = contracts.Count
-        });
     }
 
     [HttpGet("fml/expired-open")]
     public async Task<ActionResult> GetFmlExpiredOpen()
     {
-        var today = DateTime.Today;
-        var contracts = await BuildFmlContractRowsAsync(
-            c => !c.is_deleted &&
-                 (c.still_current == "Y" || c.end_date == null || c.end_date >= today) &&
-                 c.target_return_date.HasValue &&
-                 c.target_return_date.Value.Date < today);
+        var report = await _fmlReportRepository.GetExpiredOpenContractsAsync();
+        return Ok(report);
 
-        return Ok(new
-        {
-            Contracts = contracts,
-            TotalCount = contracts.Count
-        });
     }
 
     [HttpGet("fml/vehicles-no-contracts")]
     public async Task<ActionResult> GetFmlVehiclesNoContracts()
     {
-        var activeContractVmfCodes = await _context.Contracts
-            .AsNoTracking()
-            .Where(c => !c.is_deleted && c.still_current == "Y")
-            .Select(c => c.vmf_code)
-            .Distinct()
-            .ToListAsync();
+        var report = await _fmlReportRepository.GetVehiclesNoContractsAsync();
+        return Ok(report);
 
-        var activeSet = activeContractVmfCodes.ToHashSet();
-
-        var vehicles = await _context.Vehicles
-            .AsNoTracking()
-            .Where(v => !v.is_deleted && !activeSet.Contains(v.vmf_code))
-            .OrderBy(v => v.fleet_number)
-            .Take(2000)
-            .Select(v => new
-            {
-                v.vmf_code,
-                v.fleet_number,
-                v.registration_number,
-                v.vs_code,
-                v.vehicle_status_code,
-                v.location_code,
-                v.year_manufactured,
-                v.model_code,
-                v.purchase_amount
-            })
-            .ToListAsync();
-
-        var sourceMap = await _context.VehicleSources.AsNoTracking().ToDictionaryAsync(x => x.vs_code, x => x.name ?? string.Empty);
-        var statusMap = await _context.VehicleStatuses.AsNoTracking().ToDictionaryAsync(x => x.vehicle_status_code, x => x.status_description ?? string.Empty);
-        var siteMap = await _context.Sites.AsNoTracking().ToDictionaryAsync(x => x.Site_code, x => x.description ?? string.Empty);
-        var modelMap = await _context.Models.AsNoTracking().ToDictionaryAsync(x => x.model_code, x => x.model_description);
-        var classMap = await _context.Classes.AsNoTracking().ToDictionaryAsync(x => x.class_code, x => x.description ?? string.Empty);
-
-        var modelClassMap = await _context.Models.AsNoTracking()
-            .ToDictionaryAsync(m => m.model_code, m => m.class_code);
-
-        var rows = vehicles.Select((v, idx) =>
-        {
-            var modelDescription = modelMap.TryGetValue(v.model_code, out var md) ? md : string.Empty;
-            var cls = modelClassMap.TryGetValue(v.model_code, out var classCode) ? classCode : (short)0;
-            return new
-            {
-                VehicleCounter = idx + 1,
-                GgNumber = v.fleet_number,
-                RegistrationNumber = v.registration_number,
-                HiredFrom = v.vs_code.HasValue && sourceMap.TryGetValue(v.vs_code.Value, out var source) ? source : string.Empty,
-                VehicleStatus = statusMap.TryGetValue(v.vehicle_status_code, out var status) ? status : string.Empty,
-                Location = siteMap.TryGetValue(v.location_code, out var site) ? site : string.Empty,
-                YearModel = v.year_manufactured,
-                ModelDescription = modelDescription,
-                ClassDescription = classMap.TryGetValue(cls, out var classDesc) ? classDesc : string.Empty,
-                PurchaseAmount = v.purchase_amount
-            };
-        }).ToList();
-
-        return Ok(new
-        {
-            Vehicles = rows,
-            TotalCount = rows.Count
-        });
     }
 
     [HttpGet("fml/over-utilized")]
     public async Task<ActionResult> GetFmlOverUtilized([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
     {
-        var from = startDate?.Date ?? DateTime.Today.AddMonths(-3);
-        var to = endDate?.Date ?? DateTime.Today;
+        var report = await _fmlReportRepository.GetOverUtilizedAsync(startDate, endDate);
+        return Ok(report);
 
-        var contracts = await _context.Contracts
-            .AsNoTracking()
-            .Where(c => !c.is_deleted && c.still_current == "Y" && c.monthly_km.HasValue && c.monthly_km > 0)
-            .Select(c => new
-            {
-                c.contract_code,
-                c.vmf_code,
-                c.start_date,
-                c.target_return_date,
-                c.monthly_km
-            })
-            .ToListAsync();
-
-        var contractIds = contracts.Select(x => (int?)x.contract_code).ToHashSet();
-        var kilos = await _context.VehicleKilos
-            .AsNoTracking()
-            .Where(k => !k.is_deleted &&
-                        k.contract_code.HasValue &&
-                        contractIds.Contains(k.contract_code) &&
-                        k.date_created.Date >= from &&
-                        k.date_created.Date <= to)
-            .ToListAsync();
-
-        var vehicleMap = await _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted).ToDictionaryAsync(v => v.vmf_code);
-        var sourceMap = await _context.VehicleSources.AsNoTracking().ToDictionaryAsync(x => x.vs_code, x => x.name ?? string.Empty);
-        var modelMap = await _context.Models.AsNoTracking().ToDictionaryAsync(x => x.model_code, x => x.model_description);
-
-        var rows = contracts
-            .Select((c, idx) =>
-            {
-                if (!vehicleMap.TryGetValue(c.vmf_code, out var vehicle))
-                {
-                    return null;
-                }
-
-                var kRows = kilos.Where(k => k.contract_code == c.contract_code).ToList();
-                var minOdo = kRows.Count > 0 ? (decimal?)kRows.Min(x => (decimal?)(x.start_odo ?? 0d)) : vehicle.take_on_odo;
-                var maxOdo = kRows.Count > 0 ? (decimal?)kRows.Max(x => (decimal?)(x.end_odo ?? 0d)) : vehicle.current_odo;
-                var actualKilos = (maxOdo ?? 0m) - (minOdo ?? 0m);
-
-                var start = c.start_date.Date;
-                var end = (c.target_return_date ?? DateTime.Today).Date;
-                var contractMonths = Math.Max(1, ((end.Year - start.Year) * 12) + end.Month - start.Month + 1);
-                var agreedMonthly = c.monthly_km ?? 0;
-                var agreedOverall = agreedMonthly * contractMonths;
-                var excess = actualKilos - agreedOverall;
-                var avgMonthly = contractMonths > 0 ? actualKilos / contractMonths : actualKilos;
-                if (excess <= 0)
-                {
-                    return null;
-                }
-
-                var projectedEndDate = avgMonthly > 0
-                    ? start.AddMonths((int)Math.Ceiling((double)(agreedOverall / avgMonthly)))
-                    : (DateTime?)null;
-
-                return new
-                {
-                    VehicleCounter = idx + 1,
-                    GgNumber = vehicle.fleet_number,
-                    GpNumber = vehicle.registration_number,
-                    HiredFrom = vehicle.vs_code.HasValue && sourceMap.TryGetValue(vehicle.vs_code.Value, out var source) ? source : string.Empty,
-                    Month = $"{from:yyyy-MM} to {to:yyyy-MM}",
-                    MaxOdoMeter = maxOdo,
-                    MinOdoMeter = minOdo,
-                    ActualKilos = actualKilos,
-                    AgreedKilos = (decimal?)agreedMonthly,
-                    ExcessKilos = excess,
-                    AgreedOverallKilo = (decimal?)agreedOverall,
-                    AgreedTerms = (decimal?)contractMonths,
-                    ActualTerm = (decimal?)contractMonths,
-                    TotalKilos = actualKilos,
-                    TotalExcessKilos = excess,
-                    AverageMonthlyKilos = avgMonthly,
-                    ProjectedEndMonth = projectedEndDate?.ToString("yyyy-MM"),
-                    ProjectedEndDate = projectedEndDate,
-                    YearModel = vehicle.year_manufactured,
-                    ModelDescription = modelMap.TryGetValue(vehicle.model_code, out var model) ? model : string.Empty,
-                    PurchaseAmount = vehicle.purchase_amount
-                };
-            })
-            .Where(x => x != null)
-            .ToList();
-
-        return Ok(new
-        {
-            Vehicles = rows,
-            TotalCount = rows.Count
-        });
     }
 
-    private async Task<List<object>> BuildFmlContractRowsAsync(System.Linq.Expressions.Expression<Func<Contract, bool>> predicate)
-    {
-        var rowsBase = await _context.Contracts
-            .AsNoTracking()
-            .Where(predicate)
-            .Join(_context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
-                c => c.vmf_code,
-                v => v.vmf_code,
-                (c, v) => new { c, v })
-            .GroupJoin(_context.Models.AsNoTracking(),
-                cv => cv.v.model_code,
-                m => m.model_code,
-                (cv, model) => new { cv, model = model.FirstOrDefault() })
-            .GroupJoin(_context.VehicleSources.AsNoTracking(),
-                cvm => cvm.cv.v.vs_code,
-                src => src.vs_code,
-                (cvm, source) => new { cvm, source = source.FirstOrDefault() })
-            .GroupJoin(_context.VehicleTypes.AsNoTracking(),
-                cvms => cvms.cvm.cv.v.type_code,
-                type => type.type_code,
-                (cvms, type) => new { cvms, type = type.FirstOrDefault() })
-            .GroupJoin(_context.Sites.AsNoTracking(),
-                cvmst => cvmst.cvms.cvm.cv.c.site_code,
-                site => site.Site_code,
-                (cvmst, site) => new { cvmst, site = site.FirstOrDefault() })
-            .OrderBy(x => x.cvmst.cvms.cvm.cv.v.fleet_number)
-            .Select(x => new
-            {
-                x.cvmst.cvms.cvm.cv.v.vmf_code,
-                GgNumber = x.cvmst.cvms.cvm.cv.v.fleet_number,
-                GpNumber = x.cvmst.cvms.cvm.cv.v.registration_number,
-                Model = x.cvmst.cvms.cvm.model != null ? x.cvmst.cvms.cvm.model.model_description : string.Empty,
-                YearModel = x.cvmst.cvms.cvm.cv.v.year_manufactured,
-                HiredFrom = x.cvmst.cvms.source != null ? x.cvmst.cvms.source.name : string.Empty,
-                HireType = x.cvmst.type != null ? x.cvmst.type.type_description : string.Empty,
-                StillCurrent = x.cvmst.cvms.cvm.cv.c.still_current,
-                ContractStartDate = x.cvmst.cvms.cvm.cv.c.start_date,
-                TargetReturnDate = x.cvmst.cvms.cvm.cv.c.target_return_date,
-                ContractType = x.cvmst.cvms.cvm.cv.c.contract_type,
-                SiteName = x.site != null ? x.site.description : string.Empty,
-                FixedTariff = (decimal?)null
-            })
-            .ToListAsync();
-
-        var rows = rowsBase
-            .Select((x, idx) => new
-            {
-                RowNumber = idx + 1,
-                x.GgNumber,
-                x.GpNumber,
-                x.Model,
-                x.YearModel,
-                x.HiredFrom,
-                x.HireType,
-                x.StillCurrent,
-                x.ContractStartDate,
-                x.TargetReturnDate,
-                x.ContractType,
-                x.SiteName,
-                x.FixedTariff
-            })
-            .Cast<object>()
-            .ToList();
-
-        return rows;
-    }
 
     #endregion
 
