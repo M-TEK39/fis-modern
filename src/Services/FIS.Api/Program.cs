@@ -245,6 +245,7 @@ builder.Services.AddScoped<IJobCardRepository, JobCardRepository>();
 builder.Services.AddScoped<IVehicleRemarkRepository, VehicleRemarkRepository>();
 builder.Services.AddScoped<IVehicleLicenceHistoryRepository, VehicleLicenceHistoryRepository>();
 builder.Services.AddScoped<IVehicleDocumentRepository, VehicleDocumentRepository>();
+builder.Services.AddScoped<ITaxiScanDocRepository, TaxiScanDocRepository>();
 builder.Services.AddScoped<IMaintenanceTriggerRepository, MaintenanceTriggerRepository>();
 builder.Services.AddScoped<ILicenseRepository, LicenseRepository>();
 builder.Services.AddScoped<IUnitOfMeasureRepository, UnitOfMeasureRepository>();

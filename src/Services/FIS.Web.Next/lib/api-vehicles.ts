@@ -19,6 +19,12 @@ export type VehicleSnapshotRow = {
   renumberedTo: string | null;
 };
 
+export type VehicleOption = {
+  vmfCode: number;
+  fleetNumber: string | null;
+  registrationNumber: string | null;
+};
+
 export type ContractSnapshot = {
   label: string;
   badgeClass: "badge" | "badge-warning" | "badge-info" | "badge-success" | "badge-error";
@@ -301,6 +307,22 @@ export async function getVehicleSnapshotPage(page: number, pageSize = PAGE_SIZE)
     totalRecords,
     totalPages,
   };
+}
+
+export async function getVehicleOptions(): Promise<VehicleOption[]> {
+  const payload = await requestApi("api/vehicles");
+  return getCollection(payload)
+    .filter(isRecord)
+    .map((value) => {
+      const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
+      if (vmfCode === null) return null;
+      return {
+        vmfCode,
+        fleetNumber: asString(getValue(value, "fleet_number", "fleetNumber")),
+        registrationNumber: asString(getValue(value, "registration_number", "registrationNumber")),
+      } satisfies VehicleOption;
+    })
+    .filter((vehicle): vehicle is VehicleOption => vehicle !== null);
 }
 
 export async function getRenumberedVehicleReport(): Promise<RenumberedVehicleReportRow[]> {
