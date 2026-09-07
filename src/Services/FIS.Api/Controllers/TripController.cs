@@ -23,6 +23,50 @@ public class CreateTripDto
     public bool TripIsMonthly { get; set; } = false;
 }
 
+public sealed class CreateTripAuthorityDto : CreateTripDto
+{
+    public IReadOnlyList<CreateTripAuthorityDriverDto> Drivers { get; set; } = [];
+    public IReadOnlyList<CreateTripAuthorityPassengerDto> Passengers { get; set; } = [];
+    public IReadOnlyList<CreateTripAuthorityRouteDto> Routes { get; set; } = [];
+}
+
+public sealed class CreateTripAuthorityDriverDto
+{
+    public string? Name { get; set; }
+    public string? IdentityNumber { get; set; }
+    public bool IsPrimary { get; set; }
+    public int? SiteCode { get; set; }
+    public int? LicenceTypeCode { get; set; }
+    public string? PassportNumber { get; set; }
+    public string? PersalNumber { get; set; }
+    public string? ContractNumber { get; set; }
+    public string? LicenceNumber { get; set; }
+    public DateTime? LicenceIssueDate { get; set; }
+    public DateTime? LicenceLastVerifiedDate { get; set; }
+    public bool HasPdp { get; set; }
+    public DateTime? PdpExpiryDate { get; set; }
+    public DateTime? LicenceExpiryDate { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class CreateTripAuthorityPassengerDto
+{
+    public string Name { get; set; } = string.Empty;
+}
+
+public sealed class CreateTripAuthorityRouteDto
+{
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+    public string? StartLocation { get; set; }
+    public string? EndLocation { get; set; }
+    public int? EstimatedDistance { get; set; }
+    public string ResponsibilityCode { get; set; } = string.Empty;
+    public string ObjectiveCode { get; set; } = string.Empty;
+    public string ProjectNumber { get; set; } = string.Empty;
+    public string FundCode { get; set; } = string.Empty;
+}
+
 public class UpdateTripDto : CreateTripDto { }
 
 public class TripDto
@@ -464,6 +508,79 @@ public class TripController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating trip");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpPost("with-details")]
+    public async Task<ActionResult<TripDto>> CreateTripAuthority([FromBody] CreateTripAuthorityDto request)
+    {
+        try
+        {
+            var trip = new Trip
+            {
+                contract_code = request.ContractCode,
+                approver_name = request.ApproverName,
+                approver_rank = request.ApproverRank,
+                approver_tel = request.ApproverTelephone,
+                expiry_date = request.ExpiryDate,
+                trip_reason = request.TripReason,
+                trip_request_number = request.TripRequestNumber,
+                issue_date = request.IssueDate,
+                trip_type_code = request.TripTypeCode,
+                trip_incident_type_code = request.TripIncidentTypeCode,
+                user_access_code = request.UserAccessCode ?? (short?)GetCurrentUserId(),
+                locked_for_transfer = false,
+                Trip_Is_Monthly = request.TripIsMonthly
+            };
+
+            var createdTrip = await _tripService.CreateTripAuthorityAsync(
+                trip,
+                request.Drivers.Select(driver => new TripAuthorityDriverInput(
+                    driver.Name,
+                    driver.IdentityNumber,
+                    driver.IsPrimary,
+                    driver.SiteCode,
+                    driver.LicenceTypeCode,
+                    driver.PassportNumber,
+                    driver.PersalNumber,
+                    driver.ContractNumber,
+                    driver.LicenceNumber,
+                    driver.LicenceIssueDate,
+                    driver.LicenceLastVerifiedDate,
+                    driver.HasPdp,
+                    driver.PdpExpiryDate,
+                    driver.LicenceExpiryDate,
+                    driver.IsActive)).ToArray(),
+                request.Passengers
+                    .Where(passenger => !string.IsNullOrWhiteSpace(passenger.Name))
+                    .Select(passenger => new TripAuthorityPassengerInput(passenger.Name.Trim()))
+                    .ToArray(),
+                request.Routes.Select(route => new TripAuthorityRouteInput(
+                    route.StartDate,
+                    route.EndDate,
+                    route.StartLocation,
+                    route.EndLocation,
+                    route.EstimatedDistance,
+                    route.ResponsibilityCode.Trim(),
+                    route.ObjectiveCode.Trim(),
+                    route.ProjectNumber.Trim(),
+                    route.FundCode.Trim())).ToArray());
+
+            return CreatedAtAction(nameof(GetTrip), new { id = createdTrip.trip_authority_code }, MapTrip(createdTrip));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Trip authority creation was rejected for contract {ContractCode}", request.ContractCode);
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating trip authority with related records");
             return StatusCode(500, "Internal server error");
         }
     }

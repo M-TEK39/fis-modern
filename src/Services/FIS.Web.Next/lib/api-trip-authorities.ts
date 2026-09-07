@@ -7,6 +7,7 @@ type JsonRecord = Record<string, unknown>;
 
 export type TripAuthorityVehicle = {
   vmfCode: number;
+  contractCode: number;
   fleetNumber: string | null;
   registrationNumber: string | null;
   licenceDueDate: string | null;
@@ -89,9 +90,52 @@ export type CloseTripAuthorityRequest = {
   routes: Array<{ routeCode: number; endOdometer: number }>;
 };
 
+export type CreateTripAuthorityRequest = {
+  contractCode: number;
+  approverName: string;
+  approverRank: string;
+  approverTelephone: string | null;
+  expiryDate: string | null;
+  tripReason: string;
+  tripRequestNumber: string | null;
+  tripTypeCode: number;
+  tripIncidentTypeCode: number;
+  userAccessCode: number | null;
+  tripIsMonthly: boolean;
+  drivers: Array<{
+    name: string;
+    identityNumber: string | null;
+    isPrimary: boolean;
+    siteCode: number | null;
+    licenceTypeCode: number | null;
+    passportNumber: string | null;
+    persalNumber: string | null;
+    contractNumber: string | null;
+    licenceNumber: string | null;
+    licenceIssueDate: string | null;
+    licenceLastVerifiedDate: string | null;
+    hasPdp: boolean;
+    pdpExpiryDate: string | null;
+    licenceExpiryDate: string | null;
+    isActive: boolean;
+  }>;
+  passengers: Array<{ name: string }>;
+  routes: Array<{
+    startDate: string;
+    endDate: string;
+    startLocation: string | null;
+    endLocation: string | null;
+    estimatedDistance: number | null;
+    responsibilityCode: string;
+    objectiveCode: string;
+    projectNumber: string;
+    fundCode: string;
+  }>;
+};
+
 export class TripAuthorityApiError extends Error {
   constructor(
-    public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found",
+    public readonly reason: "unauthorized" | "unavailable" | "invalid-response" | "not-found" | "rejected",
     message: string,
   ) {
     super(message);
@@ -171,11 +215,13 @@ function mapVehicle(value: unknown): TripAuthorityVehicle | null {
   if (!isRecord(value)) return null;
 
   const vmfCode = asNumber(getValue(value, "vmf_code", "vmfCode"));
-  if (vmfCode === null) return null;
+  const contractCode = asNumber(getValue(value, "contractCode", "contract_code"));
+  if (vmfCode === null || contractCode === null) return null;
 
   const statusCode = asNumber(getValue(value, "vehicle_status_code", "vehicleStatusCode")) ?? 0;
   return {
     vmfCode,
+    contractCode,
     fleetNumber: asString(getValue(value, "fleetNumber", "fleet_number")),
     registrationNumber: asString(getValue(value, "registrationNumber", "registration_number")),
     licenceDueDate: asString(getValue(value, "licenceDueDate", "licence_due_date")),
@@ -296,6 +342,9 @@ async function requestApi(path: string, init: RequestInit = {}) {
     if (response.status === 404) {
       throw new TripAuthorityApiError("not-found", "The requested trip authority was not found.");
     }
+    if (response.status === 400 || response.status === 409) {
+      throw new TripAuthorityApiError("rejected", await response.text());
+    }
 
     if (!response.ok) {
       throw new TripAuthorityApiError("unavailable", `FIS API returned HTTP ${response.status}.`);
@@ -369,6 +418,61 @@ export async function closeTripAuthority(tripId: number, request: CloseTripAutho
   const trip = mapTrip(payload);
   if (!trip) {
     throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid closed trip authority.");
+  }
+
+  return trip;
+}
+
+export async function createTripAuthority(request: CreateTripAuthorityRequest) {
+  const payload = await requestApi("api/Trip/with-details", {
+    method: "POST",
+    body: JSON.stringify({
+      ContractCode: request.contractCode,
+      ApproverName: request.approverName,
+      ApproverRank: request.approverRank,
+      ApproverTelephone: request.approverTelephone,
+      ExpiryDate: request.expiryDate,
+      TripReason: request.tripReason,
+      TripRequestNumber: request.tripRequestNumber,
+      TripTypeCode: request.tripTypeCode,
+      TripIncidentTypeCode: request.tripIncidentTypeCode,
+      UserAccessCode: request.userAccessCode,
+      TripIsMonthly: request.tripIsMonthly,
+      Drivers: request.drivers.map((driver) => ({
+        Name: driver.name,
+        IdentityNumber: driver.identityNumber,
+        IsPrimary: driver.isPrimary,
+        SiteCode: driver.siteCode,
+        LicenceTypeCode: driver.licenceTypeCode,
+        PassportNumber: driver.passportNumber,
+        PersalNumber: driver.persalNumber,
+        ContractNumber: driver.contractNumber,
+        LicenceNumber: driver.licenceNumber,
+        LicenceIssueDate: driver.licenceIssueDate,
+        LicenceLastVerifiedDate: driver.licenceLastVerifiedDate,
+        HasPdp: driver.hasPdp,
+        PdpExpiryDate: driver.pdpExpiryDate,
+        LicenceExpiryDate: driver.licenceExpiryDate,
+        IsActive: driver.isActive,
+      })),
+      Passengers: request.passengers.map((passenger) => ({ Name: passenger.name })),
+      Routes: request.routes.map((route) => ({
+        StartDate: route.startDate,
+        EndDate: route.endDate,
+        StartLocation: route.startLocation,
+        EndLocation: route.endLocation,
+        EstimatedDistance: route.estimatedDistance,
+        ResponsibilityCode: route.responsibilityCode,
+        ObjectiveCode: route.objectiveCode,
+        ProjectNumber: route.projectNumber,
+        FundCode: route.fundCode,
+      })),
+    }),
+  });
+
+  const trip = mapTrip(payload);
+  if (!trip) {
+    throw new TripAuthorityApiError("invalid-response", "The FIS API returned an invalid created trip authority.");
   }
 
   return trip;

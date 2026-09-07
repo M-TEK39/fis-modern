@@ -17,6 +17,16 @@ public interface ITripService
     Task<Trip> CreateTripAsync(Trip trip);
 
     /// <summary>
+    /// Create a trip authority and its legacy child rows as one operation.
+    /// The repository negotiates optional columns and table names at runtime.
+    /// </summary>
+    Task<Trip> CreateTripAuthorityAsync(
+        Trip trip,
+        IReadOnlyList<TripAuthorityDriverInput> drivers,
+        IReadOnlyList<TripAuthorityPassengerInput> passengers,
+        IReadOnlyList<TripAuthorityRouteInput> routes);
+
+    /// <summary>
     /// Update an existing trip authority
     /// Legacy: Trip authority modification
     /// Validates that trip is not locked for transfer
@@ -196,3 +206,34 @@ public sealed record TripAuthorityRouteUpdate(
     int RouteCode,
     int EndOdometer,
     int Distance);
+
+public sealed record TripAuthorityDriverInput(
+    string? Name,
+    string? IdentityNumber,
+    bool IsPrimary,
+    int? SiteCode,
+    int? LicenceTypeCode,
+    string? PassportNumber,
+    string? PersalNumber,
+    string? ContractNumber,
+    string? LicenceNumber,
+    DateTime? LicenceIssueDate,
+    DateTime? LicenceLastVerifiedDate,
+    bool HasPdp,
+    DateTime? PdpExpiryDate,
+    DateTime? LicenceExpiryDate,
+    bool IsActive);
+
+public sealed record TripAuthorityPassengerInput(string Name);
+
+public sealed record TripAuthorityRouteInput(
+    DateTime StartDate,
+    DateTime EndDate,
+    string? StartLocation,
+    string? EndLocation,
+    int? EstimatedDistance,
+    string ResponsibilityCode,
+    string ObjectiveCode,
+    string ProjectNumber,
+    string FundCode,
+    int? StartOdometer = null);

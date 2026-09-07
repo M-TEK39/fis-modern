@@ -288,6 +288,89 @@ public sealed class TripRepository : ITripRepository
         }
     }
 
+    public async Task<Trip> CreateAuthorityAsync(
+        Trip trip,
+        IReadOnlyList<TripAuthorityDriverInput> drivers,
+        IReadOnlyList<TripAuthorityPassengerInput> passengers,
+        IReadOnlyList<TripAuthorityRouteInput> routes,
+        int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(trip);
+        ArgumentNullException.ThrowIfNull(drivers);
+        ArgumentNullException.ThrowIfNull(passengers);
+        ArgumentNullException.ThrowIfNull(routes);
+
+        var driverTable = await ResolveTripDriverTableAsync();
+        if (driverTable is null)
+        {
+            throw new InvalidOperationException(
+                "Neither trip_driver nor trip_drivers contains the required legacy trip-driver columns.");
+        }
+
+        var passengerColumns = await GetTableColumnsAsync(TripPassengerTableName);
+        var routeColumns = await GetTableColumnsAsync(RouteDetailTableName);
+        var requiredRouteColumns = new[] { "trip_authority_code", "start_date", "end_date" };
+        if (!requiredRouteColumns.All(routeColumns.Contains))
+        {
+            throw new InvalidOperationException(
+                "The route_details compatibility columns are not available for creating a trip authority.");
+        }
+
+        var existingTransaction = _context.Database.CurrentTransaction;
+        var transaction = existingTransaction is null
+            ? await _context.Database.BeginTransactionAsync()
+            : null;
+
+        try
+        {
+            var createdTrip = await CreateAsync(trip, currentUserId);
+            foreach (var driver in drivers)
+            {
+                await InsertTripDriverAsync(driverTable, driver, createdTrip.trip_authority_code, currentUserId);
+            }
+
+            // Some later databases contain the lookup-shaped trip_passengers
+            // table without the legacy trip_authority_code relationship. Do
+            // not create orphan rows in that shape; the client-era table is
+            // written when its relationship is available.
+            if (new[] { "trip_passenger_name", "trip_authority_code" }.All(passengerColumns.Contains))
+            {
+                foreach (var passenger in passengers)
+                {
+                    await InsertTripPassengerAsync(passenger, createdTrip.trip_authority_code, passengerColumns, currentUserId);
+                }
+            }
+
+            foreach (var route in routes)
+            {
+                await InsertRouteDetailAsync(route, createdTrip.trip_authority_code, routeColumns, currentUserId);
+            }
+
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync();
+            }
+
+            return createdTrip;
+        }
+        catch
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync();
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+    }
+
     public async Task UpdateAsync(Trip trip, int currentUserId)
     {
         ArgumentNullException.ThrowIfNull(trip);
@@ -482,6 +565,128 @@ public sealed class TripRepository : ITripRepository
             {
                 await connection.CloseAsync();
             }
+        }
+    }
+
+    private async Task<string?> ResolveTripDriverTableAsync()
+    {
+        var requiredColumns = new[]
+        {
+            "trip_driver_name", "trip_driver_id", "trip_authority_code", "trip_driver_primary"
+        };
+
+        foreach (var tableName in TripDriverTableNames)
+        {
+            var columns = await GetTableColumnsAsync(tableName);
+            if (requiredColumns.All(columns.Contains))
+            {
+                return tableName;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task InsertTripDriverAsync(
+        string tableName,
+        TripAuthorityDriverInput driver,
+        int tripAuthorityCode,
+        int currentUserId)
+    {
+        var columns = await GetTableColumnsAsync(tableName);
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, tripAuthorityCode);
+        AddValue(values, columns, "trip_driver_name", "@tripDriverName", DbType.String, driver.Name);
+        AddValue(values, columns, "trip_driver_id", "@tripDriverId", DbType.String, driver.IdentityNumber);
+        AddValue(values, columns, "trip_driver_primary", "@tripDriverPrimary", DbType.Boolean, driver.IsPrimary);
+        AddValue(values, columns, "site_code", "@siteCode", DbType.Int32, driver.SiteCode);
+        AddValue(values, columns, "driver_licence_type_id", "@licenceTypeCode", DbType.Int32, driver.LicenceTypeCode);
+        AddValue(values, columns, "driver_passportnumber", "@passportNumber", DbType.String, driver.PassportNumber);
+        AddValue(values, columns, "driver_persalnumber", "@persalNumber", DbType.String, driver.PersalNumber);
+        AddValue(values, columns, "driver_contractnumber", "@contractNumber", DbType.String, driver.ContractNumber);
+        AddValue(values, columns, "driver_licence_number", "@licenceNumber", DbType.String, driver.LicenceNumber);
+        AddValue(values, columns, "driver_licence_issuedate", "@licenceIssueDate", DbType.DateTime, driver.LicenceIssueDate);
+        AddValue(values, columns, "driver_licence_lastVerifiedDate", "@licenceLastVerifiedDate", DbType.DateTime, driver.LicenceLastVerifiedDate);
+        AddValue(values, columns, "driver_hasPDP", "@hasPdp", DbType.Boolean, driver.HasPdp);
+        AddValue(values, columns, "driver_PDP_ExpiryDate", "@pdpExpiryDate", DbType.DateTime, driver.PdpExpiryDate);
+        AddValue(values, columns, "driver_licence_ExpiryDate", "@licenceExpiryDate", DbType.DateTime, driver.LicenceExpiryDate);
+        AddValue(values, columns, "driver_active", "@driverActive", DbType.Boolean, driver.IsActive);
+        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        await ExecuteInsertAsync(tableName, values);
+    }
+
+    private async Task InsertTripPassengerAsync(
+        TripAuthorityPassengerInput passenger,
+        int tripAuthorityCode,
+        IReadOnlySet<string> columns,
+        int currentUserId)
+    {
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, tripAuthorityCode);
+        AddValue(values, columns, "trip_passenger_name", "@tripPassengerName", DbType.String, passenger.Name);
+        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        await ExecuteInsertAsync(TripPassengerTableName, values);
+    }
+
+    private async Task InsertRouteDetailAsync(
+        TripAuthorityRouteInput route,
+        int tripAuthorityCode,
+        IReadOnlySet<string> columns,
+        int currentUserId)
+    {
+        var values = new List<WriteValue>();
+        AddValue(values, columns, "trip_authority_code", "@tripAuthorityCode", DbType.Int32, tripAuthorityCode);
+        AddValue(values, columns, "start_date", "@startDate", DbType.DateTime2, route.StartDate);
+        AddValue(values, columns, "end_date", "@endDate", DbType.DateTime2, route.EndDate);
+        AddValue(values, columns, "start_odo_meter", "@startOdometer", DbType.Int32, route.StartOdometer);
+        AddValue(values, columns, "end_odo_meter", "@endOdometer", DbType.Int32, null);
+        AddFirstAvailableValue(values, columns, "@responsibilityCode", DbType.String, route.ResponsibilityCode, "bas_responsibility_code", "responsibility_code");
+        AddFirstAvailableValue(values, columns, "@objectiveCode", DbType.String, route.ObjectiveCode, "bas_object_code", "bas_objective_code", "objective_code");
+        AddFirstAvailableValue(values, columns, "@startLocation", DbType.String, route.StartLocation, "start_route_location_name", "start_location_name");
+        AddFirstAvailableValue(values, columns, "@endLocation", DbType.String, route.EndLocation, "end_route_location_name", "end_location_name");
+        AddValue(values, columns, "estimated_distance", "@estimatedDistance", DbType.Int32, route.EstimatedDistance);
+        AddValue(values, columns, "distance", "@distance", DbType.Int32, 0);
+        AddFirstAvailableValue(values, columns, "@projectNumber", DbType.String, route.ProjectNumber, "bas_project_number", "project_number");
+        AddFirstAvailableValue(values, columns, "@fundCode", DbType.String, route.FundCode, "bas_fund_code", "fund_code");
+        AddValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+        AddValue(values, columns, "created_by_user_code", "@createdByUserCode", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        await ExecuteInsertAsync(RouteDetailTableName, values);
+    }
+
+    private async Task ExecuteInsertAsync(string tableName, IReadOnlyList<WriteValue> values)
+    {
+        if (values.Count == 0)
+        {
+            throw new InvalidOperationException($"No compatible columns are available for inserting into {tableName}.");
+        }
+
+        await using var command = _context.Database.GetDbConnection().CreateCommand();
+        command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+        command.CommandText = $"INSERT INTO [dbo].[{tableName}] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+        AddParameters(command, values);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static void AddFirstAvailableValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> availableColumns,
+        string parameter,
+        DbType dbType,
+        object? value,
+        params string[] columns)
+    {
+        var column = columns.FirstOrDefault(availableColumns.Contains);
+        if (column is not null)
+        {
+            values.Add(new WriteValue(column, parameter, dbType, value));
         }
     }
 

@@ -72,6 +72,93 @@ public class TripService : ITripService
         }
     }
 
+    public async Task<Trip> CreateTripAuthorityAsync(
+        Trip trip,
+        IReadOnlyList<TripAuthorityDriverInput> drivers,
+        IReadOnlyList<TripAuthorityPassengerInput> passengers,
+        IReadOnlyList<TripAuthorityRouteInput> routes)
+    {
+        ArgumentNullException.ThrowIfNull(trip);
+        ArgumentNullException.ThrowIfNull(drivers);
+        ArgumentNullException.ThrowIfNull(passengers);
+        ArgumentNullException.ThrowIfNull(routes);
+
+        if (drivers.Count == 0)
+        {
+            throw new ArgumentException("At least one driver is required.", nameof(drivers));
+        }
+
+        if (routes.Count == 0)
+        {
+            throw new ArgumentException("At least one route is required.", nameof(routes));
+        }
+
+        if (drivers.Any(driver => string.IsNullOrWhiteSpace(driver.Name)))
+        {
+            throw new ArgumentException("Every selected driver must have a name.", nameof(drivers));
+        }
+
+        if (routes.Any(route => route.StartDate > route.EndDate))
+        {
+            throw new ArgumentException("A route arrival date cannot be before its departure date.", nameof(routes));
+        }
+
+        if (routes.Any(route => string.IsNullOrWhiteSpace(route.ResponsibilityCode) ||
+                                string.IsNullOrWhiteSpace(route.ObjectiveCode) ||
+                                string.IsNullOrWhiteSpace(route.ProjectNumber) ||
+                                string.IsNullOrWhiteSpace(route.FundCode)))
+        {
+            throw new ArgumentException(
+                "Responsibility, Objective, Project, and Fund are required for every route.",
+                nameof(routes));
+        }
+
+        if (routes.Any(route => route.EstimatedDistance is < 0))
+        {
+            throw new ArgumentException("Estimated route distance cannot be negative.", nameof(routes));
+        }
+
+        var contract = await _contractRepository.GetByIdAsync(trip.contract_code)
+            ?? throw new InvalidOperationException($"Contract {trip.contract_code} was not found");
+
+        if (!await ValidateTripCreationAsync(trip))
+        {
+            throw new InvalidOperationException("Trip validation failed");
+        }
+
+        trip.issue_date = DateTime.Now;
+        trip.end_odo_meter = null;
+        trip.locked_for_transfer = false;
+
+        if (!trip.expiry_date.HasValue)
+        {
+            trip.expiry_date = routes.Max(route => route.EndDate);
+        }
+
+        var normalizedRoutes = routes
+            .Select(route => route with { StartOdometer = contract.start_odometer })
+            .ToArray();
+        var normalizedPassengers = passengers.Count > 0
+            ? passengers
+            : [new TripAuthorityPassengerInput("None")];
+
+        var createdTrip = await _tripRepository.CreateAuthorityAsync(
+            trip,
+            drivers,
+            normalizedPassengers,
+            normalizedRoutes,
+            _currentUserContext.GetCurrentUserIdOrDefault());
+
+        _logger.LogInformation(
+            "Trip authority {TripAuthorityCode} created with {DriverCount} drivers, {PassengerCount} passengers, and {RouteCount} routes",
+            createdTrip.trip_authority_code,
+            drivers.Count,
+            normalizedPassengers.Count,
+            normalizedRoutes.Length);
+
+        return createdTrip;
+    }
+
     /// <summary>
     /// Update an existing trip authority
     /// Legacy: Trip authority modification

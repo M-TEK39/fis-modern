@@ -481,6 +481,12 @@ public interface ITripRepository
     Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode);
     Task<IEnumerable<Trip>> GetTripsByDateRangeAsync(DateTime startDate, DateTime endDate);
     Task<Trip> CreateAsync(Trip trip, int currentUserId);
+    Task<Trip> CreateAuthorityAsync(
+        Trip trip,
+        IReadOnlyList<TripAuthorityDriverInput> drivers,
+        IReadOnlyList<TripAuthorityPassengerInput> passengers,
+        IReadOnlyList<TripAuthorityRouteInput> routes,
+        int currentUserId);
     Task UpdateAsync(Trip trip, int currentUserId);
     Task CloseAsync(int tripId, IReadOnlyList<TripAuthorityRouteUpdate> routes, int? endOdometer, int currentUserId);
     Task DeleteAsync(int tripId, int currentUserId);
