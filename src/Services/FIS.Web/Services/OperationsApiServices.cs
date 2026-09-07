@@ -311,17 +311,6 @@ public class LicenseReportApiService(HttpClient httpClient, TokenService tokenSe
         await PostAsync<object, List<T>>($"{BasePath}/site", payload) ?? new List<T>();
 }
 
-public class WorkshopApiService(HttpClient httpClient, TokenService tokenService, ILogger<WorkshopApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/workshop";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
-
 public class TaxiApiService(HttpClient httpClient, TokenService tokenService, ILogger<TaxiApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/taxi";

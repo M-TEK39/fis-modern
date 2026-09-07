@@ -91,6 +91,10 @@ const MANUAL_GROUPS: readonly ManualGroup[] = [
     title: "Validation",
     links: [{ label: "Validation Data User Manual", href: "/Validation/Doc/Doc_ValidationData.htm" }],
   },
+  {
+    title: "Workshop",
+    links: [{ label: "Workshop User Manual", href: "/workshop/help" }],
+  },
 ];
 
 function ManualsFallback() {
