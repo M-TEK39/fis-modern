@@ -159,12 +159,6 @@ builder.Services.AddHttpClient<PrivateHireApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-builder.Services.AddHttpClient<PrivateHireFuelCardApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-
 builder.Services.AddHttpClient<AuditApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
@@ -172,12 +166,6 @@ builder.Services.AddHttpClient<AuditApiService>(client =>
 });
 
 builder.Services.AddHttpClient<AccidentApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-
-builder.Services.AddHttpClient<FleetManagementApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
