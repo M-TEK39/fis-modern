@@ -49,9 +49,13 @@ function formatDate(value: string | null) {
   return `${date.getUTCFullYear()}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
-function getYear(value: string | null) {
+function getYear(value: string | number | null) {
   if (!value) {
     return "-";
+  }
+
+  if (typeof value === "number") {
+    return String(value);
   }
 
   const date = new Date(value);
@@ -198,7 +202,7 @@ function QueueTable({
                       <tr key={vehicle.tempVmfCode}>
                         <td>{valueOrDash(vehicle.chassisNumber)}</td>
                         <td>{valueOrDash(vehicle.modelDescription)}</td>
-                        <td>{getYear(vehicle.purchaseDate)}</td>
+                        <td>{getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}</td>
                         <td>{valueOrDash(vehicle.engineNumber)}</td>
                         <td>-</td>
                         <td>-</td>
@@ -218,7 +222,7 @@ function QueueTable({
                       <tr key={vehicle.tempVmfCode}>
                         <td>{valueOrDash(vehicle.chassisNumber)}</td>
                         <td>{valueOrDash(vehicle.modelDescription)}</td>
-                        <td>{getYear(vehicle.purchaseDate)}</td>
+                        <td>{getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}</td>
                         <td>{valueOrDash(vehicle.engineNumber)}</td>
                         <td>-</td>
                         <td>-</td>
@@ -245,7 +249,7 @@ function QueueTable({
                       <td>{valueOrDash(vehicle.chassisNumber)}</td>
                       <td>{vehicle.vmfCode ?? "-"}</td>
                       <td>{valueOrDash(vehicle.modelDescription)}</td>
-                      <td>{getYear(vehicle.purchaseDate)}</td>
+                        <td>{getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)}</td>
                       <td>{valueOrDash(vehicle.engineNumber)}</td>
                       <td>-</td>
                       <td>-</td>
@@ -380,12 +384,18 @@ function ReviewModal({
         )}
 
         <dl className="vehicle-review-grid">
-          <SummaryField label="Current GG Number" value={vehicle.vmfCode?.toString() ?? "-"} />
+          <SummaryField label="Current GG Number" value={valueOrDash(vehicle.fleetNumber) === "-" ? "Allocated on authorization" : vehicle.fleetNumber!} />
           <SummaryField label="Status" value={valueOrDash(vehicle.authorityStatus)} />
           <SummaryField label="Make & Model" value={valueOrDash(vehicle.modelDescription)} />
-          <SummaryField label="Year Manufactured" value={getYear(vehicle.purchaseDate)} />
+          <SummaryField label="Year Manufactured" value={getYear(vehicle.yearManufactured ?? vehicle.purchaseDate)} />
           <SummaryField label="VIN/Chassis Number" value={valueOrDash(vehicle.chassisNumber)} />
           <SummaryField label="Engine Number" value={valueOrDash(vehicle.engineNumber)} />
+          <SummaryField label="GP Number" value={valueOrDash(vehicle.gpNumber ?? vehicle.registrationNumber)} />
+          <SummaryField label="Location Code" value={vehicle.locationCode?.toString() ?? "-"} />
+          <SummaryField label="Hire Type Code" value={vehicle.typeCode?.toString() ?? "-"} />
+          <SummaryField label="Hired From Code" value={vehicle.vsCode?.toString() ?? "-"} />
+          <SummaryField label="Site Code" value={vehicle.siteCode?.toString() ?? "-"} />
+          <SummaryField label="Invoice Number" value={valueOrDash(vehicle.invoiceNumber)} />
           <SummaryField label="Purchase Date" value={formatDate(vehicle.purchaseDate)} />
           <SummaryField label="Purchase Amount" value={formatAmount(vehicle.purchaseAmount)} />
           <SummaryField label="Purchase From" value={valueOrDash(vehicle.purchaseFrom)} />

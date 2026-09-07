@@ -8,17 +8,29 @@ type JsonRecord = Record<string, unknown>;
 
 export type VehicleAuthorization = {
   tempVmfCode: number;
+  fleetNumber: string | null;
+  registrationNumber: string | null;
   chassisNumber: string;
   engineNumber: string | null;
   modelCode: number | null;
   modelDescription: string | null;
   colour: string | null;
+  yearManufactured: number | null;
+  locationCode: number | null;
+  vehicleStatusCode: number | null;
+  vehicleStatusDate: string | null;
+  typeCode: number | null;
+  vsCode: number | null;
+  comment: string | null;
   purchaseAmount: number | null;
   purchaseDate: string | null;
   purchaseFrom: string | null;
   takeOnDate: string | null;
   takeOnOdo: number | null;
   replacedGgNumber: string | null;
+  siteCode: number | null;
+  invoiceNumber: string | null;
+  gpNumber: string | null;
   fleetNotes: string | null;
   damageStatus: string | null;
   damagesComment: string | null;
@@ -122,17 +134,29 @@ function toVehicleAuthorization(value: unknown): VehicleAuthorization | null {
 
   return {
     tempVmfCode,
+    fleetNumber: asString(getValue(value, "fleetNumber", "fleet_number")),
+    registrationNumber: asString(getValue(value, "registrationNumber", "registration_number")),
     chassisNumber: asString(getValue(value, "chassisNumber", "chassis_number")) ?? "",
     engineNumber: asString(getValue(value, "engineNumber", "engine_number")),
     modelCode: asNumber(getValue(value, "modelCode", "model_code")),
     modelDescription: asString(getValue(value, "modelDescription", "model_description")),
     colour: asString(getValue(value, "colour")),
+    yearManufactured: asNumber(getValue(value, "yearManufactured", "year_manufactured")),
+    locationCode: asNumber(getValue(value, "locationCode", "location_code")),
+    vehicleStatusCode: asNumber(getValue(value, "vehicleStatusCode", "vehicle_status_code")),
+    vehicleStatusDate: asString(getValue(value, "vehicleStatusDate", "vehicle_status_date")),
+    typeCode: asNumber(getValue(value, "typeCode", "type_code")),
+    vsCode: asNumber(getValue(value, "vsCode", "vs_code")),
+    comment: asString(getValue(value, "comment")),
     purchaseAmount: asNumber(getValue(value, "purchaseAmount", "purchase_amount")),
     purchaseDate: asString(getValue(value, "purchaseDate", "purchase_date")),
     purchaseFrom: asString(getValue(value, "purchaseFrom", "purchase_from")),
     takeOnDate: asString(getValue(value, "takeOnDate", "take_on_date")),
     takeOnOdo: asNumber(getValue(value, "takeOnOdo", "take_on_odo")),
     replacedGgNumber: asString(getValue(value, "replacedGGNumber", "replacedGgNumber", "replaced_gg_number")),
+    siteCode: asNumber(getValue(value, "siteCode", "site_code")),
+    invoiceNumber: asString(getValue(value, "invoiceNumber", "invoice_number")),
+    gpNumber: asString(getValue(value, "gpNumber", "gp_number")),
     fleetNotes: asString(getValue(value, "fleetNotes", "Fleet_Notes", "fleet_notes")),
     damageStatus: asString(getValue(value, "damageStatus", "damage_status")),
     damagesComment: asString(getValue(value, "damagesComment", "damages_comment")),

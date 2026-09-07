@@ -23,10 +23,40 @@ export type VehicleLocationOption = {
   name: string;
 };
 
+export type VehicleTypeOption = {
+  code: number;
+  name: string;
+};
+
+export type VehicleSourceOption = {
+  code: number;
+  name: string;
+};
+
+export type VehicleSiteOption = {
+  code: number;
+  name: string;
+};
+
+export type VehicleExtraOption = {
+  code: number;
+  name: string;
+};
+
+export type VehicleMaintenanceTypeOption = {
+  code: number;
+  name: string;
+};
+
 export type VehicleCreateReferenceData = {
   makes: VehicleMakeOption[];
   models: VehicleModelOption[];
   locations: VehicleLocationOption[];
+  types: VehicleTypeOption[];
+  sources: VehicleSourceOption[];
+  sites: VehicleSiteOption[];
+  extras: VehicleExtraOption[];
+  maintenanceTypes: VehicleMaintenanceTypeOption[];
 };
 
 export type VehicleSearchResult = {
@@ -39,26 +69,36 @@ export type VehicleSearchResult = {
 };
 
 export type CreateVehicleRequest = {
-  model_code: number;
-  type_code: number;
-  vehicle_status_code: number;
-  location_code: number;
-  fleet_number: string;
-  registration_number: string;
-  engine_number_1: string;
+  fleet_number: string | null;
+  registration_number: string | null;
   chassis_number: string;
+  engine_number: string;
+  model_code: number;
+  colour: string;
+  year_manufactured: number;
+  location_code: number;
+  vehicle_status_code: number;
+  type_code: number;
+  vs_code: number;
   take_on_date: string;
   take_on_odo: number;
-  current_odo: number;
-  tare: number;
-  gvm: number | null;
-  year_manufactured: number;
-  colour: string;
   purchase_date: string;
   purchase_amount: number;
-  ifms_vehicle_register_number: string | null;
-  natis_model_number: string | null;
-  recalculate_tariff: boolean;
+  purchase_from: string;
+  replaced_gg_number: string | null;
+  site_code: number;
+  invoice_number: string | null;
+  gp_number: string | null;
+  comment: string;
+  damage_status: "Y" | "N";
+  damages_comment: string | null;
+  fleet_notes: string | null;
+  extra_codes: number[];
+  maintenance_type_code: number | null;
+  maintenance_start_date: string | null;
+  maintenance_period_months: number | null;
+  maintenance_kilos: number | null;
+  maintenance_value: number | null;
 };
 
 export type VehicleCreateApiErrorReason = "unauthorized" | "unavailable" | "invalid-response";
@@ -213,6 +253,52 @@ function mapLocations(payload: unknown) {
   });
 }
 
+function mapTypes(payload: unknown) {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
+    const code = asNumber(getValue(item, "type_code", "typeCode"));
+    const name = asString(getValue(item, "type_description", "typeDescription", "name"));
+    return code !== null && name ? { code, name } : null;
+  });
+}
+
+function mapSources(payload: unknown) {
+  const items = isRecord(payload) ? getCollection(getValue(payload, "items")) : getCollection(payload);
+  return mapPresent(items, (item) => {
+    if (!isRecord(item)) return null;
+    const code = asNumber(getValue(item, "vsCode", "vs_code", "sourceCode"));
+    const name = asString(getValue(item, "name", "description"));
+    return code !== null && name ? { code, name } : null;
+  });
+}
+
+function mapSites(payload: unknown) {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
+    const code = asNumber(getValue(item, "siteCode", "site_code"));
+    const name = asString(getValue(item, "description", "siteDescription", "name"));
+    return code !== null && name ? { code, name } : null;
+  });
+}
+
+function mapExtras(payload: unknown) {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
+    const code = asNumber(getValue(item, "extra_code", "extraCode"));
+    const name = asString(getValue(item, "extra_description", "description", "extraDescription"));
+    return code !== null && name ? { code, name } : null;
+  });
+}
+
+function mapMaintenanceTypes(payload: unknown) {
+  return mapPresent(getCollection(payload), (item) => {
+    if (!isRecord(item)) return null;
+    const code = asNumber(getValue(item, "code", "maintenanceTypeId", "maintenance_type_id", "Maintenance_TypeId"));
+    const name = asString(getValue(item, "name", "description", "Name"));
+    return code !== null && name ? { code, name } : null;
+  });
+}
+
 function mapSearchResults(payload: unknown) {
   return mapPresent(getCollection(payload), (item) => {
     if (!isRecord(item)) return null;
@@ -233,13 +319,18 @@ function mapSearchResults(payload: unknown) {
 }
 
 export async function getVehicleCreateReferenceData(): Promise<VehicleCreateReferenceData> {
-  const [makes, models, locations] = await Promise.all([
+  const [makes, models, locations, types, sources, sites, extras, maintenanceTypes] = await Promise.all([
     fetchApi("api/make").then(readJson).then(mapMakes),
     fetchApi("api/model").then(readJson).then(mapModels),
     fetchApi("api/Location").then(readJson).then(mapLocations),
+    fetchApi("api/Type").then(readJson).then(mapTypes),
+    fetchApi("api/vehicle-source").then(readJson).then(mapSources),
+    fetchApi("api/Site").then(readJson).then(mapSites),
+    fetchApi("api/ExtraCode").then(readJson).then(mapExtras),
+    fetchApi("api/vehicle/authorization/maintenance-types").then(readJson).then(mapMaintenanceTypes),
   ]);
 
-  return { makes, models, locations };
+  return { makes, models, locations, types, sources, sites, extras, maintenanceTypes };
 }
 
 export async function searchVehiclesAgainstApi(searchTerm: string) {
@@ -248,7 +339,7 @@ export async function searchVehiclesAgainstApi(searchTerm: string) {
 }
 
 export async function createVehicleAgainstApi(request: CreateVehicleRequest) {
-  const response = await fetchApi("api/vehicles", {
+  const response = await fetchApi("api/vehicle/authorization", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(request),
