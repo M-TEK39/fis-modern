@@ -580,6 +580,11 @@ public interface IPrivateHireRepository
     Task UpdateAsync(PrivateHire privateHire, int currentUserId);
     Task DeleteAsync(int privateHireCode, int currentUserId);
     Task<IEnumerable<PrivateHire>> SearchHiresAsync(string searchTerm);
+    Task<IEnumerable<PrivateHireContractorRecord>> GetContractorsAsync();
+    Task<PrivateHireContractorRecord?> GetContractorByIdAsync(int contractorId);
+    Task<PrivateHireContractorRecord> CreateContractorAsync(PrivateHireContractorRecord contractor, int currentUserId);
+    Task UpdateContractorAsync(PrivateHireContractorRecord contractor, int currentUserId);
+    Task DeleteContractorAsync(int contractorId, int currentUserId);
 }
 
 /// <summary>
