@@ -219,12 +219,6 @@ builder.Services.AddHttpClient<ProvinceApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-builder.Services.AddHttpClient<LocationApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
-
 builder.Services.AddHttpClient<MaintenanceRecordApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;

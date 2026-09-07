@@ -231,6 +231,16 @@ input:focus-visible {
   gap: 1rem;
 }
 
+.field-group-full {
+  grid-column: 1 / -1;
+}
+
+.location-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 1.25rem 0;
+}
+
 .vehicle-form-stack {
   display: grid;
   gap: 1.25rem;
