@@ -6,6 +6,7 @@ using FIS.Core.Domain.Entities.Financial;
 using FIS.Core.Domain.Entities.System;
 using FIS.Core.Domain.Entities.ReferenceData;
 using FIS.Core.Domain.Entities.Vehicles;
+using FIS.Core.Domain.Entities.Operations;
 using TypeEntity = FIS.Core.Domain.Entities.ReferenceData.VehicleType;
 
 namespace FIS.Core.Application.Interfaces;
@@ -969,6 +970,21 @@ public interface IVehicleLicenceHistoryRepository
     Task<IEnumerable<VehicleLicenceHistory>> GetByVehicleAsync(int vmfCode);
     Task<VehicleLicenceHistory?> GetLatestByVehicleAsync(int vmfCode);
     Task<VehicleLicenceHistory> CreateAsync(VehicleLicenceHistory history);
+}
+
+/// <summary>
+/// Reads and writes licence certificate scans across the expanded document
+/// table and the client's original scan_docs table.
+/// </summary>
+public interface ILicenseCertificateRepository
+{
+    Task<IEnumerable<LicenseCertificateDocument>> GetAllAsync();
+    Task<IEnumerable<LicenseCertificateDocument>> GetByVehicleAsync(int vmfCode);
+    Task<LicenseCertificateDocument?> GetByKeyAsync(string source, int vmfCode, string documentKey);
+    Task<bool> HasAnyForVehicleAsync(int vmfCode);
+    Task<string?> GetPreferredWriteSourceAsync();
+    Task<LicenseCertificateDocument> CreateAsync(LicenseCertificateDocument document, int currentUserId);
+    Task DeleteAsync(string source, int vmfCode, string documentKey, int currentUserId);
 }
 
 /// <summary>
