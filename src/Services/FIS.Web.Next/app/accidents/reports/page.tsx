@@ -51,10 +51,6 @@ async function AccidentReportsContent() {
 
   return (
     <>
-      <div className="notice notice-warning" role="status">
-        <span aria-hidden="true">!</span>
-        <span>The one-vehicle, all-detail, garage-detail, private-vehicle, new-accident, department-period, department-period VIP, department-month, department-finyear, accident-costs-finyear, outstanding-documents, inspection-letter, categories, last-gg-reference, period, driver, and duplicate accident reports are available in Next. The other menu targets are preserved below and will be migrated from their exact source when available.</span>
-      </div>
       <div className="vehicle-menu-tiles">
         {reportEntries.map((entry) => (
           <section className="vehicle-menu-tile" key={entry.target}>

@@ -1887,48 +1887,7 @@ textarea.form-input:focus,
     color: var(--fis-error);
 }
 
-/* Severity Badges - Accident specific */
-.severity-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.375rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-transform: uppercase;
-}
-
-.severity-minor {
-    background-color: hsl(142.1 76.2% 36.3% / 0.1);
-    color: hsl(142.1 76.2% 36.3%);
-    border: 1px solid hsl(142.1 76.2% 36.3% / 0.2);
-}
-
-.severity-moderate {
-    background-color: hsl(47.9 95.8% 53.1% / 0.1);
-    color: hsl(47.9 95.8% 53.1%);
-    border: 1px solid hsl(47.9 95.8% 53.1% / 0.2);
-}
-
-.severity-major {
-    background-color: hsl(24.6 95% 53.1% / 0.1);
-    color: hsl(24.6 95% 53.1%);
-    border: 1px solid hsl(24.6 95% 53.1% / 0.2);
-}
-
-.severity-critical {
-    background-color: hsl(0 84.2% 60.2% / 0.1);
-    color: hsl(0 84.2% 60.2%);
-    border: 1px solid hsl(0 84.2% 60.2% / 0.2);
-}
-
-.severity-default {
-    background-color: var(--fis-muted);
-    color: var(--fis-muted-text);
-    border: 1px solid var(--fis-border);
-}
-
-/* Status Badges - Accident specific */
+/* Status Badges */
 .status-badge {
     display: inline-flex;
     align-items: center;
@@ -1964,26 +1923,14 @@ textarea.form-input:focus,
 }
 
 @media (prefers-color-scheme: dark) {
-.severity-minor,
     .status-success {
         background-color: rgba(34, 197, 94, 0.2);
         color: var(--fis-success);
     }
 
-    .severity-moderate,
     .status-warning {
         background-color: rgba(245, 158, 11, 0.2);
         color: var(--fis-warning);
-    }
-
-    .severity-major {
-        background-color: rgba(239, 68, 68, 0.2);
-        color: var(--fis-error);
-    }
-
-    .severity-critical {
-        background-color: rgba(220, 38, 38, 0.2);
-        color: var(--fis-error);
     }
 
     .status-info {
