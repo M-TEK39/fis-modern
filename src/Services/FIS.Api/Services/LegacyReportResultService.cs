@@ -2478,12 +2478,15 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private async Task<LegacyReportResultDto> BuildLicencesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
-        var search = GetString(filters, "search");
+        var search = GetString(filters, "search") ?? GetString(filters, "identifier");
         var mode = (GetString(filters, "mode") ?? "GG").Trim().ToUpperInvariant();
         var statusFilter = (GetString(filters, "status") ?? "all").Trim().ToLowerInvariant();
         var locationFilter = (GetString(filters, "location") ?? "all").Trim().ToLowerInvariant();
         var from = GetDate(filters, "from")?.Date;
         var to = GetDate(filters, "to")?.Date;
+        var department = GetString(filters, "department_code") ?? GetString(filters, "department");
+        var month = GetInt(filters, "month");
+        var year = GetInt(filters, "year");
 
         var query =
             from vehicle in _context.Vehicles.AsNoTracking()
@@ -2549,6 +2552,12 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             query = query.Where(row => row.location_code == 2);
         }
 
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            var departmentValue = department.Trim();
+            query = query.Where(row => row.Department_number == departmentValue);
+        }
+
         if (from.HasValue)
         {
             query = query.Where(row => row.licence_due_date.HasValue && row.licence_due_date.Value.Date >= from.Value);
@@ -2557,6 +2566,16 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         if (to.HasValue)
         {
             query = query.Where(row => row.licence_due_date.HasValue && row.licence_due_date.Value.Date <= to.Value);
+        }
+
+        if (month is >= 1 and <= 12)
+        {
+            query = query.Where(row => row.licence_due_date.HasValue && row.licence_due_date.Value.Month == month.Value);
+        }
+
+        if (year is > 0)
+        {
+            query = query.Where(row => row.licence_due_date.HasValue && row.licence_due_date.Value.Year == year.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))

@@ -209,40 +209,6 @@ public class AuctionApiService(HttpClient httpClient, TokenService tokenService,
            ?? new AuctionReportDto();
 }
 
-public class LicenseReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<LicenseReportApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/report/licences";
-
-    public async Task<List<T>> GetByIdentifierAsync<T>(string mode, object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/{mode}", payload) ?? new List<T>();
-    public async Task<List<T>> GetAllAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/all", payload) ?? new List<T>();
-    public async Task<List<T>> GetDeptPeriodAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/dept-period", payload) ?? new List<T>();
-    public async Task<List<T>> GetExpireDateAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/expire-date", payload) ?? new List<T>();
-    public async Task<List<T>> GetMonthFeesAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/month-fees", payload) ?? new List<T>();
-    public async Task<List<T>> GetOldExpireAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/old-expire", payload) ?? new List<T>();
-    public async Task<List<T>> GetSapAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/sap", payload) ?? new List<T>();
-    public async Task<List<T>> GetCofAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/cof", payload) ?? new List<T>();
-    public async Task<List<T>> GetModelFeesAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/model-fees", payload) ?? new List<T>();
-    public async Task<List<T>> GetGgModelFeesAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/gg-model-fees", payload) ?? new List<T>();
-    public async Task<List<T>> GetWorkgroupAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/workgroup", payload) ?? new List<T>();
-    public async Task<List<T>> GetWorkgroupLatestAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/workgroup-latest", payload) ?? new List<T>();
-    public async Task<List<T>> GetGgmtReceivedAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/ggmt-received", payload) ?? new List<T>();
-    public async Task<List<T>> GetSiteAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/site", payload) ?? new List<T>();
-}
-
 public class VehicleAssessmentApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleAssessmentApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehicleassessment";
