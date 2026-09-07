@@ -1,12 +1,9 @@
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Core.Infrastructure.Interfaces;
-using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
@@ -22,18 +19,15 @@ public class LicenseController : BaseApiController
 {
     private readonly ILicenseRepository _licenseRepository;
     private readonly IVehicleRepository _vehicleRepository;
-    private readonly FisDbContext _context;
     private readonly ILogger<LicenseController> _logger;
 
     public LicenseController(
         ILicenseRepository licenseRepository,
         IVehicleRepository vehicleRepository,
-        FisDbContext context,
         ILogger<LicenseController> logger)
     {
         _licenseRepository = licenseRepository;
         _vehicleRepository = vehicleRepository;
-        _context = context;
         _logger = logger;
     }
 
@@ -132,8 +126,7 @@ public class LicenseController : BaseApiController
             vmfCode = fallbackVehicle.vmf_code;
         }
 
-        var vehicle = await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.vmf_code == vmfCode.Value && !v.is_deleted);
+        var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode.Value);
         if (vehicle is null)
         {
             return NotFound(new { success = false, message = $"Vehicle {vmfCode.Value} not found." });
@@ -141,44 +134,40 @@ public class LicenseController : BaseApiController
 
         var oldDue = vehicle.licence_due_date?.Date;
         var newDue = request.expDate?.Date;
-
-        vehicle.licence_due_date = request.expDate;
-        vehicle.lic_register_number = request.registerNumber;
-        vehicle.lic_registration_doc = request.regDoc;
-        vehicle.Licence_receiver = request.receiver;
-        vehicle.Licence_receiver_id = request.receiverId;
-        vehicle.Licence_receiver_tel = request.receiverTel;
-        vehicle.Licence_receiver_site = request.receiverSiteCode;
-        vehicle.Licence_date_taken = request.dateCollected;
-        vehicle.cof_required = request.cofRequired;
-        vehicle.cof_last_done = string.Equals(request.cofRequired, "N", StringComparison.OrdinalIgnoreCase)
+        var cofLastDone = string.Equals(request.cofRequired, "N", StringComparison.OrdinalIgnoreCase)
             ? null
             : request.cofExpDate;
-        vehicle.licence_comments = request.comments;
-        vehicle.tare = ParseNullableInt(request.tare);
-        vehicle.date_updated = DateTime.UtcNow;
-        vehicle.modified_by_user_code = currentUserId;
+
+        await _vehicleRepository.UpdateLicenceFieldsAsync(
+            vmfCode.Value,
+            new VehicleLicenceUpdate(
+                request.expDate,
+                request.registerNumber,
+                request.regDoc,
+                ParseNullableInt(request.tare),
+                request.receiver,
+                request.receiverId,
+                request.receiverTel,
+                request.receiverSiteCode,
+                request.dateCollected,
+                request.cofRequired,
+                cofLastDone,
+                request.comments),
+            currentUserId);
 
         if (oldDue != newDue)
         {
-            _context.FleetNotes.Add(new FleetNote
-            {
-                vmf_code = vehicle.vmf_code,
-                note_text = $"Licence Receive: {ResolveCurrentUsername()}",
-                date_created = DateTime.UtcNow,
-                created_by_user_code = currentUserId,
-                is_deleted = false
-            });
+            await _vehicleRepository.AddLicenceReceiveNoteAsync(vmfCode.Value, ResolveCurrentUsername(), currentUserId);
         }
 
-        await _context.SaveChangesAsync();
+        var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode.Value) ?? vehicle;
 
         return Ok(new
         {
             success = true,
-            vmfCode = vehicle.vmf_code,
-            fleetNumber = vehicle.fleet_number,
-            registrationNumber = vehicle.registration_number,
+            vmfCode = updatedVehicle.vmf_code,
+            fleetNumber = updatedVehicle.fleet_number,
+            registrationNumber = updatedVehicle.registration_number,
             message = "Licence details saved successfully."
         });
     }

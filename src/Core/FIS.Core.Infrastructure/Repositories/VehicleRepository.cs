@@ -273,6 +273,110 @@ public sealed class VehicleRepository : IVehicleRepository
         }
     }
 
+    public async Task UpdateLicenceFieldsAsync(int vmfCode, VehicleLicenceUpdate update, int currentUserId)
+    {
+        ArgumentNullException.ThrowIfNull(update);
+
+        var availableColumns = await GetAvailableColumnsAsync();
+        var values = new List<WriteValue>();
+        AddColumnValue(values, availableColumns, "licence_due_date", DbType.DateTime2, update.LicenceDueDate);
+        AddColumnValue(values, availableColumns, "lic_register_number", DbType.String, update.LicenceRegisterNumber);
+        AddColumnValue(values, availableColumns, "lic_registration_doc", DbType.String, update.LicenceRegistrationDocument);
+        AddColumnValue(values, availableColumns, "tare", DbType.Int32, update.Tare);
+        AddColumnValue(values, availableColumns, "Licence_receiver", DbType.String, update.LicenceReceiver);
+        AddColumnValue(values, availableColumns, "Licence_receiver_id", DbType.String, update.LicenceReceiverId);
+        AddColumnValue(values, availableColumns, "Licence_receiver_tel", DbType.String, update.LicenceReceiverTelephone);
+        AddColumnValue(values, availableColumns, "Licence_receiver_site", DbType.Int16, update.LicenceReceiverSite);
+        AddColumnValue(values, availableColumns, "Licence_date_taken", DbType.DateTime2, update.LicenceDateTaken);
+        AddColumnValue(values, availableColumns, "cof_required", DbType.String, update.CofRequired);
+        AddColumnValue(values, availableColumns, "cof_last_done", DbType.DateTime2, update.CofLastDone);
+        AddColumnValue(values, availableColumns, "licence_comments", DbType.String, update.LicenceComments);
+        AddColumnValue(values, availableColumns, "date_updated", DbType.DateTime2, DateTime.UtcNow, includeNull: false);
+        AddColumnValue(values, availableColumns, "modified_by_user_code", DbType.Int32, currentUserId > 0 ? currentUserId : null, includeNull: false);
+
+        if (values.Count == 0)
+        {
+            throw new InvalidOperationException("The vehicle_master table has no licence fields available for update.");
+        }
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"""
+                UPDATE [dbo].[{VehicleTableName}]
+                SET {string.Join(", ", values.Select(value => $"[{value.Column}] = {value.Parameter}"))}
+                WHERE [vmf_code] = @vmfCode
+                AND {GetActiveFilter("", availableColumns)}
+                """;
+            AddParameters(command, values);
+            AddParameter(command, "@vmfCode", DbType.Int32, vmfCode);
+            if (await command.ExecuteNonQueryAsync() == 0)
+            {
+                throw new KeyNotFoundException($"Vehicle with vmf_code {vmfCode} was not found.");
+            }
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    public async Task AddLicenceReceiveNoteAsync(int vmfCode, string username, int currentUserId)
+    {
+        var columns = await GetTableColumnsAsync("fleet_notes");
+        if (!columns.Contains("vmf_code") || (!columns.Contains("notes") && !columns.Contains("fleet_note")))
+        {
+            return;
+        }
+
+        var noteColumn = columns.Contains("notes") ? "notes" : "fleet_note";
+        var values = new List<WriteValue>
+        {
+            new("vmf_code", "@vmfCode", DbType.Int32, vmfCode),
+            new(noteColumn, "@note", DbType.String, $"Licence Receive: {username}"),
+        };
+        AddOptionalColumnValue(values, columns, "update_date", "@updateDate", DbType.DateTime2, DateTime.UtcNow);
+        AddOptionalColumnValue(values, columns, "date_created", "@dateCreated", DbType.DateTime2, DateTime.UtcNow);
+        AddOptionalColumnValue(values, columns, "date_updated", "@dateUpdated", DbType.DateTime2, DateTime.UtcNow);
+        AddOptionalColumnValue(values, columns, "created_by_user_code", "@createdBy", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalColumnValue(values, columns, "modified_by_user_code", "@modifiedBy", DbType.Int32, currentUserId > 0 ? currentUserId : null);
+        AddOptionalColumnValue(values, columns, "is_deleted", "@isDeleted", DbType.Boolean, false);
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = $"INSERT INTO [dbo].[fleet_notes] ({string.Join(", ", values.Select(value => $"[{value.Column}]"))}) VALUES ({string.Join(", ", values.Select(value => value.Parameter))})";
+            AddParameters(command, values);
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
     public async Task DeleteAsync(int vmfCode, int currentUserId)
     {
         var availableColumns = await GetAvailableColumnsAsync();
@@ -516,6 +620,36 @@ public sealed class VehicleRepository : IVehicleRepository
         }
 
         return values;
+    }
+
+    private static void AddColumnValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> availableColumns,
+        string column,
+        DbType type,
+        object? value,
+        bool includeNull = true)
+    {
+        if (!availableColumns.Contains(column) || (!includeNull && value is null))
+        {
+            return;
+        }
+
+        values.Add(new WriteValue(column, $"@licence_{values.Count}", type, value));
+    }
+
+    private static void AddOptionalColumnValue(
+        ICollection<WriteValue> values,
+        IReadOnlySet<string> availableColumns,
+        string column,
+        string parameter,
+        DbType type,
+        object? value)
+    {
+        if (availableColumns.Contains(column))
+        {
+            values.Add(new WriteValue(column, parameter, type, value));
+        }
     }
 
     private static void AddParameters(DbCommand command, IEnumerable<WriteValue> values)

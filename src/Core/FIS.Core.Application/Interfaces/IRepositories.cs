@@ -25,8 +25,28 @@ public interface IVehicleRepository
     Task<IEnumerable<Vehicle>> GetByInvoiceNumberAsync(string invoiceNumber);
     Task<Vehicle> CreateAsync(Vehicle vehicle, int currentUserId);
     Task UpdateAsync(Vehicle vehicle, int currentUserId);
+    Task UpdateLicenceFieldsAsync(int vmfCode, VehicleLicenceUpdate update, int currentUserId);
+    Task AddLicenceReceiveNoteAsync(int vmfCode, string username, int currentUserId);
     Task DeleteAsync(int vmfCode, int currentUserId);
 }
+
+/// <summary>
+/// Values written by the legacy licence capture workflow. The repository
+/// updates only columns that exist in the connected vehicle_master table.
+/// </summary>
+public sealed record VehicleLicenceUpdate(
+    DateTime? LicenceDueDate,
+    string? LicenceRegisterNumber,
+    string? LicenceRegistrationDocument,
+    int? Tare,
+    string? LicenceReceiver,
+    string? LicenceReceiverId,
+    string? LicenceReceiverTelephone,
+    short? LicenceReceiverSite,
+    DateTime? LicenceDateTaken,
+    string? CofRequired,
+    DateTime? CofLastDone,
+    string? LicenceComments);
 
 /// <summary>
 /// Repository interface for GG block number range maintenance.
@@ -944,6 +964,7 @@ public interface IVehicleRemarkRepository
 /// </summary>
 public interface IVehicleLicenceHistoryRepository
 {
+    Task<bool> IsAvailableAsync();
     Task<IEnumerable<VehicleLicenceHistory>> GetByVehicleAsync(int vmfCode);
     Task<VehicleLicenceHistory?> GetLatestByVehicleAsync(int vmfCode);
     Task<VehicleLicenceHistory> CreateAsync(VehicleLicenceHistory history);

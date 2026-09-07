@@ -789,8 +789,7 @@ public class VehiclesController : BaseApiController
         {
             var currentUserId = GetCurrentUserId();
 
-            var vehicle = await _context.Vehicles
-                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
+            var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
 
             if (vehicle == null)
                 return NotFound(new { error = $"Vehicle {vmfCode} not found." });
@@ -929,27 +928,29 @@ public class VehiclesController : BaseApiController
             };
 
             // Only save a snapshot if there is something worth preserving
-            if (snapshot.licence_due_date.HasValue || snapshot.lic_register_number != null)
+            if (await _licenceHistory.IsAvailableAsync()
+                && (snapshot.licence_due_date.HasValue || snapshot.lic_register_number != null))
                 await _licenceHistory.CreateAsync(snapshot);
 
             // Apply new licence values
-            vehicle.licence_due_date = dto.licence_due_date;
-            vehicle.lic_register_number = dto.lic_register_number;
-            vehicle.lic_registration_doc = dto.lic_registration_doc;
-            vehicle.licence_comments = dto.licence_comments;
-            vehicle.cof_last_done = dto.cof_last_done;
-            vehicle.cof_required = dto.cof_required;
-            vehicle.Licence_receiver = dto.Licence_receiver;
-            vehicle.Licence_receiver_id = dto.Licence_receiver_id;
-            vehicle.Licence_receiver_tel = dto.Licence_receiver_tel;
-            vehicle.Licence_receiver_site = dto.Licence_receiver_site;
-            vehicle.Licence_date_taken = dto.Licence_date_taken;
-            if (dto.tare.HasValue) vehicle.tare = dto.tare;
+            await _vehicleRepository.UpdateLicenceFieldsAsync(
+                vmfCode,
+                new VehicleLicenceUpdate(
+                    dto.licence_due_date,
+                    dto.lic_register_number,
+                    dto.lic_registration_doc,
+                    dto.tare,
+                    dto.Licence_receiver,
+                    dto.Licence_receiver_id,
+                    dto.Licence_receiver_tel,
+                    dto.Licence_receiver_site,
+                    dto.Licence_date_taken,
+                    dto.cof_required,
+                    dto.cof_last_done,
+                    dto.licence_comments),
+                currentUserId);
 
-            vehicle.date_updated = DateTime.UtcNow;
-            vehicle.modified_by_user_code = currentUserId;
-
-            await _context.SaveChangesAsync();
+            var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode) ?? vehicle;
 
             _logger.LogInformation(
                 "Licence captured for vehicle {VmfCode} by user {UserId}. New due date: {DueDate}",
@@ -958,12 +959,12 @@ public class VehiclesController : BaseApiController
             return Ok(new
             {
                 vmf_code = vmfCode,
-                fleet_number = vehicle.fleet_number,
-                registration_number = vehicle.registration_number,
-                licence_due_date = vehicle.licence_due_date,
-                lic_register_number = vehicle.lic_register_number,
-                Licence_receiver = vehicle.Licence_receiver,
-                Licence_date_taken = vehicle.Licence_date_taken,
+                fleet_number = updatedVehicle.fleet_number,
+                registration_number = updatedVehicle.registration_number,
+                licence_due_date = updatedVehicle.licence_due_date,
+                lic_register_number = updatedVehicle.lic_register_number,
+                Licence_receiver = updatedVehicle.Licence_receiver,
+                Licence_date_taken = updatedVehicle.Licence_date_taken,
                 message = "Licence captured successfully. Previous licence saved to history."
             });
         }
