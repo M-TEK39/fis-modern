@@ -22,6 +22,20 @@ public class PrivateHireFuelCardController : BaseApiController
         _logger = logger;
     }
 
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<PrivateHireFuelCard>>> GetAll()
+    {
+        try
+        {
+            return Ok(await _repository.GetActiveFuelCardsAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving private hire fuel cards");
+            return StatusCode(500, "Error retrieving private hire fuel cards");
+        }
+    }
+
     [HttpGet("{id}")]
     public async Task<ActionResult<PrivateHireFuelCard>> GetById(int id)
     {
