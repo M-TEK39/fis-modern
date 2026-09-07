@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -29,11 +30,22 @@ namespace FIS.Api.Controllers;
 public class FinanceReportController : BaseApiController
 {
     private readonly FisDbContext _context;
+    private readonly ITaxiRepository _taxiRepository;
+    private readonly ITaxiLogRepository _taxiLogRepository;
+    private readonly IPrivateHireRepository _privateHireRepository;
     private readonly ILogger<FinanceReportController> _logger;
 
-    public FinanceReportController(FisDbContext context, ILogger<FinanceReportController> logger)
+    public FinanceReportController(
+        FisDbContext context,
+        ITaxiRepository taxiRepository,
+        ITaxiLogRepository taxiLogRepository,
+        IPrivateHireRepository privateHireRepository,
+        ILogger<FinanceReportController> logger)
     {
         _context = context;
+        _taxiRepository = taxiRepository;
+        _taxiLogRepository = taxiLogRepository;
+        _privateHireRepository = privateHireRepository;
         _logger = logger;
     }
 
@@ -348,12 +360,13 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var taxiBase = filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
-                ? _context.Taxis.Where(t => t.site_code == id)
-                : _context.Taxis.Where(t => t.department_code == id);
-
-            var taxisInPeriod = await taxiBase
-                .Where(t => t.date_required >= pm.PeriodStart && t.date_required < pm.PeriodEnd)
+            var taxis = await _taxiRepository.GetAllAsync();
+            var taxisInPeriod = taxis
+                .Where(t => (filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
+                        ? t.site_code == id
+                        : t.department_code == id)
+                    && t.date_required >= pm.PeriodStart
+                    && t.date_required < pm.PeriodEnd)
                 .Select(t => new
                 {
                     t.rek_num,
@@ -364,12 +377,12 @@ public class FinanceReportController : BaseApiController
                     t.site_code,
                     t.department_code,
                 })
-                .ToListAsync();
+                .ToList();
 
             var rekNums = taxisInPeriod.Select(t => t.rek_num).ToList();
 
-            var logs = await _context.TaxiLogs
-                .Where(tl => rekNums.Contains(tl.rek_num))
+            var logs = (await _taxiLogRepository.GetAllAsync())
+                .Where(tl => tl.rek_num is not null && rekNums.Contains(tl.rek_num))
                 .Select(tl => new
                 {
                     tl.rek_num,
@@ -378,7 +391,7 @@ public class FinanceReportController : BaseApiController
                     tl.days,
                     hours = tl.hours,
                 })
-                .ToListAsync();
+                .ToList();
 
             var logMap = logs.GroupBy(l => l.rek_num)
                              .ToDictionary(g => g.Key!, g => g.First());
@@ -389,10 +402,9 @@ public class FinanceReportController : BaseApiController
                 .Distinct()
                 .ToList();
 
-            var contractorMap = await _context.Contractors
-                .Where(c => contractorIds.Contains(c.contractor_id))
-                .Select(c => new { c.contractor_id, c.contractor_name })
-                .ToDictionaryAsync(c => c.contractor_id);
+            var contractorMap = (await _privateHireRepository.GetContractorsAsync())
+                .Where(contractor => contractorIds.Contains(contractor.contractor_id))
+                .ToDictionary(contractor => contractor.contractor_id);
 
             var rows = taxisInPeriod.Select(t =>
             {
