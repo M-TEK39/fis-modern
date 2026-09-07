@@ -1696,6 +1696,20 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 
     private Task<LegacyReportResultDto> BuildLossesAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
+        var mode = GetString(filters, "mode")?.Trim().ToLowerInvariant();
+        return mode switch
+        {
+            "one-vehicle" => BuildLossesOneVehicleAsync(filters, cancellationToken),
+            "all" => BuildLossesAllAsync(filters, cancellationToken),
+            "no-report" => BuildLossesReportStatusAsync(filters, outstanding: true, cancellationToken),
+            "with-report" => BuildLossesReportStatusAsync(filters, outstanding: false, cancellationToken),
+            "dept-period" => BuildLossesDepartmentPeriodAsync(filters, cancellationToken),
+            _ => BuildLossesMenu()
+        };
+    }
+
+    private static Task<LegacyReportResultDto> BuildLossesMenu()
+    {
         var rows = new[]
         {
             new { Section = "One Vehicle Losses Reports", Sequence = "1", Report = "Losses for one vehicle", Target = "losses/RPT_loss_per_vehicle.htm" },
@@ -1716,6 +1730,322 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Sequence", row => row.Sequence),
             Column("Report", row => row.Report),
             Column("Target", row => row.Target)));
+    }
+
+    private async Task<LegacyReportResultDto> BuildLossesOneVehicleAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var vmfCode = GetInt(filters, "vmf");
+        if (!vmfCode.HasValue)
+        {
+            var vehicleNumber = GetString(filters, "vehicle_number") ?? GetString(filters, "search");
+            vmfCode = await ResolveVehicleVmfCodeAsync(vehicleNumber, GetString(filters, "search_mode"), cancellationToken);
+        }
+
+        var lossColumns = await GetReportTableColumnsAsync("losses", cancellationToken);
+        var activePredicate = GetLossesActivePredicate(lossColumns);
+        var predicates = new List<string> { activePredicate };
+        var parameters = new List<ReportParameter>();
+        if (vmfCode.HasValue)
+        {
+            predicates.Add("l.[vmf_code] = @vmfCode");
+            parameters.Add(new ReportParameter("@vmfCode", DbType.Int32, vmfCode.Value));
+        }
+        else
+        {
+            predicates.Add("1 = 0");
+        }
+
+        var sql = $"""
+            SELECT
+                l.[loss_date] AS [Loss Date],
+                loc.[description] AS [Garage],
+                l.[loss_reference] AS [Loss Reference],
+                l.[case_number] AS [Case Number],
+                s.[description] AS [Site],
+                l.[sapd] AS [SAPD],
+                lt.[loss_description] AS [Loss Type],
+                l.[loss_amount] AS [Loss Amount],
+                l.[remarks] AS [Remarks]
+            FROM [dbo].[losses] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[location] AS loc ON loc.[location_code] = v.[location_code]
+            LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
+            LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
+            WHERE {string.Join(" AND ", predicates)}
+            ORDER BY l.[loss_date], l.[loss_code]
+            """;
+
+        return await ExecuteLossReportQueryAsync(
+            "losses-one-vehicle",
+            "Losses for One Vehicle",
+            "losses/RPT_loss_per_vehicle.htm",
+            sql,
+            parameters,
+            cancellationToken);
+    }
+
+    private async Task<LegacyReportResultDto> BuildLossesAllAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var lossColumns = await GetReportTableColumnsAsync("losses", cancellationToken);
+        var predicates = new List<string> { GetLossesActivePredicate(lossColumns) };
+        var parameters = new List<ReportParameter>();
+        AddLossesCommonFilters(filters, predicates, parameters);
+
+        var statusExpression = lossColumns.Contains("loss_status")
+            ? "COALESCE(NULLIF(l.[loss_status], ''), CASE WHEN l.[report_from_dept] = 1 THEN 'Outstanding' ELSE 'Reported' END)"
+            : "CASE WHEN l.[report_from_dept] = 1 THEN 'Outstanding' ELSE 'Reported' END";
+        var sql = $"""
+            SELECT
+                l.[loss_reference] AS [Reference],
+                l.[loss_date] AS [Loss Date],
+                v.[fleet_number] AS [GG Number],
+                vt.[type_description] AS [Hire Type],
+                lt.[loss_description] AS [Loss Type],
+                COALESCE(d.[description], s.[description]) AS [Department],
+                {statusExpression} AS [Status]
+            FROM [dbo].[losses] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[type] AS vt ON vt.[type_code] = v.[type_code]
+            LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
+            LEFT JOIN [dbo].[department] AS d ON d.[department_code] = s.[Depatrment_code]
+            LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
+            WHERE {string.Join(" AND ", predicates)}
+            ORDER BY lt.[loss_description], l.[loss_date], v.[fleet_number]
+            """;
+
+        return await ExecuteLossReportQueryAsync(
+            "losses",
+            "All Losses Report",
+            "losses/RPT_All_Losses_menu.aspx",
+            sql,
+            parameters,
+            cancellationToken);
+    }
+
+    private async Task<LegacyReportResultDto> BuildLossesReportStatusAsync(
+        IDictionary<string, string?> filters,
+        bool outstanding,
+        CancellationToken cancellationToken)
+    {
+        var lossColumns = await GetReportTableColumnsAsync("losses", cancellationToken);
+        var predicates = new List<string>
+        {
+            GetLossesActivePredicate(lossColumns),
+            outstanding ? "l.[report_from_dept] = 1" : "l.[report_from_dept] <> 1"
+        };
+        var parameters = new List<ReportParameter>();
+        AddLossesCommonFilters(filters, predicates, parameters);
+
+        var sql = $"""
+            SELECT
+                v.[fleet_number] AS [GG Number],
+                l.[loss_amount] AS [Loss Amount],
+                loc.[description] AS [Garage],
+                l.[loss_date] AS [Loss Date],
+                l.[loss_reference] AS [Reference],
+                l.[case_number] AS [Case Number],
+                s.[description] AS [Site],
+                lt.[loss_description] AS [Loss Type],
+                s.[Department_number] AS [Department],
+                l.[Call_Refer] AS [Called Refer]
+            FROM [dbo].[losses] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[location] AS loc ON loc.[location_code] = v.[location_code]
+            LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
+            LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
+            WHERE {string.Join(" AND ", predicates)}
+            ORDER BY v.[fleet_number], l.[loss_date]
+            """;
+
+        return await ExecuteLossReportQueryAsync(
+            outstanding ? "losses-outstanding-report" : "losses-with-report",
+            outstanding ? "Losses Without Department Reports" : "Losses With Department Reports",
+            outstanding ? "losses/RPT_NoReport.aspx" : "losses/RPT_WithReport.aspx",
+            sql,
+            parameters,
+            cancellationToken);
+    }
+
+    private async Task<LegacyReportResultDto> BuildLossesDepartmentPeriodAsync(
+        IDictionary<string, string?> filters,
+        CancellationToken cancellationToken)
+    {
+        var lossColumns = await GetReportTableColumnsAsync("losses", cancellationToken);
+        var predicates = new List<string> { GetLossesActivePredicate(lossColumns) };
+        var parameters = new List<ReportParameter>();
+        AddLossesCommonFilters(filters, predicates, parameters, includeDates: false);
+
+        var from = GetDate(filters, "begin_date") ?? GetDate(filters, "from");
+        var to = GetDate(filters, "end_date") ?? GetDate(filters, "to");
+        if (from.HasValue)
+        {
+            predicates.Add("l.[loss_date] >= @lossFrom");
+            parameters.Add(new ReportParameter("@lossFrom", DbType.DateTime, from.Value.Date));
+        }
+        if (to.HasValue)
+        {
+            predicates.Add("l.[loss_date] < @lossToExclusive");
+            parameters.Add(new ReportParameter("@lossToExclusive", DbType.DateTime, to.Value.Date.AddDays(1)));
+        }
+
+        var hireType = GetString(filters, "hire_type")?.Trim();
+        if (!string.IsNullOrWhiteSpace(hireType))
+        {
+            var typeCode = hireType.ToUpperInvariant() switch
+            {
+                "VIP" => 1,
+                "GG" => 2,
+                "PERMANENT" => 3,
+                _ => 0
+            };
+            if (typeCode > 0)
+            {
+                predicates.Add("v.[type_code] = @hireTypeCode");
+                parameters.Add(new ReportParameter("@hireTypeCode", DbType.Int16, typeCode));
+            }
+        }
+
+        var sql = $"""
+            SELECT
+                v.[registration_number] AS [Prov Reg Number],
+                v.[fleet_number] AS [GG Number],
+                l.[loss_date] AS [Loss Date],
+                s.[Department_number] AS [Dept Code],
+                s.[description] AS [Site],
+                vt.[type_description] AS [Hire Type],
+                lt.[loss_description] AS [Loss Type],
+                l.[dept_contact] AS [Department Contact],
+                l.[loss_amount] AS [Loss Amount]
+            FROM [dbo].[losses] AS l
+            INNER JOIN [dbo].[vehicle_master] AS v ON v.[vmf_code] = l.[vmf_code]
+            LEFT JOIN [dbo].[site] AS s ON s.[Site_code] = l.[site_code]
+            LEFT JOIN [dbo].[type] AS vt ON vt.[type_code] = v.[type_code]
+            LEFT JOIN [dbo].[Loss_type] AS lt ON lt.[loss_type_code] = l.[loss_type_code]
+            WHERE {string.Join(" AND ", predicates)}
+            ORDER BY s.[Department_number], v.[fleet_number], l.[loss_date]
+            """;
+
+        return await ExecuteLossReportQueryAsync(
+            "losses-site-period-vip-gg-hire",
+            "Losses Report by Department Period",
+            "losses/RPT_dept_periodVIP_main_losses.aspx",
+            sql,
+            parameters,
+            cancellationToken);
+    }
+
+    private static string GetLossesActivePredicate(IReadOnlySet<string> lossColumns)
+        => lossColumns.Contains("is_deleted") ? "l.[is_deleted] = 0" : "1 = 1";
+
+    private static void AddLossesCommonFilters(
+        IDictionary<string, string?> filters,
+        ICollection<string> predicates,
+        ICollection<ReportParameter> parameters,
+        bool includeDates = true)
+    {
+        var lossTypeCode = GetShort(filters, "loss_type_code");
+        if (lossTypeCode.HasValue)
+        {
+            predicates.Add("l.[loss_type_code] = @lossTypeCode");
+            parameters.Add(new ReportParameter("@lossTypeCode", DbType.Int16, lossTypeCode.Value));
+        }
+
+        var department = GetString(filters, "department");
+        if (!string.IsNullOrWhiteSpace(department))
+        {
+            predicates.Add("(s.[Department_number] LIKE @department OR CONVERT(varchar(20), s.[Depatrment_code]) = @department)");
+            parameters.Add(new ReportParameter("@department", DbType.String, $"%{department.Trim()}%"));
+        }
+
+        if (!includeDates)
+        {
+            return;
+        }
+
+        var from = GetDate(filters, "begin_date") ?? GetDate(filters, "from");
+        var to = GetDate(filters, "end_date") ?? GetDate(filters, "to");
+        if (from.HasValue)
+        {
+            predicates.Add("l.[loss_date] >= @commonLossFrom");
+            parameters.Add(new ReportParameter("@commonLossFrom", DbType.DateTime, from.Value.Date));
+        }
+        if (to.HasValue)
+        {
+            predicates.Add("l.[loss_date] < @commonLossToExclusive");
+            parameters.Add(new ReportParameter("@commonLossToExclusive", DbType.DateTime, to.Value.Date.AddDays(1)));
+        }
+    }
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The SQL is assembled only from fixed loss report templates; all filter values are parameters.")]
+    private async Task<LegacyReportResultDto> ExecuteLossReportQueryAsync(
+        string reportKey,
+        string title,
+        string legacyTarget,
+        string sql,
+        IReadOnlyList<ReportParameter> parameters,
+        CancellationToken cancellationToken)
+    {
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText = sql;
+            foreach (var parameter in parameters)
+            {
+                AddReportParameter(command, parameter.Name, parameter.Type, parameter.Value);
+            }
+
+            var columns = new List<LegacyReportColumnDto>();
+            var rows = new List<Dictionary<string, string?>>(capacity: 128);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            for (var index = 0; index < reader.FieldCount; index++)
+            {
+                var header = reader.GetName(index);
+                columns.Add(new LegacyReportColumnDto { Key = header, Header = header });
+            }
+
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                foreach (var column in columns)
+                {
+                    row[column.Key] = FormatValue(reader[column.Key]);
+                }
+                rows.Add(row);
+            }
+
+            return new LegacyReportResultDto
+            {
+                ReportKey = reportKey,
+                Title = title,
+                LegacyTarget = legacyTarget,
+                IsApproximate = false,
+                Columns = columns,
+                Rows = rows,
+                TotalCount = rows.Count
+            };
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
     }
 
     private async Task<LegacyReportResultDto> BuildHighDistanceAllAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)

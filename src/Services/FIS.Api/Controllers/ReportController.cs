@@ -1182,23 +1182,23 @@ public class ReportController : BaseApiController
 
     [HttpPost("losses/vehicle")]
     public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesVehicleReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-one-vehicle", payload, cancellationToken));
+        => Ok(await ExecuteLegacyGridAsync("losses", payload, "one-vehicle", cancellationToken));
 
     [HttpPost("losses/all")]
     public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesAllReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses", payload, cancellationToken));
+        => Ok(await ExecuteLegacyGridAsync("losses", payload, "all", cancellationToken));
 
     [HttpPost("losses/no-report")]
     public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesNoReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-outstanding-report", payload, cancellationToken));
+        => Ok(await ExecuteLegacyGridAsync("losses", payload, "no-report", cancellationToken));
 
     [HttpPost("losses/with-report")]
     public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesWithReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-with-report", payload, cancellationToken));
+        => Ok(await ExecuteLegacyGridAsync("losses", payload, "with-report", cancellationToken));
 
     [HttpPost("losses/dept-period")]
     public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesDeptPeriod([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-site-period-vip-gg-hire", payload, cancellationToken));
+        => Ok(await ExecuteLegacyGridAsync("losses", payload, "dept-period", cancellationToken));
 
     [HttpPost("licences/{mode}")]
     public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLicencesByMode(string mode, [FromBody] JsonElement payload, CancellationToken cancellationToken)
@@ -1226,15 +1226,20 @@ public class ReportController : BaseApiController
             _ => throw new KeyNotFoundException($"Unsupported licence report mode '{mode}'")
         };
 
-        return Ok(await ExecuteLegacyGridAsync(key, payload, cancellationToken));
+        return Ok(await ExecuteLegacyGridAsync(key, payload, null, cancellationToken));
     }
 
     private async Task<List<Dictionary<string, object?>>> ExecuteLegacyGridAsync(
         string reportKey,
         JsonElement payload,
+        string? reportMode,
         CancellationToken cancellationToken)
     {
         var filters = JsonPayloadToFilters(payload);
+        if (!string.IsNullOrWhiteSpace(reportMode))
+        {
+            filters["mode"] = reportMode;
+        }
         NormalizeLegacyAliases(filters);
         var report = await _legacyReportResultService.GetReportAsync(reportKey, filters, cancellationToken);
 
