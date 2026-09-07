@@ -217,7 +217,8 @@ public class NoticeManagementController : BaseApiController
                 NoticeTitle = notice.notice_title,
                 NoticeBody = notice.notice_body,
                 NoticePerson = notice.notice_person,
-                NoticePersonTitle = notice.notice_person_title
+                NoticePersonTitle = notice.notice_person_title,
+                CreatedDate = notice.date_created
             };
 
             return Ok(noticeDto);
@@ -259,7 +260,8 @@ public class NoticeManagementController : BaseApiController
                 NoticeTitle = created.notice_title,
                 NoticeBody = created.notice_body,
                 NoticePerson = created.notice_person,
-                NoticePersonTitle = created.notice_person_title
+                NoticePersonTitle = created.notice_person_title,
+                CreatedDate = created.date_created
             };
 
             return Ok(createdDto);
@@ -304,7 +306,8 @@ public class NoticeManagementController : BaseApiController
                 NoticeTitle = updated.notice_title,
                 NoticeBody = updated.notice_body,
                 NoticePerson = updated.notice_person,
-                NoticePersonTitle = updated.notice_person_title
+                NoticePersonTitle = updated.notice_person_title,
+                CreatedDate = updated.date_created
             };
 
             return Ok(updatedDto);
@@ -380,6 +383,7 @@ public class NoticeDto
 {
     public int NoticeId { get; set; }
     public DateTime? NoticeDate { get; set; }
+    public DateTime? CreatedDate { get; set; }
     public string? NoticeFrom { get; set; }
     public string? NoticeTitle { get; set; }
     public string? NoticeBody { get; set; }

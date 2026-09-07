@@ -34,6 +34,14 @@ public class NoticesController : BaseApiController
         return Ok(ToDto(notice));
     }
 
+    [HttpGet("active")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<NoticeDto>>> GetActive()
+    {
+        var notices = await _noticeRepository.GetActiveNoticesAsync();
+        return Ok(notices.Select(ToDto));
+    }
+
     [HttpPost]
     public async Task<ActionResult<NoticeDto>> Create([FromBody] CreateNoticeDto request)
     {
@@ -93,7 +101,8 @@ public class NoticesController : BaseApiController
             NoticeTitle = notice.notice_title,
             NoticeBody = notice.notice_body,
             NoticePerson = notice.notice_person,
-            NoticePersonTitle = notice.notice_person_title
+            NoticePersonTitle = notice.notice_person_title,
+            CreatedDate = notice.date_created
         };
     }
 }

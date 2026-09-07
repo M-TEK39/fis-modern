@@ -19,6 +19,7 @@ export type NoticeSchedule = {
 export type Notice = {
   noticeId: number;
   noticeDate: string | null;
+  createdDate: string | null;
   noticeFrom: string;
   noticeTitle: string;
   noticeBody: string;
@@ -26,7 +27,7 @@ export type Notice = {
   noticePersonTitle: string;
 };
 
-export type NoticeInput = Omit<Notice, "noticeId">;
+export type NoticeInput = Omit<Notice, "noticeId" | "createdDate">;
 
 export type NoticeScheduleInput = Omit<NoticeSchedule, "noticeScheduleId" | "createdBy" | "createdDate">;
 
@@ -118,6 +119,7 @@ function mapNotice(value: unknown): Notice | null {
   return {
     noticeId,
     noticeDate: asNullableString(getValue(value, "noticeDate", "NoticeDate", "notice_date")),
+    createdDate: asNullableString(getValue(value, "createdDate", "CreatedDate", "date_created", "created_date")),
     noticeFrom: asString(getValue(value, "noticeFrom", "NoticeFrom", "notice_from")),
     noticeTitle: asString(getValue(value, "noticeTitle", "NoticeTitle", "notice_title")),
     noticeBody: asString(getValue(value, "noticeBody", "NoticeBody", "notice_body")),
@@ -136,9 +138,9 @@ async function errorMessage(response: Response, fallback: string) {
   }
 }
 
-async function requestApi(path: string, init: RequestInit = {}) {
-  const cookieHeader = await getForwardedAuthCookieHeader();
-  if (!cookieHeader) throw new NoticeApiError("unauthorized", "No FIS access cookie is available.");
+async function requestApi(path: string, init: RequestInit = {}, forwardAuthCookie = true) {
+  const cookieHeader = forwardAuthCookie ? await getForwardedAuthCookieHeader() : null;
+  if (forwardAuthCookie && !cookieHeader) throw new NoticeApiError("unauthorized", "No FIS access cookie is available.");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -151,7 +153,7 @@ async function requestApi(path: string, init: RequestInit = {}) {
         accept: "application/json",
         ...(init.body ? { "content-type": "application/json" } : {}),
         ...init.headers,
-        cookie: cookieHeader,
+        ...(cookieHeader ? { cookie: cookieHeader } : {}),
       },
       signal: controller.signal,
     });
@@ -195,6 +197,11 @@ async function readJson(response: Response) {
 export async function getNoticeSchedules() {
   const payload = await readJson(await requestApi("api/notice-management/notice-schedules"));
   return collection(payload).map(mapSchedule).filter((item): item is NoticeSchedule => item !== null);
+}
+
+export async function getActiveNotices() {
+  const payload = await readJson(await requestApi("api/notices/active", {}, false));
+  return collection(payload).map(mapNotice).filter((item): item is Notice => item !== null);
 }
 
 export async function getNoticeSchedule(noticeScheduleId: number) {

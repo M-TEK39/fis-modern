@@ -1884,6 +1884,155 @@ input:focus-visible {
   font-size: 1rem;
 }
 
+.public-notice-shell {
+  display: grid;
+  min-height: 100svh;
+  place-items: start center;
+  background: hsl(240 28% 33%);
+  padding: clamp(0.75rem, 3vw, 2rem);
+}
+
+.public-notice-card {
+  width: min(100%, 60rem);
+  overflow: hidden;
+  border: 1px solid hsl(0 0% 100% / 0.22);
+  border-radius: 0.9rem;
+  background: var(--fis-surface);
+  box-shadow: var(--fis-shadow);
+}
+
+.public-notice-header {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: clamp(1rem, 4vw, 2rem);
+}
+
+.public-notice-brand {
+  display: grid;
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.8rem;
+  background: hsl(240 28% 33%);
+  color: white;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.public-notice-brand-name,
+.public-notice-brand-caption {
+  margin: 0;
+}
+
+.public-notice-brand-name {
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.public-notice-brand-caption {
+  color: var(--fis-muted-text);
+  font-size: 0.8rem;
+}
+
+.public-notice-heading {
+  background: hsl(240 28% 33%);
+  padding: 0.9rem 1.25rem;
+  text-align: center;
+}
+
+.public-notice-heading h2 {
+  margin: 0;
+  color: white;
+  font-size: clamp(1.25rem, 4vw, 1.8rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.public-notice {
+  padding: clamp(1.25rem, 5vw, 3rem);
+}
+
+.public-notice-meta {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 0 2rem;
+}
+
+.public-notice-meta > div {
+  display: grid;
+  grid-template-columns: minmax(4rem, 7rem) minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.public-notice-meta dt {
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.public-notice-meta dd {
+  margin: 0;
+}
+
+.public-notice h1 {
+  margin: 0 0 1.6rem;
+  font-size: clamp(1.25rem, 4vw, 1.75rem);
+  line-height: 1.25;
+}
+
+.public-notice-body {
+  min-height: 8rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.public-notice-signoff {
+  margin-top: 2.5rem;
+}
+
+.public-notice-signoff p {
+  margin: 0.2rem 0;
+}
+
+.public-notice-person {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.public-notice-person-title {
+  font-size: 1rem;
+}
+
+.public-notice-signature {
+  margin-top: 1.5rem !important;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.public-notice-created {
+  font-size: 0.85rem;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.public-notice-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 2.5rem;
+}
+
+.public-notice-footer {
+  border-top: 1px solid var(--fis-border);
+  color: var(--fis-error);
+  padding: 1rem clamp(1.25rem, 5vw, 3rem);
+  font-size: 0.72rem;
+  font-style: italic;
+  font-weight: 700;
+  text-align: center;
+}
+
 @media (max-width: 48rem) {
   .vehicle-create-grid {
     grid-template-columns: 1fr;
@@ -1900,6 +2049,11 @@ input:focus-visible {
 
   .vehicle-review-grid {
     grid-template-columns: 1fr;
+  }
+
+  .public-notice-meta > div {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
   }
 
   .vehicle-summary-field-wide {

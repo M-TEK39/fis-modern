@@ -64,10 +64,9 @@ public sealed class NoticeRepository : INoticeRepository
                     connection,
                     transaction,
                     schema.NoticeColumns,
-                    $"WHERE {ActiveFilter("n", schema.NoticeColumns.Contains("is_deleted"))} AND {ActiveFilter("s", schema.ScheduleColumns.Contains("is_deleted"))} AND [s].[start_date] <= CAST(GETDATE() AS date) AND ([s].[end_date] IS NULL OR [s].[end_date] >= CAST(GETDATE() AS date)) ORDER BY COALESCE([s].[sort_order], 2147483647), COALESCE([n].[notice_date], {DateCreatedExpression("n", schema.NoticeColumns.Contains("date_created"))}) DESC",
+                    $"WHERE {ActiveFilter("n", schema.NoticeColumns.Contains("is_deleted"))} AND EXISTS (SELECT 1 FROM [dbo].[{ScheduleTableName}] AS [s] WHERE [s].[notice_id] = [n].[notice_id] AND {ActiveFilter("s", schema.ScheduleColumns.Contains("is_deleted"))} AND [s].[start_date] <= CAST(GETDATE() AS date) AND ([s].[end_date] IS NULL OR [s].[end_date] >= CAST(GETDATE() AS date))) ORDER BY COALESCE((SELECT MIN(COALESCE([s].[sort_order], 2147483647)) FROM [dbo].[{ScheduleTableName}] AS [s] WHERE [s].[notice_id] = [n].[notice_id] AND {ActiveFilter("s", schema.ScheduleColumns.Contains("is_deleted"))} AND [s].[start_date] <= CAST(GETDATE() AS date) AND ([s].[end_date] IS NULL OR [s].[end_date] >= CAST(GETDATE() AS date))), 2147483647), COALESCE([n].[notice_date], {DateCreatedExpression("n", schema.NoticeColumns.Contains("date_created"))}) DESC",
                     configure: null,
-                    single: false,
-                    includeActiveSchedule: true)
+                    single: false)
                 : await ReadStoredNoticesAsync(connection, transaction, "DEV_SEL_ActiveNoticesForDisplay"));
 
     public async Task<IEnumerable<Notice>> GetByDateRangeAsync(DateTime startDate, DateTime endDate)
