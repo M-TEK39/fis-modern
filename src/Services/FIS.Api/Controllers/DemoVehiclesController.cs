@@ -191,7 +191,7 @@ public sealed class DemoVehiclesController : BaseApiController
 
         if (!TryParseNullableInt(request.YearManufactured, out var year, out error)
             || !TryParseNullableShort(request.Tank, out var tank, out error)
-            || !TryParseNullableShort(request.SiteCode, out var siteCode, out error))
+            || !TryParseNullableShort(request.SiteCode, out var siteCode, out error, zeroMeansNull: true))
         {
             return false;
         }
@@ -231,9 +231,9 @@ public sealed class DemoVehiclesController : BaseApiController
         return false;
     }
 
-    private static bool TryParseNullableShort(string? value, out short? parsed, out string? error)
+    private static bool TryParseNullableShort(string? value, out short? parsed, out string? error, bool zeroMeansNull = false)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Trim() == "0")
+        if (string.IsNullOrWhiteSpace(value) || zeroMeansNull && value.Trim() == "0")
         {
             parsed = null;
             error = null;
