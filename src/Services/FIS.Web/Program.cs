@@ -159,11 +159,6 @@ builder.Services.AddHttpClient<AuditApiService>(client =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 
-builder.Services.AddHttpClient<LicenseApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<LicenseMaintenanceApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
