@@ -1,183 +1,131 @@
+using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using FIS.Data.SqlServer;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
 
 /// <summary>
-/// Fuel Card Management Service - Legacy Compatible Business Logic
-///
-/// Demonstrates how to create modern business logic that works with legacy database schemas
-/// without requiring migrations. Uses real legacy Fuel_card table structure.
-///
-/// Key Legacy Compatibility Patterns:
-/// - Works with existing CHAR fields and legacy naming conventions
-/// - Handles legacy business rules (ExpReason values, status transitions)
-/// - Preserves legacy audit trail and workflow patterns
-/// - Uses vmf_code for vehicle relationships (not modern foreign keys)
+/// Fuel card business operations over the compatibility repository. The
+/// repository negotiates the legacy and expanded table shapes; this service
+/// keeps the legacy ExpReason status transitions unchanged.
 /// </summary>
-public class FuelCardManagementService
+public sealed class FuelCardManagementService
 {
-    private readonly FisDbContext _context;
+    private readonly IFuelCardRepository _fuelCardRepository;
+    private readonly IVehicleRepository _vehicleRepository;
 
-    public FuelCardManagementService(FisDbContext context)
+    public FuelCardManagementService(
+        IFuelCardRepository fuelCardRepository,
+        IVehicleRepository vehicleRepository)
     {
-        _context = context;
+        _fuelCardRepository = fuelCardRepository;
+        _vehicleRepository = vehicleRepository;
     }
 
-    /// <summary>
-    /// Issue a new fuel card to a vehicle using legacy workflow patterns
-    /// </summary>
     public async Task<FuelCard> IssueFuelCardAsync(
         int vmfCode,
         string receiverName,
         string receiverTel,
-        int siteCode
-    )
+        int siteCode,
+        int currentUserId = 0)
     {
-        // Check if vehicle exists using legacy vmf_code pattern with explicit no tracking
-        var vehicle = await _context
-            .Vehicles.AsNoTracking()
-            .Where(v => v.vmf_code == vmfCode) // Use exact legacy field name
-            .Select(v => new
-            {
-                VehicleId = v.vmf_code, // Use vmf_code as vehicle ID
-                VmfCode = v.vmf_code,
-                RegistrationNumber = v.registration_number, // Use exact legacy field name
-            })
-            .FirstOrDefaultAsync();
+        var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode)
+            ?? throw new InvalidOperationException($"Vehicle with VMF code {vmfCode} not found");
 
-        if (vehicle == null)
-            throw new InvalidOperationException($"Vehicle with VMF code {vmfCode} not found");
+        var existingCard = (await _fuelCardRepository.GetFuelCardsByVehicleAsync(vmfCode))
+            .FirstOrDefault(card => string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase));
+        if (existingCard is not null)
+        {
+            throw new InvalidOperationException($"Vehicle {vmfCode} already has an active fuel card");
+        }
 
-        // Check for existing active fuel card (legacy business rule)
-        var existingCard = await _context
-            .FuelCards.AsNoTracking()
-            .Where(fc => fc.vmf_code == vmfCode && fc.ExpReason == "In Service") // Use exact legacy field names
-            .FirstOrDefaultAsync();
-
-        if (existingCard != null)
-            throw new InvalidOperationException(
-                $"Vehicle {vmfCode} already has an active fuel card"
-            );
-
-        // Generate card number using legacy pattern (simplified for demo)
-        var cardNumber = $"FC{vmfCode:D6}";
-        var panNumber = $"PAN{DateTime.Now:yyyyMM}{vmfCode:D4}";
-
-        // Create fuel card using legacy field patterns
+        var now = DateTime.Now;
         var fuelCard = new FuelCard
         {
-            vmf_code = vmfCode, // Use exact legacy field name
-            Counter = 1, // Legacy counter field
-            card_number = cardNumber, // Use exact legacy field name
-            PAN_number = panNumber, // Use exact legacy field name
+            vmf_code = vehicle.vmf_code,
+            Counter = 1,
+            card_number = $"FC{vmfCode:D6}",
+            PAN_number = $"PAN{now:yyyyMM}{vmfCode:D4}",
             PetReceiver = receiverName,
             PetRecTel = receiverTel,
-            PetTaken = DateTime.Now,
-            PetExpire = DateTime.Now.AddYears(2), // 2-year expiry
-            ExpReason = "In Service", // Legacy status field
+            PetTaken = now,
+            PetExpire = now.AddYears(2),
+            ExpReason = "In Service",
             PetComment = "Auto-issued via modern system",
-            Status_date = DateTime.Now, // Use exact legacy field name
+            Status_date = now,
             Petrecsite = (short)siteCode,
-            Petprint = "Y", // Legacy print flag
-            Garage = "P", // P = Production, J = Johannesburg legacy codes
+            Petprint = "Y",
+            Garage = "P"
         };
 
-        _context.FuelCards.Add(fuelCard);
-        await _context.SaveChangesAsync();
-
-        return fuelCard;
+        return await _fuelCardRepository.CreateAsync(fuelCard, currentUserId);
     }
 
-    /// <summary>
-    /// Return/cancel a fuel card using legacy status transition patterns
-    /// </summary>
-    public async Task<bool> ReturnFuelCardAsync(int fuelCardCode, string reason)
+    public async Task<bool> ReturnFuelCardAsync(int fuelCardCode, string reason, int currentUserId = 0)
     {
-        var fuelCard = await _context.FuelCards.FindAsync(fuelCardCode);
-        if (fuelCard == null)
-            return false;
+        var fuelCard = await _fuelCardRepository.GetByIdAsync(fuelCardCode);
+        if (fuelCard is null) return false;
 
-        // Legacy status transition - update ExpReason field
         var validReasons = new[]
         {
-            "Card to Bank",
-            "Card to GG",
-            "Withdrawn",
-            "Sold",
-            "Privatised",
-            "Hijacked",
+            "Card to Bank", "Card to GG", "Withdrawn", "Sold", "Privatised", "Hijacked"
         };
-        if (!validReasons.Contains(reason))
-            throw new ArgumentException(
-                $"Invalid return reason. Must be one of: {string.Join(", ", validReasons)}"
-            );
+        if (!validReasons.Contains(reason, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"Invalid return reason. Must be one of: {string.Join(", ", validReasons)}");
+        }
 
         fuelCard.ExpReason = reason;
-        fuelCard.Status_date = DateTime.Now; // Use exact legacy field name
-        fuelCard.PetComment += $" | Returned: {reason} on {DateTime.Now:yyyy-MM-dd}";
+        fuelCard.Status_date = DateTime.Now;
+        fuelCard.PetComment = string.IsNullOrWhiteSpace(fuelCard.PetComment)
+            ? $"Returned: {reason} on {DateTime.Now:yyyy-MM-dd}"
+            : $"{fuelCard.PetComment} | Returned: {reason} on {DateTime.Now:yyyy-MM-dd}";
 
-        await _context.SaveChangesAsync();
+        await _fuelCardRepository.UpdateAsync(fuelCard, currentUserId);
         return true;
     }
 
-    /// <summary>
-    /// Get fuel card allocation report using legacy data patterns
-    /// </summary>
     public async Task<FuelCardAllocationReport> GetAllocationReportAsync(int? siteCode = null)
     {
-        var query = _context
-            .FuelCards.AsNoTracking()
-            .AsQueryable();
+        var fuelCards = await _fuelCardRepository.GetActiveFuelCardsAsync();
+        var filteredCards = siteCode.HasValue
+            ? fuelCards.Where(card => card.Petrecsite == siteCode.Value).ToList()
+            : fuelCards.ToList();
 
-        if (siteCode.HasValue)
-            query = query.Where(fc => fc.Petrecsite == siteCode);
-
-        var fuelCards = await query.ToListAsync();
-
-        // Group by legacy ExpReason status
-        var statusGroups = fuelCards
-            .GroupBy(fc => fc.ExpReason)
-            .ToDictionary(g => g.Key ?? "Unknown", g => g.Count());
+        var statusGroups = filteredCards
+            .GroupBy(card => string.IsNullOrWhiteSpace(card.ExpReason) ? "Unknown" : card.ExpReason.Trim())
+            .ToDictionary(group => group.Key, group => group.Count());
 
         return new FuelCardAllocationReport
         {
-            TotalCards = fuelCards.Count,
-            ActiveCards = fuelCards.Count(fc => fc.ExpReason == "In Service"),
-            ReturnedCards = fuelCards.Count(fc => fc.ExpReason != "In Service"),
+            TotalCards = filteredCards.Count,
+            ActiveCards = filteredCards.Count(card => string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)),
+            ReturnedCards = filteredCards.Count(card => !string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)),
             StatusBreakdown = statusGroups,
-            CardsByGarage = fuelCards
-                .GroupBy(fc => fc.Garage)
-                .ToDictionary(g => g.Key ?? "Unknown", g => g.Count()),
-            ExpiringCards = fuelCards
-                .Where(fc =>
-                    fc.PetExpire.HasValue
-                    && fc.PetExpire.Value <= DateTime.Now.AddMonths(3)
-                    && fc.ExpReason == "In Service"
-                )
-                .Count(),
-            RecentActivity = fuelCards
-                .Where(fc =>
-                    fc.Status_date.HasValue && fc.Status_date.Value >= DateTime.Now.AddDays(-30) // Use exact legacy field name
-                )
-                .OrderByDescending(fc => fc.Status_date) // Use exact legacy field name
+            CardsByGarage = filteredCards
+                .GroupBy(card => string.IsNullOrWhiteSpace(card.Garage) ? "Unknown" : card.Garage.Trim())
+                .ToDictionary(group => group.Key, group => group.Count()),
+            ExpiringCards = filteredCards.Count(card =>
+                card.PetExpire.HasValue
+                && card.PetExpire.Value <= DateTime.Now.AddMonths(3)
+                && string.Equals(card.ExpReason?.Trim(), "In Service", StringComparison.OrdinalIgnoreCase)),
+            RecentActivity = filteredCards
+                .Where(card => card.Status_date.HasValue)
+                .OrderByDescending(card => card.Status_date)
                 .Take(10)
-                .Select(fc => new FuelCardActivity
+                .Select(card => new FuelCardActivity
                 {
-                    CardNumber = fc.card_number ?? "Unknown", // Use exact legacy field name
-                    VmfCode = fc.vmf_code ?? 0, // Use exact legacy field name with null coalescing
-                    Action = fc.ExpReason ?? "Unknown",
-                    Date = fc.Status_date ?? DateTime.MinValue, // Use exact legacy field name
-                    Receiver = fc.PetReceiver ?? "Unknown",
+                    CardNumber = card.card_number ?? "Unknown",
+                    VmfCode = card.vmf_code ?? 0,
+                    Action = card.ExpReason ?? "Unknown",
+                    Date = card.Status_date ?? DateTime.MinValue,
+                    Receiver = card.PetReceiver ?? "Unknown"
                 })
-                .ToList(),
+                .ToList()
         };
     }
 }
 
-// DTOs for business logic responses
-public class FuelCardAllocationReport
+public sealed class FuelCardAllocationReport
 {
     public int TotalCards { get; set; }
     public int ActiveCards { get; set; }
@@ -188,7 +136,7 @@ public class FuelCardAllocationReport
     public List<FuelCardActivity> RecentActivity { get; set; } = new();
 }
 
-public class FuelCardActivity
+public sealed class FuelCardActivity
 {
     public string CardNumber { get; set; } = string.Empty;
     public int VmfCode { get; set; }

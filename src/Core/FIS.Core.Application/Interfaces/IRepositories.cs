@@ -486,6 +486,8 @@ public interface IPrivateHireFuelCardRepository
     Task<IEnumerable<PrivateHireFuelCard>> GetByPrivateHireCodeAsync(int privateHireCode);
     Task<IEnumerable<PrivateHireFuelCard>> GetByRegistrationNumberAsync(string registrationNumber);
     Task<IEnumerable<PrivateHireFuelCard>> GetActiveFuelCardsAsync();
+    Task<IEnumerable<PrivateHireFuelCard>> GetActiveFuelCardsBySiteAsync(int siteCode);
+    Task<int?> GetPrivateHireCodeByRegistrationAsync(string registrationNumber);
     Task<PrivateHireFuelCard> CreateAsync(PrivateHireFuelCard fuelCard, int currentUserId);
     Task UpdateAsync(PrivateHireFuelCard fuelCard, int currentUserId);
     Task DeleteAsync(int privateHireFuelCardId, int currentUserId);

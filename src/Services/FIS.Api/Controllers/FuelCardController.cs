@@ -3,7 +3,6 @@ using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -14,18 +13,15 @@ public class FuelCardController : BaseApiController
 {
     private readonly IFuelCardRepository _repository;
     private readonly IPrivateHireFuelCardRepository _privateHireFuelCardRepository;
-    private readonly FisDbContext _context;
     private readonly ILogger<FuelCardController> _logger;
 
     public FuelCardController(
         IFuelCardRepository repository,
         IPrivateHireFuelCardRepository privateHireFuelCardRepository,
-        FisDbContext context,
         ILogger<FuelCardController> logger)
     {
         _repository = repository;
         _privateHireFuelCardRepository = privateHireFuelCardRepository;
-        _context = context;
         _logger = logger;
     }
 
@@ -353,12 +349,9 @@ public class FuelCardController : BaseApiController
             if (request.SiteCode.HasValue)
             {
                 var siteCode = request.SiteCode.Value;
-                var sitePrivateHireCodes = await _context.PrivateHires
-                    .Where(x => !x.is_deleted && x.site_code == siteCode)
-                    .Select(x => (int)x.PHV_code)
-                    .ToListAsync();
-
-                filteredCards = filteredCards.Where(c => sitePrivateHireCodes.Contains(c.phv_code));
+                var siteCards = await _privateHireFuelCardRepository.GetActiveFuelCardsBySiteAsync(siteCode);
+                var siteCardCodes = siteCards.Select(card => card.PHFuel_card_code).ToHashSet();
+                filteredCards = filteredCards.Where(card => siteCardCodes.Contains(card.PHFuel_card_code));
             }
 
             var resultCards = filteredCards.ToList();

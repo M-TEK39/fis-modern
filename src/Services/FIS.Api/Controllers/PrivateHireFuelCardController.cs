@@ -3,7 +3,6 @@ using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -13,16 +12,13 @@ namespace FIS.Api.Controllers;
 public class PrivateHireFuelCardController : BaseApiController
 {
     private readonly IPrivateHireFuelCardRepository _repository;
-    private readonly FisDbContext _context;
     private readonly ILogger<PrivateHireFuelCardController> _logger;
 
     public PrivateHireFuelCardController(
         IPrivateHireFuelCardRepository repository,
-        FisDbContext context,
         ILogger<PrivateHireFuelCardController> logger)
     {
         _repository = repository;
-        _context = context;
         _logger = logger;
     }
 
@@ -128,12 +124,8 @@ public class PrivateHireFuelCardController : BaseApiController
             }
 
             var registration = request.RegistrationNumber.Trim();
-            var privateHire = await _context.PrivateHires
-                .Where(x => !x.is_deleted && x.registration_number != null && x.registration_number == registration)
-                .OrderByDescending(x => x.PHV_code)
-                .FirstOrDefaultAsync();
-
-            if (privateHire == null)
+            var privateHireCode = await _repository.GetPrivateHireCodeByRegistrationAsync(registration);
+            if (!privateHireCode.HasValue)
             {
                 return NotFound($"Private hire vehicle not found for registration '{registration}'.");
             }
@@ -149,7 +141,7 @@ public class PrivateHireFuelCardController : BaseApiController
 
             var entity = new PrivateHireFuelCard
             {
-                phv_code = privateHire.PHV_code,
+                phv_code = privateHireCode.Value,
                 Counter = request.Counter,
                 card_number = string.IsNullOrWhiteSpace(request.CardNumber) ? null : request.CardNumber.Trim(),
                 PAN_number = string.IsNullOrWhiteSpace(request.PanNumber) ? null : request.PanNumber.Trim()
