@@ -9,22 +9,67 @@ export type VehicleEditVehicle = {
   vmfCode: number;
   fleetNumber: string;
   registrationNumber: string;
+  previousGgNumber: string | null;
+  followupGgNumber: string | null;
+  recoveredGgNumber: string | null;
+  renumberedTo: string | null;
+  assetNumber: string | null;
   modelCode: number;
+  modelName: string | null;
   typeCode: number;
+  typeName: string | null;
   vehicleStatusCode: number;
   statusDescription: string | null;
   locationCode: number;
   locationDescription: string | null;
+  siteCode: number | null;
+  takeOnDate: string | null;
   takeOnOdo: number;
   currentOdo: number;
+  odoAdjustment: number | null;
+  odoUpdateDate: string | null;
+  firstRegistrationDate: string | null;
+  vehicleStatusDate: string | null;
   engineNumber: string;
   chassisNumber: string;
   tare: number | null;
   gvm: number | null;
   yearManufactured: number | null;
   colour: string;
+  transmission: string | null;
+  optionalExtras: string | null;
+  towHitch: string | null;
+  canopy: string | null;
+  additionalFuelTank: number | null;
+  averageConsumption: number | null;
+  licenceDueDate: string | null;
+  fuelCardNumber: string | null;
+  fuelCardDate: string | null;
+  maintCardNumber: string | null;
+  maintCardExpiry: string | null;
+  operatorCardNumber: string | null;
+  purchaseDate: string | null;
+  purchaseAmount: number | null;
+  purchasedFrom: string | null;
+  invoiceNumber: string | null;
+  bookValue: number | null;
+  bookValueDate: string | null;
+  soldTo: string | null;
+  soldDate: string | null;
+  soldAmount: number | null;
+  monthlyOverhead: number | null;
+  serviceLastDone: string | null;
+  serviceLastOdo: number | null;
+  cofLastDone: string | null;
+  cofRequired: string | null;
+  cofNumber: string | null;
+  cofAmount: number | null;
+  licenceRegisterNumber: string | null;
   ifmsVehicleRegisterNumber: string | null;
   natisModelNumber: string | null;
+  dateCreated: string | null;
+  dateUpdated: string | null;
+  capturedDate: string | null;
 };
 
 export type VehicleUpdateRequest = {
@@ -183,24 +228,69 @@ function mapVehicle(payload: unknown): VehicleEditVehicle {
     vmfCode,
     fleetNumber: asString(getValue(payload, "fleet_number", "fleetNumber")),
     registrationNumber: asString(getValue(payload, "registration_number", "registrationNumber")),
+    previousGgNumber: asString(getValue(payload, "previos_gg_number", "previousGgNumber")) || null,
+    followupGgNumber: asString(getValue(payload, "followup_gg_number", "followupGgNumber")) || null,
+    recoveredGgNumber: asString(getValue(payload, "recovered_gg_number", "recoveredGgNumber")) || null,
+    renumberedTo: asString(getValue(payload, "renumbered_to", "renumberedTo")) || null,
+    assetNumber: asString(getValue(payload, "asset_number", "assetNumber")) || null,
     modelCode: asNumber(getValue(payload, "model_code", "modelCode")) ?? 0,
+    modelName: asString(getValue(payload, "model_name", "modelName")) || null,
     typeCode: asNumber(getValue(payload, "type_code", "typeCode")) ?? 0,
+    typeName: asString(getValue(payload, "type_name", "typeName")) || null,
     vehicleStatusCode: asNumber(getValue(payload, "vehicle_status_code", "vehicleStatusCode")) ?? 0,
     statusDescription:
       asString(getValue(payload, "status_description", "statusDescription", "vehicle_status_description")) || null,
     locationCode: asNumber(getValue(payload, "location_code", "locationCode")) ?? 0,
     locationDescription: asString(getValue(payload, "location_description", "locationDescription")) || null,
+    siteCode: asNumber(getValue(payload, "site_code", "siteCode", "Site_code")),
+    takeOnDate: asString(getValue(payload, "take_on_date", "takeOnDate")) || null,
     takeOnOdo: asNumber(getValue(payload, "take_on_odo", "takeOnOdo")) ?? 0,
     currentOdo: asNumber(getValue(payload, "current_odo", "currentOdo")) ?? 0,
+    odoAdjustment: asNumber(getValue(payload, "odo_adjustment", "odoAdjustment")),
+    odoUpdateDate: asString(getValue(payload, "odo_update_date", "odoUpdateDate")) || null,
+    firstRegistrationDate: asString(getValue(payload, "date_First_Regist", "firstRegistrationDate")) || null,
+    vehicleStatusDate: asString(getValue(payload, "vehicle_status_date", "vehicleStatusDate")) || null,
     engineNumber: asString(getValue(payload, "engine_number_1", "engineNumber1", "engine_number")),
     chassisNumber: asString(getValue(payload, "chassis_number", "chassisNumber")),
     tare: asNumber(getValue(payload, "tare")),
     gvm: asNumber(getValue(payload, "gvm")),
     yearManufactured: asNumber(getValue(payload, "year_manufactured", "yearManufactured")),
     colour: asString(getValue(payload, "colour")),
+    transmission: asString(getValue(payload, "transmission")) || null,
+    optionalExtras: asString(getValue(payload, "optional_extras", "optionalExtras")) || null,
+    towHitch: asString(getValue(payload, "tow_hitch", "towHitch")) || null,
+    canopy: asString(getValue(payload, "canopy")) || null,
+    additionalFuelTank: asNumber(getValue(payload, "additional_fuel_tank", "additionalFuelTank")),
+    averageConsumption: asNumber(getValue(payload, "average_consumption", "averageConsumption")),
+    licenceDueDate: asString(getValue(payload, "licence_due_date", "licenceDueDate")) || null,
+    fuelCardNumber: asString(getValue(payload, "fuel_card_number", "fuelCardNumber")) || null,
+    fuelCardDate: asString(getValue(payload, "fuel_card_date", "fuelCardDate")) || null,
+    maintCardNumber: asString(getValue(payload, "maint_card_number", "maintCardNumber")) || null,
+    maintCardExpiry: asString(getValue(payload, "maint_card_exdate", "maintCardExpiry")) || null,
+    operatorCardNumber: asString(getValue(payload, "operator_card_number", "operatorCardNumber")) || null,
+    purchaseDate: asString(getValue(payload, "purchase_date", "purchaseDate")) || null,
+    purchaseAmount: asNumber(getValue(payload, "purchase_amount", "purchaseAmount")),
+    purchasedFrom: asString(getValue(payload, "purchased_from", "purchasedFrom")) || null,
+    invoiceNumber: asString(getValue(payload, "invoice_number", "invoiceNumber")) || null,
+    bookValue: asNumber(getValue(payload, "book_value", "bookValue")),
+    bookValueDate: asString(getValue(payload, "book_value_date", "bookValueDate")) || null,
+    soldTo: asString(getValue(payload, "sold_to", "soldTo")) || null,
+    soldDate: asString(getValue(payload, "sold_date", "soldDate")) || null,
+    soldAmount: asNumber(getValue(payload, "sold_amount", "soldAmount")),
+    monthlyOverhead: asNumber(getValue(payload, "monthly_overhead", "monthlyOverhead")),
+    serviceLastDone: asString(getValue(payload, "service_last_done", "serviceLastDone")) || null,
+    serviceLastOdo: asNumber(getValue(payload, "service_last_odo", "serviceLastOdo")),
+    cofLastDone: asString(getValue(payload, "cof_last_done", "cofLastDone")) || null,
+    cofRequired: asString(getValue(payload, "cof_required", "cofRequired")) || null,
+    cofNumber: asString(getValue(payload, "cof_number", "cofNumber")) || null,
+    cofAmount: asNumber(getValue(payload, "Cof_amount", "cofAmount")),
+    licenceRegisterNumber: asString(getValue(payload, "lic_register_number", "licenceRegisterNumber")) || null,
     ifmsVehicleRegisterNumber:
       asString(getValue(payload, "ifms_vehicle_register_number", "ifmsVehicleRegisterNumber")) || null,
     natisModelNumber: asString(getValue(payload, "natis_model_number", "natisModelNumber")) || null,
+    dateCreated: asString(getValue(payload, "date_created", "dateCreated")) || null,
+    dateUpdated: asString(getValue(payload, "date_updated", "dateUpdated")) || null,
+    capturedDate: asString(getValue(payload, "captured_date", "capturedDate")) || null,
   };
 }
 
@@ -216,5 +306,20 @@ export async function updateVehicleAgainstApi(vmfCode: number, request: VehicleU
   });
 
   await readJson(response);
+  return { ok: true as const };
+}
+
+export async function updateVehicleInvoiceAgainstApi(vmfCode: number, invoiceNumber: string | null) {
+  const response = await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}/invoice`, {
+    method: "PATCH",
+    body: JSON.stringify({ invoice_number: invoiceNumber }),
+  });
+
+  await readJson(response);
+  return { ok: true as const };
+}
+
+export async function deleteVehicleAgainstApi(vmfCode: number) {
+  await requestApi(`api/vehicles/${encodeURIComponent(vmfCode)}`, { method: "DELETE" });
   return { ok: true as const };
 }

@@ -1063,6 +1063,188 @@ input:focus-visible {
   display: contents;
 }
 
+.vehicle-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--fis-border);
+  padding-bottom: 1.5rem;
+}
+
+.vehicle-detail-header h1 {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+}
+
+.vehicle-detail-header p:last-child {
+  margin: 0.6rem 0 0;
+  color: var(--fis-muted-text);
+}
+
+.vehicle-back-link {
+  display: inline-block;
+  color: var(--fis-accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.vehicle-detail-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8rem;
+  border-bottom: 1px solid var(--fis-border);
+  padding: 1rem 0;
+  color: var(--fis-muted-text);
+  font-size: 0.85rem;
+}
+
+.vehicle-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding-top: 1.5rem;
+}
+
+.vehicle-detail-section {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--fis-border);
+  border-radius: 0.8rem;
+  background: var(--fis-elevated);
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+.vehicle-detail-section h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.vehicle-detail-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+  margin: 0;
+}
+
+.vehicle-detail-list div {
+  min-width: 0;
+}
+
+.vehicle-detail-list dt,
+.vehicle-detail-label {
+  color: var(--fis-muted-text);
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.vehicle-detail-list dd,
+.vehicle-detail-value {
+  overflow-wrap: anywhere;
+  margin: 0.25rem 0 0;
+  color: var(--fis-text);
+  font-size: 0.9rem;
+}
+
+.vehicle-inline-edit {
+  display: grid;
+  gap: 0.7rem;
+  border-top: 1px solid var(--fis-border);
+  padding-top: 1rem;
+}
+
+.vehicle-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.vehicle-inline-form .form-input {
+  min-width: min(100%, 15rem);
+  flex: 1;
+}
+
+.vehicle-documents-section {
+  margin-top: 1rem;
+}
+
+.vehicle-detail-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-bottom: 1px solid var(--fis-border);
+  padding-bottom: 0.85rem;
+}
+
+.vehicle-detail-section-heading p {
+  margin: 0.35rem 0 0;
+  color: var(--fis-muted-text);
+  font-size: 0.85rem;
+}
+
+.vehicle-document-upload {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.7fr) minmax(15rem, 1.5fr) auto;
+  align-items: end;
+  gap: 1rem;
+}
+
+.vehicle-document-file-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.vehicle-document-file-field input[type="file"] {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--fis-border);
+  border-radius: 0.7rem;
+  background: var(--fis-surface);
+  color: var(--fis-text);
+  padding: 0.65rem;
+}
+
+.vehicle-detail-documents-table {
+  min-width: 58rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: hsl(220 20% 10% / 0.55);
+  padding: 1rem;
+}
+
+.modal-card {
+  width: min(100%, 30rem);
+  border: 1px solid var(--fis-border);
+  border-radius: 0.9rem;
+  background: var(--fis-surface);
+  box-shadow: var(--fis-shadow);
+  padding: 1.5rem;
+}
+
+.modal-card h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.modal-card p {
+  color: var(--fis-muted-text);
+  line-height: 1.55;
+}
+
 .vehicle-status-card {
   margin-top: 1.5rem;
   border: 1px solid var(--fis-border);
@@ -1241,6 +1423,24 @@ input:focus-visible {
 
 @media (max-width: 680px) {
   .field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vehicle-detail-header {
+    flex-direction: column;
+  }
+
+  .vehicle-detail-header .button-row {
+    width: 100%;
+  }
+
+  .vehicle-detail-header .button-row .button {
+    flex: 1;
+  }
+
+  .vehicle-detail-grid,
+  .vehicle-detail-list,
+  .vehicle-document-upload {
     grid-template-columns: 1fr;
   }
 }
