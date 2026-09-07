@@ -11,6 +11,7 @@ type LegacyTaxiRouteProps = Readonly<{
 }>;
 
 function reportKind(path: string): TaxiReportKind {
+  if (path.includes("fin_reports")) return "financial";
   if (path.includes("inservice")) return "taxis-inservice-per-department";
   if (path.includes("per_department")) return "taxis-per-department";
   if (path.includes("one_num")) return "one-taxi-number";

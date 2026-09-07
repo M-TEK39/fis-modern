@@ -9,7 +9,7 @@ import { getTaxis, TaxiApiError, type TaxiRecord } from "@/lib/api-taxis";
 import { getSession } from "@/lib/session";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-export type TaxiReportKind = "one-taxi-number" | "logs-per-user" | "old-requisitions" | "taxis-per-company" | "taxis-per-department" | "taxis-inservice-per-department" | "logs-requisitions-status";
+export type TaxiReportKind = "one-taxi-number" | "logs-per-user" | "old-requisitions" | "taxis-per-company" | "taxis-per-department" | "taxis-inservice-per-department" | "logs-requisitions-status" | "financial";
 
 function ReportSearch({ kind, query }: Readonly<{ kind: TaxiReportKind; query: Record<string, string | string[] | undefined> }>) {
   return <form className="vehicle-status-maintenance-panel" method="get"><input type="hidden" name="mode" value={kind} /><div className="vehicle-search-row"><label className="form-label" htmlFor="taxi-report-search">{kind === "one-taxi-number" ? "Registration, GG, or requisition" : "Search report"}</label><input className="vehicle-search" id="taxi-report-search" name="search" defaultValue={queryValue(query.search)} placeholder="Optional search" /><button className="button button-primary" type="submit">Run report</button></div></form>;
@@ -32,6 +32,7 @@ function reportTitle(kind: TaxiReportKind) {
     "taxis-per-department": "List Of All Taxis In Various Departments",
     "taxis-inservice-per-department": "List Of All Taxis In Service In Various Departments",
     "logs-requisitions-status": "Taxi Logs and Requisitions Status Report",
+    financial: "Financial Reports: Taxis",
   })[kind];
 }
 

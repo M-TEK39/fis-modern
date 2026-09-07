@@ -311,28 +311,6 @@ public class LicenseReportApiService(HttpClient httpClient, TokenService tokenSe
         await PostAsync<object, List<T>>($"{BasePath}/site", payload) ?? new List<T>();
 }
 
-public class TaxiApiService(HttpClient httpClient, TokenService tokenService, ILogger<TaxiApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/taxi";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> GetByRequisitionAsync<T>(string rekNum) => GetAsync<T>($"{BasePath}/lookup/{Uri.EscapeDataString(rekNum)}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
-
-public class TaxiLogApiService(HttpClient httpClient, TokenService tokenService, ILogger<TaxiLogApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/taxilog";
-
-    public Task<T?> GetReferencesAsync<T>() => GetAsync<T>($"{BasePath}/references");
-    public Task<T?> LookupAsync<T>(string rekNum, string mode) => GetAsync<T>($"{BasePath}/lookup/{Uri.EscapeDataString(rekNum)}?mode={Uri.EscapeDataString(mode)}");
-    public Task<T?> CreateAsync<TPayload, T>(TPayload payload) => PostAsync<TPayload, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<TPayload, T>(int logId, TPayload payload) => PutAsync<TPayload, T>($"{BasePath}/{logId}", payload);
-}
-
 public class VehicleAssessmentApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleAssessmentApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehicleassessment";
