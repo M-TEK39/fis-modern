@@ -474,6 +474,7 @@ public interface ITripRepository
 {
     Task<Trip?> GetByIdAsync(int tripId);
     Task<IEnumerable<Trip>> GetAllAsync();
+    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
     Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode);
     Task<IEnumerable<Trip>> GetTripsByDriverAsync(string driverId);
     Task<IEnumerable<Trip>> GetTripsByContractAsync(int contractCode);

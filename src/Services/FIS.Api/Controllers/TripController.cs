@@ -29,6 +29,8 @@ public class TripDto
 {
     public int TripAuthorityCode { get; set; }
     public int ContractCode { get; set; }
+    public int? VmfCode { get; set; }
+    public short? SiteCode { get; set; }
     public string? ApproverName { get; set; }
     public string? ApproverRank { get; set; }
     public string? ApproverTelephone { get; set; }
@@ -50,6 +52,19 @@ public class TripDto
         (int)(ExpiryDate.Value - DateTime.Now).TotalDays : 0;
 }
 
+public class TripAuthorityVehicleDto
+{
+    public int VmfCode { get; set; }
+    public int ContractCode { get; set; }
+    public short SiteCode { get; set; }
+    public string? FleetNumber { get; set; }
+    public string? RegistrationNumber { get; set; }
+    public DateTime? LicenceDueDate { get; set; }
+    public string? MakeDescription { get; set; }
+    public string? ModelDescription { get; set; }
+    public string? ContractType { get; set; }
+}
+
 [ApiController]
 [Authorize]
 [Route("api/[controller]")]
@@ -62,6 +77,47 @@ public class TripController : BaseApiController
     {
         _tripService = tripService;
         _logger = logger;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<TripDto>>> GetAllTrips()
+    {
+        try
+        {
+            var trips = await _tripService.GetAllTripsAsync();
+            return Ok(trips.Select(MapTrip));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving all trip authorities");
+            return StatusCode(500, "Internal server error");
+        }
+    }
+
+    [HttpGet("vehicles")]
+    public async Task<ActionResult<IEnumerable<TripAuthorityVehicleDto>>> GetTripAuthorityVehicles()
+    {
+        try
+        {
+            var vehicles = await _tripService.GetTripAuthorityVehiclesAsync();
+            return Ok(vehicles.Select(vehicle => new TripAuthorityVehicleDto
+            {
+                VmfCode = vehicle.VmfCode,
+                ContractCode = vehicle.ContractCode,
+                SiteCode = vehicle.SiteCode,
+                FleetNumber = vehicle.FleetNumber,
+                RegistrationNumber = vehicle.RegistrationNumber,
+                LicenceDueDate = vehicle.LicenceDueDate,
+                MakeDescription = vehicle.MakeDescription,
+                ModelDescription = vehicle.ModelDescription,
+                ContractType = vehicle.ContractType
+            }));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving Trip Authority vehicles");
+            return StatusCode(500, "Internal server error");
+        }
     }
 
     [HttpGet("{id}")]
@@ -79,6 +135,8 @@ public class TripController : BaseApiController
             {
                 TripAuthorityCode = trip.trip_authority_code,
                 ContractCode = trip.contract_code,
+                VmfCode = trip.Contract?.vmf_code,
+                SiteCode = trip.Contract?.site_code,
                 ApproverName = trip.approver_name,
                 ApproverRank = trip.approver_rank,
                 ApproverTelephone = trip.approver_tel,
@@ -113,6 +171,8 @@ public class TripController : BaseApiController
             {
                 TripAuthorityCode = t.trip_authority_code,
                 ContractCode = t.contract_code,
+                VmfCode = t.Contract?.vmf_code,
+                SiteCode = t.Contract?.site_code,
                 ApproverName = t.approver_name,
                 ApproverRank = t.approver_rank,
                 ApproverTelephone = t.approver_tel,
@@ -146,6 +206,8 @@ public class TripController : BaseApiController
             {
                 TripAuthorityCode = t.trip_authority_code,
                 ContractCode = t.contract_code,
+                VmfCode = t.Contract?.vmf_code,
+                SiteCode = t.Contract?.site_code,
                 ApproverName = t.approver_name,
                 ApproverRank = t.approver_rank,
                 ApproverTelephone = t.approver_tel,
@@ -181,6 +243,8 @@ public class TripController : BaseApiController
             {
                 TripAuthorityCode = t.trip_authority_code,
                 ContractCode = t.contract_code,
+                VmfCode = t.Contract?.vmf_code,
+                SiteCode = t.Contract?.site_code,
                 ApproverName = t.approver_name,
                 ApproverRank = t.approver_rank,
                 ApproverTelephone = t.approver_tel,
@@ -250,6 +314,8 @@ public class TripController : BaseApiController
             {
                 TripAuthorityCode = createdTrip.trip_authority_code,
                 ContractCode = createdTrip.contract_code,
+                VmfCode = createdTrip.Contract?.vmf_code,
+                SiteCode = createdTrip.Contract?.site_code,
                 ApproverName = createdTrip.approver_name,
                 ApproverRank = createdTrip.approver_rank,
                 ApproverTelephone = createdTrip.approver_tel,
@@ -306,6 +372,8 @@ public class TripController : BaseApiController
             {
                 TripAuthorityCode = existingTrip.trip_authority_code,
                 ContractCode = existingTrip.contract_code,
+                VmfCode = existingTrip.Contract?.vmf_code,
+                SiteCode = existingTrip.Contract?.site_code,
                 ApproverName = existingTrip.approver_name,
                 ApproverRank = existingTrip.approver_rank,
                 ApproverTelephone = existingTrip.approver_tel,
@@ -350,4 +418,26 @@ public class TripController : BaseApiController
             return StatusCode(500, "Internal server error");
         }
     }
+
+    private static TripDto MapTrip(Trip trip)
+        => new()
+        {
+            TripAuthorityCode = trip.trip_authority_code,
+            ContractCode = trip.contract_code,
+            VmfCode = trip.Contract?.vmf_code,
+            SiteCode = trip.Contract?.site_code,
+            ApproverName = trip.approver_name,
+            ApproverRank = trip.approver_rank,
+            ApproverTelephone = trip.approver_tel,
+            EndOdometer = trip.end_odo_meter,
+            ExpiryDate = trip.expiry_date,
+            TripReason = trip.trip_reason,
+            TripRequestNumber = trip.trip_request_number,
+            IssueDate = trip.issue_date,
+            TripTypeCode = trip.trip_type_code,
+            TripIncidentTypeCode = trip.trip_incident_type_code,
+            UserAccessCode = trip.user_access_code,
+            LockedForTransfer = trip.locked_for_transfer,
+            TripIsMonthly = trip.Trip_Is_Monthly
+        };
 }

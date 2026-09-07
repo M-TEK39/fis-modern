@@ -114,6 +114,16 @@ public class TripService : ITripService
         return await _tripRepository.GetByIdAsync(tripAuthorityCode);
     }
 
+    public async Task<IEnumerable<Trip>> GetAllTripsAsync()
+    {
+        return await _tripRepository.GetAllAsync();
+    }
+
+    public async Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync()
+    {
+        return await _tripRepository.GetTripAuthorityVehiclesAsync();
+    }
+
     /// <summary>
     /// Get all trips for a vehicle (via contract)
     /// </summary>

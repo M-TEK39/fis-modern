@@ -29,6 +29,16 @@ public interface ITripService
     Task<Trip?> GetTripByIdAsync(int tripAuthorityCode);
 
     /// <summary>
+    /// Get all trip authorities with their contract vehicle context.
+    /// </summary>
+    Task<IEnumerable<Trip>> GetAllTripsAsync();
+
+    /// <summary>
+    /// Get active-contract vehicles used by the Trip Authority filter.
+    /// </summary>
+    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
+
+    /// <summary>
     /// Get all trips for a vehicle (via contract)
     /// </summary>
     Task<IEnumerable<Trip>> GetTripsByVehicleAsync(int vmfCode);
@@ -114,3 +124,14 @@ public interface ITripService
     /// </summary>
     Task<bool> ValidateOdometerReadingAsync(int tripAuthorityCode, int odometerReading);
 }
+
+public sealed record TripAuthorityVehicle(
+    int VmfCode,
+    int ContractCode,
+    short SiteCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    DateTime? LicenceDueDate,
+    string? MakeDescription,
+    string? ModelDescription,
+    string? ContractType);
