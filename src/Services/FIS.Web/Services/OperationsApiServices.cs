@@ -277,22 +277,6 @@ public class AuctionApiService(HttpClient httpClient, TokenService tokenService,
            ?? new AuctionReportDto();
 }
 
-public class LossReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<LossReportApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/report/losses";
-
-    public async Task<List<T>> GetVehicleAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/vehicle", payload) ?? new List<T>();
-    public async Task<List<T>> GetAllAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/all", payload) ?? new List<T>();
-    public async Task<List<T>> GetNoReportAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/no-report", payload) ?? new List<T>();
-    public async Task<List<T>> GetWithReportAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/with-report", payload) ?? new List<T>();
-    public async Task<List<T>> GetDeptPeriodAsync<T>(object payload) =>
-        await PostAsync<object, List<T>>($"{BasePath}/dept-period", payload) ?? new List<T>();
-}
-
 public class LicenseReportApiService(HttpClient httpClient, TokenService tokenService, ILogger<LicenseReportApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/report/licences";

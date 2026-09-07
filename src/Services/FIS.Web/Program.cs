@@ -362,11 +362,6 @@ builder.Services.AddHttpClient<MerchantApiService>(client =>
     client.BaseAddress = apiBaseUri;
     client.Timeout = TimeSpan.FromSeconds(30);
 });
-builder.Services.AddHttpClient<LossReportApiService>(client =>
-{
-    client.BaseAddress = apiBaseUri;
-    client.Timeout = TimeSpan.FromSeconds(30);
-});
 builder.Services.AddHttpClient<LicenseReportApiService>(client =>
 {
     client.BaseAddress = apiBaseUri;
