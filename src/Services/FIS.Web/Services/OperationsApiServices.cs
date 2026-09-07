@@ -344,17 +344,6 @@ public class TaxiLogApiService(HttpClient httpClient, TokenService tokenService,
     public Task<T?> UpdateAsync<TPayload, T>(int logId, TPayload payload) => PutAsync<TPayload, T>($"{BasePath}/{logId}", payload);
 }
 
-public class AssetVerificationApiService(HttpClient httpClient, TokenService tokenService, ILogger<AssetVerificationApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/assetverification";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-}
-
 public class VehicleAssessmentApiService(HttpClient httpClient, TokenService tokenService, ILogger<VehicleAssessmentApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/vehicleassessment";
