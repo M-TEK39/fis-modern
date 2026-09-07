@@ -371,8 +371,9 @@ export async function getDriverManagementRanks() {
   return mapCollection(await readJson(response), mapRank).sort((left, right) => (left.description ?? "").localeCompare(right.description ?? "") || left.id - right.id);
 }
 
-export async function getDriverManagementSiteDrivers(siteCode: number) {
-  const response = await requestApi(`api/site-drivers?siteCode=${encodeURIComponent(siteCode)}`);
+export async function getDriverManagementSiteDrivers(siteCode?: number) {
+  const query = siteCode === undefined ? "" : `?siteCode=${encodeURIComponent(siteCode)}`;
+  const response = await requestApi(`api/site-drivers${query}`);
   return mapCollection(await readJson(response), mapDriver).sort(
     (left, right) => (left.driverSurname ?? "").localeCompare(right.driverSurname ?? "") || (left.driverFirstname ?? "").localeCompare(right.driverFirstname ?? "") || left.siteDriverCode - right.siteDriverCode,
   );

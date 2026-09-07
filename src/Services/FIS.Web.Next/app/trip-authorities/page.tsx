@@ -73,7 +73,7 @@ function hrefWithValues(path: string, values: Record<string, string | number | u
 }
 
 function TripTools() {
-  return <div className="vehicle-menu-tiles"><section className="vehicle-menu-tile"><h2 className="vehicle-menu-header">Trip Tools</h2><div className="vehicle-menu-body"><Link className="vehicle-menu-link" href="/trips/create">Create Trip Authority</Link><Link className="vehicle-menu-link" href="/trips/show">View / Close Trip Authority</Link><Link className="vehicle-menu-link" href="/trips/driver-maintenance">Maintain Drivers</Link><Link className="vehicle-menu-link" href="/trips/driver-info">Driver Information (Financial Year)</Link><Link className="vehicle-menu-link" href="/trips/remove-without-routes">Remove Trips Without Routes</Link></div></section></div>;
+  return <div className="vehicle-menu-tiles"><section className="vehicle-menu-tile"><h2 className="vehicle-menu-header">Trip Tools</h2><div className="vehicle-menu-body"><Link className="vehicle-menu-link" href="/trips/create">Create Trip Authority</Link><Link className="vehicle-menu-link" href="/trips/show">View / Close Trip Authority</Link><Link className="vehicle-menu-link" href="/drivers">Maintain Drivers</Link><Link className="vehicle-menu-link" href="/trips/driver-licence-details">Driver Licence Details</Link><Link className="vehicle-menu-link" href="/trips/driver-info">Driver Information (Financial Year)</Link><Link className="vehicle-menu-link" href="/trips/remove-without-routes">Remove Trips Without Routes</Link></div></section></div>;
 }
 
 function SearchTabs({ tab, departmentCode, siteCode }: Readonly<{ tab: Tab; departmentCode: number | null; siteCode: number | null }>) {
