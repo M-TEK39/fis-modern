@@ -22,6 +22,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private readonly IAssetVerificationRepository _assetVerificationRepository;
     private readonly IWorkshopRepository _workshopRepository;
     private readonly IWorkshopMerchantRepository _workshopMerchantRepository;
+    private readonly ITaxiRepository _taxiRepository;
+    private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<LegacyReportResultService> _logger;
     private readonly IReadOnlyDictionary<string, LegacyReportDefinition> _definitions;
 
@@ -30,12 +32,16 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         IAssetVerificationRepository assetVerificationRepository,
         IWorkshopRepository workshopRepository,
         IWorkshopMerchantRepository workshopMerchantRepository,
+        ITaxiRepository taxiRepository,
+        IVehicleRepository vehicleRepository,
         ILogger<LegacyReportResultService> logger)
     {
         _context = context;
         _assetVerificationRepository = assetVerificationRepository;
         _workshopRepository = workshopRepository;
         _workshopMerchantRepository = workshopMerchantRepository;
+        _taxiRepository = taxiRepository;
+        _vehicleRepository = vehicleRepository;
         _logger = logger;
         _definitions = BuildDefinitions();
     }
@@ -2744,17 +2750,10 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     {
         var currentFinancialYear = GetFinancialYearKey(DateTime.Today);
 
-        var rows = await (
-            from taxi in _context.Taxis.AsNoTracking()
-            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
-            from department in taxiDepartments.DefaultIfEmpty()
-            join site in _context.Sites.AsNoTracking() on taxi.site_code equals site.Site_code into taxiSites
-            from site in taxiSites.DefaultIfEmpty()
-            where !taxi.is_deleted
-                && GetFinancialYearKey(taxi.date_created) == currentFinancialYear
-                && GetFinancialYearKey(taxi.date_required) < currentFinancialYear
-            orderby taxi.date_created descending, taxi.request_id descending
-            select new
+        var taxis = await _taxiRepository.GetAllAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+        var rows = taxis
+            .Select(taxi => new
             {
                 taxi.request_id,
                 taxi.rek_num,
@@ -2762,15 +2761,21 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 taxi.rank,
                 taxi.vmf_code,
                 taxi.date_required,
-                taxi.date_created,
+                CapturedDate = taxi.date_created == default
+                    ? taxi.request_date ?? taxi.date_required
+                    : taxi.date_created,
                 taxi.contractor_id,
-                DepartmentCode = department != null ? department.department_code : (short?)null,
-                Department = department != null ? department.description : null,
-                SiteCode = site != null ? site.Site_code : (short?)null,
-                Site = site != null ? site.description : null
+                DepartmentCode = taxi.Department?.department_code,
+                Department = taxi.Department?.description,
+                SiteCode = taxi.Site?.Site_code,
+                Site = taxi.Site?.description
             })
+            .Where(taxi => GetFinancialYearKey(taxi.CapturedDate) == currentFinancialYear
+                && GetFinancialYearKey(taxi.date_required) < currentFinancialYear)
+            .OrderByDescending(taxi => taxi.CapturedDate)
+            .ThenByDescending(taxi => taxi.request_id)
             .Take(5000)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return CreateDynamicResult(
             "Previous Fin Year VIP & Taxi Requisitions Captured in Current Fin Year",
@@ -2784,7 +2789,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Rank", row => row.rank),
             Column("Vehicle", row => row.vmf_code),
             Column("Date Required", row => row.date_required),
-            Column("Captured Date", row => row.date_created),
+            Column("Captured Date", row => row.CapturedDate),
             Column("Contractor ID", row => row.contractor_id),
             Column("Department Code", row => row.DepartmentCode),
             Column("Department", row => row.Department),
@@ -3011,32 +3016,29 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private async Task<LegacyReportResultDto> BuildTaxisListPerDepartmentAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var search = GetString(filters, "search");
-
-        var query =
-            from taxi in _context.Taxis.AsNoTracking()
-            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
-            from department in taxiDepartments.DefaultIfEmpty()
-            where !taxi.is_deleted
-            select new
+        var taxis = await _taxiRepository.GetAllAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+        var query = taxis
+            .Select(taxi => new
             {
                 taxi.request_id,
                 taxi.rek_num,
                 taxi.department_code,
-                Department = department != null ? department.description : null,
+                Department = taxi.Department?.description,
                 taxi.vmf_code
-            };
+            });
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
             query = query.Where(row =>
-                (row.rek_num != null && row.rek_num.Contains(term)) ||
-                (row.Department != null && row.Department.Contains(term)) ||
-                (row.vmf_code != null && row.vmf_code.Contains(term)) ||
-                row.request_id.ToString().Contains(term));
+                (row.rek_num != null && row.rek_num.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.Department != null && row.Department.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.vmf_code != null && row.vmf_code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                row.request_id.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase));
         }
 
-        var rows = await query
+        var rows = query
             .OrderBy(row => row.Department)
             .ThenBy(row => row.rek_num)
             .Select(row => new
@@ -3049,7 +3051,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             })
             .Distinct()
             .Take(5000)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         var numberedRows = rows
             .Select((row, index) => new
@@ -3080,39 +3082,40 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private async Task<LegacyReportResultDto> BuildTaxisListInServicePerDepartmentAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var search = GetString(filters, "search");
-
-        var query =
-            from taxi in _context.Taxis.AsNoTracking()
-            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
-            from department in taxiDepartments.DefaultIfEmpty()
-            join vehicle in _context.Vehicles.AsNoTracking() on taxi.vmf_code equals vehicle.vmf_code.ToString() into taxiVehicles
-            from vehicle in taxiVehicles.DefaultIfEmpty()
-            where !taxi.is_deleted && vehicle != null && vehicle.vehicle_status_code == 1
-            select new
+        var taxis = await _taxiRepository.GetAllAsync();
+        var vehicles = await _vehicleRepository.GetAllAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+        var inServiceVmfCodes = vehicles
+            .Where(vehicle => vehicle.vehicle_status_code == 1)
+            .Select(vehicle => vehicle.vmf_code.ToString(CultureInfo.InvariantCulture))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var query = taxis
+            .Where(taxi => taxi.vmf_code is not null && inServiceVmfCodes.Contains(taxi.vmf_code.Trim()))
+            .Select(taxi => new
             {
                 taxi.request_id,
                 taxi.rek_num,
                 taxi.department_code,
-                Department = department != null ? department.description : null,
+                Department = taxi.Department?.description,
                 taxi.vmf_code
-            };
+            });
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
             query = query.Where(row =>
-                (row.rek_num != null && row.rek_num.Contains(term)) ||
-                (row.Department != null && row.Department.Contains(term)) ||
-                (row.vmf_code != null && row.vmf_code.Contains(term)) ||
-                row.request_id.ToString().Contains(term));
+                (row.rek_num != null && row.rek_num.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.Department != null && row.Department.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.vmf_code != null && row.vmf_code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                row.request_id.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase));
         }
 
-        var rows = await query
+        var rows = query
             .OrderBy(row => row.Department)
             .ThenBy(row => row.rek_num)
             .Distinct()
             .Take(5000)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         var numberedRows = rows
             .Select((row, index) => new
@@ -3143,14 +3146,9 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private async Task<LegacyReportResultDto> BuildTaxisFinancialAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var search = GetString(filters, "search");
-        var query =
-            from taxi in _context.Taxis.AsNoTracking()
-            join department in _context.Departments.AsNoTracking() on taxi.department_code equals department.department_code into taxiDepartments
-            from department in taxiDepartments.DefaultIfEmpty()
-            join site in _context.Sites.AsNoTracking() on taxi.site_code equals site.Site_code into taxiSites
-            from site in taxiSites.DefaultIfEmpty()
-            where !taxi.is_deleted
-            select new
+        var taxis = await _taxiRepository.GetAllAsync();
+        cancellationToken.ThrowIfCancellationRequested();
+        var query = taxis.Select(taxi => new
             {
                 taxi.request_id,
                 taxi.rek_num,
@@ -3159,30 +3157,30 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 taxi.vmf_code,
                 Company = taxi.address_1,
                 taxi.date_required,
-                Department = department != null ? department.description : null,
-                Site = site != null ? site.description : null,
+                Department = taxi.Department?.description,
+                Site = taxi.Site?.description,
                 taxi.contractor_id,
                 taxi.flight,
                 taxi.address_2,
                 taxi.address_3
-            };
+            });
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
             query = query.Where(row =>
-                row.request_id.ToString().Contains(term) ||
-                (row.rek_num != null && row.rek_num.Contains(term)) ||
-                (row.official != null && row.official.Contains(term)) ||
-                (row.vmf_code != null && row.vmf_code.Contains(term)) ||
-                (row.Company != null && row.Company.Contains(term)));
+                row.request_id.ToString(CultureInfo.InvariantCulture).Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                (row.rek_num != null && row.rek_num.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.official != null && row.official.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.vmf_code != null && row.vmf_code.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                (row.Company != null && row.Company.Contains(term, StringComparison.OrdinalIgnoreCase)));
         }
 
-        var rows = await query
+        var rows = query
             .OrderByDescending(row => row.date_required)
             .ThenByDescending(row => row.request_id)
             .Take(5000)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return CreateDynamicResult(
             "Financial Reports: Taxis",

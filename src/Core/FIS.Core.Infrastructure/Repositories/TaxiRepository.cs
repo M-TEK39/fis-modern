@@ -362,14 +362,18 @@ public sealed class TaxiRepository : ITaxiRepository
     }
 
     private static Taxi MapTaxi(DbDataReader reader)
-        => new()
+    {
+        var departmentCode = ReadInt16(reader, "__department_code");
+        var siteCode = ReadInt16(reader, "__site_code");
+
+        return new()
         {
             request_id = ReadInt32(reader, "request_id") ?? 0,
             rek_num = ReadString(reader, "rek_num"),
             contractor_id = ReadInt16(reader, "contractor_id"),
             vmf_code = ReadString(reader, "vmf_code"),
             department_code = ReadInt16(reader, "department_code"),
-            site_code = ReadInt16(reader, "site_code") ?? 0,
+            site_code = siteCode ?? 0,
             date_required = ReadDateTime(reader, "date_required") ?? default,
             time_required = ReadDateTime(reader, "time_required") ?? default,
             vehicle_type_code = ReadInt16(reader, "vehicle_type_code"),
@@ -419,17 +423,22 @@ public sealed class TaxiRepository : ITaxiRepository
             created_by_user_code = ReadInt32(reader, "created_by_user_code"),
             modified_by_user_code = ReadInt32(reader, "modified_by_user_code"),
             is_deleted = ReadBoolean(reader, "is_deleted") ?? false,
-            Department = new Department
-            {
-                department_code = ReadInt16(reader, "__department_code") ?? 0,
-                description = ReadString(reader, "__department_description")
-            },
-            Site = new Site
-            {
-                Site_code = ReadInt16(reader, "__site_code") ?? 0,
-                description = ReadString(reader, "__site_description")
-            }
+            Department = departmentCode.HasValue
+                ? new Department
+                {
+                    department_code = departmentCode.Value,
+                    description = ReadString(reader, "__department_description")
+                }
+                : null,
+            Site = siteCode.HasValue
+                ? new Site
+                {
+                    Site_code = siteCode.Value,
+                    description = ReadString(reader, "__site_description")
+                }
+                : null
         };
+    }
 
     private static string GetActiveFilter(IReadOnlyDictionary<string, ColumnInfo> columns, string alias = "")
         => columns.ContainsKey("is_deleted")
