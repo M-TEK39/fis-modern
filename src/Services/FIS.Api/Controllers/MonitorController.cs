@@ -37,14 +37,24 @@ public class MonitorController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<MonitorEntity>> Create([FromBody] MonitorEntity item)
     {
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.monitor_code }, created); }
+        try
+        {
+            if (!Validate(item, out var error)) return BadRequest(error);
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.monitor_code }, created);
+        }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<MonitorEntity>> Update(short id, [FromBody] MonitorEntity item)
     {
-        try { if (id != item.monitor_code) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
+        try
+        {
+            if (item is null || id != item.monitor_code) return BadRequest();
+            if (!Validate(item, out var error)) return BadRequest(error);
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
     }
 
@@ -235,6 +245,42 @@ public class MonitorController : BaseApiController
         DriverPersalNo = item.Driver_persalno ?? string.Empty,
         DriverSite = item.Driver_Site
     };
+
+    private static bool Validate(MonitorEntity? item, out string error)
+    {
+        if (item is null)
+        {
+            error = "Monitor inquiry is required.";
+            return false;
+        }
+
+        if (!item.vmf_code.HasValue || item.vmf_code <= 0)
+        {
+            error = "A vehicle is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Inquiry_type) || item.Inquiry_type.Trim().Length > 100)
+        {
+            error = "Inquiry type is required and must be 100 characters or fewer.";
+            return false;
+        }
+
+        if (item.Driver_name?.Length > 100 || item.Driver_persalno?.Length > 50)
+        {
+            error = "Driver details exceed the legacy field limits.";
+            return false;
+        }
+
+        if (item.Driver_Site is <= 0)
+        {
+            error = "Driver site must be a positive site code when supplied.";
+            return false;
+        }
+
+        error = string.Empty;
+        return true;
+    }
 
     #endregion
 }

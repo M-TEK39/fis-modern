@@ -182,20 +182,6 @@ public class RegistrationApiService(HttpClient httpClient, TokenService tokenSer
         => GetAsync<RegistrationHistoryResponseDto>($"{BasePath}/vehicle/{vmfCode}");
 }
 
-public class MonitorApiService(HttpClient httpClient, TokenService tokenService, ILogger<MonitorApiService> logger) : BaseApiService(httpClient, tokenService, logger)
-{
-    private const string BasePath = "api/monitor";
-
-    public Task<List<T>> GetAllAsync<T>() => GetListAsync<T>(BasePath);
-    public Task<T?> GetByIdAsync<T>(int id) => GetAsync<T>($"{BasePath}/{id}");
-    public Task<T?> CreateAsync<T>(T payload) => PostAsync<T, T>(BasePath, payload);
-    public Task<T?> UpdateAsync<T>(int id, T payload) => PutAsync<T, T>($"{BasePath}/{id}", payload);
-    public Task DeleteAsync(int id) => DeleteAsync($"{BasePath}/{id}");
-    public async Task<MonitorReportDto> GetInquiryStatisticsAsync(MonitorStatsRequestDto request)
-        => await PostAsync<MonitorStatsRequestDto, MonitorReportDto>($"{BasePath}/reports/inquiry-statistics", request)
-           ?? new MonitorReportDto();
-}
-
 public class TrackingApiService(HttpClient httpClient, TokenService tokenService, ILogger<TrackingApiService> logger) : BaseApiService(httpClient, tokenService, logger)
 {
     private const string BasePath = "api/tracking";
