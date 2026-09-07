@@ -21,6 +21,7 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private readonly FisDbContext _context;
     private readonly IAssetVerificationRepository _assetVerificationRepository;
     private readonly IWorkshopRepository _workshopRepository;
+    private readonly IWorkshopMerchantRepository _workshopMerchantRepository;
     private readonly ILogger<LegacyReportResultService> _logger;
     private readonly IReadOnlyDictionary<string, LegacyReportDefinition> _definitions;
 
@@ -28,11 +29,13 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         FisDbContext context,
         IAssetVerificationRepository assetVerificationRepository,
         IWorkshopRepository workshopRepository,
+        IWorkshopMerchantRepository workshopMerchantRepository,
         ILogger<LegacyReportResultService> logger)
     {
         _context = context;
         _assetVerificationRepository = assetVerificationRepository;
         _workshopRepository = workshopRepository;
+        _workshopMerchantRepository = workshopMerchantRepository;
         _logger = logger;
         _definitions = BuildDefinitions();
     }
@@ -385,10 +388,10 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "wesbank-new-cards" => "fuelcards-wesbank-new-cards",
 
             // Workshop report variants
-            "workshop-one-vehicle" => "workshop",
-            "workshop-print-job-card" => "workshop",
-            "workshop-in-shop" => "workshop",
-            "workshop-merchants" => "workshop",
+            "workshop-one-vehicle" => "workshop-one-vehicle",
+            "workshop-print-job-card" => "workshop-print-job-card",
+            "workshop-in-shop" => "workshop-in-shop",
+            "workshop-merchants" => "workshop-merchants",
             "print-job-card" => "workshop-print-job-card",
             "in-workshop" => "workshop-in-shop",
             "all-merchants" => "workshop-merchants",
@@ -840,8 +843,40 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 "Workshop Report",
                 "Workshop/RPTWorkshop.aspx",
                 null,
-                BuildWorkshopAsync,
-                "Legacy workshop reports are menu-driven custom pages. This approximation uses workshop receive/complete rows in a dynamic grid.")
+                BuildWorkshopPeriodAsync,
+                "Legacy workshop reporting is menu-driven. This compatibility result preserves the period report filters and legacy Workshop fields."),
+
+            ["workshop-one-vehicle"] = new(
+                "workshop-one-vehicle",
+                "Workshop Report on One Vehicle",
+                "WorkShop/RPT_ww_one_num_report.aspx",
+                null,
+                BuildWorkshopOneVehicleAsync,
+                "The legacy report uses a wildcard vehicle-number search. The modern result keeps that behavior against the compatible vehicle and Workshop repositories."),
+
+            ["workshop-print-job-card"] = new(
+                "workshop-print-job-card",
+                "Print a Workshop Job Card",
+                "WorkShop/RPT_ww_printjob_report.aspx",
+                null,
+                BuildWorkshopPrintJobCardAsync,
+                "The legacy job-card report joins optional vehicle and Workshop fields. The modern result preserves the available compatible fields without requiring expanded columns."),
+
+            ["workshop-in-shop"] = new(
+                "workshop-in-shop",
+                "List of Vehicles Still in Workshop",
+                "WorkShop/RPT_ww_inshop_report.aspx",
+                null,
+                BuildWorkshopInShopAsync,
+                "The legacy report identifies open job cards with job_close = N. When that legacy flag is absent, the compatibility path uses the incomplete date state."),
+
+            ["workshop-merchants"] = new(
+                "workshop-merchants",
+                "List of All Merchants",
+                "WorkShop/RPT_merch_report.aspx",
+                null,
+                BuildWorkshopMerchantsAsync,
+                "The result reads the Workshop-specific wwmerchant table through its guarded legacy-schema repository.")
         };
     }
 
@@ -3869,77 +3904,331 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Availability", row => row.Availability)));
     }
 
-    private async Task<LegacyReportResultDto> BuildWorkshopAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    private async Task<LegacyReportResultDto> BuildWorkshopPeriodAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
-        var search = GetString(filters, "search");
-        var (startDate, endDate) = NormalizeDateRange(filters);
+        var (startDate, endDate) = NormalizeWorkshopDateRange(filters);
+        var rows = (await LoadWorkshopReportRowsAsync(cancellationToken))
+            .Where(row => IsWithinWorkshopDateRange(row, startDate, endDate))
+            .Where(row => MatchesWorkshopGarage(row.Garage, GetString(filters, "garage") ?? GetString(filters, "Radio1")))
+            .Where(row => MatchesWorkshopCategory(row.AccidMech, GetString(filters, "category") ?? GetString(filters, "Radio2")))
+            .OrderByDescending(row => row.ReceiveDate)
+            .ThenByDescending(row => row.WorkshopCode)
+            .Take(5000)
+            .ToList();
 
-        var workshops = (await _workshopRepository.GetAllAsync()).ToList();
-        var vehicles = await _context.Vehicles
-            .AsNoTracking()
-            .ToDictionaryAsync(vehicle => vehicle.vmf_code, cancellationToken);
-        var rows = workshops
-            .Where(workshop =>
-                workshop.receive_date.HasValue
-                    && workshop.receive_date.Value.Date >= startDate
-                    && workshop.receive_date.Value.Date <= endDate
-                || workshop.complete_date.HasValue
-                    && workshop.complete_date.Value.Date >= startDate
-                    && workshop.complete_date.Value.Date <= endDate)
-            .Select(workshop =>
-            {
-                vehicles.TryGetValue(workshop.vmf_code ?? 0, out var vehicle);
-                return new
-                {
-                    workshop.ww_code,
-                    workshop.vmf_code,
-                    fleet_number = vehicle?.fleet_number,
-                    registration_number = vehicle?.registration_number,
-                    workshop.receive_date,
-                    workshop.receive_time,
-                    workshop.complete_time,
-                    CompleteDate = workshop.complete_date,
-                    current_odo = vehicle?.current_odo,
-                    model_code = vehicle?.model_code,
-                    DaysInWorkshop = workshop.receive_date.HasValue && workshop.complete_date.HasValue
-                        ? (int?)(workshop.complete_date.Value.Date - workshop.receive_date.Value.Date).Days
-                        : null
-                };
-            });
+        return CreateWorkshopReportResult(
+            "Workshop Report for a Period",
+            "WorkShop/RPT_ww_date_report.aspx",
+            "The legacy period report filters receive dates by garage and accident/mechanical category. This result applies the same filters through the compatible Workshop repository.",
+            rows);
+    }
+
+    private async Task<LegacyReportResultDto> BuildWorkshopOneVehicleAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var search = GetString(filters, "search") ?? GetString(filters, "vehicleNumber") ?? GetString(filters, "xnum");
+        var searchMode = GetString(filters, "searchMode") ?? GetString(filters, "Radio1");
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(searchMode, "Radiogp", StringComparison.OrdinalIgnoreCase);
+        var rows = await LoadWorkshopReportRowsAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
-            rows = rows.Where(row =>
-                row.ww_code.ToString().Contains(term) ||
-                (row.vmf_code != null && row.vmf_code.Value.ToString().Contains(term)) ||
-                (row.fleet_number != null && row.fleet_number.Contains(term)) ||
-                (row.registration_number != null && row.registration_number.Contains(term)));
+            rows = rows
+                .Where(row => (isGp ? row.RegistrationNumber : row.FleetNumber)?.Contains(term, StringComparison.OrdinalIgnoreCase) == true)
+                .OrderBy(row => row.FleetNumber)
+                .ThenByDescending(row => row.ReceiveDate)
+                .Take(5000)
+                .ToList();
+        }
+        else
+        {
+            rows.Clear();
         }
 
-        var resultRows = rows
-            .OrderByDescending(row => row.receive_date)
-            .ThenByDescending(row => row.ww_code)
+        return CreateDynamicResult(
+            "Workshop Report on One Vehicle",
+            "WorkShop/RPT_ww_one_num_report.aspx",
+            true,
+            "The legacy report uses a wildcard GG or GP number search. This result preserves that search against compatible vehicle and Workshop data.",
+            rows,
+            Column("GG Number", row => row.FleetNumber),
+            Column("GP Number", row => row.RegistrationNumber),
+            Column("Accid/Mech", row => WorkshopCategoryLabel(row.AccidMech)),
+            Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+            Column("Date Received", row => row.ReceiveDate),
+            Column("Time Received", row => row.ReceiveTime),
+            Column("Date Completed", row => row.CompleteDate),
+            Column("Time Completed", row => row.CompleteTime),
+            Column("Contact Name", row => row.ContactName),
+            Column("Contact Tel", row => row.ContactTel),
+            Column("Days to Complete", row => CompletedDays(row)),
+            Column("Time to Complete", row => CompletedHours(row)));
+    }
+
+    private async Task<LegacyReportResultDto> BuildWorkshopPrintJobCardAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var search = GetString(filters, "search") ?? GetString(filters, "vehicleNumber") ?? GetString(filters, "txtGGNum");
+        var searchMode = GetString(filters, "searchMode") ?? GetString(filters, "Radio1");
+        var isGp = string.Equals(searchMode, "GP", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(searchMode, "Radiogp", StringComparison.OrdinalIgnoreCase);
+        var workshopCode = GetShort(filters, "workshopCode") ?? GetShort(filters, "wwCode") ?? GetShort(filters, "wwcod");
+        var rows = await LoadWorkshopReportRowsAsync(cancellationToken);
+
+        if (workshopCode.HasValue)
+        {
+            rows = rows.Where(row => row.WorkshopCode == workshopCode.Value).ToList();
+        }
+        else if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            rows = rows
+                .Where(row => (isGp ? row.RegistrationNumber : row.FleetNumber)?.Contains(term, StringComparison.OrdinalIgnoreCase) == true)
+                .OrderByDescending(row => row.ReceiveDate)
+                .Take(5000)
+                .ToList();
+        }
+        else
+        {
+            rows.Clear();
+        }
+
+        var merchants = (await _workshopMerchantRepository.GetAllAsync())
+            .ToDictionary(merchant => merchant.wwmerch_code);
+
+        return CreateDynamicResult(
+            "Print a Workshop Job Card",
+            "WorkShop/RPT_ww_printjob_report.aspx",
+            true,
+            "The legacy job-card report joins optional vehicle, site, towing, merchant, and Workshop fields. This result preserves the fields available in either supported schema.",
+            rows,
+            Column("Job Card", row => row.WorkshopCode),
+            Column("GG Number", row => row.FleetNumber),
+            Column("GP Number", row => row.RegistrationNumber),
+            Column("Model", row => row.ModelDescription),
+            Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+            Column("Date Received", row => row.ReceiveDate),
+            Column("Time Received", row => row.ReceiveTime),
+            Column("Call Refer", row => row.CallRefer),
+            Column("Driver Name", row => row.DriverName),
+            Column("KM", row => row.WorkshopKm),
+            Column("Contact Name", row => row.ContactName),
+            Column("Contact Tel", row => row.ContactTel),
+            Column("Contact Fax", row => row.ContactFax),
+            Column("Contact Email", row => row.ContactEmail),
+            Column("Accid/Mech", row => WorkshopCategoryLabel(row.AccidMech)),
+            Column("Remarks", row => row.WorkshopRemarks),
+            Column("Reason", row => row.WorkshopReason),
+            Column("Merchant", row => row.MerchantCode is int merchantCode ? merchants.GetValueOrDefault(merchantCode)?.wwmerch_name : null),
+            Column("Repair Cost", row => row.RepairCost),
+            Column("Date Completed", row => row.CompleteDate),
+            Column("Time Completed", row => row.CompleteTime));
+    }
+
+    private async Task<LegacyReportResultDto> BuildWorkshopInShopAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var now = DateTime.Now;
+        var rows = (await LoadWorkshopReportRowsAsync(cancellationToken))
+            .Where(IsWorkshopOpen)
+            .OrderBy(row => row.ReceiveDate)
+            .ThenBy(row => row.ReceiveTime)
             .Take(5000)
             .ToList();
 
         return CreateDynamicResult(
-            "Workshop Report",
-            "Workshop/RPTWorkshop.aspx",
+            "List of Vehicles Still in Workshop",
+            "WorkShop/RPT_ww_inshop_report.aspx",
             true,
-            "Legacy workshop reporting is menu-driven. This dynamic approximation uses workshop receive/complete rows with legacy table columns.",
-            resultRows,
-            Column("Workshop Code", row => row.ww_code),
-            Column("VMF Code", row => row.vmf_code),
-            Column("GG Number", row => row.fleet_number),
-            Column("GP Number", row => row.registration_number),
-            Column("Receive Date", row => row.receive_date),
-            Column("Receive Time", row => row.receive_time),
-            Column("Complete Date", row => row.CompleteDate),
-            Column("Complete Time", row => row.complete_time),
-            Column("Current ODO", row => row.current_odo),
-            Column("Model Code", row => row.model_code),
-            Column("Days In Workshop", row => row.DaysInWorkshop));
+            "The legacy report identifies open job cards with job_close = N. When that legacy flag is absent, the compatibility path uses the incomplete date state.",
+            rows,
+            Column("GG Number", row => row.FleetNumber),
+            Column("GP Number", row => row.RegistrationNumber),
+            Column("Accident/Mech", row => WorkshopCategoryLabel(row.AccidMech)),
+            Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+            Column("Date Received", row => row.ReceiveDate),
+            Column("Time Received", row => row.ReceiveTime),
+            Column("Contact Name", row => row.ContactName),
+            Column("Contact Tel", row => row.ContactTel),
+            Column("Days in Workshop", row => ElapsedDays(row, now)),
+            Column("Hours in Workshop", row => ElapsedHours(row, now)),
+            Column("Date from Workshop", row => row.DateFromWorkshop));
+    }
+
+    private async Task<LegacyReportResultDto> BuildWorkshopMerchantsAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var merchants = (await _workshopMerchantRepository.GetAllAsync())
+            .Where(merchant => string.IsNullOrWhiteSpace(GetString(filters, "search"))
+                || merchant.wwmerch_name?.Contains(GetString(filters, "search")!.Trim(), StringComparison.OrdinalIgnoreCase) == true)
+            .OrderBy(merchant => merchant.wwmerch_name)
+            .Take(5000)
+            .ToList();
+
+        return CreateDynamicResult(
+            "List of All Merchants",
+            "WorkShop/RPT_merch_report.aspx",
+            true,
+            "The result reads the Workshop-specific wwmerchant table through its guarded legacy-schema repository.",
+            merchants,
+            Column("Merchant Code", merchant => merchant.wwmerch_code),
+            Column("Merchant Name", merchant => merchant.wwmerch_name),
+            Column("Tel", merchant => merchant.wwmerch_tel),
+            Column("Fax", merchant => merchant.wwmerch_fax),
+            Column("eMAIL", merchant => merchant.wwmerch_email));
+    }
+
+    private async Task<List<WorkshopReportRow>> LoadWorkshopReportRowsAsync(CancellationToken cancellationToken)
+    {
+        var workshops = await _workshopRepository.GetAllAsync();
+        var vehicles = await _context.Vehicles
+            .AsNoTracking()
+            .ToDictionaryAsync(vehicle => vehicle.vmf_code, cancellationToken);
+        var models = await _context.Models
+            .AsNoTracking()
+            .ToDictionaryAsync(model => model.model_code, cancellationToken);
+
+        return workshops
+            .Select(workshop =>
+            {
+                vehicles.TryGetValue(workshop.vmf_code ?? 0, out var vehicle);
+                models.TryGetValue(vehicle?.model_code ?? 0, out var model);
+                return new WorkshopReportRow(
+                    workshop.ww_code,
+                    workshop.vmf_code,
+                    vehicle?.fleet_number,
+                    vehicle?.registration_number,
+                    model?.model_description,
+                    vehicle?.current_odo,
+                    workshop.receive_date,
+                    workshop.receive_time,
+                    workshop.complete_date,
+                    workshop.complete_time,
+                    workshop.contact_name,
+                    workshop.contact_tel,
+                    workshop.contact_fax,
+                    workshop.contact_email,
+                    workshop.accid_mech,
+                    workshop.garage,
+                    workshop.driver_name,
+                    workshop.call_refer,
+                    workshop.ww_km,
+                    workshop.ww_remarks,
+                    workshop.ww_reason,
+                    workshop.merch_code,
+                    workshop.cost_repair,
+                    workshop.date_from_ww,
+                    workshop.job_close);
+            })
+            .ToList();
+    }
+
+    private static LegacyReportResultDto CreateWorkshopReportResult(
+        string title,
+        string legacyTarget,
+        string approximationReason,
+        IEnumerable<WorkshopReportRow> rows)
+        => CreateDynamicResult(
+            title,
+            legacyTarget,
+            true,
+            approximationReason,
+            rows,
+            Column("GG Number", row => row.FleetNumber),
+            Column("GP Number", row => row.RegistrationNumber),
+            Column("Mech/Accid", row => WorkshopCategoryLabel(row.AccidMech)),
+            Column("Garage", row => WorkshopGarageLabel(row.Garage)),
+            Column("Date Received", row => row.ReceiveDate),
+            Column("Time Received", row => row.ReceiveTime),
+            Column("Date Completed", row => row.CompleteDate),
+            Column("Time Completed", row => row.CompleteTime),
+            Column("Contact Name", row => row.ContactName),
+            Column("Contact Tel", row => row.ContactTel),
+            Column("Days to Complete", row => CompletedDays(row)),
+            Column("Time to Complete", row => CompletedHours(row)));
+
+    private static bool IsWithinWorkshopDateRange(WorkshopReportRow row, DateTime startDate, DateTime endDate)
+        => row.ReceiveDate.HasValue && row.ReceiveDate.Value.Date >= startDate && row.ReceiveDate.Value.Date <= endDate;
+
+    private static bool MatchesWorkshopGarage(string? garage, string? filter)
+    {
+        var normalized = filter?.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "radiojhb" or "jhb" or "j" => string.Equals(garage, "J", StringComparison.OrdinalIgnoreCase),
+            "radiopta" or "pta" or "p" => string.Equals(garage, "P", StringComparison.OrdinalIgnoreCase),
+            _ => true
+        };
+    }
+
+    private static bool MatchesWorkshopCategory(string? category, string? filter)
+    {
+        var normalized = filter?.Trim().ToLowerInvariant();
+        if (normalized is not ("radioacc" or "accident" or "accidents" or "radiomec" or "mechanical" or "mechanic"))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(category)) return false;
+        return normalized is "radioacc" or "accident" or "accidents"
+            ? string.Compare(category, "M", StringComparison.OrdinalIgnoreCase) < 0
+            : string.Compare(category, "L", StringComparison.OrdinalIgnoreCase) > 0;
+    }
+
+    private static bool IsWorkshopOpen(WorkshopReportRow row)
+        => string.Equals(row.JobClose, "N", StringComparison.OrdinalIgnoreCase)
+            || (string.IsNullOrWhiteSpace(row.JobClose) && !row.CompleteDate.HasValue && !row.CompleteTime.HasValue);
+
+    private static string WorkshopCategoryLabel(string? category)
+        => category?.Trim().ToUpperInvariant() switch
+        {
+            "M" => "Mechanical",
+            "A" => "Accident",
+            "V" => "Mech-Loss",
+            _ => string.IsNullOrWhiteSpace(category) ? "-" : "Accident-Loss"
+        };
+
+    private static string WorkshopGarageLabel(string? garage)
+        => garage?.Trim().ToUpperInvariant() switch
+        {
+            "J" => "GG JHB",
+            "P" => "GG PTA",
+            _ => string.IsNullOrWhiteSpace(garage) ? "-" : garage
+        };
+
+    private static (DateTime From, DateTime To) NormalizeWorkshopDateRange(IDictionary<string, string?> filters)
+    {
+        var startDate = GetDate(filters, "from")?.Date
+            ?? GetDate(filters, "BDAT")?.Date
+            ?? DateTime.Today.AddMonths(-1).Date;
+        var endDate = GetDate(filters, "to")?.Date
+            ?? GetDate(filters, "EDAT")?.Date
+            ?? DateTime.Today.Date;
+        if (endDate < startDate) (startDate, endDate) = (endDate, startDate);
+        return (startDate, endDate);
+    }
+
+    private static int? CompletedHours(WorkshopReportRow row)
+        => row.ReceiveDate.HasValue && row.ReceiveTime.HasValue && row.CompleteDate.HasValue && row.CompleteTime.HasValue
+            ? ElapsedHours(row, row.CompleteDate.Value.Date + row.CompleteTime.Value)
+            : null;
+
+    private static decimal? CompletedDays(WorkshopReportRow row)
+    {
+        var hours = CompletedHours(row);
+        return hours.HasValue ? Math.Round(hours.Value / 24m, 2) : null;
+    }
+
+    private static int? ElapsedHours(WorkshopReportRow row, DateTime end)
+    {
+        if (!row.ReceiveDate.HasValue) return null;
+        var start = row.ReceiveDate.Value.Date + (row.ReceiveTime ?? TimeSpan.Zero);
+        var hours = (int)Math.Truncate((end - start).TotalHours);
+        return hours >= 0 ? hours : null;
+    }
+
+    private static decimal? ElapsedDays(WorkshopReportRow row, DateTime end)
+    {
+        var hours = ElapsedHours(row, end);
+        return hours.HasValue ? Math.Round(hours.Value / 24m, 2) : null;
     }
 
     private static LegacyReportResultDto CreateDynamicResult<T>(
@@ -4187,6 +4476,32 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
     private sealed record LegacyStoredProcedureParameter(string Name, object? Value, DbType DbType);
     private sealed record ReportParameter(string Name, DbType Type, object? Value);
     private sealed record LegacyProjectionColumn(string Header, Func<object, object?> Selector);
+    private sealed record WorkshopReportRow(
+        short WorkshopCode,
+        int? VmfCode,
+        string? FleetNumber,
+        string? RegistrationNumber,
+        string? ModelDescription,
+        int? CurrentOdo,
+        DateTime? ReceiveDate,
+        TimeSpan? ReceiveTime,
+        DateTime? CompleteDate,
+        TimeSpan? CompleteTime,
+        string? ContactName,
+        string? ContactTel,
+        string? ContactFax,
+        string? ContactEmail,
+        string? AccidMech,
+        string? Garage,
+        string? DriverName,
+        decimal? CallRefer,
+        decimal? WorkshopKm,
+        string? WorkshopRemarks,
+        string? WorkshopReason,
+        int? MerchantCode,
+        decimal? RepairCost,
+        DateTime? DateFromWorkshop,
+        string? JobClose);
     private sealed record AssetVerificationVehicleLookup(
         int VmfCode,
         string? FleetNumber,
