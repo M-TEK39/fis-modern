@@ -20,16 +20,19 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
 {
     private readonly FisDbContext _context;
     private readonly IAssetVerificationRepository _assetVerificationRepository;
+    private readonly IWorkshopRepository _workshopRepository;
     private readonly ILogger<LegacyReportResultService> _logger;
     private readonly IReadOnlyDictionary<string, LegacyReportDefinition> _definitions;
 
     public LegacyReportResultService(
         FisDbContext context,
         IAssetVerificationRepository assetVerificationRepository,
+        IWorkshopRepository workshopRepository,
         ILogger<LegacyReportResultService> logger)
     {
         _context = context;
         _assetVerificationRepository = assetVerificationRepository;
+        _workshopRepository = workshopRepository;
         _logger = logger;
         _definitions = BuildDefinitions();
     }
@@ -3871,51 +3874,61 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var search = GetString(filters, "search");
         var (startDate, endDate) = NormalizeDateRange(filters);
 
-        var query =
-            from workshop in _context.Workshops.AsNoTracking()
-            join vehicle in _context.Vehicles.AsNoTracking() on workshop.vmf_code equals vehicle.vmf_code into workshopVehicles
-            from vehicle in workshopVehicles.DefaultIfEmpty()
-            where !workshop.is_deleted && ((workshop.receive_date.HasValue && workshop.receive_date.Value.Date >= startDate && workshop.receive_date.Value.Date <= endDate)
-                || (workshop.complete_time.HasValue && workshop.complete_time.Value.Date >= startDate && workshop.complete_time.Value.Date <= endDate))
-            select new
+        var workshops = (await _workshopRepository.GetAllAsync()).ToList();
+        var vehicles = await _context.Vehicles
+            .AsNoTracking()
+            .ToDictionaryAsync(vehicle => vehicle.vmf_code, cancellationToken);
+        var rows = workshops
+            .Where(workshop =>
+                workshop.receive_date.HasValue
+                    && workshop.receive_date.Value.Date >= startDate
+                    && workshop.receive_date.Value.Date <= endDate
+                || workshop.complete_date.HasValue
+                    && workshop.complete_date.Value.Date >= startDate
+                    && workshop.complete_date.Value.Date <= endDate)
+            .Select(workshop =>
             {
-                workshop.ww_code,
-                workshop.vmf_code,
-                vehicle.fleet_number,
-                vehicle.registration_number,
-                workshop.receive_date,
-                workshop.receive_time,
-                workshop.complete_time,
-                CompleteDate = workshop.complete_time.HasValue ? workshop.complete_time.Value.Date : (DateTime?)null,
-                vehicle.current_odo,
-                vehicle.model_code,
-                DaysInWorkshop = workshop.receive_date.HasValue && workshop.complete_time.HasValue
-                    ? EF.Functions.DateDiffDay(workshop.receive_date.Value, workshop.complete_time.Value)
-                    : (int?)null
-            };
+                vehicles.TryGetValue(workshop.vmf_code ?? 0, out var vehicle);
+                return new
+                {
+                    workshop.ww_code,
+                    workshop.vmf_code,
+                    fleet_number = vehicle?.fleet_number,
+                    registration_number = vehicle?.registration_number,
+                    workshop.receive_date,
+                    workshop.receive_time,
+                    workshop.complete_time,
+                    CompleteDate = workshop.complete_date,
+                    current_odo = vehicle?.current_odo,
+                    model_code = vehicle?.model_code,
+                    DaysInWorkshop = workshop.receive_date.HasValue && workshop.complete_date.HasValue
+                        ? (int?)(workshop.complete_date.Value.Date - workshop.receive_date.Value.Date).Days
+                        : null
+                };
+            });
 
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
-            query = query.Where(row =>
+            rows = rows.Where(row =>
                 row.ww_code.ToString().Contains(term) ||
                 (row.vmf_code != null && row.vmf_code.Value.ToString().Contains(term)) ||
                 (row.fleet_number != null && row.fleet_number.Contains(term)) ||
                 (row.registration_number != null && row.registration_number.Contains(term)));
         }
 
-        var rows = await query
+        var resultRows = rows
             .OrderByDescending(row => row.receive_date)
             .ThenByDescending(row => row.ww_code)
             .Take(5000)
-            .ToListAsync(cancellationToken);
+            .ToList();
 
         return CreateDynamicResult(
             "Workshop Report",
             "Workshop/RPTWorkshop.aspx",
             true,
             "Legacy workshop reporting is menu-driven. This dynamic approximation uses workshop receive/complete rows with legacy table columns.",
-            rows,
+            resultRows,
             Column("Workshop Code", row => row.ww_code),
             Column("VMF Code", row => row.vmf_code),
             Column("GG Number", row => row.fleet_number),
