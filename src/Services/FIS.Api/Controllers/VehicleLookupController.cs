@@ -19,7 +19,8 @@ public class VehicleLookupController : BaseApiController
 
     public VehicleLookupController(
         IVehicleRepository vehicleRepository,
-        ILogger<VehicleLookupController> logger)
+        ILogger<VehicleLookupController> logger
+    )
     {
         _vehicleRepository = vehicleRepository;
         _logger = logger;
@@ -36,7 +37,8 @@ public class VehicleLookupController : BaseApiController
     [ProducesResponseType(typeof(IEnumerable<VehicleSearchResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IEnumerable<VehicleSearchResultDto>>> Lookup(
         [FromQuery] string keyword,
-        [FromQuery] int limit = 20)
+        [FromQuery] int limit = 20
+    )
     {
         try
         {
@@ -64,21 +66,29 @@ public class VehicleLookupController : BaseApiController
                     VehicleStatusCode = v.vehicle_status_code,
                     IsAvailable = !v.is_deleted && v.vehicle_status_code == 1,
                     InvoiceNumber = v.invoice_number,
-                    DisplayText = $"{v.fleet_number} - {v.registration_number}"
+                    DisplayText = $"{v.fleet_number} - {v.registration_number}",
                 })
                 .ToList();
 
             _logger.LogInformation(
                 "Vehicle lookup: '{Keyword}' returned {Count} results",
                 keyword,
-                results.Count);
+                results.Count
+            );
 
             return Ok(results);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error performing vehicle lookup for keyword '{Keyword}'", keyword);
-            return StatusCode(500, new { error = "Failed to search vehicles", message = ex.Message });
+            _logger.LogError(
+                ex,
+                "Error performing vehicle lookup for keyword '{Keyword}'",
+                keyword
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to search vehicles", message = ex.Message }
+            );
         }
     }
 
@@ -111,7 +121,7 @@ public class VehicleLookupController : BaseApiController
                 VehicleStatusCode = vehicle.vehicle_status_code,
                 IsAvailable = !vehicle.is_deleted && vehicle.vehicle_status_code == 1,
                 InvoiceNumber = vehicle.invoice_number,
-                DisplayText = $"{vehicle.fleet_number} - {vehicle.registration_number}"
+                DisplayText = $"{vehicle.fleet_number} - {vehicle.registration_number}",
             };
 
             return Ok(dto);
@@ -119,7 +129,10 @@ public class VehicleLookupController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving vehicle {VmfCode} for lookup", vmfCode);
-            return StatusCode(500, new { error = "Failed to retrieve vehicle", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to retrieve vehicle", message = ex.Message }
+            );
         }
     }
 }

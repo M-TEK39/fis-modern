@@ -15,7 +15,11 @@ public interface IContractService
     /// <summary>
     /// End the active contract for a vehicle (by vmfCode)
     /// </summary>
-    Task<bool> EndContractByVmfCodeAsync(int vmfCode, int? endOdometer = null, string? notes = null);
+    Task<bool> EndContractByVmfCodeAsync(
+        int vmfCode,
+        int? endOdometer = null,
+        string? notes = null
+    );
 
     /// <summary>
     /// Get currently active contracts
@@ -35,6 +39,7 @@ public class HireContractRequest
     public string? Authorisation { get; set; }
     public string? Notes { get; set; }
     public DateTime? TargetReturnDate { get; set; }
+
     /// <summary>
     /// The user who is capturing/creating this contract.
     /// Required for self-approval prevention — stored as created_by_user_code.

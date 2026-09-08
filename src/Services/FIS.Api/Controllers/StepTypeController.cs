@@ -58,11 +58,15 @@ public class StepTypeController : BaseApiController
             var stepType = new StepType
             {
                 StepTypeName = dto.StepTypeName,
-                StepTypeData = dto.StepTypeData
+                StepTypeData = dto.StepTypeData,
             };
 
             var created = await _repository.CreateAsync(stepType, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetById), new { id = created.StepTypeID }, MapToDto(created));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = created.StepTypeID },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -83,7 +87,7 @@ public class StepTypeController : BaseApiController
             {
                 StepTypeID = dto.StepTypeID,
                 StepTypeName = dto.StepTypeName,
-                StepTypeData = dto.StepTypeData
+                StepTypeData = dto.StepTypeData,
             };
 
             await _repository.UpdateAsync(stepType, GetCurrentUserId());
@@ -119,7 +123,7 @@ public class StepTypeController : BaseApiController
             StepTypeName = stepType.StepTypeName,
             StepTypeData = stepType.StepTypeData,
             DateCreated = stepType.date_created,
-            DateUpdated = stepType.date_updated
+            DateUpdated = stepType.date_updated,
         };
     }
 }

@@ -1,0 +1,76 @@
+import TaxiHelpPage from "@/app/taxis/help/page";
+import TaxiLogsPage from "@/app/taxis/logs/page";
+import TaxiMaintenanceInfoPage from "@/app/taxis/maintenance/info/page";
+import TaxiReportsPage, { type TaxiReportKind } from "@/app/taxis/reports/page";
+import TaxiRequestsPage from "@/app/taxis/requests/page";
+import TaxiScanRequisitionPage from "@/app/taxis/scan-requisition/page";
+
+type LegacyTaxiRouteProps = Readonly<{
+  params: Promise<{ legacyPath: string[] }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}>;
+
+function reportKind(path: string): TaxiReportKind {
+  if (path.includes("fin_reports")) return "financial";
+  if (path.includes("inservice")) return "taxis-inservice-per-department";
+  if (path.includes("per_department")) return "taxis-per-department";
+  if (path.includes("one_num")) return "one-taxi-number";
+  if (path.includes("countlogs")) return "logs-per-user";
+  if (path.includes("requests")) return "old-requisitions";
+  if (path.includes("company")) return "taxis-per-company";
+  return "logs-requisitions-status";
+}
+
+export default async function LegacyTaxiRoute({ params, searchParams }: LegacyTaxiRouteProps) {
+  const path = (await params).legacyPath.join("/").toLowerCase();
+  if (path.includes("doc")) return <TaxiHelpPage />;
+  if (
+    path.includes("scan") ||
+    path.includes("rekcert") ||
+    path.includes("scandoc") ||
+    path.includes("listall") ||
+    path.includes("list_one") ||
+    path.includes("delete_file") ||
+    path.includes("no_rekcert") ||
+    path.includes("chk_rek") ||
+    path.includes("rekfileexists")
+  )
+    return <TaxiScanRequisitionPage searchParams={searchParams} />;
+  if (path.includes("mnt_menu")) return <TaxiMaintenanceInfoPage />;
+  if (
+    path.includes("rpt") ||
+    path.includes("report") ||
+    path.includes("no_log") ||
+    path.includes("invoiced")
+  )
+    return <TaxiReportsPage searchParams={searchParams} kind={reportKind(path)} />;
+  if (path.includes("log") || path.includes("white_log"))
+    return (
+      <TaxiLogsPage
+        searchParams={searchParams}
+        mode={
+          path.includes("white_log")
+            ? "white-log"
+            : path.includes("edit")
+              ? "edit"
+              : path.includes("reprint")
+                ? "reprint"
+                : "enter"
+        }
+      />
+    );
+  return (
+    <TaxiRequestsPage
+      searchParams={searchParams}
+      mode={
+        path.includes("cancel")
+          ? "cancel"
+          : path.includes("reprint")
+            ? "reprint"
+            : path.includes("edit")
+              ? "edit"
+              : "add"
+      }
+    />
+  );
+}

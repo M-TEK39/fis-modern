@@ -1,8 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using FIS.Core.Domain.Entities.Auth;
-using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Core.Domain.Entities.ReferenceData;
+using FIS.Core.Domain.Entities.Vehicles;
 
 namespace FIS.Core.Domain.Entities.Operations;
 

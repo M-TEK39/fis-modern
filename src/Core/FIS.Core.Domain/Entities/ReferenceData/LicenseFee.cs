@@ -12,7 +12,7 @@ public class LicenseFee
     public short licence_fee_code { get; set; }
 
     [Column("licence_description")]
-    [StringLength(255)]
+    [StringLength(50)]
     public string? licence_description { get; set; }
 
     [Column("licence_fee")]

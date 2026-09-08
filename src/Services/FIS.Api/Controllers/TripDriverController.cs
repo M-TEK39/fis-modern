@@ -19,7 +19,8 @@ public class TripDriverController : BaseApiController
 
     public TripDriverController(
         ITripDriverRepository tripDriverRepository,
-        ILogger<TripDriverController> logger)
+        ILogger<TripDriverController> logger
+    )
     {
         _tripDriverRepository = tripDriverRepository;
         _logger = logger;
@@ -59,11 +60,18 @@ public class TripDriverController : BaseApiController
             var tripDriver = await _tripDriverRepository.GetByIdAsync(tripDriverCode);
             if (tripDriver == null)
             {
-                _logger.LogWarning("Trip driver with code {TripDriverCode} not found", tripDriverCode);
+                _logger.LogWarning(
+                    "Trip driver with code {TripDriverCode} not found",
+                    tripDriverCode
+                );
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
-            _logger.LogInformation("Retrieved trip driver {TripDriverCode}: {DriverName}", tripDriverCode, tripDriver.trip_driver_name);
+            _logger.LogInformation(
+                "Retrieved trip driver {TripDriverCode}: {DriverName}",
+                tripDriverCode,
+                tripDriver.trip_driver_name
+            );
             return Ok(tripDriver);
         }
         catch (Exception ex)
@@ -84,7 +92,11 @@ public class TripDriverController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var tripDrivers = await _tripDriverRepository.GetBySiteAsync(siteCode);
-            _logger.LogInformation("Found {Count} trip drivers for site {SiteCode}", tripDrivers.Count(), siteCode);
+            _logger.LogInformation(
+                "Found {Count} trip drivers for site {SiteCode}",
+                tripDrivers.Count(),
+                siteCode
+            );
             return Ok(tripDrivers);
         }
         catch (Exception ex)
@@ -119,20 +131,29 @@ public class TripDriverController : BaseApiController
     /// Search trip drivers by name or ID
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<TripDriver>>> SearchTripDrivers([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<TripDriver>>> SearchTripDrivers(
+        [FromQuery] string? searchTerm
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
 
             var tripDrivers = await _tripDriverRepository.SearchDriversAsync(searchTerm ?? "");
-            _logger.LogInformation("Found {Count} trip drivers matching search term '{SearchTerm}'", 
-                tripDrivers.Count(), searchTerm);
+            _logger.LogInformation(
+                "Found {Count} trip drivers matching search term '{SearchTerm}'",
+                tripDrivers.Count(),
+                searchTerm
+            );
             return Ok(tripDrivers);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching trip drivers with term '{SearchTerm}'", searchTerm);
+            _logger.LogError(
+                ex,
+                "Error searching trip drivers with term '{SearchTerm}'",
+                searchTerm
+            );
             return StatusCode(500, "An error occurred while searching trip drivers");
         }
     }
@@ -147,16 +168,29 @@ public class TripDriverController : BaseApiController
         {
             int currentUserId = GetCurrentUserId();
 
-            var createdTripDriver = await _tripDriverRepository.CreateAsync(tripDriver, currentUserId);
-            _logger.LogInformation("Created trip driver {TripDriverCode}: {DriverName}", 
-                createdTripDriver.trip_driver_code, createdTripDriver.trip_driver_name);
-            
-            return CreatedAtAction(nameof(GetTripDriver), 
-                new { tripDriverCode = createdTripDriver.trip_driver_code }, createdTripDriver);
+            var createdTripDriver = await _tripDriverRepository.CreateAsync(
+                tripDriver,
+                currentUserId
+            );
+            _logger.LogInformation(
+                "Created trip driver {TripDriverCode}: {DriverName}",
+                createdTripDriver.trip_driver_code,
+                createdTripDriver.trip_driver_name
+            );
+
+            return CreatedAtAction(
+                nameof(GetTripDriver),
+                new { tripDriverCode = createdTripDriver.trip_driver_code },
+                createdTripDriver
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating trip driver {DriverName}", tripDriver.trip_driver_name);
+            _logger.LogError(
+                ex,
+                "Error creating trip driver {DriverName}",
+                tripDriver.trip_driver_name
+            );
             return StatusCode(500, "An error occurred while creating the trip driver");
         }
     }
@@ -165,7 +199,10 @@ public class TripDriverController : BaseApiController
     /// Update an existing trip driver
     /// </summary>
     [HttpPut("{tripDriverCode}")]
-    public async Task<ActionResult<TripDriver>> UpdateTripDriver(int tripDriverCode, [FromBody] TripDriver tripDriver)
+    public async Task<ActionResult<TripDriver>> UpdateTripDriver(
+        int tripDriverCode,
+        [FromBody] TripDriver tripDriver
+    )
     {
         try
         {
@@ -179,14 +216,20 @@ public class TripDriverController : BaseApiController
             var existingTripDriver = await _tripDriverRepository.GetByIdAsync(tripDriverCode);
             if (existingTripDriver == null)
             {
-                _logger.LogWarning("Trip driver with code {TripDriverCode} not found for update", tripDriverCode);
+                _logger.LogWarning(
+                    "Trip driver with code {TripDriverCode} not found for update",
+                    tripDriverCode
+                );
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
             await _tripDriverRepository.UpdateAsync(tripDriver, currentUserId);
-            _logger.LogInformation("Updated trip driver {TripDriverCode}: {DriverName}", 
-                tripDriverCode, tripDriver.trip_driver_name);
-            
+            _logger.LogInformation(
+                "Updated trip driver {TripDriverCode}: {DriverName}",
+                tripDriverCode,
+                tripDriver.trip_driver_name
+            );
+
             return Ok(tripDriver);
         }
         catch (Exception ex)
@@ -209,14 +252,20 @@ public class TripDriverController : BaseApiController
             var existingTripDriver = await _tripDriverRepository.GetByIdAsync(tripDriverCode);
             if (existingTripDriver == null)
             {
-                _logger.LogWarning("Trip driver with code {TripDriverCode} not found for deletion", tripDriverCode);
+                _logger.LogWarning(
+                    "Trip driver with code {TripDriverCode} not found for deletion",
+                    tripDriverCode
+                );
                 return NotFound($"Trip driver with code {tripDriverCode} not found");
             }
 
             await _tripDriverRepository.DeleteAsync(tripDriverCode, currentUserId);
-            _logger.LogInformation("Deleted trip driver {TripDriverCode}: {DriverName}", 
-                tripDriverCode, existingTripDriver.trip_driver_name);
-            
+            _logger.LogInformation(
+                "Deleted trip driver {TripDriverCode}: {DriverName}",
+                tripDriverCode,
+                existingTripDriver.trip_driver_name
+            );
+
             return NoContent();
         }
         catch (Exception ex)

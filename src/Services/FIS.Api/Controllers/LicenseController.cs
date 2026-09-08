@@ -1,13 +1,10 @@
+using System.Security.Claims;
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
-using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Core.Infrastructure.Interfaces;
-using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace FIS.Api.Controllers;
 
@@ -22,23 +19,23 @@ public class LicenseController : BaseApiController
 {
     private readonly ILicenseRepository _licenseRepository;
     private readonly IVehicleRepository _vehicleRepository;
-    private readonly FisDbContext _context;
     private readonly ILogger<LicenseController> _logger;
 
     public LicenseController(
         ILicenseRepository licenseRepository,
         IVehicleRepository vehicleRepository,
-        FisDbContext context,
-        ILogger<LicenseController> logger)
+        ILogger<LicenseController> logger
+    )
     {
         _licenseRepository = licenseRepository;
         _vehicleRepository = vehicleRepository;
-        _context = context;
         _logger = logger;
     }
 
     [HttpPost("one-vehicle/password")]
-    public ActionResult SubmitOneVehiclePassword([FromBody] LicenseOneVehiclePasswordRequest request)
+    public ActionResult SubmitOneVehiclePassword(
+        [FromBody] LicenseOneVehiclePasswordRequest request
+    )
     {
         if (request is null)
         {
@@ -55,11 +52,19 @@ public class LicenseController : BaseApiController
     }
 
     [HttpPost("one-vehicle/lookup")]
-    public async Task<ActionResult<LicenseOneVehicleLookupResponse>> LookupOneVehicle([FromBody] LicenseOneVehicleLookupRequest request)
+    public async Task<ActionResult<LicenseOneVehicleLookupResponse>> LookupOneVehicle(
+        [FromBody] LicenseOneVehicleLookupRequest request
+    )
     {
-        if (request is null || string.IsNullOrWhiteSpace(request.number_type) || string.IsNullOrWhiteSpace(request.number))
+        if (
+            request is null
+            || string.IsNullOrWhiteSpace(request.number_type)
+            || string.IsNullOrWhiteSpace(request.number)
+        )
         {
-            return BadRequest(new { success = false, message = "number_type and number are required." });
+            return BadRequest(
+                new { success = false, message = "number_type and number are required." }
+            );
         }
 
         var numberType = request.number_type.Trim().ToUpperInvariant();
@@ -69,32 +74,40 @@ public class LicenseController : BaseApiController
         {
             "GG" => await _vehicleRepository.GetByFleetNumberAsync(number),
             "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(number),
-            _ => null
+            _ => null,
         };
 
         if (vehicle is null)
         {
-            return NotFound(new { success = false, message = $"Vehicle not found for {numberType} number {number}." });
+            return NotFound(
+                new
+                {
+                    success = false,
+                    message = $"Vehicle not found for {numberType} number {number}.",
+                }
+            );
         }
 
-        return Ok(new LicenseOneVehicleLookupResponse
-        {
-            vmfCode = vehicle.vmf_code,
-            numberType = numberType,
-            number = number,
-            expDate = vehicle.licence_due_date,
-            registerNumber = vehicle.lic_register_number,
-            regDoc = vehicle.lic_registration_doc,
-            tare = vehicle.tare?.ToString(),
-            receiver = vehicle.Licence_receiver,
-            receiverId = vehicle.Licence_receiver_id,
-            receiverTel = vehicle.Licence_receiver_tel,
-            receiverSiteCode = vehicle.Licence_receiver_site,
-            dateCollected = vehicle.Licence_date_taken,
-            cofRequired = vehicle.cof_required,
-            cofExpDate = vehicle.cof_last_done,
-            comments = vehicle.licence_comments
-        });
+        return Ok(
+            new LicenseOneVehicleLookupResponse
+            {
+                vmfCode = vehicle.vmf_code,
+                numberType = numberType,
+                number = number,
+                expDate = vehicle.licence_due_date,
+                registerNumber = vehicle.lic_register_number,
+                regDoc = vehicle.lic_registration_doc,
+                tare = vehicle.tare?.ToString(),
+                receiver = vehicle.Licence_receiver,
+                receiverId = vehicle.Licence_receiver_id,
+                receiverTel = vehicle.Licence_receiver_tel,
+                receiverSiteCode = vehicle.Licence_receiver_site,
+                dateCollected = vehicle.Licence_date_taken,
+                cofRequired = vehicle.cof_required,
+                cofExpDate = vehicle.cof_last_done,
+                comments = vehicle.licence_comments,
+            }
+        );
     }
 
     [HttpPost("one-vehicle/save")]
@@ -110,9 +123,14 @@ public class LicenseController : BaseApiController
 
         if (!vmfCode.HasValue || vmfCode.Value <= 0)
         {
-            if (string.IsNullOrWhiteSpace(request.numberType) || string.IsNullOrWhiteSpace(request.number))
+            if (
+                string.IsNullOrWhiteSpace(request.numberType)
+                || string.IsNullOrWhiteSpace(request.number)
+            )
             {
-                return BadRequest(new { success = false, message = "vmfCode or numberType/number is required." });
+                return BadRequest(
+                    new { success = false, message = "vmfCode or numberType/number is required." }
+                );
             }
 
             var fallbackNumberType = request.numberType.Trim().ToUpperInvariant();
@@ -121,66 +139,77 @@ public class LicenseController : BaseApiController
             {
                 "GG" => await _vehicleRepository.GetByFleetNumberAsync(fallbackNumber),
                 "GP" => await _vehicleRepository.GetByRegistrationNumberAsync(fallbackNumber),
-                _ => null
+                _ => null,
             };
 
             if (fallbackVehicle is null)
             {
-                return NotFound(new { success = false, message = "Vehicle could not be resolved for save." });
+                return NotFound(
+                    new { success = false, message = "Vehicle could not be resolved for save." }
+                );
             }
 
             vmfCode = fallbackVehicle.vmf_code;
         }
 
-        var vehicle = await _context.Vehicles
-            .FirstOrDefaultAsync(v => v.vmf_code == vmfCode.Value && !v.is_deleted);
+        var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode.Value);
         if (vehicle is null)
         {
-            return NotFound(new { success = false, message = $"Vehicle {vmfCode.Value} not found." });
+            return NotFound(
+                new { success = false, message = $"Vehicle {vmfCode.Value} not found." }
+            );
         }
 
         var oldDue = vehicle.licence_due_date?.Date;
         var newDue = request.expDate?.Date;
-
-        vehicle.licence_due_date = request.expDate;
-        vehicle.lic_register_number = request.registerNumber;
-        vehicle.lic_registration_doc = request.regDoc;
-        vehicle.Licence_receiver = request.receiver;
-        vehicle.Licence_receiver_id = request.receiverId;
-        vehicle.Licence_receiver_tel = request.receiverTel;
-        vehicle.Licence_receiver_site = request.receiverSiteCode;
-        vehicle.Licence_date_taken = request.dateCollected;
-        vehicle.cof_required = request.cofRequired;
-        vehicle.cof_last_done = string.Equals(request.cofRequired, "N", StringComparison.OrdinalIgnoreCase)
+        var cofLastDone = string.Equals(
+            request.cofRequired,
+            "N",
+            StringComparison.OrdinalIgnoreCase
+        )
             ? null
             : request.cofExpDate;
-        vehicle.licence_comments = request.comments;
-        vehicle.tare = ParseNullableInt(request.tare);
-        vehicle.date_updated = DateTime.UtcNow;
-        vehicle.modified_by_user_code = currentUserId;
+
+        await _vehicleRepository.UpdateLicenceFieldsAsync(
+            vmfCode.Value,
+            new VehicleLicenceUpdate(
+                request.expDate,
+                request.registerNumber,
+                request.regDoc,
+                ParseNullableInt(request.tare),
+                request.receiver,
+                request.receiverId,
+                request.receiverTel,
+                request.receiverSiteCode,
+                request.dateCollected,
+                request.cofRequired,
+                cofLastDone,
+                request.comments
+            ),
+            currentUserId
+        );
 
         if (oldDue != newDue)
         {
-            _context.FleetNotes.Add(new FleetNote
-            {
-                vmf_code = vehicle.vmf_code,
-                note_text = $"Licence Receive: {ResolveCurrentUsername()}",
-                date_created = DateTime.UtcNow,
-                created_by_user_code = currentUserId,
-                is_deleted = false
-            });
+            await _vehicleRepository.AddLicenceReceiveNoteAsync(
+                vmfCode.Value,
+                ResolveCurrentUsername(),
+                currentUserId
+            );
         }
 
-        await _context.SaveChangesAsync();
+        var updatedVehicle = await _vehicleRepository.GetByIdAsync(vmfCode.Value) ?? vehicle;
 
-        return Ok(new
-        {
-            success = true,
-            vmfCode = vehicle.vmf_code,
-            fleetNumber = vehicle.fleet_number,
-            registrationNumber = vehicle.registration_number,
-            message = "Licence details saved successfully."
-        });
+        return Ok(
+            new
+            {
+                success = true,
+                vmfCode = updatedVehicle.vmf_code,
+                fleetNumber = updatedVehicle.fleet_number,
+                registrationNumber = updatedVehicle.registration_number,
+                message = "Licence details saved successfully.",
+            }
+        );
     }
 
     /// <summary>
@@ -249,7 +278,11 @@ public class LicenseController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving license with description {Description}", description);
+            _logger.LogError(
+                ex,
+                "Error retrieving license with description {Description}",
+                description
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -282,7 +315,9 @@ public class LicenseController : BaseApiController
     /// <param name="createLicenseDto">The license data to create</param>
     /// <returns>The created license entity</returns>
     [HttpPost]
-    public async Task<ActionResult<License>> CreateLicense([FromBody] CreateLicenseDto createLicenseDto)
+    public async Task<ActionResult<License>> CreateLicense(
+        [FromBody] CreateLicenseDto createLicenseDto
+    )
     {
         try
         {
@@ -294,11 +329,15 @@ public class LicenseController : BaseApiController
             var license = new License
             {
                 licence_description = createLicenseDto.licence_description,
-                licence_category = createLicenseDto.licence_category
+                licence_category = createLicenseDto.licence_category,
             };
 
             var createdLicense = await _licenseRepository.CreateAsync(license, currentUserId);
-            return CreatedAtAction(nameof(GetLicense), new { licenceCode = createdLicense.licence_code }, createdLicense);
+            return CreatedAtAction(
+                nameof(GetLicense),
+                new { licenceCode = createdLicense.licence_code },
+                createdLicense
+            );
         }
         catch (Exception ex)
         {
@@ -314,7 +353,10 @@ public class LicenseController : BaseApiController
     /// <param name="license">The updated license data</param>
     /// <returns>The updated license entity</returns>
     [HttpPut("{licenceCode}")]
-    public async Task<ActionResult<License>> UpdateLicense(short licenceCode, [FromBody] License license)
+    public async Task<ActionResult<License>> UpdateLicense(
+        short licenceCode,
+        [FromBody] License license
+    )
     {
         try
         {

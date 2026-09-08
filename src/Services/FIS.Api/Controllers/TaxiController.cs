@@ -18,7 +18,8 @@ public class TaxiController : BaseApiController
     public TaxiController(
         ITaxiRepository repository,
         ITaxiWhiteLogRepository whiteLogRepository,
-        ILogger<TaxiController> logger)
+        ILogger<TaxiController> logger
+    )
     {
         _repository = repository;
         _whiteLogRepository = whiteLogRepository;
@@ -28,15 +29,30 @@ public class TaxiController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Taxi>>> GetAll()
     {
-        try { return Ok(await _repository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            return Ok(await _repository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Taxi>> GetById(int id)
     {
-        try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var item = await _repository.GetByIdAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("lookup/{rekNum}")]
@@ -57,22 +73,47 @@ public class TaxiController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<Taxi>> Create([FromBody] Taxi item)
     {
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.request_id }, created); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.request_id }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Taxi>> Update(int id, [FromBody] Taxi item)
     {
-        try { if (id != item.request_id) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            if (id != item.request_id)
+                return BadRequest();
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
-        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            await _repository.DeleteAsync(id, GetCurrentUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     // --- White Log endpoints ---
@@ -96,7 +137,7 @@ public class TaxiController : BaseApiController
                 start_date = request.start_date,
                 end_date = request.end_date,
                 driver = request.driver,
-                user_access_code = (short)GetCurrentUserId()
+                user_access_code = (short)GetCurrentUserId(),
             };
 
             var created = await _whiteLogRepository.CreateAsync(log, GetCurrentUserId());
@@ -112,15 +153,29 @@ public class TaxiController : BaseApiController
     [HttpGet("white-log")]
     public async Task<ActionResult<IEnumerable<TaxiWhiteLog>>> GetAllWhiteLogs()
     {
-        try { return Ok(await _whiteLogRepository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            return Ok(await _whiteLogRepository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("white-log/vehicle/{vmfCode}")]
     public async Task<ActionResult<IEnumerable<TaxiWhiteLog>>> GetWhiteLogsByVehicle(int vmfCode)
     {
-        try { return Ok(await _whiteLogRepository.GetByVehicleAsync(vmfCode)); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            return Ok(await _whiteLogRepository.GetByVehicleAsync(vmfCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 }
 

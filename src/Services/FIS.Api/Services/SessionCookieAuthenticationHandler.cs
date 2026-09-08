@@ -16,7 +16,8 @@ public class SessionCookieAuthenticationHandler : AuthenticationHandler<Authenti
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        ISessionTokenStore tokenStore)
+        ISessionTokenStore tokenStore
+    )
         : base(options, logger, encoder)
     {
         _tokenStore = tokenStore;
@@ -24,7 +25,10 @@ public class SessionCookieAuthenticationHandler : AuthenticationHandler<Authenti
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Cookies.TryGetValue(AccessCookieName, out var accessToken) || string.IsNullOrWhiteSpace(accessToken))
+        if (
+            !Request.Cookies.TryGetValue(AccessCookieName, out var accessToken)
+            || string.IsNullOrWhiteSpace(accessToken)
+        )
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }

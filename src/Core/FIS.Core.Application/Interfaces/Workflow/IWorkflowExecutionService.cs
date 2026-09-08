@@ -20,7 +20,11 @@ public interface IWorkflowExecutionService
     /// <param name="userId">User starting the workflow</param>
     /// <param name="initialData">Initial workflow data</param>
     /// <returns>Workflow instance information</returns>
-    Task<WorkflowInstanceResult> StartWorkflowAsync(int workflowId, int userId, Dictionary<string, object>? initialData = null);
+    Task<WorkflowInstanceResult> StartWorkflowAsync(
+        int workflowId,
+        int userId,
+        Dictionary<string, object>? initialData = null
+    );
 
     /// <summary>
     /// Completes a step and advances to the next step
@@ -29,7 +33,11 @@ public interface IWorkflowExecutionService
     /// <param name="userId">User completing the step</param>
     /// <param name="outputData">Output data from completed step</param>
     /// <returns>Next step information or completion status</returns>
-    Task<WorkflowInstanceResult> CompleteStepAsync(int statusId, int userId, Dictionary<string, object>? outputData = null);
+    Task<WorkflowInstanceResult> CompleteStepAsync(
+        int statusId,
+        int userId,
+        Dictionary<string, object>? outputData = null
+    );
 }
 
 /// <summary>

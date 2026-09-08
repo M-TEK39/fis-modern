@@ -37,9 +37,7 @@ public interface ITariffParameterService
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
     /// <param name="dto">Updated tariff parameter data</param>
     /// <returns>Updated tariff parameter</returns>
-    Task<TariffParameter> UpdateTariffParameterAsync(
-        int tariffParameterId,
-        TariffParameterDto dto);
+    Task<TariffParameter> UpdateTariffParameterAsync(int tariffParameterId, TariffParameterDto dto);
 
     /// <summary>
     /// Approve tariff parameters for use.
@@ -80,7 +78,8 @@ public interface ITariffParameterService
         int tariffParameterId,
         int classCode,
         int monthsAge,
-        int kilometerAge);
+        int kilometerAge
+    );
 
     /// <summary>
     /// Create or update maintenance value.
@@ -101,9 +100,7 @@ public interface ITariffParameterService
     /// <param name="vmfCode">Vehicle identifier</param>
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
     /// <returns>Maintenance cost per kilometer</returns>
-    Task<decimal> CalculateMaintenanceCostPerKilometerAsync(
-        int vmfCode,
-        int tariffParameterId);
+    Task<decimal> CalculateMaintenanceCostPerKilometerAsync(int vmfCode, int tariffParameterId);
 
     #endregion
 
@@ -150,8 +147,7 @@ public interface ITariffParameterService
     /// </summary>
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
     /// <returns>List of average overhead tariffs by category</returns>
-    Task<List<OverheadAverageTariff>> CalculateAverageOverheadTariffsAsync(
-        int tariffParameterId);
+    Task<List<OverheadAverageTariff>> CalculateAverageOverheadTariffsAsync(int tariffParameterId);
 
     #endregion
 
@@ -252,7 +248,8 @@ public interface ITariffParameterService
     decimal CalculateCapitalPayment(
         decimal purchaseAmount,
         decimal residualPercentage,
-        int monthsLife);
+        int monthsLife
+    );
 
     /// <summary>
     /// Calculate residual amount (end-of-life value).
@@ -274,7 +271,8 @@ public interface ITariffParameterService
     Task<decimal> CalculateOverheadPaymentAsync(
         int tariffParameterId,
         string vehicleCategory,
-        decimal overheadUnitFactor);
+        decimal overheadUnitFactor
+    );
 
     /// <summary>
     /// Calculate overhead per kilometer.
@@ -282,9 +280,7 @@ public interface ITariffParameterService
     /// <param name="monthlyOverhead">Monthly overhead payment</param>
     /// <param name="annualRecoveredKilos">Expected annual kilometers</param>
     /// <returns>Overhead cost per kilometer</returns>
-    decimal CalculateOverheadPerKilometer(
-        decimal monthlyOverhead,
-        int annualRecoveredKilos);
+    decimal CalculateOverheadPerKilometer(decimal monthlyOverhead, int annualRecoveredKilos);
 
     /// <summary>
     /// Calculate effective interest rate from annual rate.
@@ -293,9 +289,7 @@ public interface ITariffParameterService
     /// <param name="annualInterestRate">Annual interest rate percentage</param>
     /// <param name="paymentsPerYear">Number of payments per year</param>
     /// <returns>Effective periodic interest rate</returns>
-    decimal CalculateEffectiveInterestRate(
-        decimal annualInterestRate,
-        int paymentsPerYear);
+    decimal CalculateEffectiveInterestRate(decimal annualInterestRate, int paymentsPerYear);
 
     /// <summary>
     /// Calculate fixed daily tariff from monthly tariff.
@@ -323,8 +317,7 @@ public interface ITariffParameterService
     /// </summary>
     /// <param name="tariffParameterId">Tariff parameter identifier</param>
     /// <returns>Validation result with any errors</returns>
-    Task<TariffParameterValidationResult> ValidateTariffParameterAsync(
-        int tariffParameterId);
+    Task<TariffParameterValidationResult> ValidateTariffParameterAsync(int tariffParameterId);
 
     /// <summary>
     /// Get tariff calculation summary report for a parameter year.
@@ -341,9 +334,7 @@ public interface ITariffParameterService
     /// <param name="fromYear">From year</param>
     /// <param name="toYear">To year</param>
     /// <returns>Comparison report data</returns>
-    Task<TariffParameterComparison> CompareTariffParametersAsync(
-        int fromYear,
-        int toYear);
+    Task<TariffParameterComparison> CompareTariffParametersAsync(int fromYear, int toYear);
 
     #endregion
 }
@@ -431,11 +422,7 @@ public class TariffParameterValidationResult
 
     public static TariffParameterValidationResult Invalid(params string[] errors)
     {
-        return new TariffParameterValidationResult
-        {
-            IsValid = false,
-            Errors = errors.ToList()
-        };
+        return new TariffParameterValidationResult { IsValid = false, Errors = errors.ToList() };
     }
 }
 

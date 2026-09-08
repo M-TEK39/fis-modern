@@ -1,17 +1,19 @@
+using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
+using FIS.Core.Domain.Entities;
+using FIS.Core.Domain.Entities.Auth;
+using FIS.Core.Domain.Entities.Drivers;
+using FIS.Core.Domain.Entities.Financial;
+using FIS.Core.Domain.Entities.Logistics;
+using FIS.Core.Domain.Entities.ReferenceData;
+using FIS.Core.Domain.Entities.WorkshopEntities;
+using FIS.Data.SqlServer;
+using FIS.Tools.DatabaseTooling;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
-using FIS.Data.SqlServer;
-using FIS.Core.Domain.Entities;
-using FIS.Core.Domain.Entities.Auth;
-using FIS.Core.Domain.Entities.ReferenceData;
-using FIS.Core.Domain.Entities.Drivers;
-using FIS.Core.Domain.Entities.Logistics;
-using FIS.Core.Domain.Entities.Financial;
-using FIS.Core.Domain.Entities.WorkshopEntities;
 using Task = System.Threading.Tasks.Task; // Disambiguate from WorkshopEntities.Task
 
 namespace FIS.Tools.DatabaseSeederTool;
@@ -20,12 +22,23 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
+        try
+        {
+            ValidateSeedAuthorization(args);
+        }
+        catch (InvalidOperationException exception)
+        {
+            Console.Error.WriteLine($"Database seeding refused: {exception.Message}");
+            Environment.ExitCode = 1;
+            return;
+        }
+
         Console.WriteLine("🌱 FIS Database Seeder Tool - Test Data Setup");
         Console.WriteLine("=============================================");
         Console.WriteLine();
 
         var host = CreateHostBuilder(args).Build();
-        
+
         using var scope = host.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<FisDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
@@ -47,14 +60,14 @@ public class Program
             Console.WriteLine("🚗 Seeding vehicle data...");
             await SeedVehicleData(dbContext);
 
+            Console.WriteLine("🧪 Seeding frontend demo coverage data...");
+            await SeedFrontendDemoCoverage(dbContext);
+
             Console.WriteLine("📜 Seeding contract data...");
             await SeedContractData(dbContext);
 
             Console.WriteLine("💳 Seeding lease tariff data...");
             await SeedLeaseTariffData(dbContext);
-
-            Console.WriteLine("🧪 Seeding frontend demo coverage data...");
-            await SeedFrontendDemoCoverage(dbContext);
 
             Console.WriteLine("⛽ Seeding fuel card data...");
             await SeedFuelCardData(dbContext);
@@ -181,10 +194,52 @@ public class Program
         }
     }
 
+    private static void ValidateSeedAuthorization(string[] args)
+    {
+        var environmentName =
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? "Production";
+
+        if (!string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool is development-only and refuses non-development environments."
+            );
+        }
+
+        if (!args.Contains("--confirm=FIS-DEVELOPMENT-SEED", StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool is guarded. Re-run with --confirm=FIS-DEVELOPMENT-SEED."
+            );
+        }
+
+        if (
+            !string.Equals(
+                Environment.GetEnvironmentVariable("FIS_ALLOW_DEVELOPMENT_SEEDING"),
+                "I_UNDERSTAND_DEVELOPMENT_SEEDING",
+                StringComparison.Ordinal
+            )
+        )
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool requires FIS_ALLOW_DEVELOPMENT_SEEDING=I_UNDERSTAND_DEVELOPMENT_SEEDING."
+            );
+        }
+
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default");
+        DevelopmentDatabaseTargetGuard.ValidateConnectionString(
+            connectionString,
+            requireDockerSqlServerHost: true
+        );
+    }
+
     private static async Task SeedTestUsers(FisDbContext dbContext)
     {
         // Keep seeded users deterministic for demo and UI role testing.
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             UPDATE TS_Users SET email = 'murcus@corptech.co.za', tel_no = '+27 11 123 4567', is_deleted = 0 WHERE user_access_code = 1;
             UPDATE TS_Users SET email = 'admin@fis.local', tel_no = '+27 11 000 0001', is_deleted = 0 WHERE user_access_code = 2;
             UPDATE TS_Users SET email = 'it.support@fis.local', tel_no = '+27 11 000 0002', is_deleted = 0 WHERE user_access_code = 3;
@@ -212,16 +267,17 @@ public class Program
             IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 11) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (11, 'user.admin@fis.local', '+27 11 000 0010', GETDATE(), 0);
             IF NOT EXISTS (SELECT 1 FROM TS_Users WHERE user_access_code = 12) INSERT INTO TS_Users (user_access_code, email, tel_no, date_created, is_deleted) VALUES (12, 'trip.coordinator@fis.local', '+27 11 000 0011', GETDATE(), 0);
             SET IDENTITY_INSERT TS_Users OFF;
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ TS_Users seeded (12 demo users)");
 
         var seededCodes = Enumerable.Range(1, 12).ToList();
-        var existingCreds = await dbContext.LegacyUserCredentials
-            .Where(c => seededCodes.Contains(c.user_access_code))
+        var existingCreds = await dbContext
+            .LegacyUserCredentials.Where(c => seededCodes.Contains(c.user_access_code))
             .ToListAsync();
-        var existingMappings = await dbContext.EntraIdUserMappings
-            .Where(m => seededCodes.Contains(m.user_access_code))
+        var existingMappings = await dbContext
+            .EntraIdUserMappings.Where(m => seededCodes.Contains(m.user_access_code))
             .ToListAsync();
 
         if (existingCreds.Count > 0)
@@ -245,7 +301,7 @@ public class Program
                 password_salt = "",
                 created_date = now,
                 last_password_change = now,
-                is_active = true
+                is_active = true,
             })
             .ToList();
 
@@ -253,14 +309,26 @@ public class Program
 
         // Keep a couple of Entra mappings available for dual-auth testing.
         dbContext.EntraIdUserMappings.AddRange(
-            new EntraIdUserMapping { user_access_code = 3, entra_object_id = "simulated-guid-it-support", created_date = now },
-            new EntraIdUserMapping { user_access_code = 5, entra_object_id = "simulated-guid-contract-reviewer", created_date = now });
+            new EntraIdUserMapping
+            {
+                user_access_code = 3,
+                entra_object_id = "simulated-guid-it-support",
+                created_date = now,
+            },
+            new EntraIdUserMapping
+            {
+                user_access_code = 5,
+                entra_object_id = "simulated-guid-contract-reviewer",
+                created_date = now,
+            }
+        );
 
         await dbContext.SaveChangesAsync();
         Console.WriteLine("  ✓ Legacy credentials + Entra mappings seeded.");
 
         // Seed User Profiles (user_access_old1) used by first-name login + bitwise authorization.
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             UPDATE user_access_old1 SET FirstName='Murcus', LastName='Developer', name='Murcus Developer', E_Mail='murcus@corptech.co.za', telephone='+27 11 123 4567', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=1, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=1;
             UPDATE user_access_old1 SET FirstName='Admin', LastName='User', name='Admin User', E_Mail='admin@fis.local', telephone='+27 11 000 0001', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=32767, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=2;
             UPDATE user_access_old1 SET FirstName='IT', LastName='Support', name='IT Support', E_Mail='it.support@fis.local', telephone='+27 11 000 0002', password='Password123!', user_status='Active', user_active=1, Site_code=1, Position_Code=1, AccessLevel=15, is_deleted=0, date_updated=GETDATE() WHERE user_access_code=3;
@@ -288,12 +356,15 @@ public class Program
             IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 11) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (11, 'User', 'Admin', 'User Admin', 'user.admin@fis.local', '+27 11 000 0010', 'Password123!', 'Active', 1, 1, 1, 12, GETDATE(), 0);
             IF NOT EXISTS (SELECT 1 FROM user_access_old1 WHERE user_access_code = 12) INSERT INTO user_access_old1 (user_access_code, FirstName, LastName, name, E_Mail, telephone, password, user_status, user_active, Site_code, Position_Code, AccessLevel, date_created, is_deleted) VALUES (12, 'Trip', 'Coordinator', 'Trip Coordinator', 'trip.coordinator@fis.local', '+27 11 000 0011', 'Password123!', 'Active', 1, 1, 2, 200, GETDATE(), 0);
             SET IDENTITY_INSERT user_access_old1 OFF;
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ User profiles seeded (12 role-based profiles)");
         Console.WriteLine("  📝 Demo login: FirstName='Murcus', Password='Password123!'");
         Console.WriteLine("  👑 Admin login: FirstName='Admin', Password='Password123!'");
-        Console.WriteLine("  ✅ Contract reviewer login: FirstName='Contract', Password='Password123!'");
+        Console.WriteLine(
+            "  ✅ Contract reviewer login: FirstName='Contract', Password='Password123!'"
+        );
     }
 
     private static async Task SeedAccessLevelData(FisDbContext dbContext)
@@ -308,7 +379,8 @@ public class Program
         // Users can have multiple permissions by summing the values
         // Example: Admin = 1+2+4+8 = 15 (Vehicle, Contract, User Admin, Reports)
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             SET IDENTITY_INSERT AccessLevels ON;
             INSERT INTO AccessLevels (AccessLevelID, AccessLevelName, AccessLevelValue, date_created, created_by_user_code, is_deleted) VALUES
             (1, 'Vehicle Management', 1, GETDATE(), 1, 0),
@@ -327,12 +399,15 @@ public class Program
             (14, 'Workflow Management', 8192, GETDATE(), 1, 0),
             (15, 'Third Party Integration', 16384, GETDATE(), 1, 0);
             SET IDENTITY_INSERT AccessLevels OFF;
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Access levels seeded (15 module permissions)");
         Console.WriteLine("  📊 Bitwise Permission Examples:");
         Console.WriteLine("     Admin (All Access) = 32767 (sum of all 15 permissions)");
-        Console.WriteLine("     Fleet Manager = 451 (Vehicle + Contract + Reports + Trip + Maintenance = 1+2+8+64+256+128)");
+        Console.WriteLine(
+            "     Fleet Manager = 451 (Vehicle + Contract + Reports + Trip + Maintenance = 1+2+8+64+256+128)"
+        );
         Console.WriteLine("     Workshop Manager = 288 (Workshop + Maintenance = 32+256)");
         Console.WriteLine("     Basic User = 9 (Vehicle + Reports = 1+8)");
     }
@@ -344,15 +419,69 @@ public class Program
         {
             var provinces = new[]
             {
-                new Province { province_code = 1, province_name = "Gauteng", province_abbreviation = "GT", date_created = DateTime.UtcNow },
-                new Province { province_code = 2, province_name = "Western Cape", province_abbreviation = "WC", date_created = DateTime.UtcNow },
-                new Province { province_code = 3, province_name = "KwaZulu-Natal", province_abbreviation = "KZN", date_created = DateTime.UtcNow },
-                new Province { province_code = 4, province_name = "Eastern Cape", province_abbreviation = "EC", date_created = DateTime.UtcNow },
-                new Province { province_code = 5, province_name = "Limpopo", province_abbreviation = "LP", date_created = DateTime.UtcNow },
-                new Province { province_code = 6, province_name = "Mpumalanga", province_abbreviation = "MP", date_created = DateTime.UtcNow },
-                new Province { province_code = 7, province_name = "North West", province_abbreviation = "NW", date_created = DateTime.UtcNow },
-                new Province { province_code = 8, province_name = "Free State", province_abbreviation = "FS", date_created = DateTime.UtcNow },
-                new Province { province_code = 9, province_name = "Northern Cape", province_abbreviation = "NC", date_created = DateTime.UtcNow }
+                new Province
+                {
+                    province_code = 1,
+                    province_name = "Gauteng",
+                    province_abbreviation = "GT",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 2,
+                    province_name = "Western Cape",
+                    province_abbreviation = "WC",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 3,
+                    province_name = "KwaZulu-Natal",
+                    province_abbreviation = "KZN",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 4,
+                    province_name = "Eastern Cape",
+                    province_abbreviation = "EC",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 5,
+                    province_name = "Limpopo",
+                    province_abbreviation = "LP",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 6,
+                    province_name = "Mpumalanga",
+                    province_abbreviation = "MP",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 7,
+                    province_name = "North West",
+                    province_abbreviation = "NW",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 8,
+                    province_name = "Free State",
+                    province_abbreviation = "FS",
+                    date_created = DateTime.UtcNow,
+                },
+                new Province
+                {
+                    province_code = 9,
+                    province_name = "Northern Cape",
+                    province_abbreviation = "NC",
+                    date_created = DateTime.UtcNow,
+                },
             };
             dbContext.Provinces.AddRange(provinces);
             Console.WriteLine("  ✓ Provinces seeded.");
@@ -366,7 +495,7 @@ public class Program
                 new Rank { description = "Director", date_created = DateTime.UtcNow },
                 new Rank { description = "Manager", date_created = DateTime.UtcNow },
                 new Rank { description = "Officer", date_created = DateTime.UtcNow },
-                new Rank { description = "Driver", date_created = DateTime.UtcNow }
+                new Rank { description = "Driver", date_created = DateTime.UtcNow },
             };
             dbContext.Ranks.AddRange(ranks);
             Console.WriteLine("  ✓ Ranks seeded.");
@@ -378,10 +507,22 @@ public class Program
             var statuses = new[]
             {
                 new VehicleStatus { status_description = "Active", date_created = DateTime.UtcNow },
-                new VehicleStatus { status_description = "Maintenance", date_created = DateTime.UtcNow },
-                new VehicleStatus { status_description = "Disposed", date_created = DateTime.UtcNow },
+                new VehicleStatus
+                {
+                    status_description = "Maintenance",
+                    date_created = DateTime.UtcNow,
+                },
+                new VehicleStatus
+                {
+                    status_description = "Disposed",
+                    date_created = DateTime.UtcNow,
+                },
                 new VehicleStatus { status_description = "Stolen", date_created = DateTime.UtcNow },
-                new VehicleStatus { status_description = "Written Off", date_created = DateTime.UtcNow }
+                new VehicleStatus
+                {
+                    status_description = "Written Off",
+                    date_created = DateTime.UtcNow,
+                },
             };
             dbContext.VehicleStatuses.AddRange(statuses);
             Console.WriteLine("  ✓ Vehicle Statuses seeded.");
@@ -390,21 +531,24 @@ public class Program
         // Seed Driver Licence Types
         if (!await dbContext.DriverLicenceTypes.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT driver_licence_types ON;
                 INSERT INTO driver_licence_types (driver_licence_type_id, driver_licence_type_code, driver_licence_type_description, date_created, is_deleted) VALUES 
                 (1, 'C1', 'Code 10', GETDATE(), 0),
                 (2, 'EB', 'Code 08', GETDATE(), 0),
                 (3, 'EC', 'Code 14', GETDATE(), 0);
                 SET IDENTITY_INSERT driver_licence_types OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Driver Licence Types seeded.");
         }
 
         // Seed Trip Incident Types
         if (!await dbContext.TripIncidentTypes.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT trip_incident_types ON;
                 INSERT INTO trip_incident_types (trip_incident_type_code, trip_incident_type_name, date_created, is_deleted) VALUES 
                 (1, 'Accident', GETDATE(), 0),
@@ -412,14 +556,16 @@ public class Program
                 (3, 'Theft', GETDATE(), 0),
                 (4, 'None', GETDATE(), 0);
                 SET IDENTITY_INSERT trip_incident_types OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Trip Incident Types seeded.");
         }
 
         // Seed Extra Codes
         if (!await dbContext.ExtraCodes.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT extra_codes ON;
                 INSERT INTO extra_codes (extra_code, extra_description, category_type_code, specific, Additional, date_created, is_deleted) VALUES 
                 (1, 'Radio', 1, 1, 0, GETDATE(), 0),
@@ -428,14 +574,16 @@ public class Program
                 (4, 'Aircon', 1, 1, 0, GETDATE(), 0),
                 (5, 'Tracking Unit', 1, 1, 0, GETDATE(), 0);
                 SET IDENTITY_INSERT extra_codes OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Extra Codes seeded.");
         }
 
         // Seed Classes (Validation Data)
         if (!await dbContext.Classes.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT class ON;
                 INSERT INTO class (class_code, description, date_created, is_deleted) VALUES
                 (1, 'Passenger Vehicle', GETDATE(), 0),
@@ -444,14 +592,16 @@ public class Program
                 (4, 'Motorcycle', GETDATE(), 0),
                 (5, 'Special Purpose Vehicle', GETDATE(), 0);
                 SET IDENTITY_INSERT class OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Vehicle Classes seeded.");
         }
 
         // Seed Units of Measure (Validation Data)
         if (!await dbContext.UnitsOfMeasure.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT unit_of_measure ON;
                 INSERT INTO unit_of_measure (unit_of_measure_code, unit_description, unit_abbreviation, unit_category, date_created, is_deleted) VALUES
                 (1, 'Kilometers', 'km', 'Distance', GETDATE(), 0),
@@ -460,14 +610,16 @@ public class Program
                 (4, 'Gallons', 'gal', 'Volume', GETDATE(), 0),
                 (5, 'Hours', 'hr', 'Time', GETDATE(), 0);
                 SET IDENTITY_INSERT unit_of_measure OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Units of Measure seeded.");
         }
 
         // Seed Maintenance Triggers (Validation Data)
         if (!await dbContext.MaintenanceTriggers.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT maintenance_trigger ON;
                 INSERT INTO maintenance_trigger (maint_trigger_code, description, trigger_id, date_created, is_deleted) VALUES
                 (1, 'Mileage Based', 'KM', GETDATE(), 0),
@@ -475,14 +627,16 @@ public class Program
                 (3, 'Hours Based', 'HOURS', GETDATE(), 0),
                 (4, 'Condition Based', 'COND', GETDATE(), 0);
                 SET IDENTITY_INSERT maintenance_trigger OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Maintenance Triggers seeded.");
         }
 
         // Seed License Fees (Validation Data)
         if (!await dbContext.LicenseFees.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT licence_fee ON;
                 INSERT INTO licence_fee (licence_fee_code, licence_description, licence_fee, date_created, is_deleted) VALUES
                 (1, 'Passenger Vehicle Annual License', 680.00, GETDATE(), 0),
@@ -490,14 +644,16 @@ public class Program
                 (3, 'Truck Annual License', 1850.00, GETDATE(), 0),
                 (4, 'Motorcycle Annual License', 320.00, GETDATE(), 0);
                 SET IDENTITY_INSERT licence_fee OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ License Fees seeded.");
         }
 
         // Seed Loss Types (Validation Data)
         if (!await dbContext.LossTypes.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT Loss_type ON;
                 INSERT INTO Loss_type (loss_type_code, loss_description, date_created, is_deleted) VALUES
                 (1, 'Theft', GETDATE(), 0),
@@ -506,7 +662,8 @@ public class Program
                 (4, 'Flood Damage', GETDATE(), 0),
                 (5, 'Hijacking', GETDATE(), 0);
                 SET IDENTITY_INSERT Loss_type OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Loss Types seeded.");
         }
 
@@ -515,25 +672,29 @@ public class Program
 
     private static async Task SeedOperationsExtendedData(FisDbContext dbContext)
     {
-        Console.WriteLine("  ├── Seeding Extended Operations (Collection, Clearance, Auction, Loss, CallCentre, Extras)...");
+        Console.WriteLine(
+            "  ├── Seeding Extended Operations (Collection, Clearance, Auction, Loss, CallCentre, Extras)..."
+        );
 
         // 1. Collections
         if (!await dbContext.Collections.AnyAsync())
         {
             try
             {
-                await dbContext.Database.ExecuteSqlRawAsync(@"
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"
                     SET IDENTITY_INSERT Collection ON;
                     INSERT INTO Collection (Collection_code, Sessionid, vmf_code, site_code, fleet_number, date_created, is_deleted) VALUES 
                     (1, 'SES-001', 1, 1, 'FLT-001', GETDATE(), 0),
                     (2, 'SES-002', 2, 2, 'FLT-002', GETDATE(), 0);
                     SET IDENTITY_INSERT Collection OFF;
-                ");
+                "
+                );
                 Console.WriteLine("  ✓ Collections seeded.");
             }
             catch (Exception ex)
             {
-                 Console.WriteLine($"  ! Warning: Collection seed failed: {ex.Message}");
+                Console.WriteLine($"  ! Warning: Collection seed failed: {ex.Message}");
             }
         }
 
@@ -542,18 +703,20 @@ public class Program
         {
             try
             {
-                await dbContext.Database.ExecuteSqlRawAsync(@"
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"
                     SET IDENTITY_INSERT clearance ON;
                     INSERT INTO clearance (clearance_code, vmf_code, clearance_number, Clearance_date, Merchant_code, Clearance_amount, clearance_comment, clearance_kilo, date_created, is_deleted) VALUES 
                     (1, 3, 1001, DATEADD(month, -1, GETDATE()), 1, 450.00, 'Cleared for disposal', 85000, GETDATE(), 0),
                     (2, 5, 1002, DATEADD(month, -2, GETDATE()), 2, 600.00, 'Cleared for auction', 120000, GETDATE(), 0);
                     SET IDENTITY_INSERT clearance OFF;
-                ");
+                "
+                );
                 Console.WriteLine("  ✓ Clearances seeded.");
             }
             catch (Exception ex)
             {
-                 Console.WriteLine($"  ! Warning: Clearance seed failed: {ex.Message}");
+                Console.WriteLine($"  ! Warning: Clearance seed failed: {ex.Message}");
             }
         }
 
@@ -562,18 +725,20 @@ public class Program
         {
             try
             {
-                await dbContext.Database.ExecuteSqlRawAsync(@"
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"
                     SET IDENTITY_INSERT auction ON;
                     INSERT INTO auction (auction_code, vmf_code, auction_number, camp, lot, auction_garage, auth_number, auth_date, auction_km, garage_owner, reason_sold, estimate_amount, reserve_amount, sold_id, remark, date_created, is_deleted) VALUES 
                     (1, 7, 'AUC-2023-001', 'Bloemfontein', 101, 1, 'AUTH-001', DATEADD(month, -1, GETDATE()), 150000, 'Auto Auctions', 'High Mileage', 120000.00, 100000.00, 'SOLD', 'Sold above reserve', GETDATE(), 0),
                     (2, 5, 'AUC-2023-002', 'JHB South', 102, 1, 'AUTH-002', DATEADD(month, -2, GETDATE()), 120000, 'JHB Auctions', 'Redundant', 90000.00, 80000.00, 'UNSOLD', 'Did not reach reserve', GETDATE(), 0);
                     SET IDENTITY_INSERT auction OFF;
-                ");
+                "
+                );
                 Console.WriteLine("  ✓ Auctions seeded.");
             }
             catch (Exception ex)
             {
-                 Console.WriteLine($"  ! Warning: Auction seed failed: {ex.Message}");
+                Console.WriteLine($"  ! Warning: Auction seed failed: {ex.Message}");
             }
         }
 
@@ -582,18 +747,20 @@ public class Program
         {
             try
             {
-                await dbContext.Database.ExecuteSqlRawAsync(@"
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"
                     SET IDENTITY_INSERT losses ON;
                     INSERT INTO losses (loss_code, vmf_code, loss_date, loss_reference, loss_type_code, site_code, dept_contact, loss_amount, dept_claim, sapd, inspector, case_number, date_created, is_deleted) VALUES 
                     (1, 8, DATEADD(month, -3, GETDATE()), 'LOSS-001', 3, 2, 'Mr. Smith', 350000.00, 320000.00, 'JHB Central', 'Insp. Gadget', 'CAS-123/10/2023', GETDATE(), 0),
                     (2, 6, DATEADD(month, -1, GETDATE()), 'LOSS-002', 1, 1, 'Mrs. Jones', 50000.00, 45000.00, 'Sandton', 'Insp. Clouseau', 'CAS-456/11/2023', GETDATE(), 0);
                     SET IDENTITY_INSERT losses OFF;
-                ");
+                "
+                );
                 Console.WriteLine("  ✓ Losses seeded.");
             }
             catch (Exception ex)
             {
-                 Console.WriteLine($"  ! Warning: Loss seed failed: {ex.Message}");
+                Console.WriteLine($"  ! Warning: Loss seed failed: {ex.Message}");
             }
         }
 
@@ -602,54 +769,60 @@ public class Program
         {
             try
             {
-                await dbContext.Database.ExecuteSqlRawAsync(@"
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"
                     SET IDENTITY_INSERT Call_centre ON;
                     INSERT INTO Call_centre (Call_centre_code, vmf_code, Call_time, Call_date, Capture_name, User_access_code, Caller_name, Driver_name, Driver_persalno, Driver_Licno, GG_number, Driver_base_station, Driver_Site, Driver_tel, Driver_cell, date_created, is_deleted) VALUES 
                     (1, 1, GETDATE(), GETDATE(), 'Operator A', 1, 'John Doe', 'John Doe', 'PERS-001', 'LIC-001', 'GG-001', 'Midrand', 1, '011-123-4567', '082-123-4567', GETDATE(), 0),
                     (2, 2, DATEADD(hour, -2, GETDATE()), GETDATE(), 'Operator B', 2, 'Jane Smith', 'Jane Smith', 'PERS-002', 'LIC-002', 'GG-002', 'Cape Town', 2, '021-123-4567', '083-123-4567', GETDATE(), 0);
                     SET IDENTITY_INSERT Call_centre OFF;
-                ");
+                "
+                );
                 Console.WriteLine("  ✓ Call Centre logs seeded.");
             }
             catch (Exception ex)
             {
-                 Console.WriteLine($"  ! Warning: CallCentre seed failed: {ex.Message}");
+                Console.WriteLine($"  ! Warning: CallCentre seed failed: {ex.Message}");
             }
         }
 
         // 6. Extras
         if (!await dbContext.Extras.AnyAsync())
         {
-            // Note: extras_code is short, assuming not identity by default on legacy but let's check. 
+            // Note: extras_code is short, assuming not identity by default on legacy but let's check.
             // Previous seeding for short PKs like cost_category needed explicit insert or identity insert depending on config.
-            // Let's try explicit first, if fail then identity. 
+            // Let's try explicit first, if fail then identity.
             // Actually, for consistency with other legacy tables, assuming Identity Insert ON is safest if it's an IDENTITY column.
             // If it's NOT identity, SET IDENTITY_INSERT ON throws error.
             // Let's try standard insert first for extras (often manual).
             try
             {
-                 // Try standard insert first
-                 await dbContext.Database.ExecuteSqlRawAsync(@"
+                // Try standard insert first
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    @"
                     INSERT INTO extras (extras_code, vmf_code, extra_code, quantity, amount, serial_number, date_created, is_deleted) VALUES 
                     (1, 1, 1, 1, 2500.00, 'RAD-001', GETDATE(), 0),
                     (2, 1, 2, 1, 15000.00, 'CAN-001', GETDATE(), 0),
                     (3, 2, 3, 1, 3500.00, 'TOW-001', GETDATE(), 0);
-                ");
-                 Console.WriteLine("  ✓ Extras seeded.");
+                "
+                );
+                Console.WriteLine("  ✓ Extras seeded.");
             }
             catch
             {
                 try
                 {
-                    await dbContext.Database.ExecuteSqlRawAsync(@"
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        @"
                         SET IDENTITY_INSERT extras ON;
                         INSERT INTO extras (extras_code, vmf_code, extra_code, quantity, amount, serial_number, date_created, is_deleted) VALUES 
                         (1, 1, 1, 1, 2500.00, 'RAD-001', GETDATE(), 0),
                         (2, 1, 2, 1, 15000.00, 'CAN-001', GETDATE(), 0),
                         (3, 2, 3, 1, 3500.00, 'TOW-001', GETDATE(), 0);
                         SET IDENTITY_INSERT extras OFF;
-                    ");
-                     Console.WriteLine("  ✓ Extras seeded (with IDENTITY_INSERT).");
+                    "
+                    );
+                    Console.WriteLine("  ✓ Extras seeded (with IDENTITY_INSERT).");
                 }
                 catch (Exception ex)
                 {
@@ -664,7 +837,8 @@ public class Program
         // South African Government Departments — FIS manages government fleet
         if (!await dbContext.Departments.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT department ON;
                 INSERT INTO department
                     (department_code, description, department_abbr, company_code,
@@ -688,7 +862,8 @@ public class Program
                 (15, 'Department of Human Settlements',                     'DHS',   1, 1, 5, 10.0, 15000, GETDATE(), 0),
                 (16, 'Department of Sport, Arts and Culture',               'DSAC',  1, 1, 5, 10.0, 15000, GETDATE(), 0);
                 SET IDENTITY_INSERT department OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ SA Government Departments seeded (16).");
         }
 
@@ -698,7 +873,8 @@ public class Program
         // in financial reports.
         if (!await dbContext.Sites.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT site ON;
                 INSERT INTO site (Site_code, description, Depatrment_code, site_active, date_created, is_deleted) VALUES
                 -- Dept 1: The Presidency
@@ -784,7 +960,8 @@ public class Program
                 (65, 'South African Library for the Blind',                                16, 1, GETDATE(), 0),
                 (66, 'Freedom Park',                                                       16, 1, GETDATE(), 0);
                 SET IDENTITY_INSERT site OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ SA Government Entity Sites seeded (66 across 16 departments).");
         }
     }
@@ -794,22 +971,25 @@ public class Program
         // Makes
         if (!await dbContext.Makes.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT make ON;
                 INSERT INTO make (make_code, make_description, date_created, is_deleted) VALUES 
                 (1, 'Toyota', GETDATE(), 0),
                 (2, 'Ford', GETDATE(), 0),
                 (3, 'Volkswagen', GETDATE(), 0);
                 SET IDENTITY_INSERT make OFF;
-            ");
-             Console.WriteLine("  ✓ Makes seeded.");
+            "
+            );
+            Console.WriteLine("  ✓ Makes seeded.");
         }
 
         // Models
         if (!await dbContext.Models.AnyAsync())
         {
-             // Note: Providing default values for required legacy columns
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            // Note: Providing default values for required legacy columns
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT model ON;
                 INSERT INTO model (model_code, model_description, make_code, type_code, fuel_type_code, unit_of_measure_code, licence_code, class_code, date_created, is_deleted) VALUES 
                 (1, 'Hilux', 1, 1, 2, 1, 1, 1, GETDATE(), 0),
@@ -817,42 +997,48 @@ public class Program
                 (3, 'Ranger', 2, 1, 2, 1, 1, 1, GETDATE(), 0),
                 (4, 'Polo', 3, 2, 1, 1, 1, 1, GETDATE(), 0);
                 SET IDENTITY_INSERT model OFF;
-            ");
-             Console.WriteLine("  ✓ Models seeded.");
+            "
+            );
+            Console.WriteLine("  ✓ Models seeded.");
         }
 
         // Vehicle Types
         if (!await dbContext.VehicleTypes.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT type ON;
                 INSERT INTO type (type_code, type_description, date_created, is_deleted) VALUES 
                 (1, 'LDV', GETDATE(), 0),
                 (2, 'Sedan', GETDATE(), 0),
                 (3, 'Truck', GETDATE(), 0);
                 SET IDENTITY_INSERT type OFF;
-            ");
-             Console.WriteLine("  ✓ Vehicle Types seeded.");
+            "
+            );
+            Console.WriteLine("  ✓ Vehicle Types seeded.");
         }
 
         // Fuel Types
         if (!await dbContext.FuelTypes.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT fuel_type ON;
                 INSERT INTO fuel_type (fuel_type_code, fuel_description, date_created, is_deleted) VALUES 
                 (1, 'Petrol', GETDATE(), 0),
                 (2, 'Diesel', GETDATE(), 0);
                 SET IDENTITY_INSERT fuel_type OFF;
-            ");
-             Console.WriteLine("  ✓ Fuel Types seeded.");
+            "
+            );
+            Console.WriteLine("  ✓ Fuel Types seeded.");
         }
 
         // Vehicles
         // Check if we have the full set (checking count < 10 to trigger update)
         if (await dbContext.Vehicles.CountAsync() < 10)
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT vehicle_master ON;
 
                 IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1)
@@ -896,7 +1082,8 @@ public class Program
                 (10, 'EC 888-999', 3, 1, 'Blue', 'ENG444555', 'CHS444555', 2021, 65000, 1000, DATEADD(year, -3, GETDATE()), 4, 2, GETDATE(), 0);
 
                 SET IDENTITY_INSERT vehicle_master OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Vehicles seeded (ensured 10 vehicles).");
         }
     }
@@ -906,7 +1093,8 @@ public class Program
         // Seed 10 base contracts for legacy vehicles 1-10
         if (await dbContext.Contracts.CountAsync() < 10)
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT contract ON;
 
                 IF NOT EXISTS (SELECT 1 FROM contract WHERE contract_code = 1)
@@ -950,12 +1138,14 @@ public class Program
                 (10, 10, 2, 'H', DATEADD(year, -2, GETDATE()), DATEADD(year, -2, GETDATE()), 1000, 'N', 0, GETDATE(), 0);
 
                 SET IDENTITY_INSERT contract OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Base contracts seeded (10).");
         }
 
         // Seed 50 active demo contracts for vehicles 1001-1050 (mixed H/R/D types, backdated 1-24 months)
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @vmf     INT;
             DECLARE @ctype   CHAR(1);
             DECLARE @mback   INT;
@@ -994,11 +1184,14 @@ public class Program
 
                 SET @vmf = @vmf + 1;
             END;
-        ");
+        "
+        );
 
-        var activeCount = await dbContext.Database.SqlQueryRaw<int>(
-            "SELECT COUNT(1) AS [Value] FROM contract WHERE still_current = 'Y' AND is_deleted = 0"
-        ).FirstOrDefaultAsync();
+        var activeCount = await dbContext
+            .Database.SqlQueryRaw<int>(
+                "SELECT COUNT(1) AS [Value] FROM contract WHERE still_current = 'Y' AND is_deleted = 0"
+            )
+            .FirstOrDefaultAsync();
         Console.WriteLine($"  ✓ Demo contracts seeded — {activeCount} active contracts total.");
     }
 
@@ -1006,7 +1199,8 @@ public class Program
     {
         // Create one active LeaseTariff record per demo vehicle that has an active contract.
         // fixed_tariff cycles between 3000–6500 to give varied billing amounts for reports.
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @vmf     INT;
             DECLARE @tariff  DECIMAL(18,2);
 
@@ -1032,10 +1226,13 @@ public class Program
 
                 SET @vmf = @vmf + 1;
             END;
-        ");
+        "
+        );
 
         var tariffCount = await dbContext.LeaseTariffs.CountAsync(t => t.active && !t.is_deleted);
-        Console.WriteLine($"  ✓ Lease tariffs seeded ({tariffCount} active records for demo vehicles).");
+        Console.WriteLine(
+            $"  ✓ Lease tariffs seeded ({tariffCount} active records for demo vehicles)."
+        );
     }
 
     private static async Task SeedFuelCardData(FisDbContext dbContext)
@@ -1043,13 +1240,15 @@ public class Program
         if (!await dbContext.FuelCards.AnyAsync())
         {
             // Seed Fuel Cards linked to Vehicles (1, 2) and Sites (1, 2)
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT Fuel_card ON;
                 INSERT INTO Fuel_card (Fuel_card_code, vmf_code, card_number, PAN_number, Petrecsite, Status_date, date_created, is_deleted) VALUES 
                 (1, 1, '123456789012345', 'PAN123456', 1, GETDATE(), GETDATE(), 0),
                 (2, 2, '987654321098765', 'PAN987654', 2, GETDATE(), GETDATE(), 0);
                 SET IDENTITY_INSERT Fuel_card OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Fuel Cards seeded.");
         }
     }
@@ -1061,7 +1260,8 @@ public class Program
             // Seed Trips linked to Contracts (1, 2)
             // Trip 1 for Contract 1 (Vehicle 1)
             // Trip 2 for Contract 2 (Vehicle 2)
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT trip_authorities ON;
                 INSERT INTO trip_authorities (
                     trip_authority_code, contract_code, trip_request_number, issue_date, 
@@ -1071,7 +1271,8 @@ public class Program
                 (1, 1, 'REQ001', GETDATE(), 1, 4, 1, 0, 0, GETDATE(), 0),
                 (2, 2, 'REQ002', GETDATE(), 1, 4, 1, 0, 1, GETDATE(), 0);
                 SET IDENTITY_INSERT trip_authorities OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Trips seeded.");
         }
     }
@@ -1081,7 +1282,8 @@ public class Program
         // Seed trip_driver records for trip authorities
         if (!await dbContext.TripDrivers.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT trip_driver ON;
                 INSERT INTO trip_driver (
                     trip_driver_code, trip_authority_code, trip_driver_name, trip_driver_id,
@@ -1090,14 +1292,16 @@ public class Program
                 (1, 1, 'Sipho Dlamini',  '8001015009087', 1, 2, 1, 1, GETDATE(), 0),
                 (2, 2, 'Fatima Motaung', '8505050050080', 1, 1, 1, 0, GETDATE(), 0);
                 SET IDENTITY_INSERT trip_driver OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Trip drivers seeded.");
         }
 
         // Seed site_drivers — the actual driver roster per site
         if (!await dbContext.Drivers.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 -- driver_licence_type_id 1 and 2 must exist (seeded in reference data)
                 -- SA IDs are realistic test values (format: YYMMDD SSSS C Z)
                 INSERT INTO site_drivers
@@ -1141,9 +1345,12 @@ public class Program
                 (2, 2, 'Jansen',    'Werner',      '9402145800089', 'P002013', 'C002013', '89012345BCDE', '2021-02-14', DATEADD(month,-1,GETDATE()), 0, NULL,                      '2031-02-14', 1, GETDATE(), 0),
                 (2, 1, 'Coetzee',   'Elmarie',     '8006094800083', 'P002014', 'C002014', '90123456CDEF', '2011-06-09', DATEADD(month,-13,GETDATE()),0, NULL,                      '2026-06-09', 1, GETDATE(), 0),
                 (2, 2, 'Petersen',  'Ashraf',      '7309115800085', 'P002015', 'C002015', '01234567DEFG', '2006-09-11', DATEADD(month,-22,GETDATE()),1, DATEADD(year,1,GETDATE()), '2025-09-11', 1, GETDATE(), 0);
-            ");
+            "
+            );
             var driverCount = await dbContext.Drivers.CountAsync();
-            Console.WriteLine($"  ✓ Site drivers seeded ({driverCount} records across sites 1 and 2).");
+            Console.WriteLine(
+                $"  ✓ Site drivers seeded ({driverCount} records across sites 1 and 2)."
+            );
         }
     }
 
@@ -1152,7 +1359,8 @@ public class Program
         if (!await dbContext.MaintenanceRecords.AnyAsync())
         {
             // Seed Maintenance Records linked to Vehicles (1, 2)
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT maintenance_records ON;
                 INSERT INTO maintenance_records (
                     maintenance_id, vmf_code, maintenance_date, maintenance_type, 
@@ -1164,7 +1372,8 @@ public class Program
                 (1, 1, DATEADD(month, -1, GETDATE()), 'SERVICE', 10000, '10,000km Service', 'COMPLETED', 'Y', 'N', 'Y', 5000, 2000, 3000, GETDATE(), GETDATE(), 0),
                 (2, 2, DATEADD(month, -2, GETDATE()), 'REPAIR', 40000, 'Brake Pad Replacement', 'COMPLETED', 'Y', 'N', 'Y', 2500, 1000, 1500, GETDATE(), GETDATE(), 0);
                 SET IDENTITY_INSERT maintenance_records OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Maintenance Records seeded.");
         }
     }
@@ -1174,7 +1383,8 @@ public class Program
         if (!await dbContext.Fines.AnyAsync())
         {
             // Seed Fines linked to Vehicles (1, 2) and Sites (1, 2)
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT Fines ON;
                 INSERT INTO Fines (
                     Fine_code, vmf_code, Site_code, Offence_date, Offence_reference, 
@@ -1183,7 +1393,8 @@ public class Program
                 (1, 1, 1, DATEADD(day, -5, GETDATE()), 'REF12345', 'JMPD', 500.00, 'Speeding', GETDATE(), 0),
                 (2, 2, 2, DATEADD(day, -10, GETDATE()), 'REF67890', 'Cape Town Traffic', 1000.00, 'Illegal Parking', GETDATE(), 0);
                 SET IDENTITY_INSERT Fines OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Fines seeded.");
         }
     }
@@ -1192,7 +1403,8 @@ public class Program
     {
         if (!await dbContext.Accidents.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT accident ON;
                 INSERT INTO accident (
                     accident_code, vmf_code, description, driver_name, 
@@ -1203,7 +1415,8 @@ public class Program
                 (2, 3, 'Windscreen crack from stone', 'Mike Ross', DATEADD(month, -3, GETDATE()), DATEADD(month, -3, GETDATE()), DATEADD(month, -3, GETDATE()), 2500.00, 0.00, GETDATE(), 0),
                 (3, 5, 'Side swipe on highway', 'Harvey Specter', DATEADD(year, -1, GETDATE()), DATEADD(year, -1, GETDATE()), DATEADD(year, -1, GETDATE()), 15000.00, 1000.00, GETDATE(), 0);
                 SET IDENTITY_INSERT accident OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Accidents seeded.");
         }
     }
@@ -1212,7 +1425,8 @@ public class Program
     {
         if (!await dbContext.Licenses.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT license ON;
                 INSERT INTO license (licence_code, licence_description, licence_category, date_created, is_deleted) VALUES 
                 (1, 'Code 08 (B)', 'B', GETDATE(), 0),
@@ -1220,7 +1434,8 @@ public class Program
                 (3, 'Code 14 (EC)', 'EC', GETDATE(), 0),
                 (4, 'Professional Driving Permit', 'PrDP', GETDATE(), 0);
                 SET IDENTITY_INSERT license OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Licenses seeded.");
         }
     }
@@ -1229,7 +1444,8 @@ public class Program
     {
         if (!await dbContext.Logbooks.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT logbook ON;
                 INSERT INTO logbook (
                     logbookcode, vmf_code, begin_num, end_num, handout_date, 
@@ -1240,7 +1456,8 @@ public class Program
                 (2, 2, 'LB002-001', 'LB002-100', DATEADD(year, -1, GETDATE()), 2, 'Jane Smith', '0829876543', 'Initial issue', GETDATE(), 0),
                 (3, 1, 'LB001-101', 'LB001-200', DATEADD(month, -6, GETDATE()), 1, 'John Doe', '0821234567', 'Replacement', GETDATE(), 0);
                 SET IDENTITY_INSERT logbook OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Logbooks seeded.");
         }
     }
@@ -1250,28 +1467,70 @@ public class Program
         // Merchants (wwmerchant)
         if (!await dbContext.Merchants.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT wwmerchant ON;
                 INSERT INTO wwmerchant (wwmerch_code, wwmerch_name, wwmerch_tel, wwmerch_email, date_created, is_deleted) VALUES 
                 (1, 'AutoZone', '011 123 4567', 'sales@autozone.co.za', GETDATE(), 0),
                 (2, 'Tiger Wheel & Tyre', '011 987 6543', 'info@twt.co.za', GETDATE(), 0),
                 (3, 'Shell Garage Sandton', '011 555 1234', 'manager@shellsandton.co.za', GETDATE(), 0);
                 SET IDENTITY_INSERT wwmerchant OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Merchants seeded.");
         }
 
         // Suppliers (Suppliers)
         if (!await dbContext.Suppliers.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
-                SET IDENTITY_INSERT Suppliers ON;
-                INSERT INTO Suppliers (supplier_id, supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted) VALUES 
-                (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0),
-                (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0),
-                (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
-                SET IDENTITY_INSERT Suppliers OFF;
-            ");
+            var hasExpandedSupplierColumns =
+                await HasColumnAsync(dbContext, "Suppliers", "supplier_name")
+                && await HasColumnAsync(dbContext, "Suppliers", "phone_number")
+                && await HasColumnAsync(dbContext, "Suppliers", "is_active");
+
+            await ExecuteIdentityAwareSqlAsync(
+                dbContext,
+                hasExpandedSupplierColumns
+                    ? @"
+                    SET IDENTITY_INSERT Suppliers ON;
+                    INSERT INTO Suppliers (supplier_id, supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted) VALUES
+                    (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0),
+                    (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0),
+                    (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
+                    SET IDENTITY_INSERT Suppliers OFF;
+                "
+                    : @"
+                    SET IDENTITY_INSERT Suppliers ON;
+                    INSERT INTO Suppliers (supplier_id, name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted) VALUES
+                    (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 'Vehicle supplier', 1, GETDATE(), 0),
+                    (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 'Vehicle supplier', 1, GETDATE(), 0),
+                    (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                    SET IDENTITY_INSERT Suppliers OFF;
+                ",
+                hasExpandedSupplierColumns
+                    ? @"
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 1)
+                        INSERT INTO Suppliers (supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted)
+                        VALUES ('Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 2)
+                        INSERT INTO Suppliers (supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted)
+                        VALUES ('Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 3)
+                        INSERT INTO Suppliers (supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted)
+                        VALUES ('Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
+                "
+                    : @"
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 1)
+                        INSERT INTO Suppliers (name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted)
+                        VALUES ('Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 2)
+                        INSERT INTO Suppliers (name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted)
+                        VALUES ('Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 3)
+                        INSERT INTO Suppliers (name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted)
+                        VALUES ('Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                "
+            );
             Console.WriteLine("  ✓ Suppliers seeded.");
         }
     }
@@ -1280,14 +1539,16 @@ public class Program
     {
         if (!await dbContext.TrafficDepts.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT Traffic_Dept ON;
                 INSERT INTO Traffic_Dept (Traffic_dept_code, Traf_name, Traf_telephone, Traf_email, date_created, is_deleted) VALUES 
                 (1, 'JMPD', '011 375 5911', 'fines@joburg.org.za', GETDATE(), 0),
                 (2, 'Cape Town Traffic', '021 444 3333', 'traffic@capetown.gov.za', GETDATE(), 0),
                 (3, 'Tshwane Metro Police', '012 358 7095', 'tmpd@tshwane.gov.za', GETDATE(), 0);
                 SET IDENTITY_INSERT Traffic_Dept OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Traffic Departments seeded.");
         }
     }
@@ -1296,7 +1557,8 @@ public class Program
     {
         if (!await dbContext.Towings.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT Towing ON;
                 INSERT INTO Towing (
                     Towing_code, vmf_code, Call_refer, Tow_request_date, Tow_request_time, 
@@ -1306,7 +1568,8 @@ public class Program
                 (1, 1, 1001, DATEADD(month, -2, GETDATE()), DATEADD(month, -2, GETDATE()), 'N1 Highway Midrand', 'Engine failure', 'With Driver', 1, GETDATE(), 0),
                 (2, 4, 1002, DATEADD(month, -4, GETDATE()), DATEADD(month, -4, GETDATE()), 'Main Rd, Cape Town', 'Accident damage', 'At Police Station', 2, GETDATE(), 0);
                 SET IDENTITY_INSERT Towing OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Towing data seeded.");
         }
     }
@@ -1315,14 +1578,16 @@ public class Program
     {
         if (!await dbContext.VehiclePhotos.AnyAsync())
         {
-             await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT VehiclePhotoInfo ON;
                 INSERT INTO VehiclePhotoInfo (VehiclePhotoInfoCode, VehicleMasterCode, FileUrl, Description, Orientation, date_created, is_deleted) VALUES 
                 (1, 1, 'https://example.com/photos/abc123gp_front.jpg', 'Front view', 1, GETDATE(), 0),
                 (2, 1, 'https://example.com/photos/abc123gp_side.jpg', 'Side view', 2, GETDATE(), 0),
                 (3, 2, 'https://example.com/photos/xyz987gp_accident.jpg', 'Accident damage', 1, GETDATE(), 0);
                 SET IDENTITY_INSERT VehiclePhotoInfo OFF;
-            ");
+            "
+            );
             Console.WriteLine("  ✓ Vehicle Photos seeded.");
         }
     }
@@ -1335,30 +1600,34 @@ public class Program
         // Using explicit insert to avoid identity issues if any, though financial_year_code is short PK
         if (!await dbContext.FinancialYears.AnyAsync(y => y.financial_year_code == 2024))
         {
-             try
-             {
-                 // Try with IDENTITY_INSERT ON in single batch
-                 await dbContext.Database.ExecuteSqlRawAsync(
+            try
+            {
+                // Try with IDENTITY_INSERT ON in single batch
+                await dbContext.Database.ExecuteSqlRawAsync(
                     @"SET IDENTITY_INSERT financial_year ON;
                       INSERT INTO financial_year (financial_year_code, financial_year, start_date, end_date, date_created, is_deleted)
                       VALUES 
                       (2023, '2023/2024', '2023-04-01', '2024-03-31', GETDATE(), 0),
                       (2024, '2024/2025', '2024-04-01', '2025-03-31', GETDATE(), 0),
                       (2025, '2025/2026', '2025-04-01', '2026-03-31', GETDATE(), 0);
-                      SET IDENTITY_INSERT financial_year OFF;");
-             }
-             catch (Exception ex)
-             {
-                 Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for financial_year ({ex.Message}). Trying without...");
-                 // Fallback if not identity (e.g. if previous failed because table has no identity)
-                 await dbContext.Database.ExecuteSqlRawAsync(
+                      SET IDENTITY_INSERT financial_year OFF;"
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for financial_year ({ex.Message}). Trying without..."
+                );
+                // Fallback if not identity (e.g. if previous failed because table has no identity)
+                await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO financial_year (financial_year_code, financial_year, start_date, end_date, date_created, is_deleted)
                       VALUES 
                       (2023, '2023/2024', '2023-04-01', '2024-03-31', GETDATE(), 0),
                       (2024, '2024/2025', '2024-04-01', '2025-03-31', GETDATE(), 0),
-                      (2025, '2025/2026', '2025-04-01', '2026-03-31', GETDATE(), 0)");
-             }
-             Console.WriteLine("  ✓ Financial Years seeded.");
+                      (2025, '2025/2026', '2025-04-01', '2026-03-31', GETDATE(), 0)"
+                );
+            }
+            Console.WriteLine("  ✓ Financial Years seeded.");
         }
 
         // 2. Cost Categories
@@ -1377,12 +1646,15 @@ public class Program
                       (4, 'Tolls', 'N', 'N', GETDATE(), 0),
                       (5, 'Admin Fees', 'Y', 'N', GETDATE(), 0),
                       (6, 'Insurance', 'N', 'Y', GETDATE(), 0);
-                      SET IDENTITY_INSERT cost_category OFF;");
+                      SET IDENTITY_INSERT cost_category OFF;"
+                );
             }
             catch (Exception ex)
             {
-                 Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for cost_category ({ex.Message}). Trying without...");
-                 await dbContext.Database.ExecuteSqlRawAsync(
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for cost_category ({ex.Message}). Trying without..."
+                );
+                await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO cost_category (cost_category_code, description, vat_recoverable, cpk_contribution, date_created, is_deleted)
                       VALUES 
                       (1, 'Fuel', 'Y', 'Y', GETDATE(), 0),
@@ -1390,36 +1662,41 @@ public class Program
                       (3, 'Tyres', 'Y', 'Y', GETDATE(), 0),
                       (4, 'Tolls', 'N', 'N', GETDATE(), 0),
                       (5, 'Admin Fees', 'Y', 'N', GETDATE(), 0),
-                      (6, 'Insurance', 'N', 'Y', GETDATE(), 0)");
+                      (6, 'Insurance', 'N', 'Y', GETDATE(), 0)"
+                );
             }
-             Console.WriteLine("  ✓ Cost Categories seeded.");
+            Console.WriteLine("  ✓ Cost Categories seeded.");
         }
 
         // 3. Fuel Tariffs
         if (!await dbContext.FuelTariffs.AnyAsync())
         {
-             // fuel_tariff_code might be identity. Let's try SET IDENTITY_INSERT just in case.
-             try 
-             {
-                 await dbContext.Database.ExecuteSqlRawAsync(
+            // fuel_tariff_code might be identity. Let's try SET IDENTITY_INSERT just in case.
+            try
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(
                     @"SET IDENTITY_INSERT fuel_tariff ON;
                       INSERT INTO fuel_tariff (fuel_tariff_code, fuel_type_code, fuel_tariff, fuel_tariff_notes, start_date, date_created, is_deleted)
                       VALUES 
                       (1, 1, 23.50, 'Standard Inland Rate', DATEADD(month, -1, GETDATE()), GETDATE(), 0),
                       (2, 2, 24.10, 'Wholesale Diesel Rate', DATEADD(month, -1, GETDATE()), GETDATE(), 0);
-                      SET IDENTITY_INSERT fuel_tariff OFF;");
-             }
-             catch (Exception ex)
-             {
-                 Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for fuel_tariff ({ex.Message}). Trying without...");
-                 // Fallback if not identity
-                 await dbContext.Database.ExecuteSqlRawAsync(
+                      SET IDENTITY_INSERT fuel_tariff OFF;"
+                );
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for fuel_tariff ({ex.Message}). Trying without..."
+                );
+                // Fallback if not identity
+                await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO fuel_tariff (fuel_tariff_code, fuel_type_code, fuel_tariff, fuel_tariff_notes, start_date, date_created, is_deleted)
                       VALUES 
                       (1, 1, 23.50, 'Standard Inland Rate', DATEADD(month, -1, GETDATE()), GETDATE(), 0),
-                      (2, 2, 24.10, 'Wholesale Diesel Rate', DATEADD(month, -1, GETDATE()), GETDATE(), 0)");
-             }
-             Console.WriteLine("  ✓ Fuel Tariffs seeded.");
+                      (2, 2, 24.10, 'Wholesale Diesel Rate', DATEADD(month, -1, GETDATE()), GETDATE(), 0)"
+                );
+            }
+            Console.WriteLine("  ✓ Fuel Tariffs seeded.");
         }
     }
 
@@ -1430,7 +1707,7 @@ public class Program
         // 1. Tasks
         if (!await dbContext.Tasks.AnyAsync())
         {
-            try 
+            try
             {
                 // task_code is int, likely identity
                 await dbContext.Database.ExecuteSqlRawAsync(
@@ -1442,11 +1719,14 @@ public class Program
                       (3, 1, 'Brake Pad Replacement (Front)', 1.0, GETDATE(), 0),
                       (4, 1, 'Clutch Overhaul', 4.5, GETDATE(), 0),
                       (5, 1, 'Check Engine Light Diagnostics', 0.5, GETDATE(), 0);
-                      SET IDENTITY_INSERT task OFF;");
+                      SET IDENTITY_INSERT task OFF;"
+                );
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for task ({ex.Message}). Trying without...");
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for task ({ex.Message}). Trying without..."
+                );
                 await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO task (task_code, profile_code, description, duration_hours, date_created, is_deleted)
                       VALUES 
@@ -1454,7 +1734,8 @@ public class Program
                       (2, 1, 'Oil Change & Filter', 0.5, GETDATE(), 0),
                       (3, 1, 'Brake Pad Replacement (Front)', 1.0, GETDATE(), 0),
                       (4, 1, 'Clutch Overhaul', 4.5, GETDATE(), 0),
-                      (5, 1, 'Check Engine Light Diagnostics', 0.5, GETDATE(), 0)");
+                      (5, 1, 'Check Engine Light Diagnostics', 0.5, GETDATE(), 0)"
+                );
             }
             Console.WriteLine("  ✓ Workshop Tasks seeded.");
         }
@@ -1473,11 +1754,14 @@ public class Program
                       (3, 'SPK-PLG-NGK', 'Spark Plug NGK R', 200, 0, GETDATE(), 0),
                       (4, 'AIR-FIL-099', 'Air Filter Assy', 5, 50, GETDATE(), 0),
                       (5, 'WIP-BLD-22', 'Wiper Blade 22 inch', 30, 0, GETDATE(), 0);
-                      SET IDENTITY_INSERT part OFF;");
+                      SET IDENTITY_INSERT part OFF;"
+                );
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for part ({ex.Message}). Trying without...");
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for part ({ex.Message}). Trying without..."
+                );
                 await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO part (part_code, part_number, description, qty_on_hand, qty_on_order, date_created, is_deleted)
                       VALUES 
@@ -1485,7 +1769,8 @@ public class Program
                       (2, 'BRK-PAD-FT', 'Brake Pads Front Set', 12, 20, GETDATE(), 0),
                       (3, 'SPK-PLG-NGK', 'Spark Plug NGK R', 200, 0, GETDATE(), 0),
                       (4, 'AIR-FIL-099', 'Air Filter Assy', 5, 50, GETDATE(), 0),
-                      (5, 'WIP-BLD-22', 'Wiper Blade 22 inch', 30, 0, GETDATE(), 0)");
+                      (5, 'WIP-BLD-22', 'Wiper Blade 22 inch', 30, 0, GETDATE(), 0)"
+                );
             }
             Console.WriteLine("  ✓ Workshop Parts seeded.");
         }
@@ -1507,17 +1792,21 @@ public class Program
                       (1, 1, 'TRK-001-GPS', 'Active', 'GPS', DATEADD(year, -2, GETDATE()), NULL, GETDATE(), 0),
                       (2, 2, 'TRK-002-GPS', 'Active', 'GPS', DATEADD(year, -1, GETDATE()), NULL, GETDATE(), 0),
                       (3, 3, 'TRK-003-RF', 'Inactive', 'RF', DATEADD(year, -3, GETDATE()), DATEADD(month, -1, GETDATE()), GETDATE(), 0);
-                      SET IDENTITY_INSERT Tracking OFF;");
+                      SET IDENTITY_INSERT Tracking OFF;"
+                );
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for Tracking ({ex.Message}). Trying without...");
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for Tracking ({ex.Message}). Trying without..."
+                );
                 await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO Tracking (track_code, vmf_code, track_num, track_status, track_type, install_date, remove_date, date_created, is_deleted)
                       VALUES 
                       (1, 1, 'TRK-001-GPS', 'Active', 'GPS', DATEADD(year, -2, GETDATE()), NULL, GETDATE(), 0),
                       (2, 2, 'TRK-002-GPS', 'Active', 'GPS', DATEADD(year, -1, GETDATE()), NULL, GETDATE(), 0),
-                      (3, 3, 'TRK-003-RF', 'Inactive', 'RF', DATEADD(year, -3, GETDATE()), DATEADD(month, -1, GETDATE()), GETDATE(), 0)");
+                      (3, 3, 'TRK-003-RF', 'Inactive', 'RF', DATEADD(year, -3, GETDATE()), DATEADD(month, -1, GETDATE()), GETDATE(), 0)"
+                );
             }
             Console.WriteLine("  ✓ Tracking units seeded.");
         }
@@ -1534,17 +1823,21 @@ public class Program
                       (1, 1, 'Speeding', 'Vehicle exceeded 120km/h on N1', DATEADD(day, -5, GETDATE()), 'John Doe', GETDATE(), 0),
                       (2, 2, 'Route Deviation', 'Vehicle left designated zone', DATEADD(day, -2, GETDATE()), 'Jane Smith', GETDATE(), 0),
                       (3, 1, 'Harsh Braking', 'Excessive g-force recorded', DATEADD(day, -1, GETDATE()), 'John Doe', GETDATE(), 0);
-                      SET IDENTITY_INSERT Monitor OFF;");
+                      SET IDENTITY_INSERT Monitor OFF;"
+                );
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"  ! Warning: IDENTITY_INSERT failed for Monitor ({ex.Message}). Trying without...");
+                Console.WriteLine(
+                    $"  ! Warning: IDENTITY_INSERT failed for Monitor ({ex.Message}). Trying without..."
+                );
                 await dbContext.Database.ExecuteSqlRawAsync(
                     @"INSERT INTO Monitor (monitor_code, vmf_code, Inquiry_type, Inquiry_Desc, Capture_dat, Driver_name, date_created, is_deleted)
                       VALUES 
                       (1, 1, 'Speeding', 'Vehicle exceeded 120km/h on N1', DATEADD(day, -5, GETDATE()), 'John Doe', GETDATE(), 0),
                       (2, 2, 'Route Deviation', 'Vehicle left designated zone', DATEADD(day, -2, GETDATE()), 'Jane Smith', GETDATE(), 0),
-                      (3, 1, 'Harsh Braking', 'Excessive g-force recorded', DATEADD(day, -1, GETDATE()), 'John Doe', GETDATE(), 0)");
+                      (3, 1, 'Harsh Braking', 'Excessive g-force recorded', DATEADD(day, -1, GETDATE()), 'John Doe', GETDATE(), 0)"
+                );
             }
             Console.WriteLine("  ✓ Monitor alerts seeded.");
         }
@@ -1552,7 +1845,9 @@ public class Program
 
     private static async Task SeedFrontendDemoCoverage(FisDbContext dbContext)
     {
-        Console.WriteLine("  ├── Seeding frontend demo coverage (validation + vehicles + contract workflow)...");
+        Console.WriteLine(
+            "  ├── Seeding frontend demo coverage (validation + vehicles + contract workflow)..."
+        );
 
         await SeedContractWorkflowReferenceData(dbContext);
         await SeedValidationTopUpData(dbContext);
@@ -1567,7 +1862,8 @@ public class Program
     {
         try
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 SET IDENTITY_INSERT contract_status ON;
                 IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 1)
                     INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
@@ -1585,11 +1881,13 @@ public class Program
                     INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
                     VALUES (5, 'Declined', 'DECL', 0, 1, GETDATE(), 0);
                 SET IDENTITY_INSERT contract_status OFF;
-            ");
+            "
+            );
         }
         catch
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 1)
                     INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
                     VALUES (1, 'Pending Approval', 'PEND', 0, 0, GETDATE(), 0);
@@ -1605,10 +1903,12 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM contract_status WHERE contract_status_code = 5)
                     INSERT INTO contract_status (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, is_deleted)
                     VALUES (5, 'Declined', 'DECL', 0, 1, GETDATE(), 0);
-            ");
+            "
+            );
         }
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF NOT EXISTS (SELECT 1 FROM Contract_type WHERE contract_type = 'H')
                 INSERT INTO Contract_type (contract_type, CT_description, CT_Active, date_created, is_deleted)
                 VALUES ('H', 'Hire Contract', 1, GETDATE(), 0);
@@ -1618,7 +1918,8 @@ public class Program
             IF NOT EXISTS (SELECT 1 FROM Contract_type WHERE contract_type = 'D')
                 INSERT INTO Contract_type (contract_type, CT_description, CT_Active, date_created, is_deleted)
                 VALUES ('D', 'Daily Contract', 1, GETDATE(), 0);
-        ");
+        "
+        );
     }
 
     private static async Task SeedValidationTopUpData(FisDbContext dbContext)
@@ -1638,7 +1939,8 @@ public class Program
                     INSERT INTO class (class_code, description, date_created, is_deleted) VALUES (6, 'Bus', GETDATE(), 0);
                 IF NOT EXISTS (SELECT 1 FROM class WHERE class_code = 7)
                     INSERT INTO class (class_code, description, date_created, is_deleted) VALUES (7, 'Trailer', GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1653,7 +1955,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM unit_of_measure WHERE unit_of_measure_code = 6)
                     INSERT INTO unit_of_measure (unit_of_measure_code, unit_description, unit_abbreviation, unit_category, date_created, is_deleted)
                     VALUES (6, 'Days', 'day', 'Time', GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1668,7 +1971,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM maintenance_trigger WHERE maint_trigger_code = 5)
                     INSERT INTO maintenance_trigger (maint_trigger_code, description, trigger_id, date_created, is_deleted)
                     VALUES (5, 'Hybrid (Time + KM)', 'HYBRID', GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1683,7 +1987,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM licence_fee WHERE licence_fee_code = 5)
                     INSERT INTO licence_fee (licence_fee_code, licence_description, licence_fee, date_created, is_deleted)
                     VALUES (5, 'Bus Annual License', 2400.00, GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1698,7 +2003,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM Loss_type WHERE loss_type_code = 6)
                     INSERT INTO Loss_type (loss_type_code, loss_description, date_created, is_deleted)
                     VALUES (6, 'Natural Disaster', GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1713,7 +2019,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM fuel_type WHERE fuel_type_code = 3)
                     INSERT INTO fuel_type (fuel_type_code, fuel_description, date_created, is_deleted)
                     VALUES (3, 'Hybrid', GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1734,7 +2041,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM driver_licence_types WHERE driver_licence_type_id = 5)
                     INSERT INTO driver_licence_types (driver_licence_type_id, driver_licence_type_code, driver_licence_type_description, date_created, is_deleted)
                     VALUES (5, 'C', 'Code C', GETDATE(), 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -1767,7 +2075,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM vehicle_status WHERE vehicle_status_code = 4)
                     INSERT INTO vehicle_status (vehicle_status_code, status_description, date_created, is_deleted)
                     VALUES (4, 'Accident Hold', GETDATE(), 0);
-            ");
+            "
+        );
     }
 
     private static async Task SeedDemoVehicles(FisDbContext dbContext)
@@ -1907,12 +2216,14 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM vehicle_master WHERE vmf_code = 1207)
                     INSERT INTO vehicle_master (vmf_code, fleet_number, registration_number, model_code, type_code, colour, engine_number_1, chassis_number, year_manufactured, current_odo, take_on_odo, take_on_date, vehicle_status_code, location_code, purchase_amount, date_created, is_deleted)
                     VALUES (1207, 'GGRE0007', 'REL 007 GP', 3, 1, 'Silver', 'ENG1207A', 'CHS1207A', 2025, 5500, 0, DATEADD(month, -2, GETDATE()), 1, 2, 450000, GETDATE(), 0);
-            ");
+            "
+        );
     }
 
     private static async Task SeedDemoContracts(FisDbContext dbContext)
     {
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @can_seed_with_explicit_ids BIT = 1;
 
             BEGIN TRY
@@ -1962,12 +2273,67 @@ public class Program
                 BEGIN CATCH
                 END CATCH
             END
-        ");
+        "
+        );
     }
 
     private static async Task SeedVehicleAuthorizationQueue(FisDbContext dbContext)
     {
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        var hasExpandedColumns =
+            await dbContext
+                .Database.SqlQueryRaw<int>(
+                    """
+                    SELECT CASE
+                        WHEN COL_LENGTH(N'dbo.pre_vehicle_master', N'chassis_number') IS NOT NULL
+                         AND COL_LENGTH(N'dbo.pre_vehicle_master', N'engine_number') IS NOT NULL
+                         AND COL_LENGTH(N'dbo.pre_vehicle_master', N'Authority_Status') IS NOT NULL
+                         AND COL_LENGTH(N'dbo.pre_vehicle_master', N'purchase_amount') IS NOT NULL
+                        THEN 1 ELSE 0 END AS [Value]
+                    """
+                )
+                .SingleAsync() == 1;
+
+        if (!hasExpandedColumns)
+        {
+            await ExecuteIdentityAwareSqlAsync(
+                dbContext,
+                @"
+                SET IDENTITY_INSERT pre_vehicle_master ON;
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3001, 1, 'PRC 301 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3002, 2, 'PRA 302 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3003, 3, 'PRR 303 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3004, 4, 'PRC 304 GP', GETDATE(), 6, 0);
+                SET IDENTITY_INSERT pre_vehicle_master OFF;
+                ",
+                @"
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (1, 'PRC 301 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (2, 'PRA 302 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3, 'PRR 303 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (4, 'PRC 304 GP', GETDATE(), 6, 0);
+                "
+            );
+            return;
+        }
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
+            @"
             DECLARE @can_seed_explicit_pre_vehicle_ids BIT = 1;
 
             BEGIN TRY
@@ -2001,24 +2367,80 @@ public class Program
                 BEGIN CATCH
                 END CATCH
             END
-        ");
+        ",
+            @"
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (1, 'PRC 301 GP', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (2, 'PRA 302 GP', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (3, 'PRR 303 GP', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (4, 'PRC 304 GP', GETDATE(), 0);
+            "
+        );
     }
 
-    private static async Task ExecuteIdentityAwareSqlAsync(FisDbContext dbContext, string sqlWithIdentityInsert, string sqlFallback)
+    private static async Task ExecuteIdentityAwareSqlAsync(
+        FisDbContext dbContext,
+        string sqlWithIdentityInsert,
+        string sqlFallback
+    )
     {
         try
         {
-            await dbContext.Database.ExecuteSqlRawAsync(sqlWithIdentityInsert);
+            await ExecuteSqlWithoutEfLoggingAsync(dbContext, sqlWithIdentityInsert);
         }
-        catch
+        catch (SqlException exception) when (IsIdentityInsertCompatibilityError(exception))
         {
-            await dbContext.Database.ExecuteSqlRawAsync(sqlFallback);
+            await ExecuteSqlWithoutEfLoggingAsync(dbContext, sqlFallback);
+        }
+    }
+
+    private static bool IsIdentityInsertCompatibilityError(SqlException exception) =>
+        exception.Number is 544 or 8101 or 8106;
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Seeder SQL is fixed internal data and schema setup text only."
+    )]
+    private static async Task ExecuteSqlWithoutEfLoggingAsync(
+        FisDbContext dbContext,
+        string sql
+    )
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        var openedHere = false;
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await dbContext.Database.OpenConnectionAsync();
+            openedHere = true;
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (openedHere)
+            {
+                await dbContext.Database.CloseConnectionAsync();
+            }
         }
     }
 
     private static async Task ApplyBatch1VehicleMasterCompletenessAsync(FisDbContext dbContext)
     {
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             -- Batch 1: Vehicle Master dependent tables and visible columns
 
             -- 1) department
@@ -2203,39 +2625,77 @@ public class Program
             LEFT JOIN vehicle_history vh ON vh.hist_vmf_code = vm.vmf_code AND vh.is_deleted = 0
             WHERE vm.is_deleted = 0
               AND vh.hist_code IS NULL;
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 1 vehicle-master completeness updates applied.");
 
-        var missingGg = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE is_deleted = 0 AND (fleet_number IS NULL OR LTRIM(RTRIM(fleet_number)) = '')");
-        var missingReg = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE is_deleted = 0 AND (registration_number IS NULL OR LTRIM(RTRIM(registration_number)) = '')");
-        var duplicateGg = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM (SELECT UPPER(LTRIM(RTRIM(fleet_number))) v FROM vehicle_master WHERE is_deleted = 0 AND fleet_number IS NOT NULL AND LTRIM(RTRIM(fleet_number)) <> '' GROUP BY UPPER(LTRIM(RTRIM(fleet_number))) HAVING COUNT(1) > 1) x");
-        var duplicateReg = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM (SELECT UPPER(LTRIM(RTRIM(registration_number))) v FROM vehicle_master WHERE is_deleted = 0 AND registration_number IS NOT NULL AND LTRIM(RTRIM(registration_number)) <> '' GROUP BY UPPER(LTRIM(RTRIM(registration_number))) HAVING COUNT(1) > 1) x");
+        var missingGg = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_master WHERE is_deleted = 0 AND (fleet_number IS NULL OR LTRIM(RTRIM(fleet_number)) = '')"
+        );
+        var missingReg = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_master WHERE is_deleted = 0 AND (registration_number IS NULL OR LTRIM(RTRIM(registration_number)) = '')"
+        );
+        var duplicateGg = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM (SELECT UPPER(LTRIM(RTRIM(fleet_number))) v FROM vehicle_master WHERE is_deleted = 0 AND fleet_number IS NOT NULL AND LTRIM(RTRIM(fleet_number)) <> '' GROUP BY UPPER(LTRIM(RTRIM(fleet_number))) HAVING COUNT(1) > 1) x"
+        );
+        var duplicateReg = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM (SELECT UPPER(LTRIM(RTRIM(registration_number))) v FROM vehicle_master WHERE is_deleted = 0 AND registration_number IS NOT NULL AND LTRIM(RTRIM(registration_number)) <> '' GROUP BY UPPER(LTRIM(RTRIM(registration_number))) HAVING COUNT(1) > 1) x"
+        );
         if (await HasColumnAsync(dbContext, "vehicle_master", "fuel_type_code"))
         {
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 UPDATE vm
                 SET fuel_type_code = CASE WHEN vm.type_code = 1 THEN 2 ELSE 1 END
                 FROM vehicle_master vm
                 LEFT JOIN fuel_type ft ON ft.fuel_type_code = vm.fuel_type_code
                 WHERE vm.is_deleted = 0
-                  AND (vm.fuel_type_code IS NULL OR ft.fuel_type_code IS NULL);");
+                  AND (vm.fuel_type_code IS NULL OR ft.fuel_type_code IS NULL);"
+            );
         }
 
         var unresolvedCodesSql = await HasColumnAsync(dbContext, "vehicle_master", "fuel_type_code")
             ? "SELECT COUNT(1) FROM vehicle_master vm LEFT JOIN site s ON s.Site_code = vm.location_code LEFT JOIN model m ON m.model_code = vm.model_code LEFT JOIN type t ON t.type_code = vm.type_code LEFT JOIN vehicle_status vs ON vs.vehicle_status_code = vm.vehicle_status_code LEFT JOIN fuel_type ft ON ft.fuel_type_code = vm.fuel_type_code WHERE vm.is_deleted = 0 AND (s.Site_code IS NULL OR m.model_code IS NULL OR t.type_code IS NULL OR vs.vehicle_status_code IS NULL OR ft.fuel_type_code IS NULL)"
             : "SELECT COUNT(1) FROM vehicle_master vm LEFT JOIN site s ON s.Site_code = vm.location_code LEFT JOIN model m ON m.model_code = vm.model_code LEFT JOIN type t ON t.type_code = vm.type_code LEFT JOIN vehicle_status vs ON vs.vehicle_status_code = vm.vehicle_status_code WHERE vm.is_deleted = 0 AND (s.Site_code IS NULL OR m.model_code IS NULL OR t.type_code IS NULL OR vs.vehicle_status_code IS NULL)";
         var unresolvedCodes = await QueryCountAsync(dbContext, unresolvedCodesSql);
-        var vehiclesWithoutHistory = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master vm WHERE vm.is_deleted = 0 AND NOT EXISTS (SELECT 1 FROM vehicle_history vh WHERE vh.hist_vmf_code = vm.vmf_code AND vh.is_deleted = 0)");
-        var pendingCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND contract_status_code = 1");
-        var activeCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND contract_status_code = 3 AND still_current = 'Y'");
-        var closedCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND (contract_status_code = 7 OR still_current = 'N')");
-        var expiredCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND end_date < CAST(GETDATE() AS date)");
+        var vehiclesWithoutHistory = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_master vm WHERE vm.is_deleted = 0 AND NOT EXISTS (SELECT 1 FROM vehicle_history vh WHERE vh.hist_vmf_code = vm.vmf_code AND vh.is_deleted = 0)"
+        );
+        var pendingCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND contract_status_code = 1"
+        );
+        var activeCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND contract_status_code = 3 AND still_current = 'Y'"
+        );
+        var closedCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND (contract_status_code = 7 OR still_current = 'N')"
+        );
+        var expiredCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND end_date < CAST(GETDATE() AS date)"
+        );
 
-        Console.WriteLine($"  📊 Validation | Missing GG: {missingGg} | Missing Registration: {missingReg}");
-        Console.WriteLine($"  📊 Validation | Duplicate GG groups: {duplicateGg} | Duplicate Registration groups: {duplicateReg}");
-        Console.WriteLine($"  📊 Validation | Vehicles with unresolved lookups: {unresolvedCodes} | Vehicles without history: {vehiclesWithoutHistory}");
-        Console.WriteLine($"  📊 Validation | Contracts -> Pending: {pendingCount}, Active: {activeCount}, Closed: {closedCount}, Expired: {expiredCount}");
+        Console.WriteLine(
+            $"  📊 Validation | Missing GG: {missingGg} | Missing Registration: {missingReg}"
+        );
+        Console.WriteLine(
+            $"  📊 Validation | Duplicate GG groups: {duplicateGg} | Duplicate Registration groups: {duplicateReg}"
+        );
+        Console.WriteLine(
+            $"  📊 Validation | Vehicles with unresolved lookups: {unresolvedCodes} | Vehicles without history: {vehiclesWithoutHistory}"
+        );
+        Console.WriteLine(
+            $"  📊 Validation | Contracts -> Pending: {pendingCount}, Active: {activeCount}, Closed: {closedCount}, Expired: {expiredCount}"
+        );
     }
 
     private static async Task ApplyBatch2OperationalCoverageAsync(FisDbContext dbContext)
@@ -2243,7 +2703,8 @@ public class Program
         // Batch 2 tables:
         // Fuel_card, logbook, Tracking, Monitor, VehiclePhotoInfo, Fines, accident, Towing, vehicle_remarks, vehicle_documents
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             -- Fuel_card: ensure a card for vehicles missing one
             ;WITH missing_cards AS (
                 SELECT vm.vmf_code,
@@ -2498,35 +2959,71 @@ public class Program
                   )
                 ORDER BY vm.vmf_code;
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 2 operational coverage updates applied.");
 
-        var vehiclesWithFuelCard = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM Fuel_card WHERE is_deleted = 0 AND vmf_code IS NOT NULL");
-        var vehiclesWithLogbook = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM logbook WHERE is_deleted = 0 AND vmf_code IS NOT NULL");
-        var vehiclesWithTracking = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM Tracking WHERE is_deleted = 0 AND vmf_code IS NOT NULL");
-        var vehiclesWithMonitor = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM Monitor WHERE is_deleted = 0 AND vmf_code IS NOT NULL");
-        var vehiclesWithPhoto = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT VehicleMasterCode) FROM VehiclePhotoInfo WHERE is_deleted = 0 AND VehicleMasterCode IS NOT NULL");
-        var finesCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Fines WHERE is_deleted = 0");
-        var accidentCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM accident WHERE is_deleted = 0");
-        var towingCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Towing WHERE is_deleted = 0");
+        var vehiclesWithFuelCard = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT vmf_code) FROM Fuel_card WHERE is_deleted = 0 AND vmf_code IS NOT NULL"
+        );
+        var vehiclesWithLogbook = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT vmf_code) FROM logbook WHERE is_deleted = 0 AND vmf_code IS NOT NULL"
+        );
+        var vehiclesWithTracking = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT vmf_code) FROM Tracking WHERE is_deleted = 0 AND vmf_code IS NOT NULL"
+        );
+        var vehiclesWithMonitor = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT vmf_code) FROM Monitor WHERE is_deleted = 0 AND vmf_code IS NOT NULL"
+        );
+        var vehiclesWithPhoto = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT VehicleMasterCode) FROM VehiclePhotoInfo WHERE is_deleted = 0 AND VehicleMasterCode IS NOT NULL"
+        );
+        var finesCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM Fines WHERE is_deleted = 0"
+        );
+        var accidentCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM accident WHERE is_deleted = 0"
+        );
+        var towingCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM Towing WHERE is_deleted = 0"
+        );
         var hasVehicleRemarks = await HasTableAsync(dbContext, "vehicle_remarks");
         var hasVehicleDocuments = await HasTableAsync(dbContext, "vehicle_documents");
         var remarkCount = hasVehicleRemarks
-            ? await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_remarks WHERE is_deleted = 0")
+            ? await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_remarks WHERE is_deleted = 0"
+            )
             : 0;
         var documentCount = hasVehicleDocuments
-            ? await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_documents WHERE is_deleted = 0")
+            ? await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_documents WHERE is_deleted = 0"
+            )
             : 0;
 
-        Console.WriteLine($"  📊 Batch 2 | Vehicles with Fuel Card: {vehiclesWithFuelCard} | Logbook: {vehiclesWithLogbook} | Tracking: {vehiclesWithTracking} | Monitor: {vehiclesWithMonitor} | Photo: {vehiclesWithPhoto}");
-        Console.WriteLine($"  📊 Batch 2 | Fines: {finesCount} | Accidents: {accidentCount} | Towing: {towingCount} | Remarks: {remarkCount} | Documents: {documentCount}");
+        Console.WriteLine(
+            $"  📊 Batch 2 | Vehicles with Fuel Card: {vehiclesWithFuelCard} | Logbook: {vehiclesWithLogbook} | Tracking: {vehiclesWithTracking} | Monitor: {vehiclesWithMonitor} | Photo: {vehiclesWithPhoto}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 2 | Fines: {finesCount} | Accidents: {accidentCount} | Towing: {towingCount} | Remarks: {remarkCount} | Documents: {documentCount}"
+        );
     }
 
     private static async Task ApplyBatch3FinanceBillingCoverageAsync(FisDbContext dbContext)
     {
         // Step 1: Reference data (financial_system, cost_category, posting years + months for 24 months)
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @yearNow   SMALLINT = CAST(YEAR(GETDATE())   AS SMALLINT);
             DECLARE @yearPrev  SMALLINT = CAST(YEAR(GETDATE())-1 AS SMALLINT);
             DECLARE @monthNow  TINYINT  = CAST(MONTH(GETDATE())  AS TINYINT);
@@ -2624,7 +3121,8 @@ public class Program
                     SET @bi = @bi + 1;
                 END
             END
-        ");
+        "
+        );
 
         // Step 2: For every posting month in the last 24 months, create invoices per department
         //         and invoice_items + daily_transactions per active-contract vehicle.
@@ -2635,7 +3133,8 @@ public class Program
             int targetYear = targetDate.Year;
             int targetMonth = targetDate.Month;
 
-            await dbContext.Database.ExecuteSqlRawAsync(@"
+            await dbContext.Database.ExecuteSqlRawAsync(
+                @"
                 DECLARE @ty INT = {0};
                 DECLARE @tm INT = {1};
                 DECLARE @txDate DATE = DATEFROMPARTS(@ty, @tm, 15);
@@ -2749,36 +3248,75 @@ public class Program
                 END
 
                 END -- IF @pmCode IS NOT NULL
-            ", targetYear, targetMonth);
+            ",
+                targetYear,
+                targetMonth
+            );
         }
 
         Console.WriteLine("  ✓ Batch 3 finance billing coverage updated (24 months backdated).");
 
-        var financialSystemCount   = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM financial_system WHERE is_deleted = 0");
-        var postingYearCount       = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_year WHERE is_deleted = 0");
-        var postingMonthCount      = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_month WHERE is_deleted = 0");
-        var invoiceCount           = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM invoice WHERE is_deleted = 0");
-        var invoiceItemCount       = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM invoice_item WHERE is_deleted = 0");
-        var dailyTransactionCount  = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM daily_transactions WHERE is_deleted = 0");
-        var journalCount           = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal WHERE is_deleted = 0");
-        var activeContractCount    = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND still_current = 'Y'");
-        var billedVehicleCount     = await QueryCountAsync(dbContext, @"
+        var financialSystemCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM financial_system WHERE is_deleted = 0"
+        );
+        var postingYearCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM posting_year WHERE is_deleted = 0"
+        );
+        var postingMonthCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM posting_month WHERE is_deleted = 0"
+        );
+        var invoiceCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM invoice WHERE is_deleted = 0"
+        );
+        var invoiceItemCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM invoice_item WHERE is_deleted = 0"
+        );
+        var dailyTransactionCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM daily_transactions WHERE is_deleted = 0"
+        );
+        var journalCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM journal WHERE is_deleted = 0"
+        );
+        var activeContractCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract WHERE is_deleted = 0 AND still_current = 'Y'"
+        );
+        var billedVehicleCount = await QueryCountAsync(
+            dbContext,
+            @"
             SELECT COUNT(DISTINCT c.vmf_code) FROM contract c
             WHERE c.is_deleted = 0 AND c.still_current = 'Y'
-              AND EXISTS (SELECT 1 FROM invoice_item ii WHERE ii.vmf_code = c.vmf_code AND ii.is_deleted = 0)");
+              AND EXISTS (SELECT 1 FROM invoice_item ii WHERE ii.vmf_code = c.vmf_code AND ii.is_deleted = 0)"
+        );
 
-        Console.WriteLine($"  📊 Batch 3 | Financial Systems: {financialSystemCount} | Posting Years: {postingYearCount} | Posting Months: {postingMonthCount}");
-        Console.WriteLine($"  📊 Batch 3 | Invoices: {invoiceCount} | Invoice Items: {invoiceItemCount} | Daily Tx: {dailyTransactionCount} | Journals: {journalCount}");
-        Console.WriteLine($"  📊 Batch 3 | Active Contracts: {activeContractCount} | Billed Vehicles (all months): {billedVehicleCount}");
+        Console.WriteLine(
+            $"  📊 Batch 3 | Financial Systems: {financialSystemCount} | Posting Years: {postingYearCount} | Posting Months: {postingMonthCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 3 | Invoices: {invoiceCount} | Invoice Items: {invoiceItemCount} | Daily Tx: {dailyTransactionCount} | Journals: {journalCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 3 | Active Contracts: {activeContractCount} | Billed Vehicles (all months): {billedVehicleCount}"
+        );
     }
 
-    private static async Task ApplyBatch4TripWorkshopVerificationCoverageAsync(FisDbContext dbContext)
+    private static async Task ApplyBatch4TripWorkshopVerificationCoverageAsync(
+        FisDbContext dbContext
+    )
     {
         // Batch 4 tables:
         // trip_authorities, trip_driver, trip_passengers, bookings, Collection,
         // job_cards, workshop, Asset_Verification, vehicle_assessment, Vehicle_Damages
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultTripTypeCode smallint = 1;
             DECLARE @defaultIncidentTypeCode smallint = 1;
             DECLARE @defaultDriverLicenceTypeId int = 1;
@@ -3182,22 +3720,59 @@ public class Program
                       AND ISNULL(vd.is_deleted, 0) = 0
                 );
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 4 trip/workshop/verification coverage updates applied.");
 
-        var tripAuthorityCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM trip_authorities WHERE ISNULL(is_deleted, 0) = 0");
-        var tripDriverCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM trip_driver WHERE ISNULL(is_deleted, 0) = 0");
-        var tripPassengerCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM trip_passengers WHERE ISNULL(is_deleted, 0) = 0");
-        var bookingCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM bookings WHERE ISNULL(is_deleted, 0) = 0");
-        var collectionCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Collection WHERE ISNULL(is_deleted, 0) = 0");
-        var jobCardCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0");
-        var workshopCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM workshop WHERE ISNULL(is_deleted, 0) = 0");
-        var assetVerificationCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Asset_Verification WHERE ISNULL(is_deleted, 0) = 0");
-        var vehicleAssessmentCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_assessment WHERE ISNULL(is_deleted, 0) = 0");
-        var vehicleDamageCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Vehicle_Damages WHERE ISNULL(is_deleted, 0) = 0");
+        var tripAuthorityCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM trip_authorities WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var tripDriverCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM trip_driver WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var tripPassengerCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM trip_passengers WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var bookingCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM bookings WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var collectionCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM Collection WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var jobCardCount = await (
+            await HasTableAsync(dbContext, "job_cards")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var workshopCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM workshop WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var assetVerificationCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM Asset_Verification WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var vehicleAssessmentCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_assessment WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var vehicleDamageCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM Vehicle_Damages WHERE ISNULL(is_deleted, 0) = 0"
+        );
 
-        var vehiclesWithTrips = await QueryCountAsync(dbContext, @"
+        var vehiclesWithTrips = await QueryCountAsync(
+            dbContext,
+            @"
             SELECT COUNT(DISTINCT c.vmf_code)
             FROM contract c
             WHERE c.is_deleted = 0
@@ -3206,14 +3781,34 @@ public class Program
                   FROM trip_authorities ta
                   WHERE ta.contract_code = c.contract_code
                     AND ISNULL(ta.is_deleted, 0) = 0
-              )");
-        var vehiclesWithJobCards = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL");
-        var vehiclesWithAssessments = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM vehicle_assessment WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL");
-        var vehiclesWithDamageRows = await QueryCountAsync(dbContext, "SELECT COUNT(DISTINCT vmf_code) FROM Vehicle_Damages WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL");
+              )"
+        );
+        var vehiclesWithJobCards = await (
+            await HasTableAsync(dbContext, "job_cards")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(DISTINCT vmf_code) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
+                )
+                : Task.FromResult(0)
+        );
+        var vehiclesWithAssessments = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT vmf_code) FROM vehicle_assessment WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
+        );
+        var vehiclesWithDamageRows = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(DISTINCT vmf_code) FROM Vehicle_Damages WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
+        );
 
-        Console.WriteLine($"  📊 Batch 4 | Trip Authorities: {tripAuthorityCount} | Trip Drivers: {tripDriverCount} | Trip Passengers: {tripPassengerCount} | Bookings: {bookingCount} | Collections: {collectionCount}");
-        Console.WriteLine($"  📊 Batch 4 | Job Cards: {jobCardCount} | Workshop: {workshopCount} | Asset Verifications: {assetVerificationCount} | Assessments: {vehicleAssessmentCount} | Damages: {vehicleDamageCount}");
-        Console.WriteLine($"  📊 Batch 4 | Vehicles with Trips: {vehiclesWithTrips} | With JobCards: {vehiclesWithJobCards} | With Assessments: {vehiclesWithAssessments} | With Damage Rows: {vehiclesWithDamageRows}");
+        Console.WriteLine(
+            $"  📊 Batch 4 | Trip Authorities: {tripAuthorityCount} | Trip Drivers: {tripDriverCount} | Trip Passengers: {tripPassengerCount} | Bookings: {bookingCount} | Collections: {collectionCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 4 | Job Cards: {jobCardCount} | Workshop: {workshopCount} | Asset Verifications: {assetVerificationCount} | Assessments: {vehicleAssessmentCount} | Damages: {vehicleDamageCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 4 | Vehicles with Trips: {vehiclesWithTrips} | With JobCards: {vehiclesWithJobCards} | With Assessments: {vehiclesWithAssessments} | With Damage Rows: {vehiclesWithDamageRows}"
+        );
     }
 
     private static async Task ApplyBatch5AuditHistoryCoverageAsync(FisDbContext dbContext)
@@ -3222,7 +3817,8 @@ public class Program
         // contract_status_history, contract_audit_log, vehicle_status_history, vehicle_type_history, vehicle_licence_history,
         // fleet_notes, PreVehicle_Master_notes, TS_Log, error_log, vehicle_history
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultUserCode int = 1;
             DECLARE @defaultContractStatusCode smallint = NULL;
             IF OBJECT_ID('TS_Users', 'U') IS NOT NULL
@@ -3497,23 +4093,58 @@ public class Program
                         AND ISNULL(vh.is_deleted, 0) = 0
                   );
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 5 audit/history coverage updates applied.");
 
-        var contractStatusHistoryCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract_status_history WHERE ISNULL(is_deleted, 0) = 0");
-        var contractAuditLogCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract_audit_log");
-        var vehicleStatusHistoryCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_status_history WHERE ISNULL(is_deleted, 0) = 0");
-        var vehicleTypeHistoryCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_type_history WHERE ISNULL(is_deleted, 0) = 0");
-        var vehicleLicenceHistoryCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_licence_history");
-        var fleetNotesCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fleet_notes WHERE ISNULL(is_deleted, 0) = 0");
-        var preVehicleNotesCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM PreVehicle_Master_notes WHERE ISNULL(is_deleted, 0) = 0");
-        var tsLogCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Log WHERE ISNULL(is_deleted, 0) = 0");
-        var errorLogCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM error_log WHERE ISNULL(is_deleted, 0) = 0");
-        var vehicleHistoryCount = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_history WHERE ISNULL(is_deleted, 0) = 0");
+        var contractStatusHistoryCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract_status_history WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var contractAuditLogCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM contract_audit_log"
+        );
+        var vehicleStatusHistoryCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_status_history WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var vehicleTypeHistoryCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_type_history WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var vehicleLicenceHistoryCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_licence_history"
+        );
+        var fleetNotesCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM fleet_notes WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var preVehicleNotesCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM PreVehicle_Master_notes WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var tsLogCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM TS_Log WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var errorLogCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM error_log WHERE ISNULL(is_deleted, 0) = 0"
+        );
+        var vehicleHistoryCount = await QueryCountAsync(
+            dbContext,
+            "SELECT COUNT(1) FROM vehicle_history WHERE ISNULL(is_deleted, 0) = 0"
+        );
 
-        Console.WriteLine($"  📊 Batch 5 | Contract Status History: {contractStatusHistoryCount} | Contract Audit Log: {contractAuditLogCount} | Vehicle Status History: {vehicleStatusHistoryCount} | Vehicle Type History: {vehicleTypeHistoryCount} | Vehicle Licence History: {vehicleLicenceHistoryCount}");
-        Console.WriteLine($"  📊 Batch 5 | Fleet Notes: {fleetNotesCount} | Pre-Vehicle Notes: {preVehicleNotesCount} | TS Log: {tsLogCount} | Error Log: {errorLogCount} | Vehicle History: {vehicleHistoryCount}");
+        Console.WriteLine(
+            $"  📊 Batch 5 | Contract Status History: {contractStatusHistoryCount} | Contract Audit Log: {contractAuditLogCount} | Vehicle Status History: {vehicleStatusHistoryCount} | Vehicle Type History: {vehicleTypeHistoryCount} | Vehicle Licence History: {vehicleLicenceHistoryCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 5 | Fleet Notes: {fleetNotesCount} | Pre-Vehicle Notes: {preVehicleNotesCount} | TS Log: {tsLogCount} | Error Log: {errorLogCount} | Vehicle History: {vehicleHistoryCount}"
+        );
     }
 
     private static async Task ApplyBatch6ReferenceBreadthCoverageAsync(FisDbContext dbContext)
@@ -3522,7 +4153,8 @@ public class Program
         // province, ranks, Positions, Incident_Area, vehicle_source,
         // fuel_tariff, extra_codes, acc_type, Loss_type, licence_fee
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultUserCode int = 1;
             IF OBJECT_ID('TS_Users', 'U') IS NOT NULL
             BEGIN
@@ -3557,14 +4189,12 @@ public class Program
 
             IF OBJECT_ID('Positions', 'U') IS NOT NULL
             BEGIN
-                SET IDENTITY_INSERT Positions ON;
                 IF NOT EXISTS (SELECT 1 FROM Positions WHERE Position_Code = 1)
                     INSERT INTO Positions (Position_Code, Position_Name, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'Fleet Administrator', GETDATE(), @defaultUserCode, 0);
                 IF NOT EXISTS (SELECT 1 FROM Positions WHERE Position_Code = 2)
                     INSERT INTO Positions (Position_Code, Position_Name, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'Transport Officer', GETDATE(), @defaultUserCode, 0);
-                SET IDENTITY_INSERT Positions OFF;
             END
 
             IF OBJECT_ID('Incident_Area', 'U') IS NOT NULL
@@ -3582,14 +4212,12 @@ public class Program
 
             IF OBJECT_ID('vehicle_source', 'U') IS NOT NULL
             BEGIN
-                SET IDENTITY_INSERT vehicle_source ON;
                 IF NOT EXISTS (SELECT 1 FROM vehicle_source WHERE vs_code = 1)
                     INSERT INTO vehicle_source (vs_code, name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'OEM Direct', '1 Industry Rd, Midrand', 'PO Box 100, Midrand', '0110000000', '0110000001', GETDATE(), @defaultUserCode, 0);
                 IF NOT EXISTS (SELECT 1 FROM vehicle_source WHERE vs_code = 2)
                     INSERT INTO vehicle_source (vs_code, name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'Auction House', '22 Auction Ave, JHB', 'PO Box 220, JHB', '0110000002', '0110000003', GETDATE(), @defaultUserCode, 0);
-                SET IDENTITY_INSERT vehicle_source OFF;
             END
 
             IF OBJECT_ID('fuel_tariff', 'U') IS NOT NULL
@@ -3641,23 +4269,98 @@ public class Program
                     INSERT INTO licence_fee (licence_fee_code, licence_description, licence_fee, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'LDV Annual License', 940.00, GETDATE(), @defaultUserCode, 0);
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 6 reference-data breadth updates applied.");
 
-        var provinceCount = await (await HasTableAsync(dbContext, "province") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM province WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var rankCount = await (await HasTableAsync(dbContext, "ranks") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM ranks WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var positionCount = await (await HasTableAsync(dbContext, "Positions") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Positions WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var incidentAreaCount = await (await HasTableAsync(dbContext, "Incident_Area") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Incident_Area WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var vehicleSourceCount = await (await HasTableAsync(dbContext, "vehicle_source") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_source WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var fuelTariffCount = await (await HasTableAsync(dbContext, "fuel_tariff") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fuel_tariff WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var extraCodeCount = await (await HasTableAsync(dbContext, "extra_codes") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var accTypeCount = await (await HasTableAsync(dbContext, "acc_type") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM acc_type WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var lossTypeCount = await (await HasTableAsync(dbContext, "Loss_type") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Loss_type WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var licenceFeeCount = await (await HasTableAsync(dbContext, "licence_fee") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM licence_fee WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var provinceCount = await (
+            await HasTableAsync(dbContext, "province")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM province WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var rankCount = await (
+            await HasTableAsync(dbContext, "ranks")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM ranks WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var positionCount = await (
+            await HasTableAsync(dbContext, "Positions")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Positions WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var incidentAreaCount = await (
+            await HasTableAsync(dbContext, "Incident_Area")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Incident_Area WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var vehicleSourceCount = await (
+            await HasTableAsync(dbContext, "vehicle_source")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM vehicle_source WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var fuelTariffCount = await (
+            await HasTableAsync(dbContext, "fuel_tariff")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fuel_tariff WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var extraCodeCount = await (
+            await HasTableAsync(dbContext, "extra_codes")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var accTypeCount = await (
+            await HasTableAsync(dbContext, "acc_type")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM acc_type WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var lossTypeCount = await (
+            await HasTableAsync(dbContext, "Loss_type")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Loss_type WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var licenceFeeCount = await (
+            await HasTableAsync(dbContext, "licence_fee")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM licence_fee WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 6 | Province: {provinceCount} | Ranks: {rankCount} | Positions: {positionCount} | Incident Areas: {incidentAreaCount} | Vehicle Sources: {vehicleSourceCount}");
-        Console.WriteLine($"  📊 Batch 6 | Fuel Tariffs: {fuelTariffCount} | Extra Codes: {extraCodeCount} | Accident Types: {accTypeCount} | Loss Types: {lossTypeCount} | Licence Fees: {licenceFeeCount}");
+        Console.WriteLine(
+            $"  📊 Batch 6 | Province: {provinceCount} | Ranks: {rankCount} | Positions: {positionCount} | Incident Areas: {incidentAreaCount} | Vehicle Sources: {vehicleSourceCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 6 | Fuel Tariffs: {fuelTariffCount} | Extra Codes: {extraCodeCount} | Accident Types: {accTypeCount} | Loss Types: {lossTypeCount} | Licence Fees: {licenceFeeCount}"
+        );
     }
 
     private static async Task ApplyBatch7NoticeWorkflowCoverageAsync(FisDbContext dbContext)
@@ -3667,7 +4370,8 @@ public class Program
         // Workflow.Status, Workflow.NotificationTemplate, Workflow.WorkflowNotification,
         // Workflow.NotificationLog, Workflow.StepExecutionHistory
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultUserCode int = 1;
             IF OBJECT_ID('TS_Users', 'U') IS NOT NULL
             BEGIN
@@ -3757,14 +4461,12 @@ public class Program
                    AND NOT EXISTS (SELECT 1 FROM Workflow.Step WHERE WorkflowID = @workflowId AND StepName = 'Review Contract' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO Workflow.Step
                     (
-                        StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, StepParameters, HandlerType,
-                        IsConditional, ConditionExpression, TrueStepID, FalseStepID,
+                        StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID,
                         date_created, created_by_user_code, is_deleted
                     )
                     VALUES
                     (
-                        'Review Contract', 1, @stepTypeId, @workflowId, NULL, '{{""source"":""batch7""}}', 'ManualApproval',
-                        0, NULL, NULL, NULL,
+                        'Review Contract', 1, @stepTypeId, @workflowId, NULL,
                         GETDATE(), @defaultUserCode, 0
                     );
             END
@@ -3924,23 +4626,98 @@ public class Program
                         'Completed', NULL, '{{""seed"":""batch7""}}', '{{""result"":""ok""}}', @defaultUserCode, GETDATE(), 0
                     );
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 7 notice/workflow coverage updates applied.");
 
-        var noticesCount = await (await HasTableAsync(dbContext, "Notices") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Notices WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var noticeScheduleCount = await (await HasTableAsync(dbContext, "NoticeSchedule") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM NoticeSchedule WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var workflowCount = await (await HasTableAsync(dbContext, "Workflow") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.Workflow WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var stepTypeCount = await (await HasTableAsync(dbContext, "StepType") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.StepType WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var stepCount = await (await HasTableAsync(dbContext, "Step") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.Step WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var statusCount = await (await HasTableAsync(dbContext, "Status") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.Status WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var notificationTemplateCount = await (await HasTableAsync(dbContext, "NotificationTemplate") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.NotificationTemplate WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var workflowNotificationCount = await (await HasTableAsync(dbContext, "WorkflowNotification") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.WorkflowNotification WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var notificationLogCount = await (await HasTableAsync(dbContext, "NotificationLog") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.NotificationLog WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var executionHistoryCount = await (await HasTableAsync(dbContext, "StepExecutionHistory") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Workflow.StepExecutionHistory WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var noticesCount = await (
+            await HasTableAsync(dbContext, "Notices")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Notices WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var noticeScheduleCount = await (
+            await HasTableAsync(dbContext, "NoticeSchedule")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM NoticeSchedule WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var workflowCount = await (
+            await HasTableAsync(dbContext, "Workflow")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.Workflow WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var stepTypeCount = await (
+            await HasTableAsync(dbContext, "StepType")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.StepType WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var stepCount = await (
+            await HasTableAsync(dbContext, "Step")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.Step WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var statusCount = await (
+            await HasTableAsync(dbContext, "Status")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.Status WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var notificationTemplateCount = await (
+            await HasTableAsync(dbContext, "NotificationTemplate")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.NotificationTemplate WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var workflowNotificationCount = await (
+            await HasTableAsync(dbContext, "WorkflowNotification")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.WorkflowNotification WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var notificationLogCount = await (
+            await HasTableAsync(dbContext, "NotificationLog")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.NotificationLog WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var executionHistoryCount = await (
+            await HasTableAsync(dbContext, "StepExecutionHistory")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Workflow.StepExecutionHistory WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 7 | Notices: {noticesCount} | Notice Schedules: {noticeScheduleCount} | Workflows: {workflowCount} | Step Types: {stepTypeCount} | Steps: {stepCount}");
-        Console.WriteLine($"  📊 Batch 7 | Status: {statusCount} | Notification Templates: {notificationTemplateCount} | Workflow Notifications: {workflowNotificationCount} | Notification Logs: {notificationLogCount} | Step Exec History: {executionHistoryCount}");
+        Console.WriteLine(
+            $"  📊 Batch 7 | Notices: {noticesCount} | Notice Schedules: {noticeScheduleCount} | Workflows: {workflowCount} | Step Types: {stepTypeCount} | Steps: {stepCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 7 | Status: {statusCount} | Notification Templates: {notificationTemplateCount} | Workflow Notifications: {workflowNotificationCount} | Notification Logs: {notificationLogCount} | Step Exec History: {executionHistoryCount}"
+        );
     }
 
     private static async Task ApplyBatch8LegacyBridgeCoverageAsync(FisDbContext dbContext)
@@ -3949,7 +4726,8 @@ public class Program
         // VehicleKilos, Model_KilosPerFuelLitre, Wesbank_KilosPerFuelLitre, Report_vehicles, Req_num,
         // HistStatus, fleet_notes_bkp, fleet_notes_restore, TripsWithoutRoutes_Backup, EduCodes
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultUserCode int = 1;
             IF OBJECT_ID('TS_Users', 'U') IS NOT NULL
             BEGIN
@@ -4202,23 +4980,98 @@ public class Program
                   )
                 ORDER BY vm.vmf_code;
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 8 legacy-bridge coverage updates applied.");
 
-        var vehicleKilosCount = await (await HasTableAsync(dbContext, "VehicleKilos") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM VehicleKilos WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var modelKplCount = await (await HasTableAsync(dbContext, "Model_KilosPerFuelLitre") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Model_KilosPerFuelLitre WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var wesbankKplCount = await (await HasTableAsync(dbContext, "Wesbank_KilosPerFuelLitre") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Wesbank_KilosPerFuelLitre WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var reportVehiclesCount = await (await HasTableAsync(dbContext, "Report_vehicles") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Report_vehicles WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var reqNumCount = await (await HasTableAsync(dbContext, "Req_num") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Req_num WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var histStatusCount = await (await HasTableAsync(dbContext, "HistStatus") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM HistStatus WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var fleetNotesBkpCount = await (await HasTableAsync(dbContext, "fleet_notes_bkp") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fleet_notes_bkp WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var fleetNotesRestoreCount = await (await HasTableAsync(dbContext, "fleet_notes_restore") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fleet_notes_restore WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tripsWithoutRoutesCount = await (await HasTableAsync(dbContext, "TripsWithoutRoutes_Backup") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TripsWithoutRoutes_Backup WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var eduCodesCount = await (await HasTableAsync(dbContext, "EduCodes") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM EduCodes WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var vehicleKilosCount = await (
+            await HasTableAsync(dbContext, "VehicleKilos")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM VehicleKilos WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var modelKplCount = await (
+            await HasTableAsync(dbContext, "Model_KilosPerFuelLitre")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Model_KilosPerFuelLitre WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var wesbankKplCount = await (
+            await HasTableAsync(dbContext, "Wesbank_KilosPerFuelLitre")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Wesbank_KilosPerFuelLitre WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var reportVehiclesCount = await (
+            await HasTableAsync(dbContext, "Report_vehicles")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Report_vehicles WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var reqNumCount = await (
+            await HasTableAsync(dbContext, "Req_num")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Req_num WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var histStatusCount = await (
+            await HasTableAsync(dbContext, "HistStatus")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM HistStatus WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var fleetNotesBkpCount = await (
+            await HasTableAsync(dbContext, "fleet_notes_bkp")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fleet_notes_bkp WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var fleetNotesRestoreCount = await (
+            await HasTableAsync(dbContext, "fleet_notes_restore")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fleet_notes_restore WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tripsWithoutRoutesCount = await (
+            await HasTableAsync(dbContext, "TripsWithoutRoutes_Backup")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM TripsWithoutRoutes_Backup WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var eduCodesCount = await (
+            await HasTableAsync(dbContext, "EduCodes")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM EduCodes WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 8 | VehicleKilos: {vehicleKilosCount} | Model KPL: {modelKplCount} | Wesbank KPL: {wesbankKplCount} | Report Vehicles: {reportVehiclesCount} | Req Num: {reqNumCount}");
-        Console.WriteLine($"  📊 Batch 8 | HistStatus: {histStatusCount} | Fleet Notes BKP: {fleetNotesBkpCount} | Fleet Notes Restore: {fleetNotesRestoreCount} | TripsWithoutRoutes BKP: {tripsWithoutRoutesCount} | EduCodes: {eduCodesCount}");
+        Console.WriteLine(
+            $"  📊 Batch 8 | VehicleKilos: {vehicleKilosCount} | Model KPL: {modelKplCount} | Wesbank KPL: {wesbankKplCount} | Report Vehicles: {reportVehiclesCount} | Req Num: {reqNumCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 8 | HistStatus: {histStatusCount} | Fleet Notes BKP: {fleetNotesBkpCount} | Fleet Notes Restore: {fleetNotesRestoreCount} | TripsWithoutRoutes BKP: {tripsWithoutRoutesCount} | EduCodes: {eduCodesCount}"
+        );
     }
 
     private static async Task ApplyBatch9SystemConfigurationCoverageAsync(FisDbContext dbContext)
@@ -4228,9 +5081,16 @@ public class Program
         // dtproperties, Configuration.UserCompany, Configuration.Parameter,
         // Configuration.ParameterValue, Holidays
 
-        var defaultUserCode = await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4249,7 +5109,8 @@ public class Program
                     (database_version, app_version, vat_percent, daily_weight, hourly_weight, date_created, created_by_user_code, is_deleted)
                     VALUES
                     ('v1.0', 'app-1.0', 15.00, 0.60, 0.40, GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4264,7 +5125,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM version WHERE ISNULL(is_deleted, 0) = 0)
                     INSERT INTO version (version_number, version_date, date_created, created_by_user_code, is_deleted)
                     VALUES ('1.0.0', GETDATE(), GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4279,7 +5141,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM db_version WHERE ISNULL(is_deleted, 0) = 0)
                     INSERT INTO db_version (db_version_number, db_version_date, date_created, created_by_user_code, is_deleted)
                     VALUES ('legacy-sync-1', GETDATE(), GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4294,9 +5157,11 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM db_ddl_log WHERE database_user = 'fis_seed' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO db_ddl_log (post_time, database_user, [event], [schema], [object], tsql, date_created, created_by_user_code, is_deleted)
                     VALUES (GETDATE(), 'fis_seed', 'INSERT', 'dbo', 'vehicle_master', '/* seeded ddl log */', GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultUserCode int = ISNULL(
                 (SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code),
                 1
@@ -4308,7 +5173,8 @@ public class Program
                     (ConfigurationFilter, ConfiguredValue, PackagePath, ConfiguredValueType, date_created, created_by_user_code, is_deleted)
                     VALUES ('FIS', 'Server=legacy;Database=fis;', '\\Package.Variables[User::Conn].Properties[Value]', 'String', GETDATE(), @defaultUserCode, 0);
             END
-        ");
+        "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4323,7 +5189,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM dtproperties WHERE property = 'DatabaseVersion' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO dtproperties (objectid, property, value, version, uvalue, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'DatabaseVersion', '1.0', 1, 'seeded', GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4338,7 +5205,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM [Configuration].[UserCompany] WHERE Code = 'GFLEET' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO [Configuration].[UserCompany] (Code, Name, date_created, created_by_user_code, is_deleted)
                     VALUES ('GFLEET', 'g-FleeT', GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4353,7 +5221,8 @@ public class Program
                 IF NOT EXISTS (SELECT 1 FROM [Configuration].[Parameter] WHERE Name = 'BillingGraceDays' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO [Configuration].[Parameter] (Name, date_created, created_by_user_code, is_deleted)
                     VALUES ('BillingGraceDays', GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4374,9 +5243,11 @@ public class Program
                    AND NOT EXISTS (SELECT 1 FROM [Configuration].[ParameterValue] WHERE ParameterID = @pId AND UserCompanyID = @ucId AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO [Configuration].[ParameterValue] (UserCompanyID, ParameterID, Value, date_created, created_by_user_code, is_deleted)
                     VALUES (@ucId, @pId, '14', GETDATE(), {defaultUserCode}, 0);
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             DECLARE @defaultUserCode int = ISNULL(
                 (SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code),
                 1
@@ -4390,23 +5261,98 @@ public class Program
                     INSERT INTO Holidays (HolidayDate, HolidayName, date_created, created_by_user_code, is_deleted)
                     VALUES ('2026-12-25', 'Christmas Day', GETDATE(), @defaultUserCode, 0);
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 9 system-configuration coverage updates applied.");
 
-        var systemParametersCount = await (await HasTableAsync(dbContext, "system_parameters") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM system_parameters WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var versionCount = await (await HasTableAsync(dbContext, "version") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM version WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var dbVersionCount = await (await HasTableAsync(dbContext, "db_version") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM db_version WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var dbDdlLogCount = await (await HasTableAsync(dbContext, "db_ddl_log") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM db_ddl_log WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var ssisCount = await (await HasTableAsync(dbContext, "SSIS Configurations") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [SSIS Configurations] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var dtPropertiesCount = await (await HasTableAsync(dbContext, "dtproperties") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM dtproperties WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var userCompanyCount = await (await HasTableAsync(dbContext, "UserCompany") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Configuration].[UserCompany] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var parameterCount = await (await HasTableAsync(dbContext, "Parameter") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Configuration].[Parameter] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var parameterValueCount = await (await HasTableAsync(dbContext, "ParameterValue") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Configuration].[ParameterValue] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var holidayCount = await (await HasTableAsync(dbContext, "Holidays") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Holidays WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var systemParametersCount = await (
+            await HasTableAsync(dbContext, "system_parameters")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM system_parameters WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var versionCount = await (
+            await HasTableAsync(dbContext, "version")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM version WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var dbVersionCount = await (
+            await HasTableAsync(dbContext, "db_version")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM db_version WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var dbDdlLogCount = await (
+            await HasTableAsync(dbContext, "db_ddl_log")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM db_ddl_log WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var ssisCount = await (
+            await HasTableAsync(dbContext, "SSIS Configurations")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [SSIS Configurations] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var dtPropertiesCount = await (
+            await HasTableAsync(dbContext, "dtproperties")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM dtproperties WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var userCompanyCount = await (
+            await HasTableAsync(dbContext, "UserCompany")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Configuration].[UserCompany] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var parameterCount = await (
+            await HasTableAsync(dbContext, "Parameter")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Configuration].[Parameter] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var parameterValueCount = await (
+            await HasTableAsync(dbContext, "ParameterValue")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Configuration].[ParameterValue] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var holidayCount = await (
+            await HasTableAsync(dbContext, "Holidays")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Holidays WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 9 | System Params: {systemParametersCount} | Version: {versionCount} | DB Version: {dbVersionCount} | DB DDL Log: {dbDdlLogCount} | SSIS Config: {ssisCount}");
-        Console.WriteLine($"  📊 Batch 9 | dtproperties: {dtPropertiesCount} | UserCompany: {userCompanyCount} | Parameter: {parameterCount} | ParameterValue: {parameterValueCount} | Holidays: {holidayCount}");
+        Console.WriteLine(
+            $"  📊 Batch 9 | System Params: {systemParametersCount} | Version: {versionCount} | DB Version: {dbVersionCount} | DB DDL Log: {dbDdlLogCount} | SSIS Config: {ssisCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 9 | dtproperties: {dtPropertiesCount} | UserCompany: {userCompanyCount} | Parameter: {parameterCount} | ParameterValue: {parameterValueCount} | Holidays: {holidayCount}"
+        );
     }
 
     private static async Task ApplyBatch10TariffSegmentCoverageAsync(FisDbContext dbContext)
@@ -4415,20 +5361,41 @@ public class Program
         // tariff, LeaseTariff, Last_monthly_Tar, fin.TariffParameter, fin.TariffWeightCalculation,
         // fin.vehicle_tariff, segment_type, segment_group, segment, journal_detail_type_group
 
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultClassCode = await HasTableAsync(dbContext, "class") &&
-                               await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM class WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 class_code FROM class WHERE ISNULL(is_deleted, 0) = 0 ORDER BY class_code")
-            : 1;
+        var defaultClassCode =
+            await HasTableAsync(dbContext, "class")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM class WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 class_code FROM class WHERE ISNULL(is_deleted, 0) = 0 ORDER BY class_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4467,7 +5434,8 @@ public class Program
                         VALUES
                         (@nextTariffCode, {defaultClassCode}, 2023, 3500, 900, 180, 25, DATEADD(month, -3, GETDATE()), NULL, 8, 2, 5, 10, 3, 2.45, 2, {defaultUserCode}, GETDATE(), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4494,18 +5462,23 @@ public class Program
                         VALUES
                         (@nextLeaseTariffCode, {defaultVehicleCode}, DATEADD(month, -2, GETDATE()), DATEADD(month, 10, GETDATE()), 4200, 1, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Last_monthly_Tar', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Last_monthly_Tar WHERE ISNULL(is_deleted, 0) = 0)
                     INSERT INTO Last_monthly_Tar (Last_monthly_Tar, date_created, created_by_user_code, is_deleted)
                     VALUES (CAST(GETDATE() AS date), GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('fin.TariffParameter', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM fin.TariffParameter WHERE TariffParameterYear = YEAR(GETDATE()) AND ISNULL(is_deleted, 0) = 0)
@@ -4523,9 +5496,12 @@ public class Program
                         GETDATE(), {0}, 0
                     );
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('fin.TariffWeightCalculation', 'U') IS NOT NULL
             BEGIN
                 DECLARE @tpId int = (
@@ -4541,9 +5517,12 @@ public class Program
                     VALUES
                     (@tpId, 1, 120, 1.15, GETDATE(), GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('fin.vehicle_tariff', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM fin.vehicle_tariff WHERE vmf_code = {0} AND ISNULL(is_deleted, 0) = 0)
@@ -4555,7 +5534,7 @@ public class Program
                         residual_amount, capital_payment, overhead_payment, adjustment_amount, vehicle_fixed_tariff,
                         vehicle_fixed_daily_tariff, vehicle_fixed_tariff_pool, class_fixed_tariff, class_fixed_pool_tariff,
                         lease_fixed_tariff, overhead_kilometer_amount, maintenance_kilometer_amount, vehicle_kilometer_tariff,
-                        fuel_kilo_tariff, calculation_date, comment, date_created, created_by_user_code, is_deleted
+                        calculation_date, date_created, created_by_user_code, is_deleted
                     )
                     VALUES
                     (
@@ -4565,12 +5544,17 @@ public class Program
                         135000, 4200, 850, 0, 3500,
                         180, 3000, 3400, 3200,
                         4200, 0.85, 1.10, 2.20,
-                        2.45, GETDATE(), 'Seeded tariff row', GETDATE(), {2}, 0
+                        GETDATE(), GETDATE(), {2}, 0
                     );
             END
-        ", defaultVehicleCode, defaultClassCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultClassCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('segment_type', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM segment_type WHERE segment_type_code = 1)
@@ -4609,31 +5593,116 @@ public class Program
                     (journal_detail_type_group_name, date_created, created_by_user_code, is_deleted)
                     VALUES ('Billing', GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 10 tariff-segment coverage updates applied.");
 
-        var tariffCount = await (await HasTableAsync(dbContext, "tariff") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM tariff WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var leaseTariffCount = await (await HasTableAsync(dbContext, "LeaseTariff") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM LeaseTariff WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var lastMonthlyTarCount = await (await HasTableAsync(dbContext, "Last_monthly_Tar") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Last_monthly_Tar WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tariffParameterCount = await (await HasTableAsync(dbContext, "TariffParameter") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fin.TariffParameter WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tariffWeightCount = await (await HasTableAsync(dbContext, "TariffWeightCalculation") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fin.TariffWeightCalculation WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var vehicleTariffCount = await (await HasTableAsync(dbContext, "vehicle_tariff") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fin.vehicle_tariff WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var segmentTypeCount = await (await HasTableAsync(dbContext, "segment_type") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment_type WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var segmentGroupCount = await (await HasTableAsync(dbContext, "segment_group") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment_group WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var segmentCount = await (await HasTableAsync(dbContext, "segment") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var journalDetailTypeGroupCount = await (await HasTableAsync(dbContext, "journal_detail_type_group") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal_detail_type_group WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var tariffCount = await (
+            await HasTableAsync(dbContext, "tariff")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM tariff WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var leaseTariffCount = await (
+            await HasTableAsync(dbContext, "LeaseTariff")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM LeaseTariff WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var lastMonthlyTarCount = await (
+            await HasTableAsync(dbContext, "Last_monthly_Tar")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Last_monthly_Tar WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tariffParameterCount = await (
+            await HasTableAsync(dbContext, "TariffParameter")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fin.TariffParameter WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tariffWeightCount = await (
+            await HasTableAsync(dbContext, "TariffWeightCalculation")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fin.TariffWeightCalculation WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var vehicleTariffCount = await (
+            await HasTableAsync(dbContext, "vehicle_tariff")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fin.vehicle_tariff WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var segmentTypeCount = await (
+            await HasTableAsync(dbContext, "segment_type")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM segment_type WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var segmentGroupCount = await (
+            await HasTableAsync(dbContext, "segment_group")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM segment_group WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var segmentCount = await (
+            await HasTableAsync(dbContext, "segment")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM segment WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var journalDetailTypeGroupCount = await (
+            await HasTableAsync(dbContext, "journal_detail_type_group")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM journal_detail_type_group WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 10 | Tariff: {tariffCount} | LeaseTariff: {leaseTariffCount} | LastMonthlyTar: {lastMonthlyTarCount} | fin.TariffParameter: {tariffParameterCount} | fin.TariffWeight: {tariffWeightCount}");
-        Console.WriteLine($"  📊 Batch 10 | fin.VehicleTariff: {vehicleTariffCount} | SegmentType: {segmentTypeCount} | SegmentGroup: {segmentGroupCount} | Segment: {segmentCount} | JournalDetailTypeGroup: {journalDetailTypeGroupCount}");
+        Console.WriteLine(
+            $"  📊 Batch 10 | Tariff: {tariffCount} | LeaseTariff: {leaseTariffCount} | LastMonthlyTar: {lastMonthlyTarCount} | fin.TariffParameter: {tariffParameterCount} | fin.TariffWeight: {tariffWeightCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 10 | fin.VehicleTariff: {vehicleTariffCount} | SegmentType: {segmentTypeCount} | SegmentGroup: {segmentGroupCount} | Segment: {segmentCount} | JournalDetailTypeGroup: {journalDetailTypeGroupCount}"
+        );
     }
 
-    private static async Task ApplyBatch11ContractFinanceMappingCoverageAsync(FisDbContext dbContext)
+    private static async Task ApplyBatch11ContractFinanceMappingCoverageAsync(
+        FisDbContext dbContext
+    )
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4703,9 +5772,11 @@ public class Program
                         (contract_status_code, status_description, status_abbreviation, is_active, is_final, date_created, created_by_user_code, is_deleted)
                         VALUES (@csCode + 3, 'Closed', 'CLS', 0, 1, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Contract_type', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Contract_type WHERE contract_type = 'H' AND ISNULL(is_deleted, 0) = 0)
@@ -4715,7 +5786,9 @@ public class Program
                     INSERT INTO Contract_type (contract_type, CT_description, CT_Active, date_created, created_by_user_code, is_deleted)
                     VALUES ('R', 'Relief Contract', 1, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4736,9 +5809,11 @@ public class Program
                         INSERT INTO Contract_Type_Grouping (ctg_description, Is_Active, date_created, created_by_user_code, is_deleted)
                         VALUES ('Standard Operations', 1, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Contract_Type_Map', 'U') IS NOT NULL
             BEGIN
                 DECLARE @ctgCode int = (
@@ -4757,9 +5832,12 @@ public class Program
                         VALUES (@ctgCode, 'R', GETDATE(), {0}, 0);
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('contract_type_mapping', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM contract_type_mapping WHERE Contract_Type = 'H' AND vs_code = 1 AND type_code = 1 AND ISNULL(is_deleted, 0) = 0)
@@ -4770,9 +5848,12 @@ public class Program
                     INSERT INTO contract_type_mapping (Contract_Type, vs_code, type_code, Is_Lease, date_created, created_by_user_code, is_deleted)
                     VALUES ('R', 1, 2, 0, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Contract_Type_Group_Mapping', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Contract_Type_Group_Mapping WHERE vs_code = 1 AND type_code = 1 AND ISNULL(is_deleted, 0) = 0)
@@ -4783,7 +5864,9 @@ public class Program
                     INSERT INTO Contract_Type_Group_Mapping (vs_code, type_code, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 2, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4815,7 +5898,8 @@ public class Program
                         (journal_detail_type_code, journal_detail_type_name, journal_detail_type_description, journal_detail_type_isggmt, journal_detail_type_isreversal, journal_detail_type_issuspense, date_created, created_by_user_code, is_deleted)
                         VALUES (@jdtCode + 2, 'Billing Reversal', 'Reversal posting for corrections', 0, 1, 0, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4847,7 +5931,8 @@ public class Program
                         (cost_revenue_map_code, journal_detail_type_code, journal_detail_revenue_type_code, journal_detail_revenue_type_description, date_created, created_by_user_code, is_deleted)
                         VALUES (@crmCode + 2, 2, 2, 'Reversal', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4871,7 +5956,8 @@ public class Program
                         (fuel_recovery_configuration_code, start_date, end_date, recovery_percentage, date_created, created_by_user_code, is_deleted)
                         VALUES (@frcCode + 1, DATEADD(month, -1, GETDATE()), NULL, 90.00, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4903,7 +5989,8 @@ public class Program
                         (overtime_multiplier_code, overtime_multiplier, date_created, created_by_user_code, is_deleted)
                         VALUES (@otCode + 2, 2.00, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -4937,58 +6024,184 @@ public class Program
                         (journal_detail_type_segment_group_map_code, journal_detail_type_code, segment_group_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@jdtsgmCode + 1, 1, @segmentGroupCode, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         Console.WriteLine("  ✓ Batch 11 contract-finance mapping coverage updates applied.");
 
-        var contractStatusCount = await (await HasTableAsync(dbContext, "contract_status") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract_status WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var contractTypeCount = await (await HasTableAsync(dbContext, "Contract_type") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Contract_type WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var contractTypeGroupingCount = await (await HasTableAsync(dbContext, "Contract_Type_Grouping") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Contract_Type_Grouping WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var contractTypeMapCount = await (await HasTableAsync(dbContext, "Contract_Type_Map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Contract_Type_Map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var contractTypeMappingCount = await (await HasTableAsync(dbContext, "contract_type_mapping") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract_type_mapping WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var contractTypeGroupMappingCount = await (await HasTableAsync(dbContext, "Contract_Type_Group_Mapping") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Contract_Type_Group_Mapping WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var journalDetailTypeCount = await (await HasTableAsync(dbContext, "journal_detail_type") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal_detail_type WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var costRevenueMapCount = await (await HasTableAsync(dbContext, "cost_revenue_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM cost_revenue_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var fuelRecoveryConfigCount = await (await HasTableAsync(dbContext, "fuel_recovery_configuration") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fuel_recovery_configuration WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var overtimeMultiplierCount = await (await HasTableAsync(dbContext, "overtime_multiplier") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM overtime_multiplier WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var detailSegmentMapCount = await (await HasTableAsync(dbContext, "journal_detail_type_segment_group_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal_detail_type_segment_group_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var contractStatusCount = await (
+            await HasTableAsync(dbContext, "contract_status")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM contract_status WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var contractTypeCount = await (
+            await HasTableAsync(dbContext, "Contract_type")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Contract_type WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var contractTypeGroupingCount = await (
+            await HasTableAsync(dbContext, "Contract_Type_Grouping")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Contract_Type_Grouping WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var contractTypeMapCount = await (
+            await HasTableAsync(dbContext, "Contract_Type_Map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Contract_Type_Map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var contractTypeMappingCount = await (
+            await HasTableAsync(dbContext, "contract_type_mapping")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM contract_type_mapping WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var contractTypeGroupMappingCount = await (
+            await HasTableAsync(dbContext, "Contract_Type_Group_Mapping")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Contract_Type_Group_Mapping WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var journalDetailTypeCount = await (
+            await HasTableAsync(dbContext, "journal_detail_type")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM journal_detail_type WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var costRevenueMapCount = await (
+            await HasTableAsync(dbContext, "cost_revenue_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM cost_revenue_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var fuelRecoveryConfigCount = await (
+            await HasTableAsync(dbContext, "fuel_recovery_configuration")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fuel_recovery_configuration WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var overtimeMultiplierCount = await (
+            await HasTableAsync(dbContext, "overtime_multiplier")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM overtime_multiplier WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var detailSegmentMapCount = await (
+            await HasTableAsync(dbContext, "journal_detail_type_segment_group_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM journal_detail_type_segment_group_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 11 | ContractStatus: {contractStatusCount} | ContractType: {contractTypeCount} | ContractTypeGrouping: {contractTypeGroupingCount} | ContractTypeMap: {contractTypeMapCount} | ContractTypeMapping: {contractTypeMappingCount}");
-        Console.WriteLine($"  📊 Batch 11 | ContractTypeGroupMapping: {contractTypeGroupMappingCount} | JournalDetailType: {journalDetailTypeCount} | CostRevenueMap: {costRevenueMapCount} | FuelRecoveryConfig: {fuelRecoveryConfigCount} | OvertimeMultiplier: {overtimeMultiplierCount}");
-        Console.WriteLine($"  📊 Batch 11 | JournalDetailTypeSegmentGroupMap: {detailSegmentMapCount}");
+        Console.WriteLine(
+            $"  📊 Batch 11 | ContractStatus: {contractStatusCount} | ContractType: {contractTypeCount} | ContractTypeGrouping: {contractTypeGroupingCount} | ContractTypeMap: {contractTypeMapCount} | ContractTypeMapping: {contractTypeMappingCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 11 | ContractTypeGroupMapping: {contractTypeGroupMappingCount} | JournalDetailType: {journalDetailTypeCount} | CostRevenueMap: {costRevenueMapCount} | FuelRecoveryConfig: {fuelRecoveryConfigCount} | OvertimeMultiplier: {overtimeMultiplierCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 11 | JournalDetailTypeSegmentGroupMap: {detailSegmentMapCount}"
+        );
     }
 
     private static async Task ApplyBatch12SegmentAnchorCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultSegmentGroupCode = await HasTableAsync(dbContext, "segment_group") &&
-                                      await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment_group WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 segment_group_code FROM segment_group WHERE ISNULL(is_deleted, 0) = 0 ORDER BY segment_group_code")
-            : 1;
+        var defaultSegmentGroupCode =
+            await HasTableAsync(dbContext, "segment_group")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM segment_group WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 segment_group_code FROM segment_group WHERE ISNULL(is_deleted, 0) = 0 ORDER BY segment_group_code"
+                )
+                : 1;
 
-        var defaultDepartmentCode = await HasTableAsync(dbContext, "department") &&
-                                    await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code")
-            : 1;
+        var defaultDepartmentCode =
+            await HasTableAsync(dbContext, "department")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultProvinceCode = await HasTableAsync(dbContext, "province") &&
-                                  await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM province WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 province_code FROM province WHERE ISNULL(is_deleted, 0) = 0 ORDER BY province_code")
-            : 1;
+        var defaultProvinceCode =
+            await HasTableAsync(dbContext, "province")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM province WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 province_code FROM province WHERE ISNULL(is_deleted, 0) = 0 ORDER BY province_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5017,9 +6230,11 @@ public class Program
                         INSERT INTO connection_type (connection_id, description, date_created, created_by_user_code, is_deleted)
                         VALUES (@connCode + 2, 'Transfer', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('anchor_types', 'U') IS NOT NULL
             BEGIN
                 DECLARE @anchorTypeCode int = ISNULL((SELECT MAX(anchor_type_code) FROM anchor_types), 0);
@@ -5046,7 +6261,9 @@ public class Program
                         VALUES (@anchorTypeCode + 2, 'Telematics', GETDATE(), {0}, 0);
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5079,9 +6296,11 @@ public class Program
                         (segment_code, segment_number, segment_name, segment_group_code, department_code, site_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@segmentCode + 2, '4500001', 'Fleet Operations', {defaultSegmentGroupCode}, {defaultDepartmentCode}, {defaultSiteCode}, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('province_segment_map', 'U') IS NOT NULL
             BEGIN
                 DECLARE @segmentCode int = (
@@ -5096,7 +6315,10 @@ public class Program
                     (Province_code, segment_code, date_created, created_by_user_code, is_deleted)
                     VALUES ({0}, @segmentCode, GETDATE(), {1}, 0);
             END
-        ", defaultProvinceCode, defaultUserCode);
+        ",
+            defaultProvinceCode,
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5121,7 +6343,8 @@ public class Program
                         (segment_scoa_code, segment_group_code, segment_name, segment_part, scoa_version, date_created, created_by_user_code, is_deleted)
                         VALUES (@scoaCode + 1, CAST({defaultSegmentGroupCode} AS smallint), 'Cost Centre Operations', 'SCOA-CC-OPS', 6, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5162,12 +6385,14 @@ public class Program
                         (segment_structure_map_code, segment_parent_code, segment_child_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@ssmCode + 1, @parentSegmentCode, @childSegmentCode, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
             $@"
                 IF OBJECT_ID('segment_journal_detail_map', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @segmentCode int = (
                         SELECT TOP 1 segment_code FROM bassegment WHERE segment_number = '4500000' AND ISNULL(is_deleted, 0) = 0 ORDER BY segment_code
@@ -5189,6 +6414,7 @@ public class Program
             ",
             $@"
                 IF OBJECT_ID('segment_journal_detail_map', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @segmentCode int = (
                         SELECT TOP 1 segment_code FROM bassegment WHERE segment_number = '4500000' AND ISNULL(is_deleted, 0) = 0 ORDER BY segment_code
@@ -5203,7 +6429,8 @@ public class Program
                         (segment_journal_detail_map_code, segment_code, journal_detail_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@sjdmCode + 1, @segmentCode, @journalDetailCode, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5228,7 +6455,8 @@ public class Program
                         (mf_code_code, mf_code_number, mf_code_name, mf_code_value_mask, segment_group_code, mf_code_order, date_created, created_by_user_code, is_deleted)
                         VALUES (@mfCode + 1, 'CC', 'Cost Centre', '#######', {defaultSegmentGroupCode}, 1, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5269,7 +6497,8 @@ public class Program
                         (mf_code_map_code, segment_journal_detail_map_code, mf_code_code, mf_code_value, date_created, created_by_user_code, is_deleted)
                         VALUES (@mfMapCode + 1, @sjdmCode, @mfCodeCode, '4500000', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5304,51 +6533,161 @@ public class Program
                         (anchor_point_code, vmf_code, anchor_odo_meter, anchor_date, anchor_type_code, bas_journal_record_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@anchorPointCode + 1, {defaultVehicleCode}, 12000, DATEADD(day, -20, GETDATE()), CAST(@anchorTypeCode AS tinyint), NULL, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         Console.WriteLine("  ✓ Batch 12 segment-anchor mapping coverage updates applied.");
 
-        var connectionTypeCount = await (await HasTableAsync(dbContext, "connection_type") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM connection_type WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var anchorTypeCount = await (await HasTableAsync(dbContext, "anchor_types") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM anchor_types WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var basSegmentCount = await (await HasTableAsync(dbContext, "bassegment") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM bassegment WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var provinceSegmentMapCount = await (await HasTableAsync(dbContext, "province_segment_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM province_segment_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var segmentScoaCount = await (await HasTableAsync(dbContext, "segment_scoa") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment_scoa WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var segmentStructureMapCount = await (await HasTableAsync(dbContext, "segment_structure_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment_structure_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var segmentJournalDetailMapCount = await (await HasTableAsync(dbContext, "segment_journal_detail_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM segment_journal_detail_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var mfCodeCount = await (await HasTableAsync(dbContext, "mf_code") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM mf_code WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var mfCodeMapCount = await (await HasTableAsync(dbContext, "mf_code_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM mf_code_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var anchorPointsCount = await (await HasTableAsync(dbContext, "anchor_points") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM anchor_points WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var connectionTypeCount = await (
+            await HasTableAsync(dbContext, "connection_type")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM connection_type WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var anchorTypeCount = await (
+            await HasTableAsync(dbContext, "anchor_types")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM anchor_types WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var basSegmentCount = await (
+            await HasTableAsync(dbContext, "bassegment")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM bassegment WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var provinceSegmentMapCount = await (
+            await HasTableAsync(dbContext, "province_segment_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM province_segment_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var segmentScoaCount = await (
+            await HasTableAsync(dbContext, "segment_scoa")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM segment_scoa WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var segmentStructureMapCount = await (
+            await HasTableAsync(dbContext, "segment_structure_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM segment_structure_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var segmentJournalDetailMapCount = await (
+            await HasTableAsync(dbContext, "segment_journal_detail_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM segment_journal_detail_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var mfCodeCount = await (
+            await HasTableAsync(dbContext, "mf_code")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM mf_code WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var mfCodeMapCount = await (
+            await HasTableAsync(dbContext, "mf_code_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM mf_code_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var anchorPointsCount = await (
+            await HasTableAsync(dbContext, "anchor_points")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM anchor_points WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 12 | ConnectionType: {connectionTypeCount} | AnchorTypes: {anchorTypeCount} | BasSegment: {basSegmentCount} | ProvinceSegmentMap: {provinceSegmentMapCount} | SegmentScoa: {segmentScoaCount}");
-        Console.WriteLine($"  📊 Batch 12 | SegmentStructureMap: {segmentStructureMapCount} | SegmentJournalDetailMap: {segmentJournalDetailMapCount} | MfCode: {mfCodeCount} | MfCodeMap: {mfCodeMapCount} | AnchorPoints: {anchorPointsCount}");
+        Console.WriteLine(
+            $"  📊 Batch 12 | ConnectionType: {connectionTypeCount} | AnchorTypes: {anchorTypeCount} | BasSegment: {basSegmentCount} | ProvinceSegmentMap: {provinceSegmentMapCount} | SegmentScoa: {segmentScoaCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 12 | SegmentStructureMap: {segmentStructureMapCount} | SegmentJournalDetailMap: {segmentJournalDetailMapCount} | MfCode: {mfCodeCount} | MfCodeMap: {mfCodeMapCount} | AnchorPoints: {anchorPointsCount}"
+        );
     }
 
     private static async Task ApplyBatch13AuthOperationsCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultDepartmentCode = await HasTableAsync(dbContext, "department") &&
-                                    await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code")
-            : 1;
+        var defaultDepartmentCode =
+            await HasTableAsync(dbContext, "department")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code"
+                )
+                : 1;
 
-        var defaultRankCode = await HasTableAsync(dbContext, "ranks") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM ranks WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 rank_code FROM ranks WHERE ISNULL(is_deleted, 0) = 0 ORDER BY rank_code")
-            : 1;
+        var defaultRankCode =
+            await HasTableAsync(dbContext, "ranks")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM ranks WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 rank_code FROM ranks WHERE ISNULL(is_deleted, 0) = 0 ORDER BY rank_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5376,7 +6715,8 @@ public class Program
                         INSERT INTO AccessLevels (AccessLevelID, AccessLevelName, AccessLevelValue, AccessLevelCalc, date_created, created_by_user_code, is_deleted)
                         VALUES (@alCode + 2, 'User', 1024, NULL, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5404,7 +6744,8 @@ public class Program
                         INSERT INTO AccessLevels_2 (AccessLevelID, AccessLevelName, AccessLevelValue, AccessLevelCalc, date_created, created_by_user_code, is_deleted)
                         VALUES (@al2Code + 2, 'Operations', 4096, NULL, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5457,9 +6798,11 @@ public class Program
                         (CAST({defaultSiteCode} AS smallint), 'legacy.seed.user', 'seeded-hash', 'Active', GETDATE(), 1024, 'legacy.user@fis.local', '0110000102',
                          'Legacy', 'User', 1, 0, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('approvers', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM approvers WHERE Surname = 'Seed' AND Firstname = 'Approver' AND ISNULL(is_deleted, 0) = 0)
@@ -5467,7 +6810,12 @@ public class Program
                     (site_code, department_code, rank_code, Surname, Firstname, date_created, created_by_user_code, is_deleted)
                     VALUES (CAST({0} AS smallint), {1}, {2}, 'Seed', 'Approver', GETDATE(), {3}, 0);
             END
-        ", defaultSiteCode, defaultDepartmentCode, defaultRankCode, defaultUserCode);
+        ",
+            defaultSiteCode,
+            defaultDepartmentCode,
+            defaultRankCode,
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5491,7 +6839,8 @@ public class Program
                         (user_access_code, message, message_read, date_created, created_by_user_code, is_deleted)
                         VALUES ({defaultUserCode}, 'System seeded notification', 'N', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5515,9 +6864,11 @@ public class Program
                         (vmf_code, trans_code, profile_code, activity_odo, activity_date, date_created, created_by_user_code, is_deleted)
                         VALUES ({defaultVehicleCode}, NULL, 1, 15000, GETDATE(), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('TS_Comment', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM TS_Comment WHERE Ref_number = {0} AND Comments = 'Seeded comment for workflow trace' AND ISNULL(is_deleted, 0) = 0)
@@ -5525,7 +6876,10 @@ public class Program
                     (Ref_number, Comments, date_created, created_by_user_code, is_deleted)
                     VALUES ({0}, 'Seeded comment for workflow trace', GETDATE(), {1}, 0);
             END
-        ", defaultVehicleCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5547,7 +6901,8 @@ public class Program
                         INSERT INTO Notify_List (Notify_list_code, Notify_list_desc, Notify_email1, date_created, created_by_user_code, is_deleted)
                         VALUES (@notifyCode + 1, 'Operations Alerts', 'ops.alerts@fis.local', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5571,9 +6926,11 @@ public class Program
                         (vip_site_map_code, site_code, start_date, end_date, notes, date_updated, created_by_user_code, is_deleted)
                         VALUES (@vipCode + 1, {defaultSiteCode}, DATEADD(day, -30, GETDATE()), NULL, 'Seeded VIP routing map', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('EntraId_User_Mapping', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM EntraId_User_Mapping WHERE user_access_code = {0})
@@ -5581,46 +6938,147 @@ public class Program
                     (entra_object_id, user_access_code, created_date)
                     VALUES (CONCAT('seed-', CAST({0} AS varchar(20)), '-object-id'), {0}, GETDATE());
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 13 auth-ops coverage updates applied.");
 
-        var accessLevelsCount = await (await HasTableAsync(dbContext, "AccessLevels") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM AccessLevels WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var accessLevels2Count = await (await HasTableAsync(dbContext, "AccessLevels_2") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM AccessLevels_2 WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var userAccessOldCount = await (await HasTableAsync(dbContext, "user_access_old1") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM user_access_old1 WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var approversCount = await (await HasTableAsync(dbContext, "approvers") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM approvers WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var userMessageCount = await (await HasTableAsync(dbContext, "user_message") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM user_message WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var profileHistoryCount = await (await HasTableAsync(dbContext, "profile_history") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM profile_history WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tsCommentCount = await (await HasTableAsync(dbContext, "TS_Comment") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Comment WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var notifyListCount = await (await HasTableAsync(dbContext, "Notify_List") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Notify_List WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var vipSiteMapCount = await (await HasTableAsync(dbContext, "vip_site_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vip_site_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var entraMapCount = await (await HasTableAsync(dbContext, "EntraId_User_Mapping") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM EntraId_User_Mapping") : Task.FromResult(0));
+        var accessLevelsCount = await (
+            await HasTableAsync(dbContext, "AccessLevels")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM AccessLevels WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var accessLevels2Count = await (
+            await HasTableAsync(dbContext, "AccessLevels_2")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM AccessLevels_2 WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var userAccessOldCount = await (
+            await HasTableAsync(dbContext, "user_access_old1")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM user_access_old1 WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var approversCount = await (
+            await HasTableAsync(dbContext, "approvers")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM approvers WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var userMessageCount = await (
+            await HasTableAsync(dbContext, "user_message")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM user_message WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var profileHistoryCount = await (
+            await HasTableAsync(dbContext, "profile_history")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM profile_history WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tsCommentCount = await (
+            await HasTableAsync(dbContext, "TS_Comment")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM TS_Comment WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var notifyListCount = await (
+            await HasTableAsync(dbContext, "Notify_List")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Notify_List WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var vipSiteMapCount = await (
+            await HasTableAsync(dbContext, "vip_site_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM vip_site_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var entraMapCount = await (
+            await HasTableAsync(dbContext, "EntraId_User_Mapping")
+                ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM EntraId_User_Mapping")
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 13 | AccessLevels: {accessLevelsCount} | AccessLevels_2: {accessLevels2Count} | UserAccessOld: {userAccessOldCount} | Approvers: {approversCount} | UserMessage: {userMessageCount}");
-        Console.WriteLine($"  📊 Batch 13 | ProfileHistory: {profileHistoryCount} | TSComment: {tsCommentCount} | NotifyList: {notifyListCount} | VipSiteMap: {vipSiteMapCount} | EntraMappings: {entraMapCount}");
+        Console.WriteLine(
+            $"  📊 Batch 13 | AccessLevels: {accessLevelsCount} | AccessLevels_2: {accessLevels2Count} | UserAccessOld: {userAccessOldCount} | Approvers: {approversCount} | UserMessage: {userMessageCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 13 | ProfileHistory: {profileHistoryCount} | TSComment: {tsCommentCount} | NotifyList: {notifyListCount} | VipSiteMap: {vipSiteMapCount} | EntraMappings: {entraMapCount}"
+        );
     }
 
     private static async Task ApplyBatch14MaintenanceWorkshopCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultClassCode = await HasTableAsync(dbContext, "class") &&
-                               await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM class WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 class_code FROM class WHERE ISNULL(is_deleted, 0) = 0 ORDER BY class_code")
-            : 1;
+        var defaultClassCode =
+            await HasTableAsync(dbContext, "class")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM class WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 class_code FROM class WHERE ISNULL(is_deleted, 0) = 0 ORDER BY class_code"
+                )
+                : 1;
 
-        var defaultTariffParameterId = await HasTableAsync(dbContext, "TariffParameter") &&
-                                       await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fin.TariffParameter WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 TariffParameterID FROM fin.TariffParameter WHERE ISNULL(is_deleted, 0) = 0 ORDER BY TariffParameterID DESC")
-            : 1;
+        var defaultTariffParameterId =
+            await HasTableAsync(dbContext, "TariffParameter")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM fin.TariffParameter WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 TariffParameterID FROM fin.TariffParameter WHERE ISNULL(is_deleted, 0) = 0 ORDER BY TariffParameterID DESC"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5643,7 +7101,8 @@ public class Program
                         INSERT INTO bill_of_material (bom_code, quantity, date_created, created_by_user_code, is_deleted)
                         VALUES (@bomCode + 1, 1.00, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5668,7 +7127,8 @@ public class Program
                         INSERT INTO part (part_code, bom_code, part_number, description, qty_on_hand, qty_on_order, date_created, created_by_user_code, is_deleted)
                         VALUES (@partCode + 1, @bomCode, 'PT-0001', 'Oil Filter', 20, 5, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5693,9 +7153,11 @@ public class Program
                         INSERT INTO task (task_code, profile_code, bom_code, description, duration_hours, date_created, created_by_user_code, is_deleted)
                         VALUES (@taskCode + 1, 1, @bomCode, 'Standard 15k Service', 2.5, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('maint_profile_model', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM maint_profile_model WHERE profile_code = 1 AND model_code = 1 AND ISNULL(is_deleted, 0) = 0)
@@ -5703,7 +7165,9 @@ public class Program
                     (profile_code, model_code, description, trigger_type, trigger_description, interval, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 1, 'Basic maintenance profile', 'KM', 'Every 15000 KM', 15000, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5728,7 +7192,8 @@ public class Program
                         (wwmerch_code, wwmerch_name, wwmerch_tel, wwmerch_fax, wwmerch_email, date_created, created_by_user_code, is_deleted)
                         VALUES (@merchantCode + 1, 'Fleet Workshop Central', '0110000200', '0110000201', 'workshop@fis.local', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5753,7 +7218,8 @@ public class Program
                         (maint_trigger_code, description, trigger_id, date_created, created_by_user_code, is_deleted)
                         VALUES (@triggerCode + 1, 'Service every 15000km', 'KM_15000', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5795,7 +7261,8 @@ public class Program
                             GETDATE(), {defaultUserCode}, 0
                         );
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5820,7 +7287,8 @@ public class Program
                         (Maintenance_Value_History_ID, TariffParameterID, class_code, months_age, amount, date_created, created_by_user_code, is_deleted)
                         VALUES (@mvhId + 1, {defaultTariffParameterId}, {defaultClassCode}, 12, 1200.00, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -5843,12 +7311,14 @@ public class Program
                         INSERT INTO fin.OverheadType (OverheadTypeId, OverheadTypeName, date_created, created_by_user_code, is_deleted)
                         VALUES (@otId + 1, 'Workshop Overhead', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
             $@"
                 IF OBJECT_ID('fin.Overhead', 'U') IS NOT NULL
+                   AND OBJECT_ID('fin.OverheadType', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @overheadId int = ISNULL((SELECT MAX(OverheadId) FROM fin.Overhead), 0);
                     DECLARE @overheadTypeId int = ISNULL((SELECT TOP 1 OverheadTypeId FROM fin.OverheadType WHERE ISNULL(is_deleted, 0) = 0 ORDER BY OverheadTypeId), 1);
@@ -5869,6 +7339,7 @@ public class Program
             ",
             $@"
                 IF OBJECT_ID('fin.Overhead', 'U') IS NOT NULL
+                   AND OBJECT_ID('fin.OverheadType', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @overheadId int = ISNULL((SELECT MAX(OverheadId) FROM fin.Overhead), 0);
                     DECLARE @overheadTypeId int = ISNULL((SELECT TOP 1 OverheadTypeId FROM fin.OverheadType WHERE ISNULL(is_deleted, 0) = 0 ORDER BY OverheadTypeId), 1);
@@ -5884,59 +7355,175 @@ public class Program
                             CAST({defaultUserCode} AS smallint), 'seed-user', GETDATE(), {defaultUserCode}, 0
                         );
                 END
-            ");
+            "
+        );
 
         Console.WriteLine("  ✓ Batch 14 maintenance-workshop coverage updates applied.");
 
-        var bomCount = await (await HasTableAsync(dbContext, "bill_of_material") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM bill_of_material WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var partCount = await (await HasTableAsync(dbContext, "part") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM part WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taskCount = await (await HasTableAsync(dbContext, "task") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM task WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var maintProfileModelCount = await (await HasTableAsync(dbContext, "maint_profile_model") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM maint_profile_model WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var merchantCount = await (await HasTableAsync(dbContext, "wwmerchant") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM wwmerchant WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var triggerCount = await (await HasTableAsync(dbContext, "maintenance_trigger") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM maintenance_trigger WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var maintenanceRecordCount = await (await HasTableAsync(dbContext, "maintenance_records") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM maintenance_records WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var maintenanceValueHistoryCount = await (await HasTableAsync(dbContext, "Maintenance_Value_History") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Maintenance_Value_History WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var overheadTypeCount = await (await HasTableAsync(dbContext, "OverheadType") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fin.OverheadType WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var overheadCount = await (await HasTableAsync(dbContext, "Overhead") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM fin.Overhead WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var bomCount = await (
+            await HasTableAsync(dbContext, "bill_of_material")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM bill_of_material WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var partCount = await (
+            await HasTableAsync(dbContext, "part")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM part WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taskCount = await (
+            await HasTableAsync(dbContext, "task")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM task WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var maintProfileModelCount = await (
+            await HasTableAsync(dbContext, "maint_profile_model")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM maint_profile_model WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var merchantCount = await (
+            await HasTableAsync(dbContext, "wwmerchant")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM wwmerchant WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var triggerCount = await (
+            await HasTableAsync(dbContext, "maintenance_trigger")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM maintenance_trigger WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var maintenanceRecordCount = await (
+            await HasTableAsync(dbContext, "maintenance_records")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM maintenance_records WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var maintenanceValueHistoryCount = await (
+            await HasTableAsync(dbContext, "Maintenance_Value_History")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Maintenance_Value_History WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var overheadTypeCount = await (
+            await HasTableAsync(dbContext, "OverheadType")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fin.OverheadType WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var overheadCount = await (
+            await HasTableAsync(dbContext, "Overhead")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM fin.Overhead WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 14 | BOM: {bomCount} | Parts: {partCount} | Tasks: {taskCount} | MaintProfileModel: {maintProfileModelCount} | Merchants: {merchantCount}");
-        Console.WriteLine($"  📊 Batch 14 | MaintTriggers: {triggerCount} | MaintRecords: {maintenanceRecordCount} | MaintValueHistory: {maintenanceValueHistoryCount} | OverheadType: {overheadTypeCount} | Overhead: {overheadCount}");
+        Console.WriteLine(
+            $"  📊 Batch 14 | BOM: {bomCount} | Parts: {partCount} | Tasks: {taskCount} | MaintProfileModel: {maintProfileModelCount} | Merchants: {merchantCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 14 | MaintTriggers: {triggerCount} | MaintRecords: {maintenanceRecordCount} | MaintValueHistory: {maintenanceValueHistoryCount} | OverheadType: {overheadTypeCount} | Overhead: {overheadCount}"
+        );
     }
 
     private static async Task ApplyBatch15FinancialIntegrationCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultContractCode = await HasTableAsync(dbContext, "contract") &&
-                                  await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 contract_code FROM contract WHERE ISNULL(is_deleted, 0) = 0 ORDER BY contract_code DESC")
-            : 1;
+        var defaultContractCode =
+            await HasTableAsync(dbContext, "contract")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM contract WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 contract_code FROM contract WHERE ISNULL(is_deleted, 0) = 0 ORDER BY contract_code DESC"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultDepartmentCode = await HasTableAsync(dbContext, "department") &&
-                                    await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code")
-            : 1;
+        var defaultDepartmentCode =
+            await HasTableAsync(dbContext, "department")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code"
+                )
+                : 1;
 
-        var defaultFuelCardCode = await HasTableAsync(dbContext, "Fuel_card") &&
-                                  await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Fuel_card WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Fuel_card_code FROM Fuel_card WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Fuel_card_code")
-            : 1;
+        var defaultFuelCardCode =
+            await HasTableAsync(dbContext, "Fuel_card")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM Fuel_card WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Fuel_card_code FROM Fuel_card WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Fuel_card_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
-
             dbContext,
             $@"
                 IF OBJECT_ID('absa_transaction_codes', 'U') IS NOT NULL
@@ -5963,12 +7550,14 @@ public class Program
                         INSERT INTO absa_transaction_codes (absa_transaction_codes_code, transaction_code, description, cost_category_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@atcCode + 2, 'REV', 'Fuel Reversal', 2, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
             $@"
                 IF OBJECT_ID('absa_transaction', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @absaTxCode int = ISNULL((SELECT MAX(absa_transaction_code) FROM absa_transaction), 0);
                     DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created);
@@ -5982,6 +7571,7 @@ public class Program
             ",
             $@"
                 IF OBJECT_ID('absa_transaction', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @absaTxCode int = ISNULL((SELECT MAX(absa_transaction_code) FROM absa_transaction), 0);
                     DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created);
@@ -5990,7 +7580,8 @@ public class Program
                         (absa_transaction_code, vmf_code, contract_code, site_code, fuel_card_code, journal_detail_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@absaTxCode + 1, {defaultVehicleCode}, {defaultContractCode}, {defaultSiteCode}, {defaultFuelCardCode}, @journalDetailCode, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6015,7 +7606,8 @@ public class Program
                         (wesbank_transaction_code, fuel_card_code, vmf_code, site_code, file_date, date_created, created_by_user_code, is_deleted)
                         VALUES (@wbTxCode + 1, {defaultFuelCardCode}, {defaultVehicleCode}, {defaultSiteCode}, CAST(GETDATE() AS date), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6040,7 +7632,8 @@ public class Program
                         (staticID, idLinePermanent, iValidateFlag, iAccountCurrencyID, cAccountCurrencySymbol, bTrCodeHasTax, date_created, created_by_user_code, is_deleted)
                         VALUES (@psCode + 1, 100, 1, 1, 'ZAR', 1, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6065,7 +7658,8 @@ public class Program
                         (pcID, customer, name, customerID, site_code, department_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@pcCode + 1, 'CUST-001', 'Office of the Chief Justice', 1, CAST({defaultSiteCode} AS smallint), CAST({defaultDepartmentCode} AS smallint), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6090,10 +7684,13 @@ public class Program
                         (GLID, account, active, description, accountLink, accountType, date_created, created_by_user_code, is_deleted)
                         VALUES (@glCode + 1, '4000-REVENUE', 1, 'Revenue Account', 1, 'Income', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('InvalidSegmentNumbersUsed', 'U') IS NOT NULL
+               AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
             BEGIN
                 DECLARE @journalDetailCode uniqueidentifier = (
                     SELECT TOP 1 journal_detail_code
@@ -6107,9 +7704,14 @@ public class Program
                     (journal_detail_code, segment_number, segment_group_code, segment_type_code, site_code, department_code, date_created, created_by_user_code, is_deleted)
                     VALUES (@journalDetailCode, 9999999, 1, 1, CAST({0} AS smallint), CAST({1} AS smallint), GETDATE(), {2}, 0);
             END
-        ", defaultSiteCode, defaultDepartmentCode, defaultUserCode);
+        ",
+            defaultSiteCode,
+            defaultDepartmentCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Journal_WithInvalidBasCodes', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Journal_WithInvalidBasCodes WHERE GGNumber = CONCAT('GGX', {0}) AND ISNULL(is_deleted, 0) = 0)
@@ -6117,7 +7719,10 @@ public class Program
                     (JournalType, GGNumber, BasCode_FinancialYear, Enter_Correct_Responsibility_Number_Only, Enter_Correct_Objective_Number_Only, SiteName, date_created, created_by_user_code, is_deleted)
                     VALUES ('Billing', CONCAT('GGX', {0}), CONCAT(YEAR(GETDATE()), '/', YEAR(GETDATE()) + 1), '4500000', '1000', 'Head Office', GETDATE(), {1}, 0);
             END
-        ", defaultVehicleCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6142,7 +7747,8 @@ public class Program
                         (except_ID, PAN, reg_number, voucher, import_date, exception_desc, date_created, created_by_user_code, is_deleted)
                         VALUES (@dieCode + 1, '600000000000001', CONCAT('REG', {defaultVehicleCode}), 'VOUCH-001', GETDATE(), 'Duplicate voucher ignored', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6169,46 +7775,149 @@ public class Program
                         (batch_export_code, batch_code, batch_export_date, batch_export_turnover, department_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@batchExportCode + 1, @batchCode, GETDATE(), 10000.00, CAST({defaultDepartmentCode} AS smallint), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         Console.WriteLine("  ✓ Batch 15 financial-integration coverage updates applied.");
 
-        var absaCodeCount = await (await HasTableAsync(dbContext, "absa_transaction_codes") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM absa_transaction_codes WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var absaTxCount = await (await HasTableAsync(dbContext, "absa_transaction") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM absa_transaction WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var wesbankTxCount = await (await HasTableAsync(dbContext, "wesbank_transaction") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM wesbank_transaction WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var pastelStaticCount = await (await HasTableAsync(dbContext, "PastelStatic") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM PastelStatic WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var pastelCustomerCount = await (await HasTableAsync(dbContext, "PastelCustomer") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM PastelCustomer WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var pastelGlCount = await (await HasTableAsync(dbContext, "PastelGL") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM PastelGL WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var invalidSegmentCount = await (await HasTableAsync(dbContext, "InvalidSegmentNumbersUsed") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM InvalidSegmentNumbersUsed WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var invalidBasCount = await (await HasTableAsync(dbContext, "Journal_WithInvalidBasCodes") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Journal_WithInvalidBasCodes WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var dailyImportExceptCount = await (await HasTableAsync(dbContext, "daily_import_except") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM daily_import_except WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var batchExportCount = await (await HasTableAsync(dbContext, "batch_export") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM batch_export WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var absaCodeCount = await (
+            await HasTableAsync(dbContext, "absa_transaction_codes")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM absa_transaction_codes WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var absaTxCount = await (
+            await HasTableAsync(dbContext, "absa_transaction")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM absa_transaction WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var wesbankTxCount = await (
+            await HasTableAsync(dbContext, "wesbank_transaction")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM wesbank_transaction WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var pastelStaticCount = await (
+            await HasTableAsync(dbContext, "PastelStatic")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM PastelStatic WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var pastelCustomerCount = await (
+            await HasTableAsync(dbContext, "PastelCustomer")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM PastelCustomer WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var pastelGlCount = await (
+            await HasTableAsync(dbContext, "PastelGL")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM PastelGL WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var invalidSegmentCount = await (
+            await HasTableAsync(dbContext, "InvalidSegmentNumbersUsed")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM InvalidSegmentNumbersUsed WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var invalidBasCount = await (
+            await HasTableAsync(dbContext, "Journal_WithInvalidBasCodes")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Journal_WithInvalidBasCodes WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var dailyImportExceptCount = await (
+            await HasTableAsync(dbContext, "daily_import_except")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM daily_import_except WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var batchExportCount = await (
+            await HasTableAsync(dbContext, "batch_export")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM batch_export WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 15 | AbsaCodes: {absaCodeCount} | AbsaTransactions: {absaTxCount} | WesbankTransactions: {wesbankTxCount} | PastelStatic: {pastelStaticCount} | PastelCustomer: {pastelCustomerCount}");
-        Console.WriteLine($"  📊 Batch 15 | PastelGL: {pastelGlCount} | InvalidSegments: {invalidSegmentCount} | InvalidBasCodes: {invalidBasCount} | DailyImportExcept: {dailyImportExceptCount} | BatchExport: {batchExportCount}");
+        Console.WriteLine(
+            $"  📊 Batch 15 | AbsaCodes: {absaCodeCount} | AbsaTransactions: {absaTxCount} | WesbankTransactions: {wesbankTxCount} | PastelStatic: {pastelStaticCount} | PastelCustomer: {pastelCustomerCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 15 | PastelGL: {pastelGlCount} | InvalidSegments: {invalidSegmentCount} | InvalidBasCodes: {invalidBasCount} | DailyImportExcept: {dailyImportExceptCount} | BatchExport: {batchExportCount}"
+        );
     }
 
     private static async Task ApplyBatch16LegacyIdentifiersCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultTempVmfCode = await HasTableAsync(dbContext, "pre_vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM pre_vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 temp_vmf_code FROM pre_vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY temp_vmf_code")
-            : 1;
+        var defaultTempVmfCode =
+            await HasTableAsync(dbContext, "pre_vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM pre_vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 temp_vmf_code FROM pre_vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY temp_vmf_code"
+                )
+                : 1;
 
-        var defaultExtraCode = await HasTableAsync(dbContext, "extra_codes") &&
-                               await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 extra_code FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0 ORDER BY extra_code")
-            : 1;
+        var defaultExtraCode =
+            await HasTableAsync(dbContext, "extra_codes")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 extra_code FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0 ORDER BY extra_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6233,7 +7942,8 @@ public class Program
                         (Block_ID, Creation_Date, Created_By_User_Code, Vch_Start_Reg, Vch_End_Reg, Modified_User_Code, audit_date_created, audit_created_by_user_code, is_deleted)
                         VALUES (@blockId + 1, GETDATE(), CAST({defaultUserCode} AS smallint), 'GGX500001', 'GGX500100', CAST({defaultUserCode} AS smallint), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6258,7 +7968,8 @@ public class Program
                         (Block_ID, Creation_Date, Created_By_User_Code, Vch_Start_Reg, Vch_End_Reg, Modified_User_Code, date_updated, is_deleted)
                         VALUES (@blockId2 + 1, GETDATE(), {defaultUserCode}, 'GGX600001', 'GGX600100', {defaultUserCode}, GETDATE(), 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6285,16 +7996,20 @@ public class Program
                         (Block_GEN_ID, Block_ID, Creation_Date, Created_By_User_Code, GG_Number, audit_date_created, audit_created_by_user_code, is_deleted)
                         VALUES (@blockGenId + 1, CAST(@blockId AS smallint), GETDATE(), CAST({defaultUserCode} AS smallint), 'GGX500001', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('gg_numbers', 'U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM gg_numbers WHERE gg_number = 'GGX500001')
                     INSERT INTO gg_numbers (gg_number, status, date_created, created_by_user_code, is_deleted)
                     VALUES ('GGX500001', 1, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6323,7 +8038,8 @@ public class Program
                         INSERT INTO Alphabets (alphabet_id, alphabet_name, date_created, created_by_user_code, is_deleted)
                         VALUES (@alphaId + 2, 'B', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6346,7 +8062,8 @@ public class Program
                         INSERT INTO tally (tally_code, tally_value, date_created, created_by_user_code, is_deleted)
                         VALUES (@tallyCode + 1, 100, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6371,7 +8088,8 @@ public class Program
                         (satisfaction_survey_code, used_service, department_fleet, customer_service, professionalism, quality_of_vehicles, date_created, created_by_user_code, is_deleted)
                         VALUES (@surveyCode + 1, 'Vehicle Hire', 'Operations', 'Good', 'Excellent', 'Good', GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6396,7 +8114,8 @@ public class Program
                         (RegistrationID, RegistrationNumber, RegistrationDate, vmf_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@regId + 1, CONCAT('REG-', {defaultVehicleCode}), CAST(GETDATE() AS date), {defaultVehicleCode}, GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6421,9 +8140,11 @@ public class Program
                         (EnjinNumberID, vmf_code, EnjinNumber, date_created, created_by_user_code, is_deleted)
                         VALUES (@enjinId + 1, {defaultVehicleCode}, CONCAT('ENG-', {defaultVehicleCode}), GETDATE(), {defaultUserCode}, 0);
                 END
-            ");
+            "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Temp_Vehicle_extras', 'U') IS NOT NULL
             BEGIN
                 DECLARE @defaultVehicleCode int = {0};
@@ -6480,46 +8201,153 @@ public class Program
                         @userCode = @defaultUserCode;
                 END
             END
-        ", defaultVehicleCode, defaultTempVmfCode, defaultExtraCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultTempVmfCode,
+            defaultExtraCode,
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 16 legacy-identifiers coverage updates applied.");
 
-        var ggBlockLegacyCount = await (await HasTableAsync(dbContext, "GG_Block") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM GG_Block WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var ggBlocksCount = await (await HasTableAsync(dbContext, "GG_Blocks") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM GG_Blocks WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var blockGgNumbersCount = await (await HasTableAsync(dbContext, "block_gg_numbers") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM block_gg_numbers WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var ggNumbersCount = await (await HasTableAsync(dbContext, "gg_numbers") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM gg_numbers WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var alphabetsCount = await (await HasTableAsync(dbContext, "Alphabets") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Alphabets WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tallyCount = await (await HasTableAsync(dbContext, "tally") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM tally WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var surveyCount = await (await HasTableAsync(dbContext, "FIS_Survey") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM FIS_Survey WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var registrationsCount = await (await HasTableAsync(dbContext, "Registrations") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Registrations WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var enjinNumbersCount = await (await HasTableAsync(dbContext, "EnjinNumbers") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM EnjinNumbers WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tempVehicleExtrasCount = await (await HasTableAsync(dbContext, "Temp_Vehicle_extras") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Temp_Vehicle_extras WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var ggBlockLegacyCount = await (
+            await HasTableAsync(dbContext, "GG_Block")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM GG_Block WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var ggBlocksCount = await (
+            await HasTableAsync(dbContext, "GG_Blocks")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM GG_Blocks WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var blockGgNumbersCount = await (
+            await HasTableAsync(dbContext, "block_gg_numbers")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM block_gg_numbers WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var ggNumbersCount = await (
+            await HasTableAsync(dbContext, "gg_numbers")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM gg_numbers WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var alphabetsCount = await (
+            await HasTableAsync(dbContext, "Alphabets")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Alphabets WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tallyCount = await (
+            await HasTableAsync(dbContext, "tally")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM tally WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var surveyCount = await (
+            await HasTableAsync(dbContext, "FIS_Survey")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM FIS_Survey WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var registrationsCount = await (
+            await HasTableAsync(dbContext, "Registrations")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Registrations WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var enjinNumbersCount = await (
+            await HasTableAsync(dbContext, "EnjinNumbers")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM EnjinNumbers WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tempVehicleExtrasCount = await (
+            await HasTableAsync(dbContext, "Temp_Vehicle_extras")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Temp_Vehicle_extras WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 16 | GG_Block: {ggBlockLegacyCount} | GG_Blocks: {ggBlocksCount} | block_gg_numbers: {blockGgNumbersCount} | gg_numbers: {ggNumbersCount} | Alphabets: {alphabetsCount}");
-        Console.WriteLine($"  📊 Batch 16 | Tally: {tallyCount} | FIS_Survey: {surveyCount} | Registrations: {registrationsCount} | EnjinNumbers: {enjinNumbersCount} | TempVehicleExtras: {tempVehicleExtrasCount}");
+        Console.WriteLine(
+            $"  📊 Batch 16 | GG_Block: {ggBlockLegacyCount} | GG_Blocks: {ggBlocksCount} | block_gg_numbers: {blockGgNumbersCount} | gg_numbers: {ggNumbersCount} | Alphabets: {alphabetsCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 16 | Tally: {tallyCount} | FIS_Survey: {surveyCount} | Registrations: {registrationsCount} | EnjinNumbers: {enjinNumbersCount} | TempVehicleExtras: {tempVehicleExtrasCount}"
+        );
     }
 
     private static async Task ApplyBatch17LocationTempCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultContractCode = await HasTableAsync(dbContext, "contract") &&
-                                  await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 contract_code FROM contract WHERE ISNULL(is_deleted, 0) = 0 ORDER BY contract_code DESC")
-            : 1;
+        var defaultContractCode =
+            await HasTableAsync(dbContext, "contract")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM contract WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 contract_code FROM contract WHERE ISNULL(is_deleted, 0) = 0 ORDER BY contract_code DESC"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6536,7 +8364,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM Ambulance WHERE Amb_name='ER24 Central' AND ISNULL(is_deleted,0)=0)
                         INSERT INTO Ambulance (Ambulance_code, Amb_area, Amb_name, Amb_tel, Amb_fax, date_created, created_by_user_code, is_deleted)
                         VALUES (@code+1,'Johannesburg','ER24 Central','0110000300','0110000301',GETDATE(),{defaultUserCode},0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6553,7 +8382,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM Tow_Truck WHERE Tow_name='City Towing' AND ISNULL(is_deleted,0)=0)
                         INSERT INTO Tow_Truck (Tow_code, Tow_area, Tow_name, Tow_tel, Tow_fax, date_created, created_by_user_code, is_deleted)
                         VALUES (@code+1,'Johannesburg','City Towing','0110000310','0110000311',GETDATE(),{defaultUserCode},0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6570,7 +8400,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM univ WHERE univ_name='University of Johannesburg' AND ISNULL(is_deleted,0)=0)
                         INSERT INTO univ (univ_code, univ_name, date_created, created_by_user_code, is_deleted)
                         VALUES (@code+1,'University of Johannesburg',GETDATE(),{defaultUserCode},0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6587,7 +8418,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM Booking_address WHERE net_address='bookings@fis.local' AND ISNULL(is_deleted,0)=0)
                         INSERT INTO Booking_address (location_code, net_address, date_created, created_by_user_code, is_deleted)
                         VALUES (@code+1,'bookings@fis.local',GETDATE(),{defaultUserCode},0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6603,7 +8435,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM tempTA WHERE ta={defaultContractCode} AND ISNULL(is_deleted,0)=0)
                         INSERT INTO tempTA (ta, endodo, date_created, created_by_user_code, is_deleted)
                         VALUES ({defaultContractCode}, 22000, GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6618,7 +8451,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM temptrips WHERE trip_authority_code={defaultContractCode} AND ISNULL(is_deleted,0)=0)
                         INSERT INTO temptrips (trip_authority_code, contract_code, approver_name, approver_rank, approver_tel, end_odo_meter, expiry_date, trip_reason, trip_request_number, issue_date, trip_type_code, trip_incident_type_code, user_access_code, date_created, created_by_user_code, is_deleted)
                         VALUES ({defaultContractCode}, {defaultContractCode}, 'Seed Approver', 'Manager', '0110000320', 23000, DATEADD(day,7,GETDATE()), 'Operational duty', CONCAT('TMP-', {defaultContractCode}), GETDATE(), 1, 1, CAST({defaultUserCode} AS smallint), GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6635,7 +8469,8 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM route_details WHERE trip_authority_code={defaultContractCode} AND ISNULL(is_deleted,0)=0)
                         INSERT INTO route_details (route_code, trip_authority_code, start_date, end_date, start_odo_meter, end_odo_meter, bas_responsibility_code, bas_object_code, start_route_location_name, end_route_location_name, estimated_distance, date_created, created_by_user_code, is_deleted)
                         VALUES (@code+1, {defaultContractCode}, GETDATE(), DATEADD(day,1,GETDATE()), 22000, 22350, '4500000', '1000', 'Head Office', 'Pretoria', 55, GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6652,79 +8487,214 @@ public class Program
                     IF NOT EXISTS (SELECT 1 FROM Request_Change WHERE request_name='Seeded Change Request' AND ISNULL(is_deleted,0)=0)
                         INSERT INTO Request_Change (request_code, request_date, request_name, captured_by_userid, change_description, sub_system_affected, approve_or_not, request_comment, date_created, created_by_user_code, is_deleted)
                         VALUES (@code+1, GETDATE(), 'Seeded Change Request', {defaultUserCode}, 'Add legacy temp coverage', 'Trips', 'Y', 'Auto-seeded', GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('rpt_temp','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM rpt_temp WHERE reg_num = CONCAT('REG-', {0}) AND ISNULL(is_deleted,0)=0)
                     INSERT INTO rpt_temp (date, reg_num, site_code, department, merchant_name, merchant_area, date_created, created_by_user_code, is_deleted)
                     VALUES (CONVERT(varchar(10), GETDATE(), 120), CONCAT('REG-', {0}), {1}, 1, 'Fleet Workshop Central', 'Johannesburg', GETDATE(), {2}, 0);
             END
-        ", defaultVehicleCode, defaultSiteCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultSiteCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('temp','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM temp WHERE contract_code = {0} AND vmf_code = {1} AND ISNULL(is_deleted,0)=0)
                     INSERT INTO temp (contract_code, start_date, end_date, tariff, vmf_code, site_code, date_created, created_by_user_code, is_deleted)
                     VALUES ({0}, GETDATE(), DATEADD(day, 30, GETDATE()), 3500.00, {1}, CAST({2} AS smallint), GETDATE(), {3}, 0);
             END
-        ", defaultContractCode, defaultVehicleCode, defaultSiteCode, defaultUserCode);
+        ",
+            defaultContractCode,
+            defaultVehicleCode,
+            defaultSiteCode,
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 17 location-temp coverage updates applied.");
 
-        var ambulanceCount = await (await HasTableAsync(dbContext, "Ambulance") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Ambulance WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var towTruckCount = await (await HasTableAsync(dbContext, "Tow_Truck") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Tow_Truck WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var univCount = await (await HasTableAsync(dbContext, "univ") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM univ WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var bookingAddressCount = await (await HasTableAsync(dbContext, "Booking_address") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Booking_address WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tempTaCount = await (await HasTableAsync(dbContext, "tempTA") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM tempTA WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tempTripsCount = await (await HasTableAsync(dbContext, "temptrips") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM temptrips WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var routeDetailsCount = await (await HasTableAsync(dbContext, "route_details") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM route_details WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var requestChangeCount = await (await HasTableAsync(dbContext, "Request_Change") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Request_Change WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var rptTempCount = await (await HasTableAsync(dbContext, "rpt_temp") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM rpt_temp WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tempCount = await (await HasTableAsync(dbContext, "temp") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM temp WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var ambulanceCount = await (
+            await HasTableAsync(dbContext, "Ambulance")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Ambulance WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var towTruckCount = await (
+            await HasTableAsync(dbContext, "Tow_Truck")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Tow_Truck WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var univCount = await (
+            await HasTableAsync(dbContext, "univ")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM univ WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var bookingAddressCount = await (
+            await HasTableAsync(dbContext, "Booking_address")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Booking_address WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tempTaCount = await (
+            await HasTableAsync(dbContext, "tempTA")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM tempTA WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tempTripsCount = await (
+            await HasTableAsync(dbContext, "temptrips")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM temptrips WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var routeDetailsCount = await (
+            await HasTableAsync(dbContext, "route_details")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM route_details WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var requestChangeCount = await (
+            await HasTableAsync(dbContext, "Request_Change")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Request_Change WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var rptTempCount = await (
+            await HasTableAsync(dbContext, "rpt_temp")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM rpt_temp WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tempCount = await (
+            await HasTableAsync(dbContext, "temp")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM temp WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 17 | Ambulance: {ambulanceCount} | TowTruck: {towTruckCount} | Univ: {univCount} | BookingAddress: {bookingAddressCount} | TempTA: {tempTaCount}");
-        Console.WriteLine($"  📊 Batch 17 | TempTrips: {tempTripsCount} | RouteDetails: {routeDetailsCount} | RequestChange: {requestChangeCount} | RptTemp: {rptTempCount} | Temp: {tempCount}");
+        Console.WriteLine(
+            $"  📊 Batch 17 | Ambulance: {ambulanceCount} | TowTruck: {towTruckCount} | Univ: {univCount} | BookingAddress: {bookingAddressCount} | TempTA: {tempTaCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 17 | TempTrips: {tempTripsCount} | RouteDetails: {routeDetailsCount} | RequestChange: {requestChangeCount} | RptTemp: {rptTempCount} | Temp: {tempCount}"
+        );
     }
 
     private static async Task ApplyBatch18TaxiThirdPartyCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultDepartmentCode = await HasTableAsync(dbContext, "department") &&
-                                    await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code")
-            : 1;
+        var defaultDepartmentCode =
+            await HasTableAsync(dbContext, "department")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code"
+                )
+                : 1;
 
-        var defaultClassCode = await HasTableAsync(dbContext, "class") &&
-                               await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM class WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 class_code FROM class WHERE ISNULL(is_deleted, 0) = 0 ORDER BY class_code")
-            : 1;
+        var defaultClassCode =
+            await HasTableAsync(dbContext, "class")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM class WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 class_code FROM class WHERE ISNULL(is_deleted, 0) = 0 ORDER BY class_code"
+                )
+                : 1;
 
-        var defaultModelCode = await HasTableAsync(dbContext, "model") &&
-                               await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM model WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 model_code FROM model WHERE ISNULL(is_deleted, 0) = 0 ORDER BY model_code")
-            : 1;
+        var defaultModelCode =
+            await HasTableAsync(dbContext, "model")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM model WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 model_code FROM model WHERE ISNULL(is_deleted, 0) = 0 ORDER BY model_code"
+                )
+                : 1;
 
-        var defaultSupplierId = await HasTableAsync(dbContext, "Suppliers") &&
-                                await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Suppliers WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 supplier_id FROM Suppliers WHERE ISNULL(is_deleted, 0) = 0 ORDER BY supplier_id")
-            : 1;
+        var defaultSupplierId =
+            await HasTableAsync(dbContext, "Suppliers")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM Suppliers WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 supplier_id FROM Suppliers WHERE ISNULL(is_deleted, 0) = 0 ORDER BY supplier_id"
+                )
+                : 1;
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6743,7 +8713,8 @@ public class Program
                         INSERT INTO Contractors
                         (contractor_id, contractor_name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                         VALUES (@contractorId + 1, 'Seed Taxi Contractor', '1 Fleet Lane, Johannesburg', 'PO Box 501, Johannesburg', '0110000400', '0110000401', GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6764,7 +8735,8 @@ public class Program
                         INSERT INTO Contractor_taxi_class
                         (class_id, contractor_id, description, km_tariff, driver_per_hour, daily_tariff, date_created, created_by_user_code, is_deleted)
                         VALUES (@taxiClassId + 1, @contractorId, 'Standard Sedan', 8.75, 95.00, 650.00, GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6784,7 +8756,8 @@ public class Program
                         INSERT INTO Taxis
                         (rek_num, contractor_id, vmf_code, department_code, site_code, date_required, time_required, vehicle_type_code, official, rank, address_1, address_2, address_3, flight, date_created, created_by_user_code, is_deleted)
                         VALUES ('TAXI-SEED-001', @contractorId, CAST({defaultVehicleCode} AS varchar(20)), CAST({defaultDepartmentCode} AS smallint), CAST({defaultSiteCode} AS smallint), DATEADD(day,1,GETDATE()), DATEADD(hour,2,GETDATE()), 1, 'Seed Official', 'Manager', '1 Main Rd', 'Braamfontein', 'Johannesburg', NULL, GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6804,9 +8777,11 @@ public class Program
                         INSERT INTO Taxi_logs
                         (request_id, rek_num, user_start_odo, user_end_odo, user_start_date, user_end_date, user_start_time, user_end_time, driver_start_odo, driver_end_odo, driver_start_date, driver_end_date, driver_start_time, driver_end_time, userid, enter_date, division, distance, days, date_created, created_by_user_code, is_deleted)
                         VALUES (@requestId, 'TAXI-SEED-001', 12000, 12040, CAST(GETDATE() AS date), CAST(GETDATE() AS date), GETDATE(), DATEADD(hour,2,GETDATE()), 12000, 12040, CAST(GETDATE() AS date), CAST(GETDATE() AS date), GETDATE(), DATEADD(hour,2,GETDATE()), CAST({defaultUserCode} AS smallint), GETDATE(), 'Fleet Ops', 40, 1, GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Taxi_Log_changes','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Taxi_Log_changes WHERE rek_num='TAXI-SEED-001' AND ISNULL(is_deleted,0)=0)
@@ -6814,7 +8789,9 @@ public class Program
                     (ID, rek_num, days, hours, km, date_changed, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'TAXI-SEED-001', 1, 2.0, 40.00, GETDATE(), GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6833,7 +8810,8 @@ public class Program
                         INSERT INTO Taxi_white_log
                         (Log_id, vmf_code, start_odo, end_odo, start_date, end_date, driver, user_access_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, {defaultVehicleCode}, 15000, 15065, CAST(GETDATE() AS date), CAST(GETDATE() AS date), 'Seed Driver', CAST({defaultUserCode} AS smallint), GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6852,7 +8830,8 @@ public class Program
                         INSERT INTO Taxi_ScanDocs
                         (taxi_scandoc_code, vmf_code, image, period_begin, period_end, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, {defaultVehicleCode}, 'seeded/taxi_scandoc_001.pdf', DATEADD(day,-30,GETDATE()), GETDATE(), GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6871,9 +8850,11 @@ public class Program
                         INSERT INTO taxi_log_notes
                         (taxi_log_note_code, taxi_log_note_description, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, 'Seeded taxi trip note', GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('third_party_projects','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM third_party_projects WHERE description='Seeded Third Party Project' AND ISNULL(is_deleted,0)=0)
@@ -6881,9 +8862,14 @@ public class Program
                     (department_code, site_code, description, start_date, end_date, responsible_person, rp_physical_address, rp_postal_address, rp_tel, rp_fax, rp_email, rp_cell, notes, order_reference, class_configuration, date_created, created_by_user_code, is_deleted)
                     VALUES (CAST({0} AS smallint), CAST({1} AS smallint), 'Seeded Third Party Project', GETDATE(), DATEADD(day, 90, GETDATE()), 'Seed Coordinator', '11 Project Park, Midrand', 'PO Box 77, Midrand', '0110000410', '0110000411', 'thirdparty@fis.local', '0820000412', 'Auto-seeded third-party project', 'ORD-TP-001', 'Class mix', GETDATE(), {2}, 0);
             END
-        ", defaultDepartmentCode, defaultSiteCode, defaultUserCode);
+        ",
+            defaultDepartmentCode,
+            defaultSiteCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('ClassRequirements','U') IS NOT NULL
             BEGIN
                 DECLARE @projectId int = 0;
@@ -6898,9 +8884,13 @@ public class Program
                     (project_id, class_id, required_count, start_date, end_date, notes, date_created, created_by_user_code, is_deleted)
                     VALUES (@projectId, CAST({0} AS smallint), 2, GETDATE(), DATEADD(day, 90, GETDATE()), 'Seeded requirement row', GETDATE(), {1}, 0);
             END
-        ", defaultClassCode, defaultUserCode);
+        ",
+            defaultClassCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Vehicle_orders','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Vehicle_orders WHERE order_number='VO-SEED-001' AND ISNULL(is_deleted,0)=0)
@@ -6908,59 +8898,187 @@ public class Program
                     (make_code, model_code, quantity, supplier_id, order_number, date_created, created_by_user_code, is_deleted)
                     VALUES (1, CAST({0} AS smallint), 2, CAST({1} AS smallint), 'VO-SEED-001', GETDATE(), {2}, 0);
             END
-        ", defaultModelCode, defaultSupplierId, defaultUserCode);
+        ",
+            defaultModelCode,
+            defaultSupplierId,
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 18 taxi-thirdparty coverage updates applied.");
 
-        var contractorsCount = await (await HasTableAsync(dbContext, "Contractors") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Contractors WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var contractorTaxiClassCount = await (await HasTableAsync(dbContext, "Contractor_taxi_class") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Contractor_taxi_class WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taxisCount = await (await HasTableAsync(dbContext, "Taxis") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Taxis WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taxiLogsCount = await (await HasTableAsync(dbContext, "Taxi_logs") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Taxi_logs WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taxiLogChangesCount = await (await HasTableAsync(dbContext, "Taxi_Log_changes") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Taxi_Log_changes WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taxiWhiteLogCount = await (await HasTableAsync(dbContext, "Taxi_white_log") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Taxi_white_log WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taxiScanDocsCount = await (await HasTableAsync(dbContext, "Taxi_ScanDocs") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Taxi_ScanDocs WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var taxiLogNotesCount = await (await HasTableAsync(dbContext, "taxi_log_notes") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM taxi_log_notes WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var thirdPartyProjectsCount = await (await HasTableAsync(dbContext, "third_party_projects") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM third_party_projects WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var classRequirementsCount = await (await HasTableAsync(dbContext, "ClassRequirements") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM ClassRequirements WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var vehicleOrdersCount = await (await HasTableAsync(dbContext, "Vehicle_orders") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Vehicle_orders WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var contractorsCount = await (
+            await HasTableAsync(dbContext, "Contractors")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Contractors WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var contractorTaxiClassCount = await (
+            await HasTableAsync(dbContext, "Contractor_taxi_class")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Contractor_taxi_class WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taxisCount = await (
+            await HasTableAsync(dbContext, "Taxis")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Taxis WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taxiLogsCount = await (
+            await HasTableAsync(dbContext, "Taxi_logs")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Taxi_logs WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taxiLogChangesCount = await (
+            await HasTableAsync(dbContext, "Taxi_Log_changes")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Taxi_Log_changes WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taxiWhiteLogCount = await (
+            await HasTableAsync(dbContext, "Taxi_white_log")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Taxi_white_log WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taxiScanDocsCount = await (
+            await HasTableAsync(dbContext, "Taxi_ScanDocs")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Taxi_ScanDocs WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var taxiLogNotesCount = await (
+            await HasTableAsync(dbContext, "taxi_log_notes")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM taxi_log_notes WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var thirdPartyProjectsCount = await (
+            await HasTableAsync(dbContext, "third_party_projects")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM third_party_projects WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var classRequirementsCount = await (
+            await HasTableAsync(dbContext, "ClassRequirements")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM ClassRequirements WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var vehicleOrdersCount = await (
+            await HasTableAsync(dbContext, "Vehicle_orders")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Vehicle_orders WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 18 | Contractors: {contractorsCount} | ContractorTaxiClass: {contractorTaxiClassCount} | Taxis: {taxisCount} | TaxiLogs: {taxiLogsCount} | TaxiLogChanges: {taxiLogChangesCount}");
-        Console.WriteLine($"  📊 Batch 18 | TaxiWhiteLog: {taxiWhiteLogCount} | TaxiScanDocs: {taxiScanDocsCount} | TaxiLogNotes: {taxiLogNotesCount} | ThirdPartyProjects: {thirdPartyProjectsCount} | ClassRequirements: {classRequirementsCount} | VehicleOrders: {vehicleOrdersCount}");
+        Console.WriteLine(
+            $"  📊 Batch 18 | Contractors: {contractorsCount} | ContractorTaxiClass: {contractorTaxiClassCount} | Taxis: {taxisCount} | TaxiLogs: {taxiLogsCount} | TaxiLogChanges: {taxiLogChangesCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 18 | TaxiWhiteLog: {taxiWhiteLogCount} | TaxiScanDocs: {taxiScanDocsCount} | TaxiLogNotes: {taxiLogNotesCount} | ThirdPartyProjects: {thirdPartyProjectsCount} | ClassRequirements: {classRequirementsCount} | VehicleOrders: {vehicleOrdersCount}"
+        );
     }
 
     private static async Task ApplyBatch19ContractsDocsCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultContractCode = await HasTableAsync(dbContext, "contract") &&
-                                  await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 contract_code FROM contract WHERE ISNULL(is_deleted, 0) = 0 ORDER BY contract_code DESC")
-            : 1;
+        var defaultContractCode =
+            await HasTableAsync(dbContext, "contract")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM contract WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 contract_code FROM contract WHERE ISNULL(is_deleted, 0) = 0 ORDER BY contract_code DESC"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultPostingMonthCode = await HasTableAsync(dbContext, "posting_month") &&
-                                      await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_month WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 posting_month_code FROM posting_month WHERE ISNULL(is_deleted, 0) = 0 ORDER BY posting_month_code DESC")
-            : 0;
+        var defaultPostingMonthCode =
+            await HasTableAsync(dbContext, "posting_month")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM posting_month WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 posting_month_code FROM posting_month WHERE ISNULL(is_deleted, 0) = 0 ORDER BY posting_month_code DESC"
+                )
+                : 0;
 
-        var defaultExtraCode = await HasTableAsync(dbContext, "extra_codes") &&
-                               await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 extra_code FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0 ORDER BY extra_code")
-            : 1;
+        var defaultExtraCode =
+            await HasTableAsync(dbContext, "extra_codes")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 extra_code FROM extra_codes WHERE ISNULL(is_deleted, 0) = 0 ORDER BY extra_code"
+                )
+                : 1;
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('LeaseContractTerms','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM LeaseContractTerms WHERE vmf_Code = {0} AND ISNULL(is_deleted, 0) = 0)
@@ -6968,7 +9086,10 @@ public class Program
                     (vmf_Code, AgreedTerms, AgreedKilos, AppliedInterest, FixedMonthlyAmount, AuthorityStatus, CreatedBy, CreatedDate, ModifiedBy, ModifiedDate, StartDate, EndDate, date_created, created_by_user_code, is_deleted)
                     VALUES ({0}, 36, 120000, 10.50, 7450.00, 1, {1}, GETDATE(), {1}, GETDATE(), DATEADD(day, -30, GETDATE()), DATEADD(year, 3, GETDATE()), GETDATE(), {1}, 0);
             END
-        ", defaultVehicleCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -6987,7 +9108,8 @@ public class Program
                         INSERT INTO LeaseContractTermsComment
                         (comment_code, comment, comment_date, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, 'Auto-seeded lease terms comment', GETDATE(), GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -7006,9 +9128,11 @@ public class Program
                         INSERT INTO contract_rebillsplit
                         (rebillsplit_code, contract_code, rebill_percentage, site_code, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, {defaultContractCode}, 50.00, CAST({defaultSiteCode} AS smallint), GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('scan_docs','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM scan_docs WHERE vmf_code = {0} AND image = 'seeded/scan_doc_001.pdf' AND ISNULL(is_deleted, 0) = 0)
@@ -7016,7 +9140,10 @@ public class Program
                     (vmf_code, image, period_begin, period_end, date_created, created_by_user_code, is_deleted)
                     VALUES ({0}, 'seeded/scan_doc_001.pdf', DATEADD(day, -30, GETDATE()), GETDATE(), GETDATE(), {1}, 0);
             END
-        ", defaultVehicleCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultUserCode
+        );
 
         if (defaultPostingMonthCode > 0)
         {
@@ -7037,7 +9164,8 @@ public class Program
                             INSERT INTO monthly_odo
                             (monthly_odo_code, vmf_code, posting_month_code, max_odometer, derived_odo, odometer_date, trans_type, date_created, created_by_user_code, is_deleted)
                             VALUES (@code + 1, {defaultVehicleCode}, CAST({defaultPostingMonthCode} AS smallint), 25500, 'Captured', GETDATE(), 'M', GETDATE(), {defaultUserCode}, 0);
-                     END");
+                     END"
+            );
         }
 
         await ExecuteIdentityAwareSqlAsync(
@@ -7057,7 +9185,8 @@ public class Program
                         INSERT INTO temp_fleet_note
                         (temp_fleet_notes_code, temp_vmf_code, notes, update_date, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, 3001, 'Auto-seeded temp fleet note', GETDATE(), GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -7085,7 +9214,8 @@ public class Program
                         INSERT INTO extras
                         (extras_code, vmf_code, extra_code, quantity, amount, serial_number, date_created, created_by_user_code, is_deleted)
                         VALUES (@code + 1, {defaultVehicleCode}, CAST({defaultExtraCode} AS smallint), 1, 500.00, 'SN-SEED-001', GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -7102,9 +9232,11 @@ public class Program
                         INSERT INTO third_party_vehicle_model_description
                         (vmf_code, model_description, date_created, created_by_user_code, is_deleted)
                         VALUES (CAST({defaultVehicleCode} AS smallint), 'Seeded Third-Party Model Description', GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('third_party_allocations','U') IS NOT NULL
             BEGIN
                 DECLARE @projectId int = 0;
@@ -7117,9 +9249,13 @@ public class Program
                     (project_id, supplier_id, vehicle_id, class_id, quantity, date_created, created_by_user_code, is_deleted)
                     VALUES (@projectId, 1, {0}, 1, 1, GETDATE(), {1}, 0);
             END
-        ", defaultVehicleCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('PrivHireFuel_card','U') IS NOT NULL
             BEGIN
                 DECLARE @phvCode int = 0;
@@ -7131,48 +9267,153 @@ public class Program
                     (phv_code, Counter, card_number, PAN_number, date_created, created_by_user_code, is_deleted)
                     VALUES (@phvCode, 1, RIGHT(CONCAT('000000000000000', CAST(710000000000000 + @phvCode AS varchar(20))), 15), RIGHT(CONCAT('000000000000000', CAST(810000000000000 + @phvCode AS varchar(20))), 15), GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 19 contracts-docs coverage updates applied.");
 
-        var leaseTermsCount = await (await HasTableAsync(dbContext, "LeaseContractTerms") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM LeaseContractTerms WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var leaseTermsCommentCount = await (await HasTableAsync(dbContext, "LeaseContractTermsComment") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM LeaseContractTermsComment WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var rebillSplitCount = await (await HasTableAsync(dbContext, "contract_rebillsplit") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM contract_rebillsplit WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var scanDocsCount = await (await HasTableAsync(dbContext, "scan_docs") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM scan_docs WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var monthlyOdoCount = await (await HasTableAsync(dbContext, "monthly_odo") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM monthly_odo WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tempFleetNoteCount = await (await HasTableAsync(dbContext, "temp_fleet_note") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM temp_fleet_note WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var extrasCount = await (await HasTableAsync(dbContext, "extras") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM extras WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var thirdPartyModelDescCount = await (await HasTableAsync(dbContext, "third_party_vehicle_model_description") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM third_party_vehicle_model_description WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var thirdPartyAllocCount = await (await HasTableAsync(dbContext, "third_party_allocations") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM third_party_allocations WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var privHireFuelCardCount = await (await HasTableAsync(dbContext, "PrivHireFuel_card") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM PrivHireFuel_card WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var leaseTermsCount = await (
+            await HasTableAsync(dbContext, "LeaseContractTerms")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM LeaseContractTerms WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var leaseTermsCommentCount = await (
+            await HasTableAsync(dbContext, "LeaseContractTermsComment")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM LeaseContractTermsComment WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var rebillSplitCount = await (
+            await HasTableAsync(dbContext, "contract_rebillsplit")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM contract_rebillsplit WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var scanDocsCount = await (
+            await HasTableAsync(dbContext, "scan_docs")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM scan_docs WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var monthlyOdoCount = await (
+            await HasTableAsync(dbContext, "monthly_odo")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM monthly_odo WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tempFleetNoteCount = await (
+            await HasTableAsync(dbContext, "temp_fleet_note")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM temp_fleet_note WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var extrasCount = await (
+            await HasTableAsync(dbContext, "extras")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM extras WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var thirdPartyModelDescCount = await (
+            await HasTableAsync(dbContext, "third_party_vehicle_model_description")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM third_party_vehicle_model_description WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var thirdPartyAllocCount = await (
+            await HasTableAsync(dbContext, "third_party_allocations")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM third_party_allocations WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var privHireFuelCardCount = await (
+            await HasTableAsync(dbContext, "PrivHireFuel_card")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM PrivHireFuel_card WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 19 | LeaseTerms: {leaseTermsCount} | LeaseTermsComment: {leaseTermsCommentCount} | RebillSplit: {rebillSplitCount} | ScanDocs: {scanDocsCount} | MonthlyOdo: {monthlyOdoCount}");
-        Console.WriteLine($"  📊 Batch 19 | TempFleetNote: {tempFleetNoteCount} | Extras: {extrasCount} | ThirdPartyModelDesc: {thirdPartyModelDescCount} | ThirdPartyAllocations: {thirdPartyAllocCount} | PrivHireFuelCards: {privHireFuelCardCount}");
+        Console.WriteLine(
+            $"  📊 Batch 19 | LeaseTerms: {leaseTermsCount} | LeaseTermsComment: {leaseTermsCommentCount} | RebillSplit: {rebillSplitCount} | ScanDocs: {scanDocsCount} | MonthlyOdo: {monthlyOdoCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 19 | TempFleetNote: {tempFleetNoteCount} | Extras: {extrasCount} | ThirdPartyModelDesc: {thirdPartyModelDescCount} | ThirdPartyAllocations: {thirdPartyAllocCount} | PrivHireFuelCards: {privHireFuelCardCount}"
+        );
     }
 
     private static async Task ApplyBatch20LegacyOpsTailCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultDepartmentCode = await HasTableAsync(dbContext, "department") &&
-                                    await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code")
-            : 1;
+        var defaultDepartmentCode =
+            await HasTableAsync(dbContext, "department")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code"
+                )
+                : 1;
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('TS_Error_Code','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM TS_Error_Code WHERE Error_Code = 'E-SEED-001' AND ISNULL(is_deleted, 0) = 0)
@@ -7180,9 +9421,12 @@ public class Program
                     (Error_Code, Description, date_created, created_by_user_code, is_deleted)
                     VALUES ('E-SEED-001', 'Seeded diagnostic error code', GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('TS_Comment','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM TS_Comment WHERE Ref_number = {0} AND Comments = 'Seeded TS comment' AND ISNULL(is_deleted, 0) = 0)
@@ -7190,9 +9434,13 @@ public class Program
                     (Ref_number, Comments, date_created, created_by_user_code, is_deleted)
                     VALUES ({0}, 'Seeded TS comment', GETDATE(), {1}, 0);
             END
-        ", defaultVehicleCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Notify_List','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Notify_List WHERE Notify_list_desc = 'Seeded Ops Alerts' AND ISNULL(is_deleted, 0) = 0)
@@ -7200,9 +9448,12 @@ public class Program
                     (Notify_list_desc, Notify_email1, date_created, created_by_user_code, is_deleted)
                     VALUES ('Seeded Ops Alerts', 'ops.alerts@fis.local', GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Req_num','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Req_num WHERE series = 'SEED-OPS' AND ISNULL(is_deleted, 0) = 0)
@@ -7210,9 +9461,12 @@ public class Program
                     (series, number, date_created, created_by_user_code, is_deleted)
                     VALUES ('SEED-OPS', 1001, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('IL','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM IL WHERE department_code = CAST({0} AS float) AND bas_installation_code = 4500000 AND ISNULL(is_deleted, 0) = 0)
@@ -7220,9 +9474,13 @@ public class Program
                     (department_code, bas_installation_code, date_created, created_by_user_code, is_deleted)
                     VALUES (CAST({0} AS float), 4500000, GETDATE(), {1}, 0);
             END
-        ", defaultDepartmentCode, defaultUserCode);
+        ",
+            defaultDepartmentCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('tyda','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM tyda WHERE xreknum = 'SEED-REQ-001' AND ISNULL(is_deleted, 0) = 0)
@@ -7230,9 +9488,12 @@ public class Program
                     (xf_nom, xd_nom, xs_odo, xe_odo, xs_dat, xe_dat, xreknum, xtrdat, xclas, date_created, created_by_user_code, is_deleted)
                     VALUES ('GGX000001', 'Seed Driver', 10000, 10080, CAST(GETDATE() AS date), CAST(GETDATE() AS date), 'SEED-REQ-001', GETDATE(), 1, GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('tyda1','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM tyda1 WHERE xel = 'SEED-REQ-001' AND ISNULL(is_deleted, 0) = 0)
@@ -7240,9 +9501,12 @@ public class Program
                     (xf_nom, xr_nom, xd_nom, xd_naam, xs_odo, xe_odo, xs_dat, xe_dat, xel, date_created, created_by_user_code, is_deleted)
                     VALUES ('GGX000001', 'REG001GP', 'Seed Driver', 'Seed Driver Fullname', 10000, 10080, CAST(GETDATE() AS date), CAST(GETDATE() AS date), 'SEED-REQ-001', GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('AdHocHolidays','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(AdHocHolidayID) FROM AdHocHolidays), 0);
@@ -7263,9 +9527,12 @@ public class Program
                         VALUES (@code + 1, DATEADD(day, 21, CAST(GETDATE() AS date)), 'Seeded AdHoc Holiday', GETDATE(), {0}, 0);
                     END
                 END
-            END", defaultUserCode);
+            END",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Holidays','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Holidays WHERE HolidayDate = DATEADD(day, 28, CAST(GETDATE() AS date)) AND ISNULL(is_deleted, 0) = 0)
@@ -7273,7 +9540,9 @@ public class Program
                     (HolidayDate, HolidayName, date_created, created_by_user_code, is_deleted)
                     VALUES (DATEADD(day, 28, CAST(GETDATE() AS date)), 'Seeded Public Holiday', GETDATE(), {0}, 0);
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
         await ExecuteIdentityAwareSqlAsync(
             dbContext,
@@ -7292,73 +9561,212 @@ public class Program
                         INSERT INTO vip_site_map
                         (vip_site_map_code, site_code, start_date, end_date, notes, date_updated, created_by_user_code, is_deleted)
                         VALUES (@code + 1, CAST({defaultSiteCode} AS smallint), CAST(GETDATE() AS date), DATEADD(year, 1, CAST(GETDATE() AS date)), 'Seeded VIP site mapping', GETDATE(), {defaultUserCode}, 0);
-                 END");
+                 END"
+        );
 
         Console.WriteLine("  ✓ Batch 20 legacy-ops-tail coverage updates applied.");
 
-        var tsErrorCodeCount = await (await HasTableAsync(dbContext, "TS_Error_Code") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Error_Code WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tsCommentCount = await (await HasTableAsync(dbContext, "TS_Comment") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Comment WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var notifyListCount = await (await HasTableAsync(dbContext, "Notify_List") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Notify_List WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var reqNumCount = await (await HasTableAsync(dbContext, "Req_num") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Req_num WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var ilCount = await (await HasTableAsync(dbContext, "IL") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM IL WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tydaCount = await (await HasTableAsync(dbContext, "tyda") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM tyda WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var tyda1Count = await (await HasTableAsync(dbContext, "tyda1") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM tyda1 WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var adHocHolidayCount = await (await HasTableAsync(dbContext, "AdHocHolidays") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM AdHocHolidays WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var holidayCount = await (await HasTableAsync(dbContext, "Holidays") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Holidays WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var vipSiteMapCount = await (await HasTableAsync(dbContext, "vip_site_map") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vip_site_map WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var tsErrorCodeCount = await (
+            await HasTableAsync(dbContext, "TS_Error_Code")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM TS_Error_Code WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tsCommentCount = await (
+            await HasTableAsync(dbContext, "TS_Comment")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM TS_Comment WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var notifyListCount = await (
+            await HasTableAsync(dbContext, "Notify_List")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Notify_List WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var reqNumCount = await (
+            await HasTableAsync(dbContext, "Req_num")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Req_num WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var ilCount = await (
+            await HasTableAsync(dbContext, "IL")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM IL WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tydaCount = await (
+            await HasTableAsync(dbContext, "tyda")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM tyda WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var tyda1Count = await (
+            await HasTableAsync(dbContext, "tyda1")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM tyda1 WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var adHocHolidayCount = await (
+            await HasTableAsync(dbContext, "AdHocHolidays")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM AdHocHolidays WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var holidayCount = await (
+            await HasTableAsync(dbContext, "Holidays")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Holidays WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var vipSiteMapCount = await (
+            await HasTableAsync(dbContext, "vip_site_map")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM vip_site_map WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 20 | TSErrorCode: {tsErrorCodeCount} | TSComment: {tsCommentCount} | NotifyList: {notifyListCount} | ReqNum: {reqNumCount} | IL: {ilCount}");
-        Console.WriteLine($"  📊 Batch 20 | Tyda: {tydaCount} | Tyda1: {tyda1Count} | AdHocHolidays: {adHocHolidayCount} | Holidays: {holidayCount} | VipSiteMap: {vipSiteMapCount}");
+        Console.WriteLine(
+            $"  📊 Batch 20 | TSErrorCode: {tsErrorCodeCount} | TSComment: {tsCommentCount} | NotifyList: {notifyListCount} | ReqNum: {reqNumCount} | IL: {ilCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 20 | Tyda: {tydaCount} | Tyda1: {tyda1Count} | AdHocHolidays: {adHocHolidayCount} | Holidays: {holidayCount} | VipSiteMap: {vipSiteMapCount}"
+        );
     }
 
     private static async Task ApplyBatch21FinancialLedgerTailCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        var defaultVehicleCode = await HasTableAsync(dbContext, "vehicle_master") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code")
-            : 1;
+        var defaultVehicleCode =
+            await HasTableAsync(dbContext, "vehicle_master")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 vmf_code FROM vehicle_master WHERE ISNULL(is_deleted, 0) = 0 ORDER BY vmf_code"
+                )
+                : 1;
 
-        var defaultDepartmentCode = await HasTableAsync(dbContext, "department") &&
-                                    await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code")
-            : 1;
+        var defaultDepartmentCode =
+            await HasTableAsync(dbContext, "department")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM department WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 department_code FROM department WHERE ISNULL(is_deleted, 0) = 0 ORDER BY department_code"
+                )
+                : 1;
 
-        var defaultSiteCode = await HasTableAsync(dbContext, "site") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code")
-            : 1;
+        var defaultSiteCode =
+            await HasTableAsync(dbContext, "site")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM site WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 Site_code FROM site WHERE ISNULL(is_deleted, 0) = 0 ORDER BY Site_code"
+                )
+                : 1;
 
-        var defaultCostCategoryCode = await HasTableAsync(dbContext, "cost_category") &&
-                                      await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM cost_category WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 cost_category_code FROM cost_category WHERE ISNULL(is_deleted, 0) = 0 ORDER BY cost_category_code")
-            : 1;
+        var defaultCostCategoryCode =
+            await HasTableAsync(dbContext, "cost_category")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM cost_category WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 cost_category_code FROM cost_category WHERE ISNULL(is_deleted, 0) = 0 ORDER BY cost_category_code"
+                )
+                : 1;
 
-        var defaultPostingYearCode = await HasTableAsync(dbContext, "posting_year") &&
-                                     await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_year WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 posting_year_code FROM posting_year WHERE ISNULL(is_deleted, 0) = 0 ORDER BY posting_year_code DESC")
-            : DateTime.UtcNow.Year;
+        var defaultPostingYearCode =
+            await HasTableAsync(dbContext, "posting_year")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM posting_year WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 posting_year_code FROM posting_year WHERE ISNULL(is_deleted, 0) = 0 ORDER BY posting_year_code DESC"
+                )
+                : DateTime.UtcNow.Year;
 
-        var defaultPostingMonthCode = await HasTableAsync(dbContext, "posting_month") &&
-                                      await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM posting_month WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 posting_month_code FROM posting_month WHERE ISNULL(is_deleted, 0) = 0 ORDER BY posting_month_code DESC")
-            : 0;
+        var defaultPostingMonthCode =
+            await HasTableAsync(dbContext, "posting_month")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM posting_month WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 posting_month_code FROM posting_month WHERE ISNULL(is_deleted, 0) = 0 ORDER BY posting_month_code DESC"
+                )
+                : 0;
 
-        var defaultJournalCode = await HasTableAsync(dbContext, "journal") &&
-                                 await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 journal_code FROM journal WHERE ISNULL(is_deleted, 0) = 0 ORDER BY journal_code DESC")
-            : 0;
+        var defaultJournalCode =
+            await HasTableAsync(dbContext, "journal")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM journal WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 journal_code FROM journal WHERE ISNULL(is_deleted, 0) = 0 ORDER BY journal_code DESC"
+                )
+                : 0;
 
-        var defaultJournalDetailTypeCode = await HasTableAsync(dbContext, "journal_detail_type") &&
-                                           await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal_detail_type WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 journal_detail_type_code FROM journal_detail_type WHERE ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_type_code")
-            : 1;
+        var defaultJournalDetailTypeCode =
+            await HasTableAsync(dbContext, "journal_detail_type")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM journal_detail_type WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 journal_detail_type_code FROM journal_detail_type WHERE ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_type_code"
+                )
+                : 1;
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('transactions','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(trans_code) FROM transactions), 0);
@@ -7380,9 +9788,15 @@ public class Program
                     END
                 END
             END
-        ", defaultVehicleCode, defaultCostCategoryCode, defaultPostingMonthCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultCostCategoryCode,
+            defaultPostingMonthCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @id int = ISNULL((SELECT MAX(journal_detail_id) FROM journal_detail), 0);
@@ -7405,10 +9819,20 @@ public class Program
                     END
                 END
             END
-        ", defaultJournalCode, defaultDepartmentCode, defaultSiteCode, defaultVehicleCode, defaultJournalDetailTypeCode, defaultPostingYearCode, defaultUserCode);
+        ",
+            defaultJournalCode,
+            defaultDepartmentCode,
+            defaultSiteCode,
+            defaultVehicleCode,
+            defaultJournalDetailTypeCode,
+            defaultPostingYearCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('journal_detail_allocation_exception','U') IS NOT NULL
+               AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(journal_detail_allocation_exception_code) FROM journal_detail_allocation_exception), 0);
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('journal_detail_allocation_exception'), 'journal_detail_allocation_exception_code', 'IsIdentity');
@@ -7431,10 +9855,14 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Income_Split_TempTable','U') IS NOT NULL
+               AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @detailId int = (SELECT TOP 1 journal_detail_id FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
                 DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
@@ -7445,9 +9873,14 @@ public class Program
                     (Type, source_date, TransactionFinYear, journal_detail_id, journal_detail_code, journal_code, date_created, created_by_user_code, is_deleted)
                     VALUES ('SeededSplit', CAST(GETDATE() AS date), CAST({0} AS varchar(10)), @detailId, @detailCode, CASE WHEN {1} > 0 THEN {1} ELSE NULL END, GETDATE(), {2}, 0);
             END
-        ", defaultPostingYearCode, defaultJournalCode, defaultUserCode);
+        ",
+            defaultPostingYearCode,
+            defaultJournalCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('burn_rate','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(burn_rate_code) FROM burn_rate), 0);
@@ -7468,9 +9901,13 @@ public class Program
                     END
                 END
             END
-        ", defaultDepartmentCode, defaultUserCode);
+        ",
+            defaultDepartmentCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Monthly_burn_rate','U') IS NOT NULL
             BEGIN
                 IF NOT EXISTS (SELECT 1 FROM Monthly_burn_rate WHERE [month] = MONTH(GETDATE()) AND [year] = YEAR(GETDATE()) AND department_number = {0} AND ISNULL(is_deleted, 0) = 0)
@@ -7478,10 +9915,15 @@ public class Program
                     ([month], [year], department_number, Fixed_income_total, Fixed_cost_total, percent_Replacement, date_created, created_by_user_code, is_deleted)
                     VALUES (MONTH(GETDATE()), YEAR(GETDATE()), {0}, 125000.00, 97500.00, 78.00, GETDATE(), {1}, 0);
             END
-        ", defaultDepartmentCode, defaultUserCode);
+        ",
+            defaultDepartmentCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('vip_billing','U') IS NOT NULL
+               AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(vip_billing_code) FROM vip_billing), 0);
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('vip_billing'), 'vip_billing_code', 'IsIdentity');
@@ -7503,9 +9945,14 @@ public class Program
                     END
                 END
             END
-        ", defaultVehicleCode, defaultSiteCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultSiteCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('budget','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(budget_code) FROM budget), 0);
@@ -7526,9 +9973,14 @@ public class Program
                     END
                 END
             END
-        ", defaultVehicleCode, defaultPostingYearCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultPostingYearCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('budget_amount','U') IS NOT NULL
             BEGIN
                 DECLARE @budgetCode int = (SELECT TOP 1 budget_code FROM budget WHERE vmf_code = {0} AND posting_year_code = CAST({1} AS smallint) AND ISNULL(is_deleted, 0) = 0 ORDER BY budget_code DESC);
@@ -7552,9 +10004,15 @@ public class Program
                     END
                 END
             END
-        ", defaultVehicleCode, defaultPostingYearCode, defaultCostCategoryCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultPostingYearCode,
+            defaultCostCategoryCode,
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('Surcharge','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(surcharge_code) FROM Surcharge), 0);
@@ -7577,33 +10035,119 @@ public class Program
                     END
                 END
             END
-        ", defaultVehicleCode, defaultSiteCode, defaultUserCode);
+        ",
+            defaultVehicleCode,
+            defaultSiteCode,
+            defaultUserCode
+        );
 
         Console.WriteLine("  ✓ Batch 21 financial-ledger tail coverage updates applied.");
 
-        var transactionsCount = await (await HasTableAsync(dbContext, "transactions") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM transactions WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var journalDetailCount = await (await HasTableAsync(dbContext, "journal_detail") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var journalAllocExCount = await (await HasTableAsync(dbContext, "journal_detail_allocation_exception") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM journal_detail_allocation_exception WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var incomeSplitCount = await (await HasTableAsync(dbContext, "Income_Split_TempTable") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Income_Split_TempTable WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var burnRateCount = await (await HasTableAsync(dbContext, "burn_rate") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM burn_rate WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var monthlyBurnRateCount = await (await HasTableAsync(dbContext, "Monthly_burn_rate") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Monthly_burn_rate WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var vipBillingCount = await (await HasTableAsync(dbContext, "vip_billing") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM vip_billing WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var budgetCount = await (await HasTableAsync(dbContext, "budget") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM budget WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var budgetAmountCount = await (await HasTableAsync(dbContext, "budget_amount") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM budget_amount WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var surchargeCount = await (await HasTableAsync(dbContext, "Surcharge") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM Surcharge WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var transactionsCount = await (
+            await HasTableAsync(dbContext, "transactions")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM transactions WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var journalDetailCount = await (
+            await HasTableAsync(dbContext, "journal_detail")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var journalAllocExCount = await (
+            await HasTableAsync(dbContext, "journal_detail_allocation_exception")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM journal_detail_allocation_exception WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var incomeSplitCount = await (
+            await HasTableAsync(dbContext, "Income_Split_TempTable")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Income_Split_TempTable WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var burnRateCount = await (
+            await HasTableAsync(dbContext, "burn_rate")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM burn_rate WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var monthlyBurnRateCount = await (
+            await HasTableAsync(dbContext, "Monthly_burn_rate")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Monthly_burn_rate WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var vipBillingCount = await (
+            await HasTableAsync(dbContext, "vip_billing")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM vip_billing WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var budgetCount = await (
+            await HasTableAsync(dbContext, "budget")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM budget WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var budgetAmountCount = await (
+            await HasTableAsync(dbContext, "budget_amount")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM budget_amount WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var surchargeCount = await (
+            await HasTableAsync(dbContext, "Surcharge")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM Surcharge WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 21 | Transactions: {transactionsCount} | JournalDetail: {journalDetailCount} | JournalAllocEx: {journalAllocExCount} | IncomeSplitTemp: {incomeSplitCount} | BurnRate: {burnRateCount}");
-        Console.WriteLine($"  📊 Batch 21 | MonthlyBurnRate: {monthlyBurnRateCount} | VipBilling: {vipBillingCount} | Budget: {budgetCount} | BudgetAmount: {budgetAmountCount} | Surcharge: {surchargeCount}");
+        Console.WriteLine(
+            $"  📊 Batch 21 | Transactions: {transactionsCount} | JournalDetail: {journalDetailCount} | JournalAllocEx: {journalAllocExCount} | IncomeSplitTemp: {incomeSplitCount} | BurnRate: {burnRateCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 21 | MonthlyBurnRate: {monthlyBurnRateCount} | VipBilling: {vipBillingCount} | Budget: {budgetCount} | BudgetAmount: {budgetAmountCount} | Surcharge: {surchargeCount}"
+        );
     }
 
     private static async Task ApplyBatch22WorkflowAnalyticsCoverageAsync(FisDbContext dbContext)
     {
-        var defaultUserCode = await HasTableAsync(dbContext, "TS_Users") &&
-                              await QueryCountAsync(dbContext, "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0") > 0
-            ? await QueryCountAsync(dbContext, "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code")
-            : 1;
+        var defaultUserCode =
+            await HasTableAsync(dbContext, "TS_Users")
+            && await QueryCountAsync(
+                dbContext,
+                "SELECT COUNT(1) FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0"
+            ) > 0
+                ? await QueryCountAsync(
+                    dbContext,
+                    "SELECT TOP 1 user_access_code FROM TS_Users WHERE ISNULL(is_deleted, 0) = 0 ORDER BY user_access_code"
+                )
+                : 1;
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[Workflow]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(WorkflowID) FROM [Workflow].[Workflow]), 0);
@@ -7624,9 +10168,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[StepType]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(StepTypeID) FROM [Workflow].[StepType]), 0);
@@ -7647,9 +10194,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[Step]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @workflowId int = (SELECT TOP 1 WorkflowID FROM [Workflow].[Workflow] WHERE WorkflowName = 'Seeded Batch22 Workflow' AND ISNULL(is_deleted, 0) = 0 ORDER BY WorkflowID DESC);
@@ -7662,20 +10212,23 @@ public class Program
                     IF @isIdentity = 1
                     BEGIN
                         INSERT INTO [Workflow].[Step]
-                        (StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, StepParameters, HandlerType, IsConditional, ConditionExpression, TrueStepID, FalseStepID, date_created, created_by_user_code, is_deleted)
-                        VALUES ('Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, 'mode=seed', 'SeedHandler', 0, NULL, NULL, NULL, GETDATE(), {0}, 0);
+                        (StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, date_created, created_by_user_code, is_deleted)
+                        VALUES ('Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, GETDATE(), {0}, 0);
                     END
                     ELSE
                     BEGIN
                         INSERT INTO [Workflow].[Step]
-                        (StepID, StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, StepParameters, HandlerType, IsConditional, ConditionExpression, TrueStepID, FalseStepID, date_created, created_by_user_code, is_deleted)
-                        VALUES (@code + 1, 'Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, 'mode=seed', 'SeedHandler', 0, NULL, NULL, NULL, GETDATE(), {0}, 0);
+                        (StepID, StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, date_created, created_by_user_code, is_deleted)
+                        VALUES (@code + 1, 'Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, GETDATE(), {0}, 0);
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[Status]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @stepId int = (SELECT TOP 1 StepID FROM [Workflow].[Step] WHERE StepName = 'Seeded Step 1' AND ISNULL(is_deleted, 0) = 0 ORDER BY StepID DESC);
@@ -7698,9 +10251,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[EventMap]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @workflowId int = (SELECT TOP 1 WorkflowID FROM [Workflow].[Workflow] WHERE WorkflowName = 'Seeded Batch22 Workflow' AND ISNULL(is_deleted, 0) = 0 ORDER BY WorkflowID DESC);
@@ -7723,9 +10279,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[NotificationTemplate]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(TemplateID) FROM [Workflow].[NotificationTemplate]), 0);
@@ -7746,9 +10305,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[WorkflowNotification]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @workflowId int = (SELECT TOP 1 WorkflowID FROM [Workflow].[Workflow] WHERE WorkflowName = 'Seeded Batch22 Workflow' AND ISNULL(is_deleted, 0) = 0 ORDER BY WorkflowID DESC);
@@ -7773,9 +10335,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[NotificationLog]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @workflowId int = (SELECT TOP 1 WorkflowID FROM [Workflow].[Workflow] WHERE WorkflowName = 'Seeded Batch22 Workflow' AND ISNULL(is_deleted, 0) = 0 ORDER BY WorkflowID DESC);
@@ -7801,9 +10366,11 @@ public class Program
                     END
                 END
             END
-        ");
+        "
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[Audit]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(AuditID) FROM [Workflow].[Audit]), 0);
@@ -7824,9 +10391,12 @@ public class Program
                     END
                 END
             END
-        ", defaultUserCode);
+        ",
+            defaultUserCode
+        );
 
-        await dbContext.Database.ExecuteSqlRawAsync(@"
+        await dbContext.Database.ExecuteSqlRawAsync(
+            @"
             IF OBJECT_ID('[Workflow].[WorkflowExecutionSummary]', 'U') IS NOT NULL
             BEGIN
                 DECLARE @workflowId int = (SELECT TOP 1 WorkflowID FROM [Workflow].[Workflow] WHERE WorkflowName = 'Seeded Batch22 Workflow' AND ISNULL(is_deleted, 0) = 0 ORDER BY WorkflowID DESC);
@@ -7850,26 +10420,105 @@ public class Program
                     END
                 END
             END
-        ");
+        "
+        );
 
         Console.WriteLine("  ✓ Batch 22 workflow-analytics coverage updates applied.");
 
-        var workflowCount = await (await HasTableAsync(dbContext, "Workflow", "Workflow") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[Workflow] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var stepTypeCount = await (await HasTableAsync(dbContext, "Workflow", "StepType") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[StepType] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var stepCount = await (await HasTableAsync(dbContext, "Workflow", "Step") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[Step] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var statusCount = await (await HasTableAsync(dbContext, "Workflow", "Status") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[Status] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var eventMapCount = await (await HasTableAsync(dbContext, "Workflow", "EventMap") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[EventMap] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var notificationTemplateCount = await (await HasTableAsync(dbContext, "Workflow", "NotificationTemplate") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[NotificationTemplate] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var workflowNotificationCount = await (await HasTableAsync(dbContext, "Workflow", "WorkflowNotification") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[WorkflowNotification] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var notificationLogCount = await (await HasTableAsync(dbContext, "Workflow", "NotificationLog") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[NotificationLog] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var auditCount = await (await HasTableAsync(dbContext, "Workflow", "Audit") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[Audit] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
-        var workflowExecutionSummaryCount = await (await HasTableAsync(dbContext, "Workflow", "WorkflowExecutionSummary") ? QueryCountAsync(dbContext, "SELECT COUNT(1) FROM [Workflow].[WorkflowExecutionSummary] WHERE ISNULL(is_deleted, 0) = 0") : Task.FromResult(0));
+        var workflowCount = await (
+            await HasTableAsync(dbContext, "Workflow", "Workflow")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[Workflow] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var stepTypeCount = await (
+            await HasTableAsync(dbContext, "Workflow", "StepType")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[StepType] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var stepCount = await (
+            await HasTableAsync(dbContext, "Workflow", "Step")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[Step] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var statusCount = await (
+            await HasTableAsync(dbContext, "Workflow", "Status")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[Status] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var eventMapCount = await (
+            await HasTableAsync(dbContext, "Workflow", "EventMap")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[EventMap] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var notificationTemplateCount = await (
+            await HasTableAsync(dbContext, "Workflow", "NotificationTemplate")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[NotificationTemplate] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var workflowNotificationCount = await (
+            await HasTableAsync(dbContext, "Workflow", "WorkflowNotification")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[WorkflowNotification] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var notificationLogCount = await (
+            await HasTableAsync(dbContext, "Workflow", "NotificationLog")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[NotificationLog] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var auditCount = await (
+            await HasTableAsync(dbContext, "Workflow", "Audit")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[Audit] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
+        var workflowExecutionSummaryCount = await (
+            await HasTableAsync(dbContext, "Workflow", "WorkflowExecutionSummary")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM [Workflow].[WorkflowExecutionSummary] WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
+        );
 
-        Console.WriteLine($"  📊 Batch 22 | Workflow: {workflowCount} | StepType: {stepTypeCount} | Step: {stepCount} | Status: {statusCount} | EventMap: {eventMapCount}");
-        Console.WriteLine($"  📊 Batch 22 | NotificationTemplate: {notificationTemplateCount} | WorkflowNotification: {workflowNotificationCount} | NotificationLog: {notificationLogCount} | Audit: {auditCount} | WorkflowExecutionSummary: {workflowExecutionSummaryCount}");
+        Console.WriteLine(
+            $"  📊 Batch 22 | Workflow: {workflowCount} | StepType: {stepTypeCount} | Step: {stepCount} | Status: {statusCount} | EventMap: {eventMapCount}"
+        );
+        Console.WriteLine(
+            $"  📊 Batch 22 | NotificationTemplate: {notificationTemplateCount} | WorkflowNotification: {workflowNotificationCount} | NotificationLog: {notificationLogCount} | Audit: {auditCount} | WorkflowExecutionSummary: {workflowExecutionSummaryCount}"
+        );
     }
 
-    [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities", Justification = "Seeder validation uses fixed internal SQL literals only.")]
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Seeder validation uses fixed internal SQL literals only."
+    )]
     private static async Task<int> QueryCountAsync(FisDbContext dbContext, string sql)
     {
         var connection = dbContext.Database.GetDbConnection();
@@ -7880,20 +10529,33 @@ public class Program
             openedHere = true;
         }
 
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        var result = await command.ExecuteScalarAsync();
-        var count = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
-
-        if (openedHere)
+        try
         {
-            await dbContext.Database.CloseConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            var result = await command.ExecuteScalarAsync();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
         }
-
-        return count;
+        catch (SqlException exception) when (exception.Number == 208)
+        {
+            // Optional legacy tables are absent from clean-install or older client schemas.
+            // Reporting zero keeps the seed run useful without hiding invalid-column errors.
+            return 0;
+        }
+        finally
+        {
+            if (openedHere)
+            {
+                await dbContext.Database.CloseConnectionAsync();
+            }
+        }
     }
 
-    private static async Task<bool> HasColumnAsync(FisDbContext dbContext, string tableName, string columnName)
+    private static async Task<bool> HasColumnAsync(
+        FisDbContext dbContext,
+        string tableName,
+        string columnName
+    )
     {
         var connection = dbContext.Database.GetDbConnection();
         var openedHere = false;
@@ -7904,7 +10566,8 @@ public class Program
         }
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(1) FROM sys.columns c JOIN sys.tables t ON c.object_id = t.object_id WHERE t.name = @tableName AND c.name = @columnName";
+        command.CommandText =
+            "SELECT COUNT(1) FROM sys.columns c JOIN sys.tables t ON c.object_id = t.object_id WHERE t.name = @tableName AND c.name = @columnName";
 
         var tableParam = command.CreateParameter();
         tableParam.ParameterName = "@tableName";
@@ -7956,7 +10619,11 @@ public class Program
         return exists;
     }
 
-    private static async Task<bool> HasTableAsync(FisDbContext dbContext, string schemaName, string tableName)
+    private static async Task<bool> HasTableAsync(
+        FisDbContext dbContext,
+        string schemaName,
+        string tableName
+    )
     {
         var connection = dbContext.Database.GetDbConnection();
         var openedHere = false;
@@ -7967,7 +10634,8 @@ public class Program
         }
 
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(1) FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schemaName AND t.name = @tableName";
+        command.CommandText =
+            "SELECT COUNT(1) FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id WHERE s.name = @schemaName AND t.name = @tableName";
 
         var schemaParam = command.CreateParameter();
         schemaParam.ParameterName = "@schemaName";
@@ -7992,15 +10660,18 @@ public class Program
 
     private static IHostBuilder CreateHostBuilder(string[] args) =>
         Host.CreateDefaultBuilder(args)
-            .ConfigureServices((context, services) =>
-            {
-                var connectionString = SqlServerConnectionStringHelper.Resolve(
-                    context.Configuration["ConnectionStrings:Default"],
-                    context.HostingEnvironment.IsDevelopment());
+            .ConfigureServices(
+                (context, services) =>
+                {
+                    var connectionString = SqlServerConnectionStringHelper.Resolve(
+                        context.Configuration["ConnectionStrings:Default"],
+                        context.HostingEnvironment.IsDevelopment()
+                    );
 
-                services.AddDbContext<FisDbContext>(options =>
-                    options.UseSqlServer(connectionString)
-                );
-                services.AddLogging(builder => builder.AddConsole());
-            });
+                    services.AddDbContext<FisDbContext>(options =>
+                        options.UseSqlServer(connectionString)
+                    );
+                    services.AddLogging(builder => builder.AddConsole());
+                }
+            );
 }

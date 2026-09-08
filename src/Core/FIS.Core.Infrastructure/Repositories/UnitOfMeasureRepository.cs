@@ -25,9 +25,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>UnitOfMeasure entity if found, null otherwise</returns>
     public async Task<UnitOfMeasure?> GetByIdAsync(short unitCode)
     {
-        return await _context.UnitsOfMeasure
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(u => u.unit_of_measure_code == unitCode);
+        return await _context
+            .UnitsOfMeasure.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(u => u.unit_of_measure_code == unitCode);
     }
 
     /// <summary>
@@ -37,9 +37,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>UnitOfMeasure entity if found, null otherwise</returns>
     public async Task<UnitOfMeasure?> GetByDescriptionAsync(string description)
     {
-        return await _context.UnitsOfMeasure
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(u => u.unit_description == description);
+        return await _context
+            .UnitsOfMeasure.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(u => u.unit_description == description);
     }
 
     /// <summary>
@@ -49,9 +49,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>UnitOfMeasure entity if found, null otherwise</returns>
     public async Task<UnitOfMeasure?> GetByAbbreviationAsync(string abbreviation)
     {
-        return await _context.UnitsOfMeasure
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(u => u.unit_abbreviation == abbreviation);
+        return await _context
+            .UnitsOfMeasure.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(u => u.unit_abbreviation == abbreviation);
     }
 
     /// <summary>
@@ -60,8 +60,8 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>List of all unit of measure entities</returns>
     public async Task<IEnumerable<UnitOfMeasure>> GetAllUnitsAsync()
     {
-        return await _context.UnitsOfMeasure
-                .Where(x => !x.is_deleted)
+        return await _context
+            .UnitsOfMeasure.Where(x => !x.is_deleted)
             .OrderBy(u => u.unit_category)
             .ThenBy(u => u.unit_description)
             .ToListAsync();
@@ -74,8 +74,8 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>List of units in the specified category</returns>
     public async Task<IEnumerable<UnitOfMeasure>> GetByCategoryAsync(string category)
     {
-        return await _context.UnitsOfMeasure
-            .Where(u => u.unit_category == category)
+        return await _context
+            .UnitsOfMeasure.Where(u => u.unit_category == category)
             .OrderBy(u => u.unit_description)
             .ToListAsync();
     }
@@ -87,10 +87,12 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     /// <returns>List of matching unit of measure entities</returns>
     public async Task<IEnumerable<UnitOfMeasure>> SearchUnitsAsync(string searchTerm)
     {
-        return await _context.UnitsOfMeasure
-            .Where(u => u.unit_description.Contains(searchTerm) ||
-                       (u.unit_abbreviation != null && u.unit_abbreviation.Contains(searchTerm)) ||
-                       (u.unit_category != null && u.unit_category.Contains(searchTerm)))
+        return await _context
+            .UnitsOfMeasure.Where(u =>
+                u.unit_description.Contains(searchTerm)
+                || (u.unit_abbreviation != null && u.unit_abbreviation.Contains(searchTerm))
+                || (u.unit_category != null && u.unit_category.Contains(searchTerm))
+            )
             .OrderBy(u => u.unit_description)
             .ToListAsync();
     }
@@ -104,11 +106,11 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
     public async Task<UnitOfMeasure> CreateAsync(UnitOfMeasure unit, int currentUserId)
     {
         // Auto-populate audit fields
-            unit.date_created = DateTime.UtcNow;
-            unit.created_by_user_code = currentUserId;
-            unit.is_deleted = false;
-            
-            _context.UnitsOfMeasure.Add(unit);
+        unit.date_created = DateTime.UtcNow;
+        unit.created_by_user_code = currentUserId;
+        unit.is_deleted = false;
+
+        _context.UnitsOfMeasure.Add(unit);
         await _context.SaveChangesAsync();
         return unit;
     }
@@ -126,7 +128,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
 
         var existing = await _context.UnitsOfMeasure.FindAsync(unit.unit_of_measure_code);
         if (existing == null)
-            throw new InvalidOperationException($"UnitOfMeasure with unit_of_measure_code {unit.unit_of_measure_code} not found");
+            throw new InvalidOperationException(
+                $"UnitOfMeasure with unit_of_measure_code {unit.unit_of_measure_code} not found"
+            );
 
         // Preserve creation audit fields
         unit.date_created = existing.date_created;
@@ -134,7 +138,7 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
         // Set update audit fields
         unit.date_updated = DateTime.UtcNow;
         unit.modified_by_user_code = currentUserId;
-        
+
         _context.Entry(existing).CurrentValues.SetValues(unit);
         await _context.SaveChangesAsync();
         return existing;
@@ -153,9 +157,9 @@ public class UnitOfMeasureRepository : IUnitOfMeasureRepository
             return false;
 
         // Soft delete instead of hard delete
-                unit.is_deleted = true;
-                unit.date_updated = DateTime.UtcNow;
-                unit.modified_by_user_code = currentUserId;
+        unit.is_deleted = true;
+        unit.date_updated = DateTime.UtcNow;
+        unit.modified_by_user_code = currentUserId;
         await _context.SaveChangesAsync();
         return true;
     }

@@ -16,10 +16,7 @@ public interface ITariffRepository
     /// <param name="yearManufactured">Year vehicle was manufactured</param>
     /// <param name="effectiveDate">Date tariff should be effective for</param>
     /// <returns>Tariff or null if not found</returns>
-    Task<Tariff?> GetTariffAsync(
-        short classCode,
-        short yearManufactured,
-        DateTime effectiveDate);
+    Task<Tariff?> GetTariffAsync(short classCode, short yearManufactured, DateTime effectiveDate);
 
     /// <summary>
     /// Get the current approved tariff for a vehicle class on a given date.

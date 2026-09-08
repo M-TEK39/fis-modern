@@ -23,7 +23,8 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// </summary>
     public async Task<TariffParameter?> GetByYearAsync(int year)
     {
-        return await _context.Set<TariffParameter>()
+        return await _context
+            .Set<TariffParameter>()
             .FirstOrDefaultAsync(tp => tp.TariffParameterYear == year);
     }
 
@@ -41,7 +42,8 @@ public class TariffParameterRepository : ITariffParameterRepository
             return parameter;
 
         // If not found or not approved, get the most recent approved parameter
-        return await _context.Set<TariffParameter>()
+        return await _context
+            .Set<TariffParameter>()
             .Where(tp => tp.Approved)
             .OrderByDescending(tp => tp.TariffParameterYear)
             .FirstOrDefaultAsync();
@@ -52,7 +54,8 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// </summary>
     public async Task<TariffParameter?> GetByIdAsync(int tariffParameterId)
     {
-        return await _context.Set<TariffParameter>()
+        return await _context
+            .Set<TariffParameter>()
             .FirstOrDefaultAsync(tp => tp.TariffParameterID == tariffParameterId);
     }
 
@@ -61,7 +64,8 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// </summary>
     public async Task<List<TariffParameter>> GetAllAsync()
     {
-        return await _context.Set<TariffParameter>()
+        return await _context
+            .Set<TariffParameter>()
             .OrderByDescending(tp => tp.TariffParameterYear)
             .ToListAsync();
     }
@@ -71,7 +75,8 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// </summary>
     public async Task<List<TariffParameter>> GetApprovedAsync()
     {
-        return await _context.Set<TariffParameter>()
+        return await _context
+            .Set<TariffParameter>()
             .Where(tp => tp.Approved)
             .OrderByDescending(tp => tp.TariffParameterYear)
             .ToListAsync();
@@ -80,7 +85,10 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// <summary>
     /// Create new tariff parameter.
     /// </summary>
-    public async Task<TariffParameter> CreateAsync(TariffParameter tariffParameter, int currentUserId)
+    public async Task<TariffParameter> CreateAsync(
+        TariffParameter tariffParameter,
+        int currentUserId
+    )
     {
         tariffParameter.CaptureDate = DateTime.Now;
         tariffParameter.Approved = false; // New parameters start as unapproved
@@ -92,14 +100,21 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// <summary>
     /// Update existing tariff parameter.
     /// </summary>
-    public async Task<TariffParameter> UpdateAsync(TariffParameter tariffParameter, int currentUserId)
+    public async Task<TariffParameter> UpdateAsync(
+        TariffParameter tariffParameter,
+        int currentUserId
+    )
     {
         if (tariffParameter == null)
             throw new ArgumentNullException(nameof(tariffParameter));
 
-        var existing = await _context.Set<TariffParameter>().FindAsync(tariffParameter.TariffParameterID);
+        var existing = await _context
+            .Set<TariffParameter>()
+            .FindAsync(tariffParameter.TariffParameterID);
         if (existing == null)
-            throw new InvalidOperationException($"TariffParameter with TariffParameterID {tariffParameter.TariffParameterID} not found");
+            throw new InvalidOperationException(
+                $"TariffParameter with TariffParameterID {tariffParameter.TariffParameterID} not found"
+            );
 
         tariffParameter.ModifiedDate = DateTime.Now;
         _context.Entry(existing).CurrentValues.SetValues(tariffParameter);
@@ -125,7 +140,6 @@ public class TariffParameterRepository : ITariffParameterRepository
     /// </summary>
     public async Task<bool> ExistsForYearAsync(int year)
     {
-        return await _context.Set<TariffParameter>()
-            .AnyAsync(tp => tp.TariffParameterYear == year);
+        return await _context.Set<TariffParameter>().AnyAsync(tp => tp.TariffParameterYear == year);
     }
 }

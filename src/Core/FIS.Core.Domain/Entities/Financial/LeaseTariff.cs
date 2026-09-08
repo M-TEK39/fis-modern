@@ -43,6 +43,12 @@ public class LeaseTariff
     [Column("is_deleted")]
     public bool is_deleted { get; set; } = false;
 
+    // Present in the original client LeaseTariff table. The expanded schema
+    // does not require this field, so the compatibility repository exposes it
+    // without making it an EF-mapped column.
+    [NotMapped]
+    public decimal? excess_kilo_tariff { get; set; }
+
     // Navigation properties
     [ForeignKey("created_by_user_code")]
     public virtual User? CreatedByUser { get; set; }

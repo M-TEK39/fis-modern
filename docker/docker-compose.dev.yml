@@ -32,16 +32,50 @@ services:
     image: mcr.microsoft.com/mssql-tools:latest
     environment:
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-Behox@1903}"
-      MSSQL_DB_NAME: "${MSSQL_DB_NAME:-legacy}"
-      MSSQL_APP_LOGIN: "${MSSQL_APP_LOGIN:-legacy}"
-      MSSQL_APP_PASSWORD: "${MSSQL_APP_PASSWORD:-legacy@1903}"
+      MSSQL_DB_NAME: "${MSSQL_DB_NAME:-fis_dev}"
+      MSSQL_APP_LOGIN: "${MSSQL_APP_LOGIN:-fis_dev_app}"
+      MSSQL_APP_PASSWORD: "${MSSQL_APP_PASSWORD:-fis_dev_app@1903}"
     depends_on:
       mssql:
         condition: service_healthy
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >-
-        SQLCMD="/opt/mssql-tools18/bin/sqlcmd"; [ -x "$$SQLCMD" ] || SQLCMD="/opt/mssql-tools/bin/sqlcmd"; until "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" >/dev/null 2>&1; do echo 'Waiting for SQL Server to be ready...'; sleep 5; done; echo 'SQL Server is ready. Initializing database...'; "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "IF DB_ID('$$MSSQL_DB_NAME') IS NULL CREATE DATABASE [$$MSSQL_DB_NAME];" && "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -d "$$MSSQL_DB_NAME" -Q "IF NOT EXISTS (SELECT name FROM sys.sql_logins WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE LOGIN [$$MSSQL_APP_LOGIN] WITH PASSWORD = '$$MSSQL_APP_PASSWORD', CHECK_POLICY = ON; END IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE USER [$$MSSQL_APP_LOGIN] FOR LOGIN [$$MSSQL_APP_LOGIN]; EXEC sp_addrolemember N'db_owner', N'$$MSSQL_APP_LOGIN'; END" && echo 'Database initialization completed successfully.';
+        SQLCMD="/opt/mssql-tools18/bin/sqlcmd"; [ -x "$$SQLCMD" ] || SQLCMD="/opt/mssql-tools/bin/sqlcmd"; case "$$MSSQL_DB_NAME" in fis_dev|fis_dev_*|fis_test|fis_test_*) ;; *) echo 'Refusing to initialize a non-development database name.' >&2; exit 1 ;; esac; case "$$MSSQL_DB_NAME" in *[!A-Za-z0-9_-]*|'') echo 'Refusing an unsafe development database name.' >&2; exit 1 ;; esac; case "$$MSSQL_APP_LOGIN" in *[!A-Za-z0-9_-]*|'') echo 'Refusing an unsafe development login name.' >&2; exit 1 ;; esac; case "$$MSSQL_APP_PASSWORD" in *"'"*) echo 'Refusing a development password containing an unsafe SQL quote.' >&2; exit 1 ;; esac; until "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" >/dev/null 2>&1; do echo 'Waiting for SQL Server to be ready...'; sleep 5; done; echo 'SQL Server is ready. Initializing database...'; "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -Q "IF DB_ID('$$MSSQL_DB_NAME') IS NULL CREATE DATABASE [$$MSSQL_DB_NAME];" && "$$SQLCMD" -S mssql -U sa -P "$$MSSQL_SA_PASSWORD" -d "$$MSSQL_DB_NAME" -Q "IF NOT EXISTS (SELECT name FROM sys.sql_logins WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE LOGIN [$$MSSQL_APP_LOGIN] WITH PASSWORD = '$$MSSQL_APP_PASSWORD', CHECK_POLICY = ON; END IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$$MSSQL_APP_LOGIN') BEGIN CREATE USER [$$MSSQL_APP_LOGIN] FOR LOGIN [$$MSSQL_APP_LOGIN]; EXEC sp_addrolemember N'db_owner', N'$$MSSQL_APP_LOGIN'; END" && echo 'Database initialization completed successfully.';
+
+  # Local-only clean-install schema bootstrap. This never runs against a client database.
+  db-bootstrap:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    working_dir: /tmp
+    volumes:
+      - ..:/src
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseDevelopmentTool/DatabaseDevelopmentTool.csproj", "--", "--confirm=FIS-DEVELOPMENT-DATABASE"]
+    environment:
+      ConnectionStrings__Default: "Server=mssql,1433;Database=${MSSQL_DB_NAME:-fis_dev};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=False;TrustServerCertificate=True;"
+      DOTNET_ENVIRONMENT: "Development"
+      FIS_ALLOW_DEVELOPMENT_DATABASE_BOOTSTRAP: "I_UNDERSTAND_LOCAL_DATABASE_BOOTSTRAP"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # Explicit local demo data only. Production Compose has no equivalent service.
+  db-seed:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    working_dir: /tmp
+    volumes:
+      - ..:/src
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseSeederTool/DatabaseSeederTool.csproj", "--", "--confirm=FIS-DEVELOPMENT-SEED"]
+    environment:
+      ConnectionStrings__Default: "Server=mssql,1433;Database=${MSSQL_DB_NAME:-fis_dev};User Id=sa;Password=${MSSQL_SA_PASSWORD:-Behox@1903};Encrypt=False;TrustServerCertificate=True;"
+      DOTNET_ENVIRONMENT: "Development"
+      FIS_ALLOW_DEVELOPMENT_SEEDING: "I_UNDERSTAND_DEVELOPMENT_SEEDING"
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
+    profiles:
+      - seed
+    restart: "no"
 
 volumes:
   fis-mssql-dev-data:

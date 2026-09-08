@@ -15,7 +15,8 @@ public class WorkflowMetricsJob
     public WorkflowMetricsJob(
         IAnalyticsService analyticsService,
         IWorkflowRepository workflowRepository,
-        ILogger<WorkflowMetricsJob> logger)
+        ILogger<WorkflowMetricsJob> logger
+    )
     {
         _analyticsService = analyticsService;
         _workflowRepository = workflowRepository;
@@ -28,7 +29,7 @@ public class WorkflowMetricsJob
     public async Task GenerateDailyMetricsAsync()
     {
         _logger.LogInformation("Starting daily workflow metrics generation");
-        
+
         var workflows = await _workflowRepository.GetAllAsync();
         var yesterday = DateTime.UtcNow.Date.AddDays(-1);
         var processed = 0;
@@ -38,18 +39,27 @@ public class WorkflowMetricsJob
         {
             try
             {
-                await _analyticsService.GenerateWorkflowMetricsAsync(workflow.WorkflowID, yesterday);
+                await _analyticsService.GenerateWorkflowMetricsAsync(
+                    workflow.WorkflowID,
+                    yesterday
+                );
                 processed++;
             }
             catch (Exception ex)
             {
                 errors++;
-                _logger.LogError(ex, "Error generating metrics for workflow {WorkflowId}", workflow.WorkflowID);
+                _logger.LogError(
+                    ex,
+                    "Error generating metrics for workflow {WorkflowId}",
+                    workflow.WorkflowID
+                );
             }
         }
 
         _logger.LogInformation(
-            "Completed daily workflow metrics generation. Processed: {Processed}, Errors: {Errors}", 
-            processed, errors);
+            "Completed daily workflow metrics generation. Processed: {Processed}, Errors: {Errors}",
+            processed,
+            errors
+        );
     }
 }

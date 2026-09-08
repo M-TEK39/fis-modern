@@ -20,60 +20,54 @@ public class TripDriverRepository : ITripDriverRepository
 
     public async Task<TripDriver?> GetByIdAsync(int tripDriverCode)
     {
-        return await _context.TripDrivers
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(td => td.trip_driver_code == tripDriverCode);
+        return await _context
+            .TripDrivers.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(td => td.trip_driver_code == tripDriverCode);
     }
 
     public async Task<TripDriver?> GetByNameAsync(string tripDriverName)
     {
-        return await _context.TripDrivers
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(td => td.trip_driver_name == tripDriverName);
+        return await _context
+            .TripDrivers.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(td => td.trip_driver_name == tripDriverName);
     }
 
     public async Task<IEnumerable<TripDriver>> GetByTripAuthorityAsync(int tripAuthorityCode)
     {
-        return await _context.TripDrivers
-            .Where(td => td.trip_authority_code == tripAuthorityCode)
+        return await _context
+            .TripDrivers.Where(td => td.trip_authority_code == tripAuthorityCode)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<TripDriver>> GetBySiteAsync(int siteCode)
     {
-        return await _context.TripDrivers
-            .Where(td => td.site_code == siteCode)
-            .ToListAsync();
+        return await _context.TripDrivers.Where(td => td.site_code == siteCode).ToListAsync();
     }
 
     public async Task<IEnumerable<TripDriver>> GetPrimaryDriversAsync()
     {
-        return await _context.TripDrivers
-            .Where(td => td.trip_driver_primary)
-            .ToListAsync();
+        return await _context.TripDrivers.Where(td => td.trip_driver_primary).ToListAsync();
     }
 
     public async Task<IEnumerable<TripDriver>> GetActiveDriversAsync()
     {
-        return await _context.TripDrivers
-            .Where(td => td.driver_active)
-            .ToListAsync();
+        return await _context.TripDrivers.Where(td => td.driver_active).ToListAsync();
     }
 
     public async Task<IEnumerable<TripDriver>> GetByLicenseTypeAsync(int licenseTypeId)
     {
-        return await _context.TripDrivers
-            .Where(td => td.driver_licence_type_id == licenseTypeId)
+        return await _context
+            .TripDrivers.Where(td => td.driver_licence_type_id == licenseTypeId)
             .ToListAsync();
     }
 
     public async Task<TripDriver> CreateAsync(TripDriver tripDriver, int currentUserId)
     {
         // Auto-populate audit fields
-            tripDriver.date_created = DateTime.UtcNow;
-            tripDriver.is_deleted = false;
-            
-            _context.TripDrivers.Add(tripDriver);
+        tripDriver.date_created = DateTime.UtcNow;
+        tripDriver.is_deleted = false;
+
+        _context.TripDrivers.Add(tripDriver);
         await _context.SaveChangesAsync();
         return tripDriver;
     }
@@ -85,7 +79,9 @@ public class TripDriverRepository : ITripDriverRepository
 
         var existing = await _context.TripDrivers.FindAsync(tripDriver.trip_driver_code);
         if (existing == null)
-            throw new InvalidOperationException($"TripDriver with trip_driver_code {tripDriver.trip_driver_code} not found");
+            throw new InvalidOperationException(
+                $"TripDriver with trip_driver_code {tripDriver.trip_driver_code} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(tripDriver);
         await _context.SaveChangesAsync();
@@ -97,8 +93,8 @@ public class TripDriverRepository : ITripDriverRepository
         if (tripDriver != null)
         {
             // Soft delete instead of hard delete
-                tripDriver.is_deleted = true;
-                tripDriver.date_updated = DateTime.UtcNow;
+            tripDriver.is_deleted = true;
+            tripDriver.date_updated = DateTime.UtcNow;
             await _context.SaveChangesAsync();
         }
     }
@@ -108,10 +104,15 @@ public class TripDriverRepository : ITripDriverRepository
         if (string.IsNullOrWhiteSpace(searchTerm))
             return await _context.TripDrivers.ToListAsync();
 
-        return await _context.TripDrivers
-            .Where(td => (td.trip_driver_name != null && td.trip_driver_name.Contains(searchTerm)) ||
-                        (td.trip_driver_id != null && td.trip_driver_id.Contains(searchTerm)) ||
-                        (td.driver_licence_number != null && td.driver_licence_number.Contains(searchTerm)))
+        return await _context
+            .TripDrivers.Where(td =>
+                (td.trip_driver_name != null && td.trip_driver_name.Contains(searchTerm))
+                || (td.trip_driver_id != null && td.trip_driver_id.Contains(searchTerm))
+                || (
+                    td.driver_licence_number != null
+                    && td.driver_licence_number.Contains(searchTerm)
+                )
+            )
             .ToListAsync();
     }
 }

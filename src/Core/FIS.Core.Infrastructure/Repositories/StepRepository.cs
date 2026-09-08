@@ -16,38 +16,37 @@ public class StepRepository : IStepRepository
 
     public async Task<Step?> GetByIdAsync(int stepId)
     {
-        return await _context.Steps
-            .FirstOrDefaultAsync(s => s.StepID == stepId && !s.is_deleted);
+        return await _context.Steps.FirstOrDefaultAsync(s => s.StepID == stepId && !s.is_deleted);
     }
 
     public async Task<IEnumerable<Step>> GetAllAsync()
     {
-        return await _context.Steps
-            .Where(s => !s.is_deleted)
+        return await _context
+            .Steps.Where(s => !s.is_deleted)
             .OrderBy(s => s.StepOrder)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Step>> GetByWorkflowIdAsync(int workflowId)
     {
-        return await _context.Steps
-            .Where(s => s.WorkflowID == workflowId && !s.is_deleted)
+        return await _context
+            .Steps.Where(s => s.WorkflowID == workflowId && !s.is_deleted)
             .OrderBy(s => s.StepOrder)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Step>> GetByStepTypeIdAsync(int stepTypeId)
     {
-        return await _context.Steps
-            .Where(s => s.StepTypeID == stepTypeId && !s.is_deleted)
+        return await _context
+            .Steps.Where(s => s.StepTypeID == stepTypeId && !s.is_deleted)
             .OrderBy(s => s.StepOrder)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Step>> GetChildStepsAsync(int parentStepId)
     {
-        return await _context.Steps
-            .Where(s => s.ParentStepID == parentStepId && !s.is_deleted)
+        return await _context
+            .Steps.Where(s => s.ParentStepID == parentStepId && !s.is_deleted)
             .OrderBy(s => s.StepOrder)
             .ToListAsync();
     }

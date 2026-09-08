@@ -39,7 +39,7 @@ public class TypeController : BaseApiController
             var typeDtos = types.Select(t => new TypeResponseDto
             {
                 type_code = t.type_code,
-                type_description = t.type_description
+                type_description = t.type_description,
             });
             return Ok(typeDtos);
         }
@@ -67,13 +67,13 @@ public class TypeController : BaseApiController
             {
                 return NotFound($"Type with code {id} not found");
             }
-            
+
             var typeDto = new TypeResponseDto
             {
                 type_code = type.type_code,
-                type_description = type.type_description
+                type_description = type.type_description,
             };
-            
+
             return Ok(typeDto);
         }
         catch (Exception ex)
@@ -149,10 +149,7 @@ public class TypeController : BaseApiController
             }
 
             // Create Type entity from DTO (ID will be auto-generated)
-            var type = new TypeEntity
-            {
-                type_description = createTypeDto.type_description
-            };
+            var type = new TypeEntity { type_description = createTypeDto.type_description };
 
             var createdType = await _typeRepository.CreateAsync(type, currentUserId);
             return CreatedAtAction(
@@ -163,7 +160,11 @@ public class TypeController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating type {TypeDescription}", createTypeDto.type_description);
+            _logger.LogError(
+                ex,
+                "Error creating type {TypeDescription}",
+                createTypeDto.type_description
+            );
             return StatusCode(500, "An error occurred while creating the type");
         }
     }

@@ -51,7 +51,7 @@ public class Logsheet
     /// <summary>
     /// Requisition number
     /// </summary>
-    [StringLength(50)]
+    [StringLength(10)]
     [Column("rek_num")]
     public string? rek_num { get; set; }
 
@@ -66,6 +66,35 @@ public class Logsheet
     /// </summary>
     [Column("bund_num")]
     public int? bund_num { get; set; }
+
+    // Legacy transaction columns. They remain part of dbo.Logsheets even
+    // though the modern entry workflow only edits the fields above.
+    [Column("trans_date")]
+    public DateTime trans_date { get; set; }
+
+    [Column("driver_time")]
+    public double? driver_time { get; set; }
+
+    [Column("FBS_comp")]
+    public DateTime? FBS_comp { get; set; }
+
+    [Column("user_access_code")]
+    public short? user_access_code { get; set; }
+
+    [Column("trans_time")]
+    public TimeSpan trans_time { get; set; }
+
+    [Column("department_code")]
+    public short department_code { get; set; }
+
+    [Column("contract_code")]
+    public int? contract_code { get; set; }
+
+    [Column("journal_detail_code")]
+    public Guid journal_detail_code { get; set; }
+
+    [Column("parent_log_code")]
+    public int? parent_log_code { get; set; }
 
     // Navigation properties
     /// <summary>

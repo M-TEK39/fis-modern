@@ -17,6 +17,10 @@ node_modules
 
 # Local Markdown files
 *.md
+!AGENTS.md
+!CLAUDE.md
+!.rules/
+!.rules/**
 
 # Folders
 images
@@ -110,6 +114,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 pnpm-lock.yaml
+!src/Services/FIS.Web.Next/pnpm-lock.yaml
 
 # csv files
 *.csv

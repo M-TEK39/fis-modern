@@ -50,6 +50,66 @@ public class AssetVerification
     [Column("notes")]
     public string? notes { get; set; }
 
+    // Legacy Asset_Verification columns. They are read and written by the
+    // compatibility repository because the expanded schema does not always
+    // contain every client-era column.
+    [NotMapped]
+    public string? vehicle_make { get; set; }
+
+    [NotMapped]
+    public string? vehicle_model { get; set; }
+
+    [NotMapped]
+    public string? vehicle_colour { get; set; }
+
+    [NotMapped]
+    public string? mobitrack_fitted { get; set; }
+
+    [NotMapped]
+    public string? petrol_card { get; set; }
+
+    [NotMapped]
+    public string? lamination { get; set; }
+
+    [NotMapped]
+    public string? tyre_bands { get; set; }
+
+    [NotMapped]
+    public string? barcode { get; set; }
+
+    [NotMapped]
+    public string? logbook { get; set; }
+
+    [NotMapped]
+    public string? gearlock { get; set; }
+
+    [NotMapped]
+    public string? radio { get; set; }
+
+    [NotMapped]
+    public string? car_keys { get; set; }
+
+    [NotMapped]
+    public DateTime? licence_expiry_date { get; set; }
+
+    [NotMapped]
+    public string? barcode_number { get; set; }
+
+    [NotMapped]
+    public string? vehicle_engine_num { get; set; }
+
+    [NotMapped]
+    public string? vehicle_chassis_num { get; set; }
+
+    [NotMapped]
+    public int? current_km { get; set; }
+
+    [NotMapped]
+    public DateTime? date_last_verified { get; set; }
+
+    [NotMapped]
+    public string? comments { get; set; }
+
     // Navigation properties
     [ForeignKey("vmf_code")]
     public virtual Vehicle? Vehicle { get; set; }

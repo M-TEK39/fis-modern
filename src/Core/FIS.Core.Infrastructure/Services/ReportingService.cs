@@ -1,9 +1,9 @@
+using System.IO.Compression;
+using System.Net;
+using System.Security;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Net;
-using System.IO.Compression;
-using System.Security;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Data.SqlServer;
@@ -282,42 +282,45 @@ public class ReportingService : IReportingService
     /// </summary>
     private async Task<ReportLookups> LoadLookupsAsync()
     {
-        var sites = await _context.Sites
-            .Where(s => !s.is_deleted)
+        var sites = await _context
+            .Sites.Where(s => !s.is_deleted)
             .ToDictionaryAsync(s => s.Site_code, s => s.description ?? string.Empty);
 
-        var statuses = await _context.VehicleStatuses
-            .ToDictionaryAsync(s => s.vehicle_status_code, s => s.status_description ?? string.Empty);
+        var statuses = await _context.VehicleStatuses.ToDictionaryAsync(
+            s => s.vehicle_status_code,
+            s => s.status_description ?? string.Empty
+        );
 
-        var types = await _context.VehicleTypes
-            .Where(t => !t.is_deleted)
+        var types = await _context
+            .VehicleTypes.Where(t => !t.is_deleted)
             .ToDictionaryAsync(t => t.type_code, t => t.type_description);
 
         // Model code → "{make_description} {model_description}"
-        var models = await _context.Models
-            .Include(m => m.Make)
+        var models = await _context
+            .Models.Include(m => m.Make)
             .Where(m => !m.is_deleted)
             .ToDictionaryAsync(
                 m => m.model_code,
-                m => new ModelInfo(
-                    m.Make?.make_description ?? string.Empty,
-                    m.model_description));
+                m => new ModelInfo(m.Make?.make_description ?? string.Empty, m.model_description)
+            );
 
         // vmf_code → registration_number
-        var vehicleRegs = await _context.Vehicles
-            .Where(v => !v.is_deleted)
+        var vehicleRegs = await _context
+            .Vehicles.Where(v => !v.is_deleted)
             .ToDictionaryAsync(v => v.vmf_code, v => v.registration_number ?? string.Empty);
 
         return new ReportLookups(sites, statuses, types, models, vehicleRegs);
     }
 
     private record ModelInfo(string Make, string Model);
+
     private record ReportLookups(
         Dictionary<short, string> Sites,
         Dictionary<short, string> Statuses,
         Dictionary<short, string> Types,
         Dictionary<short, ModelInfo> Models,
-        Dictionary<int, string> VehicleRegistrations);
+        Dictionary<int, string> VehicleRegistrations
+    );
 
     private static DateTime? ResolveNextServiceDate(IEnumerable<MaintenanceRecord> maintenance)
     {
@@ -327,8 +330,7 @@ public class ReportingService : IReportingService
             return null;
         }
 
-        var explicitNext = rows
-            .Where(m => m.NextServiceDate.HasValue)
+        var explicitNext = rows.Where(m => m.NextServiceDate.HasValue)
             .Select(m => m.NextServiceDate!.Value)
             .OrderBy(d => d)
             .FirstOrDefault();
@@ -338,9 +340,7 @@ public class ReportingService : IReportingService
             return explicitNext;
         }
 
-        var latest = rows
-            .OrderByDescending(m => m.MaintenanceDate)
-            .First();
+        var latest = rows.OrderByDescending(m => m.MaintenanceDate).First();
 
         var intervalDays = latest.ServiceIntervalDays.GetValueOrDefault(90);
         return latest.MaintenanceDate.AddDays(intervalDays);
@@ -349,13 +349,17 @@ public class ReportingService : IReportingService
     private static List<string> BuildVehicleAlerts(
         Vehicle vehicle,
         DateTime? nextServiceDate,
-        IEnumerable<MaintenanceRecord> maintenance)
+        IEnumerable<MaintenanceRecord> maintenance
+    )
     {
         var rows = maintenance as IList<MaintenanceRecord> ?? maintenance.ToList();
         var alerts = new List<string>();
         var today = DateTime.UtcNow.Date;
 
-        if (vehicle.licence_due_date.HasValue && vehicle.licence_due_date.Value.Date <= today.AddDays(30))
+        if (
+            vehicle.licence_due_date.HasValue
+            && vehicle.licence_due_date.Value.Date <= today.AddDays(30)
+        )
         {
             alerts.Add("Licence expiring within 30 days");
         }
@@ -371,8 +375,7 @@ public class ReportingService : IReportingService
         }
         else
         {
-            var roadworthyExpiry = rows
-                .Where(m => m.RoadworthyExpiryDate.HasValue)
+            var roadworthyExpiry = rows.Where(m => m.RoadworthyExpiryDate.HasValue)
                 .Select(m => m.RoadworthyExpiryDate!.Value)
                 .OrderBy(d => d)
                 .FirstOrDefault();
@@ -575,149 +578,276 @@ public class ReportingService : IReportingService
                 break;
 
             case "detailed":
-                var detailedVehicles = await _context.Vehicles
-                    .Where(v => !v.is_deleted && (request.VmfCode == null || v.vmf_code == request.VmfCode))
+                var detailedVehicles = await _context
+                    .Vehicles.Where(v =>
+                        !v.is_deleted && (request.VmfCode == null || v.vmf_code == request.VmfCode)
+                    )
                     .Select(v => new
                     {
-                        v.vmf_code, v.registration_number, v.fleet_number,
-                        v.current_odo, v.year_manufactured, v.location_code,
-                        v.model_code, v.monthly_overhead, v.purchase_amount
+                        v.vmf_code,
+                        v.registration_number,
+                        v.fleet_number,
+                        v.current_odo,
+                        v.year_manufactured,
+                        v.location_code,
+                        v.model_code,
+                        v.monthly_overhead,
+                        v.purchase_amount,
                     })
                     .ToListAsync();
 
                 var detailModelIds = detailedVehicles.Select(v => v.model_code).Distinct().ToList();
-                var detailSiteIds  = detailedVehicles.Select(v => v.location_code).Distinct().ToList();
+                var detailSiteIds = detailedVehicles
+                    .Select(v => v.location_code)
+                    .Distinct()
+                    .ToList();
 
-                var detailModels = await _context.Models
-                    .Where(m => detailModelIds.Contains(m.model_code))
-                    .Join(_context.Makes, m => m.make_code, mk => mk.make_code,
-                          (m, mk) => new { m.model_code, m.model_description, mk.make_description })
+                var detailModels = await _context
+                    .Models.Where(m => detailModelIds.Contains(m.model_code))
+                    .Join(
+                        _context.Makes,
+                        m => m.make_code,
+                        mk => mk.make_code,
+                        (m, mk) =>
+                            new
+                            {
+                                m.model_code,
+                                m.model_description,
+                                mk.make_description,
+                            }
+                    )
                     .ToDictionaryAsync(x => x.model_code);
 
-                var detailSites = await _context.Sites
-                    .Where(s => detailSiteIds.Contains(s.Site_code) && !s.is_deleted)
-                    .Join(_context.Departments.Where(d => !d.is_deleted),
-                          s => s.Depatrment_code, d => d.department_code,
-                          (s, d) => new { s.Site_code, site_desc = s.description, dept_desc = d.description })
+                var detailSites = await _context
+                    .Sites.Where(s => detailSiteIds.Contains(s.Site_code) && !s.is_deleted)
+                    .Join(
+                        _context.Departments.Where(d => !d.is_deleted),
+                        s => s.Depatrment_code,
+                        d => d.department_code,
+                        (s, d) =>
+                            new
+                            {
+                                s.Site_code,
+                                site_desc = s.description,
+                                dept_desc = d.description,
+                            }
+                    )
                     .ToDictionaryAsync(x => x.Site_code);
 
-                var detailContracts = await _context.Contracts
-                    .Where(c => !c.is_deleted && c.still_current == "Y")
-                    .Select(c => new { c.vmf_code, c.contract_type, c.monthly_km })
+                var detailContracts = await _context
+                    .Contracts.Where(c => !c.is_deleted && c.still_current == "Y")
+                    .Select(c => new
+                    {
+                        c.vmf_code,
+                        c.contract_type,
+                        c.monthly_km,
+                    })
                     .ToDictionaryAsync(c => c.vmf_code);
 
-                var detailTariffs = await _context.LeaseTariffs
-                    .Where(t => t.active && !t.is_deleted)
+                var detailTariffs = await _context
+                    .LeaseTariffs.Where(t => t.active && !t.is_deleted)
                     .Select(t => new { t.vmf_code, t.fixed_tariff })
                     .ToDictionaryAsync(t => t.vmf_code);
 
-                dataRows = detailedVehicles.Select(v =>
-                {
-                    detailModels.TryGetValue(v.model_code, out var model);
-                    detailSites.TryGetValue(v.location_code, out var site);
-                    detailContracts.TryGetValue(v.vmf_code, out var contract);
-                    detailTariffs.TryGetValue(v.vmf_code, out var tariff);
-                    return new Dictionary<string, object>
+                dataRows = detailedVehicles
+                    .Select(v =>
                     {
-                        ["VMF_Code"]         = v.vmf_code,
-                        ["Fleet_Number"]     = (object)(v.fleet_number ?? ""),
-                        ["Registration"]     = (object)(v.registration_number ?? ""),
-                        ["Make"]             = (object)(model?.make_description ?? ""),
-                        ["Model"]            = (object)(model?.model_description ?? ""),
-                        ["Year"]             = (object)(v.year_manufactured ?? 0),
-                        ["Current_Odo"]      = v.current_odo,
-                        ["Site"]             = (object)(site?.site_desc ?? ""),
-                        ["Department"]       = (object)(site?.dept_desc ?? ""),
-                        ["Contract_Type"]    = (object)(contract?.contract_type ?? "None"),
-                        ["Monthly_KM"]       = contract?.monthly_km ?? 0,
-                        ["Monthly_Tariff"]   = tariff?.fixed_tariff ?? 0m,
-                        ["Monthly_Overhead"] = v.monthly_overhead ?? 0m,
-                    };
-                }).ToList();
+                        detailModels.TryGetValue(v.model_code, out var model);
+                        detailSites.TryGetValue(v.location_code, out var site);
+                        detailContracts.TryGetValue(v.vmf_code, out var contract);
+                        detailTariffs.TryGetValue(v.vmf_code, out var tariff);
+                        return new Dictionary<string, object>
+                        {
+                            ["VMF_Code"] = v.vmf_code,
+                            ["Fleet_Number"] = (object)(v.fleet_number ?? ""),
+                            ["Registration"] = (object)(v.registration_number ?? ""),
+                            ["Make"] = (object)(model?.make_description ?? ""),
+                            ["Model"] = (object)(model?.model_description ?? ""),
+                            ["Year"] = (object)(v.year_manufactured ?? 0),
+                            ["Current_Odo"] = v.current_odo,
+                            ["Site"] = (object)(site?.site_desc ?? ""),
+                            ["Department"] = (object)(site?.dept_desc ?? ""),
+                            ["Contract_Type"] = (object)(contract?.contract_type ?? "None"),
+                            ["Monthly_KM"] = contract?.monthly_km ?? 0,
+                            ["Monthly_Tariff"] = tariff?.fixed_tariff ?? 0m,
+                            ["Monthly_Overhead"] = v.monthly_overhead ?? 0m,
+                        };
+                    })
+                    .ToList();
 
-                summary["Total_Vehicles"]       = detailedVehicles.Count;
-                summary["Active_Contracts"]     = detailContracts.Count;
+                summary["Total_Vehicles"] = detailedVehicles.Count;
+                summary["Active_Contracts"] = detailContracts.Count;
                 summary["Vehicles_With_Tariff"] = detailTariffs.Count;
                 break;
 
             case "financial":
-                var financialItems = await _context.InvoiceItems
-                    .Where(ii => !ii.is_deleted
-                        && (request.VmfCode == null || ii.vmf_code == request.VmfCode))
-                    .Join(_context.Invoices.Where(i => !i.is_deleted),
-                          ii => ii.invoice_code, i => i.invoice_code,
-                          (ii, i) => new { ii, i })
-                    .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
-                          x => x.i.posting_month_code, pm => pm.posting_month_code,
-                          (x, pm) => new { x.ii, x.i, pm })
-                    .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                          x => x.pm.posting_year_code, py => py.posting_year_code,
-                          (x, py) => new { x.ii, x.i, x.pm, py })
+                var departmentFilter = GetNullableIntParameter(
+                    request.Parameters,
+                    "departmentCode"
+                );
+                var siteFilter = GetNullableIntParameter(request.Parameters, "siteCode");
+                var provinceFilter = GetNullableIntParameter(request.Parameters, "provinceCode");
+                var financialItems = await _context
+                    .InvoiceItems.Where(ii =>
+                        !ii.is_deleted
+                        && (request.VmfCode == null || ii.vmf_code == request.VmfCode)
+                        && (
+                            !departmentFilter.HasValue
+                            || _context.Invoices.Any(invoice =>
+                                !invoice.is_deleted
+                                && invoice.invoice_code == ii.invoice_code
+                                && invoice.department_code == departmentFilter.Value
+                            )
+                        )
+                        && (!siteFilter.HasValue || ii.site_code == siteFilter.Value)
+                    )
+                    .Join(
+                        _context.Invoices.Where(i => !i.is_deleted),
+                        ii => ii.invoice_code,
+                        i => i.invoice_code,
+                        (ii, i) => new { ii, i }
+                    )
+                    .Join(
+                        _context.PostingMonths.Where(pm => !pm.is_deleted),
+                        x => x.i.posting_month_code,
+                        pm => pm.posting_month_code,
+                        (x, pm) =>
+                            new
+                            {
+                                x.ii,
+                                x.i,
+                                pm,
+                            }
+                    )
+                    .Join(
+                        _context.PostingYears.Where(py => !py.is_deleted),
+                        x => x.pm.posting_year_code,
+                        py => py.posting_year_code,
+                        (x, py) =>
+                            new
+                            {
+                                x.ii,
+                                x.i,
+                                x.pm,
+                                py,
+                            }
+                    )
                     .Where(x =>
-                        (request.StartDate == null || x.py.year_start_date >= request.StartDate) &&
-                        (request.EndDate   == null || x.py.year_end_date   <= request.EndDate))
+                        (request.StartDate == null || x.py.year_start_date >= request.StartDate)
+                        && (request.EndDate == null || x.py.year_end_date <= request.EndDate)
+                    )
                     .Select(x => new
                     {
                         x.ii.vmf_code,
+                        x.ii.site_code,
                         x.ii.fixed_tariff_amount,
                         x.ii.odo_tariff_amount,
                         x.i.department_code,
-                        month_name   = x.pm.month_name,
+                        month_name = x.pm.month_name,
                         month_number = (int)x.pm.month_number,
-                        year         = x.py.year_start_date.Year,
+                        year = x.py.year_start_date.Year,
                     })
                     .ToListAsync();
 
-                dataRows = financialItems.Select(f => new Dictionary<string, object>
+                if (provinceFilter.HasValue)
                 {
-                    ["VMF_Code"]       = f.vmf_code,
-                    ["Department_Code"]= f.department_code,
-                    ["Year"]           = f.year,
-                    ["Month"]          = (object)(f.month_name ?? f.month_number.ToString()),
-                    ["Fixed_Tariff"]   = f.fixed_tariff_amount,
-                    ["Odo_Tariff"]     = f.odo_tariff_amount,
-                    ["Total_Billed"]   = f.fixed_tariff_amount + f.odo_tariff_amount,
-                }).ToList();
+                    var provinceSiteCodes = await _context
+                        .Sites.Where(site =>
+                            !site.is_deleted && (int?)site.province_code == provinceFilter.Value
+                        )
+                        .Select(site => site.Site_code)
+                        .ToListAsync();
+                    var allowedSiteCodes = provinceSiteCodes.ToHashSet();
+                    financialItems = financialItems
+                        .Where(item => allowedSiteCodes.Contains(item.site_code))
+                        .ToList();
+                }
 
-                summary["Total_Billed"]     = financialItems.Sum(f => f.fixed_tariff_amount + f.odo_tariff_amount);
-                summary["Vehicles_Billed"]  = financialItems.Select(f => f.vmf_code).Distinct().Count();
-                summary["Months_Covered"]   = financialItems.Select(f => new { f.year, f.month_number }).Distinct().Count();
+                dataRows = financialItems
+                    .Select(f => new Dictionary<string, object>
+                    {
+                        ["VMF_Code"] = f.vmf_code,
+                        ["Department_Code"] = f.department_code,
+                        ["Year"] = f.year,
+                        ["Month"] = (object)(f.month_name ?? f.month_number.ToString()),
+                        ["Fixed_Tariff"] = f.fixed_tariff_amount,
+                        ["Odo_Tariff"] = f.odo_tariff_amount,
+                        ["Total_Billed"] = f.fixed_tariff_amount + f.odo_tariff_amount,
+                    })
+                    .ToList();
+
+                summary["Total_Billed"] = financialItems.Sum(f =>
+                    f.fixed_tariff_amount + f.odo_tariff_amount
+                );
+                summary["Vehicles_Billed"] = financialItems
+                    .Select(f => f.vmf_code)
+                    .Distinct()
+                    .Count();
+                summary["Months_Covered"] = financialItems
+                    .Select(f => new { f.year, f.month_number })
+                    .Distinct()
+                    .Count();
                 break;
 
             case "maintenance":
                 var maintVmfFilter = request.VmfCode;
-                var maintVehicles = await _context.Vehicles
-                    .Where(v => !v.is_deleted && (maintVmfFilter == null || v.vmf_code == maintVmfFilter))
-                    .Select(v => new { v.vmf_code, v.registration_number, v.fleet_number })
+                var maintVehicles = await _context
+                    .Vehicles.Where(v =>
+                        !v.is_deleted && (maintVmfFilter == null || v.vmf_code == maintVmfFilter)
+                    )
+                    .Select(v => new
+                    {
+                        v.vmf_code,
+                        v.registration_number,
+                        v.fleet_number,
+                    })
                     .ToListAsync();
 
                 var maintVmfCodes = maintVehicles.Select(v => v.vmf_code).ToList();
-                var maintRecords  = await _context.MaintenanceRecords
-                    .Where(m => maintVmfCodes.Contains(m.VmfCode))
-                    .Select(m => new { m.VmfCode, m.MaintenanceType, m.MaintenanceDate, m.TotalCost, m.OdometerReading })
+                var maintRecords = await _context
+                    .MaintenanceRecords.Where(m => maintVmfCodes.Contains(m.VmfCode))
+                    .Select(m => new
+                    {
+                        m.VmfCode,
+                        m.MaintenanceType,
+                        m.MaintenanceDate,
+                        m.TotalCost,
+                        m.OdometerReading,
+                    })
                     .ToListAsync();
 
-                var maintByVehicle = maintRecords.GroupBy(m => m.VmfCode)
+                var maintByVehicle = maintRecords
+                    .GroupBy(m => m.VmfCode)
                     .ToDictionary(g => g.Key, g => g.ToList());
 
-                dataRows = maintVehicles.Select(v =>
-                {
-                    var records = maintByVehicle.GetValueOrDefault(v.vmf_code);
-                    return new Dictionary<string, object>
+                dataRows = maintVehicles
+                    .Select(v =>
                     {
-                        ["VMF_Code"]             = v.vmf_code,
-                        ["Registration"]         = (object)(v.registration_number ?? ""),
-                        ["Fleet_Number"]         = (object)(v.fleet_number ?? ""),
-                        ["Service_Count"]        = records?.Count ?? 0,
-                        ["Total_Maintenance_Cost"]= records?.Sum(r => r.TotalCost) ?? 0m,
-                        ["Last_Service_Date"]    = (object)(records?.Max(r => (DateTime?)r.MaintenanceDate)?.ToString("yyyy-MM-dd") ?? ""),
-                        ["Last_Service_Odo"]     = records?.OrderByDescending(r => r.MaintenanceDate).FirstOrDefault()?.OdometerReading ?? 0,
-                    };
-                }).ToList();
+                        var records = maintByVehicle.GetValueOrDefault(v.vmf_code);
+                        return new Dictionary<string, object>
+                        {
+                            ["VMF_Code"] = v.vmf_code,
+                            ["Registration"] = (object)(v.registration_number ?? ""),
+                            ["Fleet_Number"] = (object)(v.fleet_number ?? ""),
+                            ["Service_Count"] = records?.Count ?? 0,
+                            ["Total_Maintenance_Cost"] = records?.Sum(r => r.TotalCost) ?? 0m,
+                            ["Last_Service_Date"] = (object)(
+                                records
+                                    ?.Max(r => (DateTime?)r.MaintenanceDate)
+                                    ?.ToString("yyyy-MM-dd") ?? ""
+                            ),
+                            ["Last_Service_Odo"] =
+                                records
+                                    ?.OrderByDescending(r => r.MaintenanceDate)
+                                    .FirstOrDefault()
+                                    ?.OdometerReading ?? 0,
+                        };
+                    })
+                    .ToList();
 
-                summary["Total_Maintenance_Cost"]  = maintRecords.Sum(r => r.TotalCost);
-                summary["Total_Services"]          = maintRecords.Count;
-                summary["Vehicles_With_Service"]   = maintByVehicle.Count;
+                summary["Total_Maintenance_Cost"] = maintRecords.Sum(r => r.TotalCost);
+                summary["Total_Services"] = maintRecords.Count;
+                summary["Vehicles_With_Service"] = maintByVehicle.Count;
                 break;
 
             default:
@@ -746,20 +876,45 @@ public class ReportingService : IReportingService
 
     public async Task<SummaryIncomeReport> GenerateSummaryIncomeReportAsync(int financialYear)
     {
-        _logger.LogInformation("Generating summary income report for FY: {FinancialYear}", financialYear);
+        _logger.LogInformation(
+            "Generating summary income report for FY: {FinancialYear}",
+            financialYear
+        );
 
         // Pull all invoice_items for the requested financial year, joining through invoice → posting_month → posting_year
-        var yearItems = await _context.InvoiceItems
-            .Where(ii => !ii.is_deleted)
-            .Join(_context.Invoices.Where(i => !i.is_deleted),
-                  ii => ii.invoice_code, i => i.invoice_code,
-                  (ii, i) => new { ii, i })
-            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
-                  x => x.i.posting_month_code, pm => pm.posting_month_code,
-                  (x, pm) => new { x.ii, x.i, pm })
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                  x => x.pm.posting_year_code, py => py.posting_year_code,
-                  (x, py) => new { x.ii, x.i, x.pm, py })
+        var yearItems = await _context
+            .InvoiceItems.Where(ii => !ii.is_deleted)
+            .Join(
+                _context.Invoices.Where(i => !i.is_deleted),
+                ii => ii.invoice_code,
+                i => i.invoice_code,
+                (ii, i) => new { ii, i }
+            )
+            .Join(
+                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                x => x.i.posting_month_code,
+                pm => pm.posting_month_code,
+                (x, pm) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        pm,
+                    }
+            )
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
+                x => x.pm.posting_year_code,
+                py => py.posting_year_code,
+                (x, py) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        x.pm,
+                        py,
+                    }
+            )
             .Where(x => x.py.year_start_date.Year == financialYear)
             .Select(x => new
             {
@@ -768,22 +923,29 @@ public class ReportingService : IReportingService
                 x.ii.site_code,
                 x.ii.fixed_tariff_amount,
                 x.ii.odo_tariff_amount,
-                month_name   = x.pm.month_name,
+                month_name = x.pm.month_name,
                 month_number = (int)x.pm.month_number,
             })
             .ToListAsync();
 
         var deptCodes = yearItems.Select(x => x.department_code).Distinct().ToList();
-        var deptNames = await _context.Departments
-            .Where(d => deptCodes.Contains(d.department_code) && !d.is_deleted)
+        var deptNames = await _context
+            .Departments.Where(d => deptCodes.Contains(d.department_code) && !d.is_deleted)
             .Select(d => new { d.department_code, d.description })
-            .ToDictionaryAsync(d => d.department_code, d => d.description ?? $"Dept {d.department_code}");
+            .ToDictionaryAsync(
+                d => d.department_code,
+                d => d.description ?? $"Dept {d.department_code}"
+            );
 
         var vmfCodes = yearItems.Select(x => x.vmf_code).Distinct().ToList();
-        var vehicleTypes = await _context.Vehicles
-            .Where(v => vmfCodes.Contains(v.vmf_code) && !v.is_deleted)
-            .Join(_context.VehicleTypes, v => v.type_code, t => t.type_code,
-                  (v, t) => new { v.vmf_code, type = t.type_description })
+        var vehicleTypes = await _context
+            .Vehicles.Where(v => vmfCodes.Contains(v.vmf_code) && !v.is_deleted)
+            .Join(
+                _context.VehicleTypes,
+                v => v.type_code,
+                t => t.type_code,
+                (v, t) => new { v.vmf_code, type = t.type_description }
+            )
             .ToDictionaryAsync(x => x.vmf_code, x => x.type ?? "Unknown");
 
         var totalIncome = yearItems.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount);
@@ -792,51 +954,77 @@ public class ReportingService : IReportingService
             .GroupBy(x => x.department_code)
             .ToDictionary(
                 g => deptNames.GetValueOrDefault(g.Key, $"Dept {g.Key}"),
-                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
+                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount)
+            );
 
         var incomeByMonth = yearItems
             .GroupBy(x => new { x.month_number, x.month_name })
             .OrderBy(g => g.Key.month_number)
             .ToDictionary(
                 g => g.Key.month_name ?? $"Month {g.Key.month_number}",
-                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
+                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount)
+            );
 
         var incomeByType = yearItems
             .GroupBy(x => vehicleTypes.GetValueOrDefault(x.vmf_code, "Unknown"))
-            .ToDictionary(
-                g => g.Key,
-                g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount));
 
         return new SummaryIncomeReport
         {
-            FinancialYear       = financialYear,
-            GeneratedDate       = DateTime.Now,
-            TotalIncome         = totalIncome,
-            IncomeByDepartment  = incomeByDept,
-            IncomeByMonth       = incomeByMonth,
+            FinancialYear = financialYear,
+            GeneratedDate = DateTime.Now,
+            TotalIncome = totalIncome,
+            IncomeByDepartment = incomeByDept,
+            IncomeByMonth = incomeByMonth,
             IncomeByVehicleType = incomeByType,
-            BudgetedIncome      = 0,
-            VarianceAmount      = 0,
-            VariancePercentage  = 0,
-            Summary = $"Financial year {financialYear}: {yearItems.Select(x => x.vmf_code).Distinct().Count()} vehicles billed, {yearItems.Count} invoice lines, total income R{totalIncome:N2}",
+            BudgetedIncome = 0,
+            VarianceAmount = 0,
+            VariancePercentage = 0,
+            Summary =
+                $"Financial year {financialYear}: {yearItems.Select(x => x.vmf_code).Distinct().Count()} vehicles billed, {yearItems.Count} invoice lines, total income R{totalIncome:N2}",
         };
     }
 
     public async Task<DetailedIncomeReport> GenerateDetailedIncomeReportAsync(int financialYear)
     {
-        _logger.LogInformation("Generating detailed income report for FY: {FinancialYear}", financialYear);
+        _logger.LogInformation(
+            "Generating detailed income report for FY: {FinancialYear}",
+            financialYear
+        );
 
-        var detailItems = await _context.InvoiceItems
-            .Where(ii => !ii.is_deleted)
-            .Join(_context.Invoices.Where(i => !i.is_deleted),
-                  ii => ii.invoice_code, i => i.invoice_code,
-                  (ii, i) => new { ii, i })
-            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
-                  x => x.i.posting_month_code, pm => pm.posting_month_code,
-                  (x, pm) => new { x.ii, x.i, pm })
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                  x => x.pm.posting_year_code, py => py.posting_year_code,
-                  (x, py) => new { x.ii, x.i, x.pm, py })
+        var detailItems = await _context
+            .InvoiceItems.Where(ii => !ii.is_deleted)
+            .Join(
+                _context.Invoices.Where(i => !i.is_deleted),
+                ii => ii.invoice_code,
+                i => i.invoice_code,
+                (ii, i) => new { ii, i }
+            )
+            .Join(
+                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                x => x.i.posting_month_code,
+                pm => pm.posting_month_code,
+                (x, pm) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        pm,
+                    }
+            )
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
+                x => x.pm.posting_year_code,
+                py => py.posting_year_code,
+                (x, py) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        x.pm,
+                        py,
+                    }
+            )
             .Where(x => x.py.year_start_date.Year == financialYear)
             .Select(x => new
             {
@@ -850,53 +1038,67 @@ public class ReportingService : IReportingService
             .ToListAsync();
 
         var vmfList = detailItems.Select(x => x.vmf_code).Distinct().ToList();
-        var regNumbers = await _context.Vehicles
-            .Where(v => vmfList.Contains(v.vmf_code) && !v.is_deleted)
+        var regNumbers = await _context
+            .Vehicles.Where(v => vmfList.Contains(v.vmf_code) && !v.is_deleted)
             .Select(v => new { v.vmf_code, v.registration_number })
             .ToDictionaryAsync(v => v.vmf_code, v => v.registration_number ?? "");
 
         var deptList = detailItems.Select(x => x.department_code).Distinct().ToList();
-        var deptNameMap = await _context.Departments
-            .Where(d => deptList.Contains(d.department_code) && !d.is_deleted)
+        var deptNameMap = await _context
+            .Departments.Where(d => deptList.Contains(d.department_code) && !d.is_deleted)
             .Select(d => new { d.department_code, d.description })
-            .ToDictionaryAsync(d => d.department_code, d => d.description ?? $"Dept {d.department_code}");
+            .ToDictionaryAsync(
+                d => d.department_code,
+                d => d.description ?? $"Dept {d.department_code}"
+            );
 
-        var incomeDetails = detailItems.Select(x => new IncomeDetailLine
-        {
-            VmfCode            = x.vmf_code.ToString(),
-            RegistrationNumber = regNumbers.GetValueOrDefault(x.vmf_code, ""),
-            Department         = deptNameMap.GetValueOrDefault(x.department_code, $"Dept {x.department_code}"),
-            Amount             = x.fixed_tariff_amount + x.odo_tariff_amount,
-            Description        = $"Monthly tariff — {x.month_name}",
-            Date               = x.date_created,
-        }).ToList();
+        var incomeDetails = detailItems
+            .Select(x => new IncomeDetailLine
+            {
+                VmfCode = x.vmf_code.ToString(),
+                RegistrationNumber = regNumbers.GetValueOrDefault(x.vmf_code, ""),
+                Department = deptNameMap.GetValueOrDefault(
+                    x.department_code,
+                    $"Dept {x.department_code}"
+                ),
+                Amount = x.fixed_tariff_amount + x.odo_tariff_amount,
+                Description = $"Monthly tariff — {x.month_name}",
+                Date = x.date_created,
+            })
+            .ToList();
 
         var totals = new Dictionary<string, decimal>
         {
             ["Total_Fixed_Tariff"] = detailItems.Sum(x => x.fixed_tariff_amount),
-            ["Total_Odo_Tariff"]   = detailItems.Sum(x => x.odo_tariff_amount),
-            ["Grand_Total"]        = detailItems.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount),
+            ["Total_Odo_Tariff"] = detailItems.Sum(x => x.odo_tariff_amount),
+            ["Grand_Total"] = detailItems.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount),
         };
 
         return new DetailedIncomeReport
         {
-            FinancialYear  = financialYear,
-            GeneratedDate  = DateTime.Now,
-            IncomeDetails  = incomeDetails,
-            Totals         = totals,
-            Summary        = $"{incomeDetails.Count} line items, grand total R{totals["Grand_Total"]:N2}",
+            FinancialYear = financialYear,
+            GeneratedDate = DateTime.Now,
+            IncomeDetails = incomeDetails,
+            Totals = totals,
+            Summary = $"{incomeDetails.Count} line items, grand total R{totals["Grand_Total"]:N2}",
         };
     }
 
     public async Task<TariffListReport> GenerateTariffListReportAsync(int financialYear)
     {
-        _logger.LogInformation("Generating tariff list report for FY: {FinancialYear}", financialYear);
+        _logger.LogInformation(
+            "Generating tariff list report for FY: {FinancialYear}",
+            financialYear
+        );
 
-        var tariffs = await _context.LeaseTariffs
-            .Where(t => !t.is_deleted && t.active)
-            .Join(_context.Vehicles.Where(v => !v.is_deleted),
-                  t => t.vmf_code, v => v.vmf_code,
-                  (t, v) => new { t, v })
+        var tariffs = await _context
+            .LeaseTariffs.Where(t => !t.is_deleted && t.active)
+            .Join(
+                _context.Vehicles.Where(v => !v.is_deleted),
+                t => t.vmf_code,
+                v => v.vmf_code,
+                (t, v) => new { t, v }
+            )
             .Select(x => new
             {
                 x.t.lease_tariff_code,
@@ -910,42 +1112,75 @@ public class ReportingService : IReportingService
             .OrderBy(x => x.vmf_code)
             .ToListAsync();
 
-        var tariffItems = tariffs.Select(t => new TariffItem
-        {
-            TariffCode  = t.lease_tariff_code.ToString(),
-            Description = $"{t.fleet_number ?? t.vmf_code.ToString()} — {t.registration_number} (valid {t.start_date:yyyy-MM-dd} to {t.end_date:yyyy-MM-dd})",
-            Rate        = t.fixed_tariff,
-            Unit        = "Monthly",
-        }).ToList();
+        var tariffItems = tariffs
+            .Select(t => new TariffItem
+            {
+                TariffCode = t.lease_tariff_code.ToString(),
+                Description =
+                    $"{t.fleet_number ?? t.vmf_code.ToString()} — {t.registration_number} (valid {t.start_date:yyyy-MM-dd} to {t.end_date:yyyy-MM-dd})",
+                Rate = t.fixed_tariff,
+                Unit = "Monthly",
+            })
+            .ToList();
 
         return new TariffListReport
         {
             FinancialYear = financialYear,
             GeneratedDate = DateTime.Now,
-            Tariffs       = tariffItems,
-            Summary       = $"{tariffItems.Count} active lease tariffs. Average monthly rate: R{(tariffItems.Count > 0 ? tariffItems.Average(t => t.Rate) : 0):N2}",
+            Tariffs = tariffItems,
+            Summary =
+                $"{tariffItems.Count} active lease tariffs. Average monthly rate: R{(tariffItems.Count > 0 ? tariffItems.Average(t => t.Rate) : 0):N2}",
         };
     }
 
-    public async Task<VehicleBillingHistoryReport> GenerateVehicleBillingHistoryAsync(int vmfCode, int financialYear)
+    public async Task<VehicleBillingHistoryReport> GenerateVehicleBillingHistoryAsync(
+        int vmfCode,
+        int financialYear
+    )
     {
-        _logger.LogInformation("Generating vehicle billing history for VMF: {VmfCode}, FY: {FinancialYear}", vmfCode, financialYear);
+        _logger.LogInformation(
+            "Generating vehicle billing history for VMF: {VmfCode}, FY: {FinancialYear}",
+            vmfCode,
+            financialYear
+        );
 
         var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
         if (vehicle == null)
             throw new ArgumentException($"Vehicle with VMF Code {vmfCode} not found");
 
-        var billingLines = await _context.InvoiceItems
-            .Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
-            .Join(_context.Invoices.Where(i => !i.is_deleted),
-                  ii => ii.invoice_code, i => i.invoice_code,
-                  (ii, i) => new { ii, i })
-            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
-                  x => x.i.posting_month_code, pm => pm.posting_month_code,
-                  (x, pm) => new { x.ii, x.i, pm })
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                  x => x.pm.posting_year_code, py => py.posting_year_code,
-                  (x, py) => new { x.ii, x.i, x.pm, py })
+        var billingLines = await _context
+            .InvoiceItems.Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .Join(
+                _context.Invoices.Where(i => !i.is_deleted),
+                ii => ii.invoice_code,
+                i => i.invoice_code,
+                (ii, i) => new { ii, i }
+            )
+            .Join(
+                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                x => x.i.posting_month_code,
+                pm => pm.posting_month_code,
+                (x, pm) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        pm,
+                    }
+            )
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
+                x => x.pm.posting_year_code,
+                py => py.posting_year_code,
+                (x, py) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        x.pm,
+                        py,
+                    }
+            )
             .Where(x => x.py.year_start_date.Year == financialYear)
             .Select(x => new
             {
@@ -953,55 +1188,84 @@ public class ReportingService : IReportingService
                 x.ii.odo_tariff_amount,
                 x.ii.start_odometer,
                 x.ii.end_odometer,
-                month_name   = x.pm.month_name,
+                month_name = x.pm.month_name,
                 month_number = (int)x.pm.month_number,
                 x.ii.date_created,
             })
             .OrderBy(x => x.month_number)
             .ToListAsync();
 
-        var history = billingLines.Select(b => new BillingHistoryLine
-        {
-            Date        = b.date_created,
-            Description = $"{b.month_name} — fixed R{b.fixed_tariff_amount:N2} + odo R{b.odo_tariff_amount:N2} ({b.start_odometer} → {b.end_odometer} km)",
-            Amount      = b.fixed_tariff_amount + b.odo_tariff_amount,
-            Reference   = $"FY{financialYear}/{b.month_number:D2}",
-            Type        = "Tariff",
-        }).ToList();
+        var history = billingLines
+            .Select(b => new BillingHistoryLine
+            {
+                Date = b.date_created,
+                Description =
+                    $"{b.month_name} — fixed R{b.fixed_tariff_amount:N2} + odo R{b.odo_tariff_amount:N2} ({b.start_odometer} → {b.end_odometer} km)",
+                Amount = b.fixed_tariff_amount + b.odo_tariff_amount,
+                Reference = $"FY{financialYear}/{b.month_number:D2}",
+                Type = "Tariff",
+            })
+            .ToList();
 
-        var totalBilled   = history.Sum(h => h.Amount);
-        var monthlyAvg    = history.Count > 0 ? totalBilled / history.Count : 0m;
+        var totalBilled = history.Sum(h => h.Amount);
+        var monthlyAvg = history.Count > 0 ? totalBilled / history.Count : 0m;
 
         return new VehicleBillingHistoryReport
         {
-            VmfCode                = vmfCode,
-            RegistrationNumber     = vehicle.registration_number ?? string.Empty,
-            FinancialYear          = financialYear,
-            GeneratedDate          = DateTime.Now,
-            BillingHistory         = history,
-            TotalBilled            = totalBilled,
-            AverageMonthlyBilling  = monthlyAvg,
-            Summary                = $"{history.Count} billing periods in FY{financialYear}, total R{totalBilled:N2}, average R{monthlyAvg:N2}/month",
+            VmfCode = vmfCode,
+            RegistrationNumber = vehicle.registration_number ?? string.Empty,
+            FinancialYear = financialYear,
+            GeneratedDate = DateTime.Now,
+            BillingHistory = history,
+            TotalBilled = totalBilled,
+            AverageMonthlyBilling = monthlyAvg,
+            Summary =
+                $"{history.Count} billing periods in FY{financialYear}, total R{totalBilled:N2}, average R{monthlyAvg:N2}/month",
         };
     }
 
     public async Task<KiloGapsReport> GenerateKiloGapsReportAsync(int financialYear)
     {
-        _logger.LogInformation("Generating kilo gaps report for FY: {FinancialYear}", financialYear);
+        _logger.LogInformation(
+            "Generating kilo gaps report for FY: {FinancialYear}",
+            financialYear
+        );
 
         // Find odometer discontinuities: for each vehicle, compare consecutive invoice_item
         // end_odometer vs the next month's start_odometer across the financial year.
-        var odoData = await _context.InvoiceItems
-            .Where(ii => !ii.is_deleted)
-            .Join(_context.Invoices.Where(i => !i.is_deleted),
-                  ii => ii.invoice_code, i => i.invoice_code,
-                  (ii, i) => new { ii, i })
-            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
-                  x => x.i.posting_month_code, pm => pm.posting_month_code,
-                  (x, pm) => new { x.ii, x.i, pm })
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                  x => x.pm.posting_year_code, py => py.posting_year_code,
-                  (x, py) => new { x.ii, x.i, x.pm, py })
+        var odoData = await _context
+            .InvoiceItems.Where(ii => !ii.is_deleted)
+            .Join(
+                _context.Invoices.Where(i => !i.is_deleted),
+                ii => ii.invoice_code,
+                i => i.invoice_code,
+                (ii, i) => new { ii, i }
+            )
+            .Join(
+                _context.PostingMonths.Where(pm => !pm.is_deleted),
+                x => x.i.posting_month_code,
+                pm => pm.posting_month_code,
+                (x, pm) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        pm,
+                    }
+            )
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
+                x => x.pm.posting_year_code,
+                py => py.posting_year_code,
+                (x, py) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        x.pm,
+                        py,
+                    }
+            )
             .Where(x => x.py.year_start_date.Year == financialYear)
             .Select(x => new
             {
@@ -1012,7 +1276,8 @@ public class ReportingService : IReportingService
                 x.ii.end_odo_date,
                 month_number = (int)x.pm.month_number,
             })
-            .OrderBy(x => x.vmf_code).ThenBy(x => x.month_number)
+            .OrderBy(x => x.vmf_code)
+            .ThenBy(x => x.month_number)
             .ToListAsync();
 
         var gaps = new List<KiloGap>();
@@ -1022,31 +1287,40 @@ public class ReportingService : IReportingService
             for (int i = 0; i < months.Count - 1; i++)
             {
                 var current = months[i];
-                var next    = months[i + 1];
+                var next = months[i + 1];
                 // A gap exists when next month's start_odo doesn't align with this month's end_odo
-                if (next.start_odometer > 0 && current.end_odometer > 0
-                    && next.start_odometer != current.end_odometer)
+                if (
+                    next.start_odometer > 0
+                    && current.end_odometer > 0
+                    && next.start_odometer != current.end_odometer
+                )
                 {
-                    gaps.Add(new KiloGap
-                    {
-                        VmfCode     = vehicleGroup.Key,
-                        FromDate    = current.end_odo_date ?? DateTime.MinValue,
-                        ToDate      = next.start_odo_date ?? DateTime.MinValue,
-                        MissingDays = (next.start_odo_date - current.end_odo_date) is TimeSpan ts && ts.TotalDays > 0
-                            ? (int)ts.TotalDays : 0,
-                    });
+                    gaps.Add(
+                        new KiloGap
+                        {
+                            VmfCode = vehicleGroup.Key,
+                            FromDate = current.end_odo_date ?? DateTime.MinValue,
+                            ToDate = next.start_odo_date ?? DateTime.MinValue,
+                            MissingDays =
+                                (next.start_odo_date - current.end_odo_date) is TimeSpan ts
+                                && ts.TotalDays > 0
+                                    ? (int)ts.TotalDays
+                                    : 0,
+                        }
+                    );
                 }
             }
         }
 
         return new KiloGapsReport
         {
-            FinancialYear    = financialYear,
-            GeneratedDate    = DateTime.Now,
-            Gaps             = gaps,
-            TotalGaps        = gaps.Count,
+            FinancialYear = financialYear,
+            GeneratedDate = DateTime.Now,
+            Gaps = gaps,
+            TotalGaps = gaps.Count,
             VehiclesAffected = gaps.Select(g => g.VmfCode).Distinct().Count(),
-            Summary          = $"{gaps.Count} odometer discontinuities found across {gaps.Select(g => g.VmfCode).Distinct().Count()} vehicles in FY{financialYear}",
+            Summary =
+                $"{gaps.Count} odometer discontinuities found across {gaps.Select(g => g.VmfCode).Distinct().Count()} vehicles in FY{financialYear}",
         };
     }
 
@@ -1078,12 +1352,15 @@ public class ReportingService : IReportingService
                 ServiceType = m.MaintenanceType,
                 Odometer = m.OdometerReading,
                 Cost = m.TotalCost,
-                Provider = m.ServiceProvider ?? string.Empty
+                Provider = m.ServiceProvider ?? string.Empty,
             })
             .ToList();
 
         var dayIntervals = maintenanceRecords
-            .Zip(maintenanceRecords.Skip(1), (a, b) => (int)(b.MaintenanceDate.Date - a.MaintenanceDate.Date).TotalDays)
+            .Zip(
+                maintenanceRecords.Skip(1),
+                (a, b) => (int)(b.MaintenanceDate.Date - a.MaintenanceDate.Date).TotalDays
+            )
             .Where(days => days > 0)
             .ToList();
 
@@ -1093,19 +1370,23 @@ public class ReportingService : IReportingService
             .ToList();
 
         var latestRecord = maintenanceRecords.LastOrDefault();
-        var serviceIntervalDays = dayIntervals.Count > 0
-            ? (int)Math.Round(dayIntervals.Average())
-            : latestRecord?.ServiceIntervalDays.GetValueOrDefault(90) ?? 90;
-        var serviceIntervalKm = kmIntervals.Count > 0
-            ? (int)Math.Round(kmIntervals.Average())
-            : latestRecord?.ServiceIntervalKm.GetValueOrDefault(10000) ?? 10000;
+        var serviceIntervalDays =
+            dayIntervals.Count > 0
+                ? (int)Math.Round(dayIntervals.Average())
+                : latestRecord?.ServiceIntervalDays.GetValueOrDefault(90) ?? 90;
+        var serviceIntervalKm =
+            kmIntervals.Count > 0
+                ? (int)Math.Round(kmIntervals.Average())
+                : latestRecord?.ServiceIntervalKm.GetValueOrDefault(10000) ?? 10000;
 
-        var preferredProvider = maintenanceRecords
-            .Where(m => !string.IsNullOrWhiteSpace(m.ServiceProvider))
-            .GroupBy(m => m.ServiceProvider!)
-            .OrderByDescending(g => g.Count())
-            .FirstOrDefault()
-            ?.Key ?? string.Empty;
+        var preferredProvider =
+            maintenanceRecords
+                .Where(m => !string.IsNullOrWhiteSpace(m.ServiceProvider))
+                .GroupBy(m => m.ServiceProvider!)
+                .OrderByDescending(g => g.Count())
+                .FirstOrDefault()
+                ?.Key
+            ?? string.Empty;
 
         return new ServiceHistoryReport
         {
@@ -1126,9 +1407,10 @@ public class ReportingService : IReportingService
             PreferredServiceProvider = preferredProvider,
             GeneratedDate = DateTime.UtcNow,
             ServiceRecords = serviceRecords,
-            Summary = serviceCount == 0
-                ? "No maintenance records found."
-                : $"{serviceCount} services recorded. Avg interval {serviceIntervalDays} days / {serviceIntervalKm} km.",
+            Summary =
+                serviceCount == 0
+                    ? "No maintenance records found."
+                    : $"{serviceCount} services recorded. Avg interval {serviceIntervalDays} days / {serviceIntervalKm} km.",
         };
     }
 
@@ -1143,9 +1425,7 @@ public class ReportingService : IReportingService
             endDate
         );
 
-        var vehicles = (await _vehicleRepository.GetAllAsync())
-            .Where(v => !v.is_deleted)
-            .ToList();
+        var vehicles = (await _vehicleRepository.GetAllAsync()).Where(v => !v.is_deleted).ToList();
         var maintenance = (await _maintenanceRepository.GetAllAsync())
             .Where(m => !m.is_deleted)
             .GroupBy(m => m.VmfCode)
@@ -1166,8 +1446,12 @@ public class ReportingService : IReportingService
             if (latest is not null)
             {
                 var intervalDays = latest.ServiceIntervalDays.GetValueOrDefault(90);
-                dueDate = latest.NextServiceDate?.Date ?? latest.MaintenanceDate.Date.AddDays(intervalDays);
-                maintenanceType = string.IsNullOrWhiteSpace(latest.MaintenanceType) ? "Service" : latest.MaintenanceType;
+                dueDate =
+                    latest.NextServiceDate?.Date
+                    ?? latest.MaintenanceDate.Date.AddDays(intervalDays);
+                maintenanceType = string.IsNullOrWhiteSpace(latest.MaintenanceType)
+                    ? "Service"
+                    : latest.MaintenanceType;
             }
             else
             {
@@ -1177,24 +1461,28 @@ public class ReportingService : IReportingService
 
             if (dueDate >= startDate.Date && dueDate <= endDate.Date)
             {
-                scheduledItems.Add(new ScheduledMaintenanceItem
-                {
-                    VmfCode = vehicle.vmf_code,
-                    DueDate = dueDate,
-                    MaintenanceType = maintenanceType,
-                    Status = dueDate < today ? "Overdue" : "Scheduled"
-                });
+                scheduledItems.Add(
+                    new ScheduledMaintenanceItem
+                    {
+                        VmfCode = vehicle.vmf_code,
+                        DueDate = dueDate,
+                        MaintenanceType = maintenanceType,
+                        Status = dueDate < today ? "Overdue" : "Scheduled",
+                    }
+                );
             }
 
             if (dueDate < today)
             {
-                overdueItems.Add(new OverdueMaintenanceItem
-                {
-                    VmfCode = vehicle.vmf_code,
-                    DueDate = dueDate,
-                    MaintenanceType = maintenanceType,
-                    DaysOverdue = (today - dueDate).Days
-                });
+                overdueItems.Add(
+                    new OverdueMaintenanceItem
+                    {
+                        VmfCode = vehicle.vmf_code,
+                        DueDate = dueDate,
+                        MaintenanceType = maintenanceType,
+                        DaysOverdue = (today - dueDate).Days,
+                    }
+                );
             }
         }
 
@@ -1204,8 +1492,12 @@ public class ReportingService : IReportingService
             EndDate = endDate,
             GeneratedDate = DateTime.UtcNow,
             ScheduledItems = scheduledItems.OrderBy(x => x.DueDate).ThenBy(x => x.VmfCode).ToList(),
-            OverdueItems = overdueItems.OrderByDescending(x => x.DaysOverdue).ThenBy(x => x.VmfCode).ToList(),
-            Summary = $"{scheduledItems.Count} scheduled items in range; {overdueItems.Count} overdue items.",
+            OverdueItems = overdueItems
+                .OrderByDescending(x => x.DaysOverdue)
+                .ThenBy(x => x.VmfCode)
+                .ToList(),
+            Summary =
+                $"{scheduledItems.Count} scheduled items in range; {overdueItems.Count} overdue items.",
         };
     }
 
@@ -1236,7 +1528,10 @@ public class ReportingService : IReportingService
             .Select(m => new MaintenanceCostLine
             {
                 VmfCode = m.VmfCode,
-                RegistrationNumber = lookups.VehicleRegistrations.GetValueOrDefault(m.VmfCode, string.Empty),
+                RegistrationNumber = lookups.VehicleRegistrations.GetValueOrDefault(
+                    m.VmfCode,
+                    string.Empty
+                ),
                 ServiceDate = m.MaintenanceDate,
                 MaintenanceType = m.MaintenanceType,
                 ServiceProvider = m.ServiceProvider ?? string.Empty,
@@ -1295,8 +1590,8 @@ public class ReportingService : IReportingService
 
         // Build contract → site lookup for trip department resolution
         var contractIds = filteredTrips.Select(t => t.contract_code).Distinct().ToList();
-        var contractSites = await _context.Contracts
-            .Where(c => contractIds.Contains(c.contract_code))
+        var contractSites = await _context
+            .Contracts.Where(c => contractIds.Contains(c.contract_code))
             .ToDictionaryAsync(c => c.contract_code, c => c.site_code);
 
         var tripSummaries = filteredTrips
@@ -1304,9 +1599,10 @@ public class ReportingService : IReportingService
             .Select(g =>
             {
                 contractSites.TryGetValue(g.Key, out var siteCode);
-                var siteName = siteCode != 0
-                    ? lookups.Sites.GetValueOrDefault(siteCode, string.Empty)
-                    : string.Empty;
+                var siteName =
+                    siteCode != 0
+                        ? lookups.Sites.GetValueOrDefault(siteCode, string.Empty)
+                        : string.Empty;
                 return new TripSummaryLine
                 {
                     VmfCode = g.Key,
@@ -1348,11 +1644,13 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Trip with ID {tripId} not found");
         }
 
-        var tripSequence = await _context.Trips
-            .Where(t => !t.is_deleted
-                        && t.contract_code == trip.contract_code
-                        && t.end_odo_meter.HasValue
-                        && t.issue_date <= trip.issue_date)
+        var tripSequence = await _context
+            .Trips.Where(t =>
+                !t.is_deleted
+                && t.contract_code == trip.contract_code
+                && t.end_odo_meter.HasValue
+                && t.issue_date <= trip.issue_date
+            )
             .OrderBy(t => t.issue_date)
             .ThenBy(t => t.trip_authority_code)
             .Select(t => new { t.trip_authority_code, EndOdo = t.end_odo_meter!.Value })
@@ -1376,33 +1674,41 @@ public class ReportingService : IReportingService
         }
 
         var vmfCode = contract?.vmf_code ?? 0;
-        var registrationNumber = vmfCode > 0
-            ? await _context.Vehicles
-                .Where(v => !v.is_deleted && v.vmf_code == vmfCode)
-                .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
-                .FirstOrDefaultAsync() ?? vmfCode.ToString()
-            : string.Empty;
+        var registrationNumber =
+            vmfCode > 0
+                ? await _context
+                    .Vehicles.Where(v => !v.is_deleted && v.vmf_code == vmfCode)
+                    .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
+                    .FirstOrDefaultAsync() ?? vmfCode.ToString()
+                : string.Empty;
 
-        var tripMonthCosts = await _context.InvoiceItems
-            .Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
-            .Join(_context.Invoices.Where(i => !i.is_deleted),
+        var tripMonthCosts = await _context
+            .InvoiceItems.Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .Join(
+                _context.Invoices.Where(i => !i.is_deleted),
                 ii => ii.invoice_code,
                 i => i.invoice_code,
-                (ii, i) => new { ii, i })
-            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                (ii, i) => new { ii, i }
+            )
+            .Join(
+                _context.PostingMonths.Where(pm => !pm.is_deleted),
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
-                (x, pm) => new { x.ii, pm })
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                (x, pm) => new { x.ii, pm }
+            )
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
-                (x, py) => new
-                {
-                    x.ii.fixed_tariff_amount,
-                    x.ii.odo_tariff_amount,
-                    Month = (int)x.pm.month_number,
-                    Year = py.year_start_date.Year
-                })
+                (x, py) =>
+                    new
+                    {
+                        x.ii.fixed_tariff_amount,
+                        x.ii.odo_tariff_amount,
+                        Month = (int)x.pm.month_number,
+                        Year = py.year_start_date.Year,
+                    }
+            )
             .Where(x => x.Year == trip.issue_date.Year && x.Month == trip.issue_date.Month)
             .ToListAsync();
 
@@ -1413,24 +1719,28 @@ public class ReportingService : IReportingService
         var expenses = new List<TripExpense>();
         if (fixedCost > 0)
         {
-            expenses.Add(new TripExpense
-            {
-                Description = "Monthly fixed tariff",
-                Amount = fixedCost,
-                Category = "Tariff",
-                Date = trip.issue_date
-            });
+            expenses.Add(
+                new TripExpense
+                {
+                    Description = "Monthly fixed tariff",
+                    Amount = fixedCost,
+                    Category = "Tariff",
+                    Date = trip.issue_date,
+                }
+            );
         }
 
         if (odoCost > 0)
         {
-            expenses.Add(new TripExpense
-            {
-                Description = "Odometer tariff",
-                Amount = odoCost,
-                Category = "Tariff",
-                Date = trip.issue_date
-            });
+            expenses.Add(
+                new TripExpense
+                {
+                    Description = "Odometer tariff",
+                    Amount = odoCost,
+                    Category = "Tariff",
+                    Date = trip.issue_date,
+                }
+            );
         }
 
         return new TripDetailReport
@@ -1460,9 +1770,10 @@ public class ReportingService : IReportingService
                 EndOdometer = trip.end_odo_meter ?? previousEnd,
                 Distance = tripKilometers,
                 Purpose = trip.trip_reason ?? string.Empty,
-                AuthorityNumber = trip.trip_request_number ?? string.Empty
+                AuthorityNumber = trip.trip_request_number ?? string.Empty,
             },
-            Summary = $"Trip {trip.trip_authority_code}: {tripKilometers} km, revenue estimate R{tripRevenue:N2}."
+            Summary =
+                $"Trip {trip.trip_authority_code}: {tripKilometers} km, revenue estimate R{tripRevenue:N2}.",
         };
     }
 
@@ -1479,14 +1790,17 @@ public class ReportingService : IReportingService
             throw new ArgumentException($"Contract with ID {contractId} not found");
         }
 
-        var relatedTrips = await _context.Trips
-            .Where(t => !t.is_deleted && t.contract_code == contract.contract_code)
+        var relatedTrips = await _context
+            .Trips.Where(t => !t.is_deleted && t.contract_code == contract.contract_code)
             .OrderBy(t => t.issue_date)
             .ThenBy(t => t.trip_authority_code)
             .ToListAsync();
 
         var lookups = await LoadLookupsAsync();
-        var vehicleRegistration = lookups.VehicleRegistrations.GetValueOrDefault(contract.vmf_code, string.Empty);
+        var vehicleRegistration = lookups.VehicleRegistrations.GetValueOrDefault(
+            contract.vmf_code,
+            string.Empty
+        );
 
         var lastEnd = contract.start_odometer;
         var tripLines = new List<TripSummaryLine>();
@@ -1495,17 +1809,19 @@ public class ReportingService : IReportingService
             var endOdo = t.end_odo_meter ?? lastEnd;
             var distance = Math.Max(0, endOdo - lastEnd);
 
-            tripLines.Add(new TripSummaryLine
-            {
-                TripId = t.trip_authority_code,
-                Date = t.issue_date,
-                StartOdometer = lastEnd,
-                EndOdometer = endOdo,
-                Distance = distance,
-                DriverName = contract.Driver_name ?? string.Empty,
-                VehicleRegistration = vehicleRegistration,
-                Purpose = t.trip_reason ?? string.Empty,
-            });
+            tripLines.Add(
+                new TripSummaryLine
+                {
+                    TripId = t.trip_authority_code,
+                    Date = t.issue_date,
+                    StartOdometer = lastEnd,
+                    EndOdometer = endOdo,
+                    Distance = distance,
+                    DriverName = contract.Driver_name ?? string.Empty,
+                    VehicleRegistration = vehicleRegistration,
+                    Purpose = t.trip_reason ?? string.Empty,
+                }
+            );
 
             lastEnd = Math.Max(lastEnd, endOdo);
         }
@@ -1570,11 +1886,14 @@ public class ReportingService : IReportingService
                 EndDate = c.end_date ?? DateTime.MinValue,
                 ContractValue = 0,
                 VehicleCount = 1,
-                Status = c.still_current == "Y"
-                    ? "Active"
-                    : (c.contract_status_code == 7 ? "Closed"
-                        : c.contract_status_code == 6 ? "Cancelled"
-                        : "Inactive"),
+                Status =
+                    c.still_current == "Y"
+                        ? "Active"
+                        : (
+                            c.contract_status_code == 7 ? "Closed"
+                            : c.contract_status_code == 6 ? "Cancelled"
+                            : "Inactive"
+                        ),
                 UsedKilometers = 0,
                 AuthorizedKilometers = c.monthly_km ?? 0,
             })
@@ -1611,35 +1930,49 @@ public class ReportingService : IReportingService
         }
 
         var vmfCode = contract.vmf_code;
-        var registration = await _context.Vehicles
-            .Where(v => !v.is_deleted && v.vmf_code == vmfCode)
-            .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
-            .FirstOrDefaultAsync() ?? vmfCode.ToString();
+        var registration =
+            await _context
+                .Vehicles.Where(v => !v.is_deleted && v.vmf_code == vmfCode)
+                .Select(v => v.registration_number ?? v.fleet_number ?? vmfCode.ToString())
+                .FirstOrDefaultAsync() ?? vmfCode.ToString();
 
-        var rawRows = await _context.InvoiceItems
-            .Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
-            .Join(_context.Invoices.Where(i => !i.is_deleted),
+        var rawRows = await _context
+            .InvoiceItems.Where(ii => !ii.is_deleted && ii.vmf_code == vmfCode)
+            .Join(
+                _context.Invoices.Where(i => !i.is_deleted),
                 ii => ii.invoice_code,
                 i => i.invoice_code,
-                (ii, i) => new { ii, i })
-            .Join(_context.PostingMonths.Where(pm => !pm.is_deleted),
+                (ii, i) => new { ii, i }
+            )
+            .Join(
+                _context.PostingMonths.Where(pm => !pm.is_deleted),
                 x => x.i.posting_month_code,
                 pm => pm.posting_month_code,
-                (x, pm) => new { x.ii, x.i, pm })
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
+                (x, pm) =>
+                    new
+                    {
+                        x.ii,
+                        x.i,
+                        pm,
+                    }
+            )
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
                 x => x.pm.posting_year_code,
                 py => py.posting_year_code,
-                (x, py) => new
-                {
-                    x.ii.fixed_tariff_amount,
-                    x.ii.odo_tariff_amount,
-                    x.ii.start_odometer,
-                    x.ii.end_odometer,
-                    x.ii.contract_type,
-                    x.pm.month_name,
-                    x.pm.month_number,
-                    Year = py.year_start_date.Year
-                })
+                (x, py) =>
+                    new
+                    {
+                        x.ii.fixed_tariff_amount,
+                        x.ii.odo_tariff_amount,
+                        x.ii.start_odometer,
+                        x.ii.end_odometer,
+                        x.ii.contract_type,
+                        x.pm.month_name,
+                        x.pm.month_number,
+                        Year = py.year_start_date.Year,
+                    }
+            )
             .ToListAsync();
 
         var billingLines = rawRows
@@ -1651,10 +1984,12 @@ public class ReportingService : IReportingService
                     BillingDate = monthDate,
                     Amount = row.fixed_tariff_amount + row.odo_tariff_amount,
                     Kilometers = Math.Max(0, row.end_odometer - row.start_odometer),
-                    Description = $"{row.month_name} {row.Year}: fixed R{row.fixed_tariff_amount:N2} + odo R{row.odo_tariff_amount:N2} ({row.start_odometer} -> {row.end_odometer} km)"
+                    Description = $"{row.month_name} {row.Year}: fixed R{row.fixed_tariff_amount:N2} + odo R{row.odo_tariff_amount:N2} ({row.start_odometer} -> {row.end_odometer} km)",
                 };
             })
-            .Where(row => row.BillingDate.Date >= startDate.Date && row.BillingDate.Date <= endDate.Date)
+            .Where(row =>
+                row.BillingDate.Date >= startDate.Date && row.BillingDate.Date <= endDate.Date
+            )
             .OrderBy(row => row.BillingDate)
             .Select(row => new ContractBillingLine
             {
@@ -1664,7 +1999,7 @@ public class ReportingService : IReportingService
                 Amount = row.Amount,
                 Kilometers = row.Kilometers,
                 VehicleRegistration = registration,
-                Description = row.Description
+                Description = row.Description,
             })
             .ToList();
 
@@ -1674,7 +2009,7 @@ public class ReportingService : IReportingService
                 Date = line.BillingDate,
                 Description = line.Description,
                 Amount = line.Amount,
-                Kilometers = line.Kilometers
+                Kilometers = line.Kilometers,
             })
             .ToList();
 
@@ -1694,7 +2029,7 @@ public class ReportingService : IReportingService
             TotalBilled = billingLines.Sum(b => b.Amount),
             Summary = !billingLines.Any()
                 ? "No billing lines found for the selected period."
-                : $"{billingLines.Count()} billing lines for contract {contract.Authorisation ?? contractId.ToString()}."
+                : $"{billingLines.Count()} billing lines for contract {contract.Authorisation ?? contractId.ToString()}.",
         };
     }
 
@@ -1797,44 +2132,57 @@ public class ReportingService : IReportingService
 
         if (string.Equals(reportKey, "SummaryIncome", StringComparison.OrdinalIgnoreCase))
         {
-            reportData = await GenerateSummaryIncomeReportAsync(GetIntParameter(parameters, "financial_year"));
+            reportData = await GenerateSummaryIncomeReportAsync(
+                GetIntParameter(parameters, "financial_year")
+            );
         }
         else if (string.Equals(reportKey, "DetailedIncome", StringComparison.OrdinalIgnoreCase))
         {
-            reportData = await GenerateDetailedIncomeReportAsync(GetIntParameter(parameters, "financial_year"));
+            reportData = await GenerateDetailedIncomeReportAsync(
+                GetIntParameter(parameters, "financial_year")
+            );
         }
         else if (string.Equals(reportKey, "TariffList", StringComparison.OrdinalIgnoreCase))
         {
-            reportData = await GenerateTariffListReportAsync(GetIntParameter(parameters, "financial_year"));
+            reportData = await GenerateTariffListReportAsync(
+                GetIntParameter(parameters, "financial_year")
+            );
         }
         else if (string.Equals(reportKey, "KiloGaps", StringComparison.OrdinalIgnoreCase))
         {
-            reportData = await GenerateKiloGapsReportAsync(GetIntParameter(parameters, "financial_year"));
+            reportData = await GenerateKiloGapsReportAsync(
+                GetIntParameter(parameters, "financial_year")
+            );
         }
         else if (string.Equals(reportKey, "TripSummary", StringComparison.OrdinalIgnoreCase))
         {
             reportData = await GenerateTripSummaryReportAsync(
                 GetNullableIntParameter(parameters, "vmf_code"),
                 GetDateParameter(parameters, "start_date"),
-                GetDateParameter(parameters, "end_date"));
+                GetDateParameter(parameters, "end_date")
+            );
         }
         else if (string.Equals(reportKey, "MaintenanceCost", StringComparison.OrdinalIgnoreCase))
         {
             reportData = await GenerateMaintenanceCostReportAsync(
                 GetNullableIntParameter(parameters, "vmf_code"),
                 GetDateParameter(parameters, "start_date"),
-                GetDateParameter(parameters, "end_date"));
+                GetDateParameter(parameters, "end_date")
+            );
         }
         else if (string.Equals(reportKey, "ContractSummary", StringComparison.OrdinalIgnoreCase))
         {
-            reportData = await GenerateContractSummaryReportAsync(GetNullableIntParameter(parameters, "contract_id"));
+            reportData = await GenerateContractSummaryReportAsync(
+                GetNullableIntParameter(parameters, "contract_id")
+            );
         }
         else if (string.Equals(reportKey, "ContractBilling", StringComparison.OrdinalIgnoreCase))
         {
             reportData = await GenerateContractBillingReportAsync(
                 GetIntParameter(parameters, "contract_id"),
                 GetDateParameter(parameters, "start_date"),
-                GetDateParameter(parameters, "end_date"));
+                GetDateParameter(parameters, "end_date")
+            );
         }
 
         var html = new StringBuilder();
@@ -1842,7 +2190,9 @@ public class ReportingService : IReportingService
         html.AppendLine("<html>");
         html.AppendLine("<head>");
         html.AppendLine($"<title>{WebUtility.HtmlEncode(normalizedReportType)} Report</title>");
-        html.AppendLine("<style>body{font-family:Arial,sans-serif;margin:20px;}h1{margin-bottom:0;}h2{margin-top:24px;}pre{white-space:pre-wrap;background:#f7f7f7;padding:12px;border-radius:6px;border:1px solid #ddd;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#f0f0f0;}</style>");
+        html.AppendLine(
+            "<style>body{font-family:Arial,sans-serif;margin:20px;}h1{margin-bottom:0;}h2{margin-top:24px;}pre{white-space:pre-wrap;background:#f7f7f7;padding:12px;border-radius:6px;border:1px solid #ddd;}table{border-collapse:collapse;width:100%;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#f0f0f0;}</style>"
+        );
         html.AppendLine("</head>");
         html.AppendLine("<body>");
         html.AppendLine($"<h1>{WebUtility.HtmlEncode(normalizedReportType)} Report</h1>");
@@ -1853,16 +2203,17 @@ public class ReportingService : IReportingService
         foreach (var parameter in parameters.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
         {
             html.AppendLine(
-                $"<tr><td>{WebUtility.HtmlEncode(parameter.Key)}</td><td>{WebUtility.HtmlEncode(parameter.Value?.ToString() ?? string.Empty)}</td></tr>");
+                $"<tr><td>{WebUtility.HtmlEncode(parameter.Key)}</td><td>{WebUtility.HtmlEncode(parameter.Value?.ToString() ?? string.Empty)}</td></tr>"
+            );
         }
         html.AppendLine("</tbody></table>");
 
         if (reportData is not null)
         {
-            var json = JsonSerializer.Serialize(reportData, new JsonSerializerOptions
-            {
-                WriteIndented = true,
-            });
+            var json = JsonSerializer.Serialize(
+                reportData,
+                new JsonSerializerOptions { WriteIndented = true }
+            );
 
             html.AppendLine("<h2>Report Data</h2>");
             html.AppendLine($"<pre>{WebUtility.HtmlEncode(json)}</pre>");
@@ -1898,7 +2249,9 @@ public class ReportingService : IReportingService
 
     private static DateTime GetDateParameter(Dictionary<string, object> parameters, string key)
     {
-        if (!TryGetParameter(parameters, key, out var raw) || !DateTime.TryParse(raw, out var value))
+        if (
+            !TryGetParameter(parameters, key, out var raw) || !DateTime.TryParse(raw, out var value)
+        )
         {
             throw new InvalidOperationException($"Required date parameter '{key}' is missing.");
         }
@@ -1944,7 +2297,8 @@ public class ReportingService : IReportingService
             htmlContent,
             @"</(h\d|p|div|tr|li|br|section|article|header|footer)>",
             "\n",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            RegexOptions.IgnoreCase | RegexOptions.Compiled
+        );
         var withoutTags = Regex.Replace(withLineBreaks, "<[^>]+>", " ", RegexOptions.Compiled);
         var decoded = WebUtility.HtmlDecode(withoutTags);
         var normalized = Regex.Replace(decoded, @"[ \t]+", " ", RegexOptions.Compiled);
@@ -1987,7 +2341,7 @@ public class ReportingService : IReportingService
             "2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n",
             "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
             "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-            $"5 0 obj\n<< /Length {Encoding.ASCII.GetByteCount(contentStream)} >>\nstream\n{contentStream}endstream\nendobj\n"
+            $"5 0 obj\n<< /Length {Encoding.ASCII.GetByteCount(contentStream)} >>\nstream\n{contentStream}endstream\nendobj\n",
         };
 
         var pdf = new StringBuilder();
@@ -2020,8 +2374,8 @@ public class ReportingService : IReportingService
         return Encoding.ASCII.GetBytes(pdf.ToString());
     }
 
-    private static string EscapePdfText(string value)
-        => value.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+    private static string EscapePdfText(string value) =>
+        value.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
 
     #endregion
 
@@ -2041,7 +2395,12 @@ public class ReportingService : IReportingService
         csv.AppendLine(string.Join(",", headers.Select(EscapeCsvValue)));
         foreach (var row in rows)
         {
-            csv.AppendLine(string.Join(",", headers.Select(h => EscapeCsvValue(row.GetValueOrDefault(h, string.Empty)))));
+            csv.AppendLine(
+                string.Join(
+                    ",",
+                    headers.Select(h => EscapeCsvValue(row.GetValueOrDefault(h, string.Empty)))
+                )
+            );
         }
 
         return Encoding.UTF8.GetBytes(csv.ToString());
@@ -2060,7 +2419,10 @@ public class ReportingService : IReportingService
         return BuildXlsx(headers, rows);
     }
 
-    private static (List<string> Headers, List<Dictionary<string, string>> Rows) NormalizeExportRows(IEnumerable<object> source)
+    private static (
+        List<string> Headers,
+        List<Dictionary<string, string>> Rows
+    ) NormalizeExportRows(IEnumerable<object> source)
     {
         var headers = new List<string>();
         var rows = new List<Dictionary<string, string>>();
@@ -2128,7 +2490,14 @@ public class ReportingService : IReportingService
         }
 
         var type = item.GetType();
-        if (type == typeof(string) || type.IsPrimitive || item is decimal || item is DateTime || item is DateTimeOffset || item is Guid)
+        if (
+            type == typeof(string)
+            || type.IsPrimitive
+            || item is decimal
+            || item is DateTime
+            || item is DateTimeOffset
+            || item is Guid
+        )
         {
             row["Value"] = item.ToString() ?? string.Empty;
             return row;
@@ -2152,13 +2521,18 @@ public class ReportingService : IReportingService
             JsonValueKind.False => bool.FalseString,
             JsonValueKind.Null => string.Empty,
             JsonValueKind.Undefined => string.Empty,
-            _ => value.GetRawText()
+            _ => value.GetRawText(),
         };
     }
 
     private static string EscapeCsvValue(string value)
     {
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
+        if (
+            value.Contains(',')
+            || value.Contains('"')
+            || value.Contains('\n')
+            || value.Contains('\r')
+        )
         {
             return "\"" + value.Replace("\"", "\"\"") + "\"";
         }
@@ -2166,55 +2540,76 @@ public class ReportingService : IReportingService
         return value;
     }
 
-    private static byte[] BuildXlsx(IReadOnlyList<string> headers, IReadOnlyList<Dictionary<string, string>> rows)
+    private static byte[] BuildXlsx(
+        IReadOnlyList<string> headers,
+        IReadOnlyList<Dictionary<string, string>> rows
+    )
     {
         using var stream = new MemoryStream();
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            WriteZipEntry(archive, "[Content_Types].xml",
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
-                "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
-                "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
-                "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>" +
-                "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>" +
-                "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>" +
-                "<Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/>" +
-                "</Types>");
+            WriteZipEntry(
+                archive,
+                "[Content_Types].xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+                    + "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+                    + "<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+                    + "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>"
+                    + "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>"
+                    + "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>"
+                    + "<Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/>"
+                    + "</Types>"
+            );
 
-            WriteZipEntry(archive, "_rels/.rels",
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
-                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>" +
-                "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/>" +
-                "<Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/>" +
-                "</Relationships>");
+            WriteZipEntry(
+                archive,
+                "_rels/.rels",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+                    + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>"
+                    + "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/>"
+                    + "<Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/>"
+                    + "</Relationships>"
+            );
 
-            WriteZipEntry(archive, "docProps/core.xml",
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">" +
-                "<dc:title>FIS Export</dc:title>" +
-                "<dc:creator>FIS API</dc:creator>" +
-                $"<dcterms:created xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}</dcterms:created>" +
-                "</cp:coreProperties>");
+            WriteZipEntry(
+                archive,
+                "docProps/core.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">"
+                    + "<dc:title>FIS Export</dc:title>"
+                    + "<dc:creator>FIS API</dc:creator>"
+                    + $"<dcterms:created xsi:type=\"dcterms:W3CDTF\">{DateTime.UtcNow:yyyy-MM-ddTHH:mm:ssZ}</dcterms:created>"
+                    + "</cp:coreProperties>"
+            );
 
-            WriteZipEntry(archive, "docProps/app.xml",
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">" +
-                "<Application>FIS API</Application>" +
-                "</Properties>");
+            WriteZipEntry(
+                archive,
+                "docProps/app.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">"
+                    + "<Application>FIS API</Application>"
+                    + "</Properties>"
+            );
 
-            WriteZipEntry(archive, "xl/workbook.xml",
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
-                "<sheets><sheet name=\"Export\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
-                "</workbook>");
+            WriteZipEntry(
+                archive,
+                "xl/workbook.xml",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+                    + "<sheets><sheet name=\"Export\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+                    + "</workbook>"
+            );
 
-            WriteZipEntry(archive, "xl/_rels/workbook.xml.rels",
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
-                "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>" +
-                "</Relationships>");
+            WriteZipEntry(
+                archive,
+                "xl/_rels/workbook.xml.rels",
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                    + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+                    + "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>"
+                    + "</Relationships>"
+            );
 
             WriteZipEntry(archive, "xl/worksheets/sheet1.xml", BuildWorksheetXml(headers, rows));
         }
@@ -2222,11 +2617,16 @@ public class ReportingService : IReportingService
         return stream.ToArray();
     }
 
-    private static string BuildWorksheetXml(IReadOnlyList<string> headers, IReadOnlyList<Dictionary<string, string>> rows)
+    private static string BuildWorksheetXml(
+        IReadOnlyList<string> headers,
+        IReadOnlyList<Dictionary<string, string>> rows
+    )
     {
         var sb = new StringBuilder();
         sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-        sb.Append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>");
+        sb.Append(
+            "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+        );
 
         var rowIndex = 1;
         sb.Append($"<row r=\"{rowIndex}\">");
@@ -2252,8 +2652,8 @@ public class ReportingService : IReportingService
         return sb.ToString();
     }
 
-    private static string BuildInlineStringCell(string cellRef, string value)
-        => $"<c r=\"{cellRef}\" t=\"inlineStr\"><is><t>{XmlEscape(value)}</t></is></c>";
+    private static string BuildInlineStringCell(string cellRef, string value) =>
+        $"<c r=\"{cellRef}\" t=\"inlineStr\"><is><t>{XmlEscape(value)}</t></is></c>";
 
     private static string GetCellReference(int columnIndex, int rowIndex)
     {
@@ -2269,13 +2669,15 @@ public class ReportingService : IReportingService
         return $"{col}{rowIndex}";
     }
 
-    private static string XmlEscape(string input)
-        => SecurityElement.Escape(input) ?? string.Empty;
+    private static string XmlEscape(string input) => SecurityElement.Escape(input) ?? string.Empty;
 
     private static void WriteZipEntry(ZipArchive archive, string path, string content)
     {
         var entry = archive.CreateEntry(path, CompressionLevel.Fastest);
-        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        using var writer = new StreamWriter(
+            entry.Open(),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+        );
         writer.Write(content);
     }
 

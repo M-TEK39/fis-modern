@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using FIS.Core.Application.Interfaces;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -29,11 +30,23 @@ namespace FIS.Api.Controllers;
 public class FinanceReportController : BaseApiController
 {
     private readonly FisDbContext _context;
+    private readonly ITaxiRepository _taxiRepository;
+    private readonly ITaxiLogRepository _taxiLogRepository;
+    private readonly IPrivateHireRepository _privateHireRepository;
     private readonly ILogger<FinanceReportController> _logger;
 
-    public FinanceReportController(FisDbContext context, ILogger<FinanceReportController> logger)
+    public FinanceReportController(
+        FisDbContext context,
+        ITaxiRepository taxiRepository,
+        ITaxiLogRepository taxiLogRepository,
+        IPrivateHireRepository privateHireRepository,
+        ILogger<FinanceReportController> logger
+    )
     {
         _context = context;
+        _taxiRepository = taxiRepository;
+        _taxiLogRepository = taxiLogRepository;
+        _privateHireRepository = privateHireRepository;
         _logger = logger;
     }
 
@@ -45,27 +58,30 @@ public class FinanceReportController : BaseApiController
     /// Legacy equivalent: DEV_SEL_BatchLookup
     /// </summary>
     [HttpGet("posting-months")]
-    public async Task<ActionResult> GetPostingMonths(
-        [FromQuery] string filterBy = "Department")
+    public async Task<ActionResult> GetPostingMonths([FromQuery] string filterBy = "Department")
     {
         try
         {
-            var months = await _context.PostingMonths
-                .Where(pm => !pm.is_deleted)
-                .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                      pm => pm.posting_year_code, py => py.posting_year_code,
-                      (pm, py) => new
-                      {
-                          value            = pm.posting_month_code,
-                          label            = pm.month_name + " (" + py.description + ")",
-                          month_number     = pm.month_number,
-                          month_name       = pm.month_name,
-                          is_closed        = pm.is_closed,
-                          year_description = py.description,
-                          year_start       = py.year_start_date,
-                          year_end         = py.year_end_date,
-                          sort_key         = py.year_start_date.Year * 100 + (int)pm.month_number,
-                      })
+            var months = await _context
+                .PostingMonths.Where(pm => !pm.is_deleted)
+                .Join(
+                    _context.PostingYears.Where(py => !py.is_deleted),
+                    pm => pm.posting_year_code,
+                    py => py.posting_year_code,
+                    (pm, py) =>
+                        new
+                        {
+                            value = pm.posting_month_code,
+                            label = pm.month_name + " (" + py.description + ")",
+                            month_number = pm.month_number,
+                            month_name = pm.month_name,
+                            is_closed = pm.is_closed,
+                            year_description = py.description,
+                            year_start = py.year_start_date,
+                            year_end = py.year_end_date,
+                            sort_key = py.year_start_date.Year * 100 + (int)pm.month_number,
+                        }
+                )
                 .OrderByDescending(x => x.sort_key)
                 .ToListAsync();
 
@@ -90,7 +106,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -98,41 +115,59 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var rows = await _context.InvoiceItems
-                .Where(ii => !ii.is_deleted)
-                .Join(_context.Invoices.Where(i => !i.is_deleted && i.posting_month_code == postingMonthCode),
-                      ii => ii.invoice_code, i => i.invoice_code,
-                      (ii, i) => new { ii, dept_code = i.department_code })
-                .Where(x => filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
-                            ? x.ii.site_code == id
-                            : x.dept_code == id)
-                .Join(_context.Vehicles.Where(v => !v.is_deleted),
-                      x => x.ii.vmf_code, v => v.vmf_code,
-                      (x, v) => new
-                      {
-                          x.ii.vmf_code,
-                          v.fleet_number,
-                          v.registration_number,
-                          x.ii.contract_type,
-                          x.ii.site_code,
-                          x.ii.fixed_tariff_amount,
-                          x.ii.odo_tariff_amount,
-                          x.ii.start_odometer,
-                          x.ii.end_odometer,
-                      })
-                .GroupBy(x => new { x.vmf_code, x.fleet_number, x.registration_number, x.contract_type, x.site_code })
+            var rows = await _context
+                .InvoiceItems.Where(ii => !ii.is_deleted)
+                .Join(
+                    _context.Invoices.Where(i =>
+                        !i.is_deleted && i.posting_month_code == postingMonthCode
+                    ),
+                    ii => ii.invoice_code,
+                    i => i.invoice_code,
+                    (ii, i) => new { ii, dept_code = i.department_code }
+                )
+                .Where(x =>
+                    filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
+                        ? x.ii.site_code == id
+                        : x.dept_code == id
+                )
+                .Join(
+                    _context.Vehicles.Where(v => !v.is_deleted),
+                    x => x.ii.vmf_code,
+                    v => v.vmf_code,
+                    (x, v) =>
+                        new
+                        {
+                            x.ii.vmf_code,
+                            v.fleet_number,
+                            v.registration_number,
+                            x.ii.contract_type,
+                            x.ii.site_code,
+                            x.ii.fixed_tariff_amount,
+                            x.ii.odo_tariff_amount,
+                            x.ii.start_odometer,
+                            x.ii.end_odometer,
+                        }
+                )
+                .GroupBy(x => new
+                {
+                    x.vmf_code,
+                    x.fleet_number,
+                    x.registration_number,
+                    x.contract_type,
+                    x.site_code,
+                })
                 .Select(g => new
                 {
-                    vmf_code            = g.Key.vmf_code,
-                    fleet_number        = g.Key.fleet_number,
+                    vmf_code = g.Key.vmf_code,
+                    fleet_number = g.Key.fleet_number,
                     registration_number = g.Key.registration_number,
-                    contract_type       = g.Key.contract_type,
-                    site_code           = g.Key.site_code,
-                    fixed_tariff_total  = g.Sum(x => x.fixed_tariff_amount),
-                    odo_tariff_total    = g.Sum(x => x.odo_tariff_amount),
-                    total_billed        = g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount),
-                    start_odometer      = g.Min(x => x.start_odometer),
-                    end_odometer        = g.Max(x => x.end_odometer),
+                    contract_type = g.Key.contract_type,
+                    site_code = g.Key.site_code,
+                    fixed_tariff_total = g.Sum(x => x.fixed_tariff_amount),
+                    odo_tariff_total = g.Sum(x => x.odo_tariff_amount),
+                    total_billed = g.Sum(x => x.fixed_tariff_amount + x.odo_tariff_amount),
+                    start_odometer = g.Min(x => x.start_odometer),
+                    end_odometer = g.Max(x => x.end_odometer),
                 })
                 .OrderBy(x => x.fleet_number)
                 .ToListAsync();
@@ -140,28 +175,39 @@ public class FinanceReportController : BaseApiController
             var siteMap = await BuildSiteMap(rows.Select(r => r.site_code).ToList());
 
             var enriched = rows.Select(r =>
-            {
-                var found = siteMap.TryGetValue(r.site_code, out var site);
-                return new
                 {
-                    r.vmf_code, r.fleet_number, r.registration_number, r.contract_type,
-                    site_name       = found ? site.site_name : "",
-                    department_name = found ? site.dept_name : "",
-                    r.fixed_tariff_total, r.odo_tariff_total, r.total_billed,
-                    r.start_odometer, r.end_odometer,
-                };
-            }).ToList();
+                    var found = siteMap.TryGetValue(r.site_code, out var site);
+                    return new
+                    {
+                        r.vmf_code,
+                        r.fleet_number,
+                        r.registration_number,
+                        r.contract_type,
+                        site_name = found ? site.site_name : "",
+                        department_name = found ? site.dept_name : "",
+                        r.fixed_tariff_total,
+                        r.odo_tariff_total,
+                        r.total_billed,
+                        r.start_odometer,
+                        r.end_odometer,
+                    };
+                })
+                .ToList();
 
             var result = new
             {
-                filter_by      = filterBy,
-                filter_id      = id,
-                posting_month  = pm,
+                filter_by = filterBy,
+                filter_id = id,
+                posting_month = pm,
                 total_vehicles = enriched.Count,
-                grand_total    = enriched.Sum(r => r.total_billed),
-                rows           = enriched,
+                grand_total = enriched.Sum(r => r.total_billed),
+                rows = enriched,
             };
-            return FormatResult(format, $"Invoice_Summary_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"Invoice_Summary_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -182,7 +228,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -190,19 +237,23 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var jdQuery = _context.JournalDetails
-                .Where(jd => jd.journal_detail_date >= pm.PeriodStart &&
-                             jd.journal_detail_date <  pm.PeriodEnd &&
-                             jd.journal_detail_isaccepted);
+            var jdQuery = _context.JournalDetails.Where(jd =>
+                jd.journal_detail_date >= pm.PeriodStart
+                && jd.journal_detail_date < pm.PeriodEnd
+                && jd.journal_detail_isaccepted
+            );
 
             jdQuery = filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
                 ? jdQuery.Where(jd => jd.site_code == id)
                 : jdQuery.Where(jd => jd.department_code == id);
 
             var rows = await jdQuery
-                .Join(_context.JournalDetailTypes,
-                      jd => jd.journal_detail_type_code, jdt => jdt.journal_detail_type_code,
-                      (jd, jdt) => new { jd, jdt })
+                .Join(
+                    _context.JournalDetailTypes,
+                    jd => jd.journal_detail_type_code,
+                    jdt => jdt.journal_detail_type_code,
+                    (jd, jdt) => new { jd, jdt }
+                )
                 .GroupBy(x => new
                 {
                     x.jdt.journal_detail_type_code,
@@ -211,25 +262,29 @@ public class FinanceReportController : BaseApiController
                 })
                 .Select(g => new
                 {
-                    type_code        = g.Key.journal_detail_type_code,
-                    type_name        = g.Key.journal_detail_type_name,
+                    type_code = g.Key.journal_detail_type_code,
+                    type_name = g.Key.journal_detail_type_name,
                     type_description = g.Key.journal_detail_type_description,
-                    line_count       = g.Count(),
-                    total_amount     = g.Sum(x => x.jd.journal_detail_amount),
-                    total_quantity   = g.Sum(x => x.jd.journal_detail_quantity),
+                    line_count = g.Count(),
+                    total_amount = g.Sum(x => x.jd.journal_detail_amount),
+                    total_quantity = g.Sum(x => x.jd.journal_detail_quantity),
                 })
                 .OrderBy(x => x.type_name)
                 .ToListAsync();
 
             var result = new
             {
-                filter_by     = filterBy,
-                filter_id     = id,
+                filter_by = filterBy,
+                filter_id = id,
                 posting_month = pm,
-                grand_total   = rows.Sum(r => r.total_amount),
+                grand_total = rows.Sum(r => r.total_amount),
                 rows,
             };
-            return FormatResult(format, $"Invoice_By_CostType_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"Invoice_By_CostType_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -250,7 +305,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -258,36 +314,56 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var rows = await _context.InvoiceItems
-                .Where(ii => !ii.is_deleted)
-                .Join(_context.Invoices.Where(i => !i.is_deleted && i.posting_month_code == postingMonthCode),
-                      ii => ii.invoice_code, i => i.invoice_code,
-                      (ii, i) => new { ii, dept_code = i.department_code })
-                .Where(x => filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
-                            ? x.ii.site_code == id
-                            : x.dept_code == id)
-                .Join(_context.PostingMonths.Where(p => !p.is_deleted),
-                      x => postingMonthCode, p => p.posting_month_code,
-                      (x, p) => new { x.ii, x.dept_code, month_name = p.month_name })
-                .Join(_context.Vehicles.Where(v => !v.is_deleted),
-                      x => x.ii.vmf_code, v => v.vmf_code,
-                      (x, v) => new
-                      {
-                          x.ii.vmf_code,
-                          v.fleet_number,
-                          v.registration_number,
-                          x.ii.contract_type,
-                          x.ii.site_code,
-                          x.ii.fixed_tariff_amount,
-                          x.ii.odo_tariff_amount,
-                          total               = x.ii.fixed_tariff_amount + x.ii.odo_tariff_amount,
-                          x.ii.start_odometer,
-                          x.ii.end_odometer,
-                          x.ii.start_odo_date,
-                          x.ii.end_odo_date,
-                          month               = x.month_name,
-                          department_code     = x.dept_code,
-                      })
+            var rows = await _context
+                .InvoiceItems.Where(ii => !ii.is_deleted)
+                .Join(
+                    _context.Invoices.Where(i =>
+                        !i.is_deleted && i.posting_month_code == postingMonthCode
+                    ),
+                    ii => ii.invoice_code,
+                    i => i.invoice_code,
+                    (ii, i) => new { ii, dept_code = i.department_code }
+                )
+                .Where(x =>
+                    filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
+                        ? x.ii.site_code == id
+                        : x.dept_code == id
+                )
+                .Join(
+                    _context.PostingMonths.Where(p => !p.is_deleted),
+                    x => postingMonthCode,
+                    p => p.posting_month_code,
+                    (x, p) =>
+                        new
+                        {
+                            x.ii,
+                            x.dept_code,
+                            month_name = p.month_name,
+                        }
+                )
+                .Join(
+                    _context.Vehicles.Where(v => !v.is_deleted),
+                    x => x.ii.vmf_code,
+                    v => v.vmf_code,
+                    (x, v) =>
+                        new
+                        {
+                            x.ii.vmf_code,
+                            v.fleet_number,
+                            v.registration_number,
+                            x.ii.contract_type,
+                            x.ii.site_code,
+                            x.ii.fixed_tariff_amount,
+                            x.ii.odo_tariff_amount,
+                            total = x.ii.fixed_tariff_amount + x.ii.odo_tariff_amount,
+                            x.ii.start_odometer,
+                            x.ii.end_odometer,
+                            x.ii.start_odo_date,
+                            x.ii.end_odo_date,
+                            month = x.month_name,
+                            department_code = x.dept_code,
+                        }
+                )
                 .OrderBy(x => x.fleet_number)
                 .ThenBy(x => x.start_odo_date)
                 .ToListAsync();
@@ -295,29 +371,42 @@ public class FinanceReportController : BaseApiController
             var siteMap = await BuildSiteMap(rows.Select(r => r.site_code).ToList());
 
             var enriched = rows.Select(r =>
-            {
-                var found = siteMap.TryGetValue(r.site_code, out var site);
-                return new
                 {
-                    r.vmf_code, r.fleet_number, r.registration_number, r.contract_type,
-                    r.fixed_tariff_amount, r.odo_tariff_amount, r.total,
-                    r.start_odometer, r.end_odometer, r.start_odo_date, r.end_odo_date,
-                    r.month,
-                    site_name       = found ? site.site_name : "",
-                    department_name = found ? site.dept_name : "",
-                };
-            }).ToList();
+                    var found = siteMap.TryGetValue(r.site_code, out var site);
+                    return new
+                    {
+                        r.vmf_code,
+                        r.fleet_number,
+                        r.registration_number,
+                        r.contract_type,
+                        r.fixed_tariff_amount,
+                        r.odo_tariff_amount,
+                        r.total,
+                        r.start_odometer,
+                        r.end_odometer,
+                        r.start_odo_date,
+                        r.end_odo_date,
+                        r.month,
+                        site_name = found ? site.site_name : "",
+                        department_name = found ? site.dept_name : "",
+                    };
+                })
+                .ToList();
 
             var result = new
             {
-                filter_by     = filterBy,
-                filter_id     = id,
+                filter_by = filterBy,
+                filter_id = id,
                 posting_month = pm,
-                total_lines   = enriched.Count,
-                grand_total   = enriched.Sum(r => r.total),
-                rows          = enriched,
+                total_lines = enriched.Count,
+                grand_total = enriched.Sum(r => r.total),
+                rows = enriched,
             };
-            return FormatResult(format, $"Invoice_Detailed_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"Invoice_Detailed_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -340,7 +429,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -348,12 +438,17 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var taxiBase = filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
-                ? _context.Taxis.Where(t => t.site_code == id)
-                : _context.Taxis.Where(t => t.department_code == id);
-
-            var taxisInPeriod = await taxiBase
-                .Where(t => t.date_required >= pm.PeriodStart && t.date_required < pm.PeriodEnd)
+            var taxis = await _taxiRepository.GetAllAsync();
+            var taxisInPeriod = taxis
+                .Where(t =>
+                    (
+                        filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
+                            ? t.site_code == id
+                            : t.department_code == id
+                    )
+                    && t.date_required >= pm.PeriodStart
+                    && t.date_required < pm.PeriodEnd
+                )
                 .Select(t => new
                 {
                     t.rek_num,
@@ -364,12 +459,12 @@ public class FinanceReportController : BaseApiController
                     t.site_code,
                     t.department_code,
                 })
-                .ToListAsync();
+                .ToList();
 
             var rekNums = taxisInPeriod.Select(t => t.rek_num).ToList();
 
-            var logs = await _context.TaxiLogs
-                .Where(tl => rekNums.Contains(tl.rek_num))
+            var logs = (await _taxiLogRepository.GetAllAsync())
+                .Where(tl => tl.rek_num is not null && rekNums.Contains(tl.rek_num))
                 .Select(tl => new
                 {
                     tl.rek_num,
@@ -378,10 +473,9 @@ public class FinanceReportController : BaseApiController
                     tl.days,
                     hours = tl.hours,
                 })
-                .ToListAsync();
+                .ToList();
 
-            var logMap = logs.GroupBy(l => l.rek_num)
-                             .ToDictionary(g => g.Key!, g => g.First());
+            var logMap = logs.GroupBy(l => l.rek_num).ToDictionary(g => g.Key!, g => g.First());
 
             var contractorIds = taxisInPeriod
                 .Where(t => t.contractor_id.HasValue)
@@ -389,45 +483,49 @@ public class FinanceReportController : BaseApiController
                 .Distinct()
                 .ToList();
 
-            var contractorMap = await _context.Contractors
-                .Where(c => contractorIds.Contains(c.contractor_id))
-                .Select(c => new { c.contractor_id, c.contractor_name })
-                .ToDictionaryAsync(c => c.contractor_id);
+            var contractorMap = (await _privateHireRepository.GetContractorsAsync())
+                .Where(contractor => contractorIds.Contains(contractor.contractor_id))
+                .ToDictionary(contractor => contractor.contractor_id);
 
-            var rows = taxisInPeriod.Select(t =>
-            {
-                logMap.TryGetValue(t.rek_num ?? "", out var log);
-                var contractor = t.contractor_id.HasValue
-                    ? contractorMap.GetValueOrDefault(t.contractor_id.Value)
-                    : null;
-                return new
+            var rows = taxisInPeriod
+                .Select(t =>
                 {
-                    rek_num          = t.rek_num,
-                    contractor_name  = contractor?.contractor_name ?? "",
-                    is_vip           = t.contractor_id == 2,
-                    official         = t.official ?? "",
-                    rank             = t.rank ?? "",
-                    date_required    = t.date_required,
-                    driver_start_date= log?.driver_start_date,
-                    distance_km      = log?.distance,
-                    days             = log?.days,
-                    hours            = log?.hours,
-                };
-            })
-            .OrderBy(r => r.driver_start_date)
-            .ToList();
+                    logMap.TryGetValue(t.rek_num ?? "", out var log);
+                    var contractor = t.contractor_id.HasValue
+                        ? contractorMap.GetValueOrDefault(t.contractor_id.Value)
+                        : null;
+                    return new
+                    {
+                        rek_num = t.rek_num,
+                        contractor_name = contractor?.contractor_name ?? "",
+                        is_vip = t.contractor_id == 2,
+                        official = t.official ?? "",
+                        rank = t.rank ?? "",
+                        date_required = t.date_required,
+                        driver_start_date = log?.driver_start_date,
+                        distance_km = log?.distance,
+                        days = log?.days,
+                        hours = log?.hours,
+                    };
+                })
+                .OrderBy(r => r.driver_start_date)
+                .ToList();
 
             var result = new
             {
-                filter_by     = filterBy,
-                filter_id     = id,
+                filter_by = filterBy,
+                filter_id = id,
                 posting_month = pm,
-                total_trips   = rows.Count,
-                vip_count     = rows.Count(r => r.is_vip),
-                taxi_count    = rows.Count(r => !r.is_vip),
+                total_trips = rows.Count,
+                vip_count = rows.Count(r => r.is_vip),
+                taxi_count = rows.Count(r => !r.is_vip),
                 rows,
             };
-            return FormatResult(format, $"Taxi_VIP_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"Taxi_VIP_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -449,7 +547,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -457,17 +556,26 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var rows = await BuildDailyTransactionReport(id, postingMonthCode, filterBy, new[] { "fuel" });
+            var rows = await BuildDailyTransactionReport(
+                id,
+                postingMonthCode,
+                filterBy,
+                new[] { "fuel" }
+            );
 
             var result = new
             {
-                filter_by     = filterBy,
-                filter_id     = id,
+                filter_by = filterBy,
+                filter_id = id,
                 posting_month = pm,
-                total_lines   = rows.Count,
+                total_lines = rows.Count,
                 rows,
             };
-            return FormatResult(format, $"Fuel_Invoice_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"Fuel_Invoice_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -489,7 +597,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -497,17 +606,26 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var rows = await BuildDailyTransactionReport(id, postingMonthCode, filterBy, new[] { "toll", "oil" });
+            var rows = await BuildDailyTransactionReport(
+                id,
+                postingMonthCode,
+                filterBy,
+                new[] { "toll", "oil" }
+            );
 
             var result = new
             {
-                filter_by     = filterBy,
-                filter_id     = id,
+                filter_by = filterBy,
+                filter_id = id,
                 posting_month = pm,
-                total_lines   = rows.Count,
+                total_lines = rows.Count,
                 rows,
             };
-            return FormatResult(format, $"TollOil_Invoice_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"TollOil_Invoice_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -529,7 +647,8 @@ public class FinanceReportController : BaseApiController
         [FromQuery] short id,
         [FromQuery] short postingMonthCode,
         [FromQuery] string filterBy = "Department",
-        [FromQuery] string format = "json")
+        [FromQuery] string format = "json"
+    )
     {
         try
         {
@@ -537,10 +656,9 @@ public class FinanceReportController : BaseApiController
             if (pm == null)
                 return NotFound(new { error = $"Posting month {postingMonthCode} not found" });
 
-            var query = _context.Surcharges
-                .Where(s => !s.is_deleted &&
-                            s.TrxDate >= pm.PeriodStart &&
-                            s.TrxDate <  pm.PeriodEnd);
+            var query = _context.Surcharges.Where(s =>
+                !s.is_deleted && s.TrxDate >= pm.PeriodStart && s.TrxDate < pm.PeriodEnd
+            );
 
             query = filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase)
                 ? query.Where(s => s.Site_code == id)
@@ -565,40 +683,54 @@ public class FinanceReportController : BaseApiController
                 .ToListAsync();
 
             var vmfCodes = rows.Where(r => r.vmf_code.HasValue)
-                               .Select(r => r.vmf_code!.Value).Distinct().ToList();
-            var vehicleMap = await _context.Vehicles
-                .Where(v => vmfCodes.Contains(v.vmf_code) && !v.is_deleted)
-                .Select(v => new { v.vmf_code, v.fleet_number, v.registration_number })
+                .Select(r => r.vmf_code!.Value)
+                .Distinct()
+                .ToList();
+            var vehicleMap = await _context
+                .Vehicles.Where(v => vmfCodes.Contains(v.vmf_code) && !v.is_deleted)
+                .Select(v => new
+                {
+                    v.vmf_code,
+                    v.fleet_number,
+                    v.registration_number,
+                })
                 .ToDictionaryAsync(v => v.vmf_code);
 
             var enriched = rows.Select(r =>
-            {
-                var veh = r.vmf_code.HasValue ? vehicleMap.GetValueOrDefault(r.vmf_code.Value) : null;
-                return new
                 {
-                    r.surcharge_code,
-                    r.vmf_code,
-                    fleet_number        = veh?.fleet_number ?? "",
-                    registration_number = veh?.registration_number ?? r.RegNo1 ?? "",
-                    r.Department,
-                    r.Site_code,
-                    r.Merchant,
-                    r.TrxDate,
-                    r.AuthorityNo,
-                    r.ServiceType,
-                    r.Same,
-                };
-            }).ToList();
+                    var veh = r.vmf_code.HasValue
+                        ? vehicleMap.GetValueOrDefault(r.vmf_code.Value)
+                        : null;
+                    return new
+                    {
+                        r.surcharge_code,
+                        r.vmf_code,
+                        fleet_number = veh?.fleet_number ?? "",
+                        registration_number = veh?.registration_number ?? r.RegNo1 ?? "",
+                        r.Department,
+                        r.Site_code,
+                        r.Merchant,
+                        r.TrxDate,
+                        r.AuthorityNo,
+                        r.ServiceType,
+                        r.Same,
+                    };
+                })
+                .ToList();
 
             var result = new
             {
-                filter_by     = filterBy,
-                filter_id     = id,
+                filter_by = filterBy,
+                filter_id = id,
                 posting_month = pm,
-                total_lines   = enriched.Count,
-                rows          = enriched,
+                total_lines = enriched.Count,
+                rows = enriched,
             };
-            return FormatResult(format, $"Surcharge_{pm?.month_name}_{pm?.year_description}", result);
+            return FormatResult(
+                format,
+                $"Surcharge_{pm?.month_name}_{pm?.year_description}",
+                result
+            );
         }
         catch (Exception ex)
         {
@@ -611,50 +743,63 @@ public class FinanceReportController : BaseApiController
 
     private async Task<PostingMonthInfo?> GetPostingMonthInfo(short postingMonthCode)
     {
-        var result = await _context.PostingMonths
-            .Where(pm => pm.posting_month_code == postingMonthCode && !pm.is_deleted)
-            .Join(_context.PostingYears.Where(py => !py.is_deleted),
-                  pm => pm.posting_year_code, py => py.posting_year_code,
-                  (pm, py) => new
-                  {
-                      pm.posting_month_code,
-                      pm.month_name,
-                      pm.month_number,
-                      pm.is_closed,
-                      year_description = py.description,
-                      year_start       = py.year_start_date,
-                  })
+        var result = await _context
+            .PostingMonths.Where(pm => pm.posting_month_code == postingMonthCode && !pm.is_deleted)
+            .Join(
+                _context.PostingYears.Where(py => !py.is_deleted),
+                pm => pm.posting_year_code,
+                py => py.posting_year_code,
+                (pm, py) =>
+                    new
+                    {
+                        pm.posting_month_code,
+                        pm.month_name,
+                        pm.month_number,
+                        pm.is_closed,
+                        year_description = py.description,
+                        year_start = py.year_start_date,
+                    }
+            )
             .FirstOrDefaultAsync();
 
-        if (result == null) return null;
+        if (result == null)
+            return null;
 
         var start = new DateTime(result.year_start.Year, (int)result.month_number, 1);
         return new PostingMonthInfo
         {
             posting_month_code = result.posting_month_code,
-            month_name         = result.month_name,
-            month_number       = (int)result.month_number,
-            year_description   = result.year_description,
-            is_closed          = result.is_closed,
-            PeriodStart        = start,
-            PeriodEnd          = start.AddMonths(1),
+            month_name = result.month_name,
+            month_number = (int)result.month_number,
+            year_description = result.year_description,
+            is_closed = result.is_closed,
+            PeriodStart = start,
+            PeriodEnd = start.AddMonths(1),
         };
     }
 
     private async Task<Dictionary<short, (string site_name, string dept_name)>> BuildSiteMap(
-        IEnumerable<short> siteIds)
+        IEnumerable<short> siteIds
+    )
     {
         var ids = siteIds.Distinct().ToList();
-        var raw = await _context.Sites
-            .Where(s => ids.Contains(s.Site_code) && !s.is_deleted)
-            .Join(_context.Departments.Where(d => !d.is_deleted),
-                  s => s.Depatrment_code, d => d.department_code,
-                  (s, d) => new { s.Site_code, site_name = s.description ?? "", dept_name = d.description ?? "" })
+        var raw = await _context
+            .Sites.Where(s => ids.Contains(s.Site_code) && !s.is_deleted)
+            .Join(
+                _context.Departments.Where(d => !d.is_deleted),
+                s => s.Depatrment_code,
+                d => d.department_code,
+                (s, d) =>
+                    new
+                    {
+                        s.Site_code,
+                        site_name = s.description ?? "",
+                        dept_name = d.description ?? "",
+                    }
+            )
             .ToListAsync();
 
-        return raw.ToDictionary(
-            x => x.Site_code,
-            x => (x.site_name, x.dept_name));
+        return raw.ToDictionary(x => x.Site_code, x => (x.site_name, x.dept_name));
     }
 
     /// <summary>
@@ -664,14 +809,21 @@ public class FinanceReportController : BaseApiController
     /// supplied keyword terms (case-insensitive).
     /// </summary>
     private async Task<List<object>> BuildDailyTransactionReport(
-        short id, short postingMonthCode, string filterBy, string[] descTerms)
+        short id,
+        short postingMonthCode,
+        string filterBy,
+        string[] descTerms
+    )
     {
         // Determine which CostCategory codes to include (small lookup table — loaded in memory)
         var allCategories = await _context.CostCategories.Where(cc => !cc.is_deleted).ToListAsync();
         var matchCodes = allCategories
-            .Where(cc => descTerms.Any(t =>
-                cc.description != null &&
-                cc.description.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            .Where(cc =>
+                descTerms.Any(t =>
+                    cc.description != null
+                    && cc.description.Contains(t, StringComparison.OrdinalIgnoreCase)
+                )
+            )
             .Select(cc => cc.cost_category_code)
             .ToHashSet();
 
@@ -682,22 +834,25 @@ public class FinanceReportController : BaseApiController
         List<int> vmfCodes;
         if (filterBy.Equals("Site", StringComparison.OrdinalIgnoreCase))
         {
-            vmfCodes = await _context.Contracts
-                .Where(c => !c.is_deleted && c.still_current == "Y" && c.site_code == id)
+            vmfCodes = await _context
+                .Contracts.Where(c => !c.is_deleted && c.still_current == "Y" && c.site_code == id)
                 .Select(c => c.vmf_code)
                 .Distinct()
                 .ToListAsync();
         }
         else
         {
-            var siteCodesForDept = await _context.Sites
-                .Where(s => !s.is_deleted && s.Depatrment_code == id)
+            var siteCodesForDept = await _context
+                .Sites.Where(s => !s.is_deleted && s.Depatrment_code == id)
                 .Select(s => s.Site_code)
                 .ToListAsync();
 
-            vmfCodes = await _context.Contracts
-                .Where(c => !c.is_deleted && c.still_current == "Y" &&
-                            siteCodesForDept.Contains(c.site_code))
+            vmfCodes = await _context
+                .Contracts.Where(c =>
+                    !c.is_deleted
+                    && c.still_current == "Y"
+                    && siteCodesForDept.Contains(c.site_code)
+                )
                 .Select(c => c.vmf_code)
                 .Distinct()
                 .ToListAsync();
@@ -706,11 +861,13 @@ public class FinanceReportController : BaseApiController
         if (!vmfCodes.Any())
             return new List<object>();
 
-        var txRows = await _context.DailyTransactions
-            .Where(dt => !dt.is_deleted
+        var txRows = await _context
+            .DailyTransactions.Where(dt =>
+                !dt.is_deleted
                 && dt.posting_month_code == postingMonthCode
                 && vmfCodes.Contains(dt.vmf_code)
-                && matchCodes.Contains(dt.cost_category_code))
+                && matchCodes.Contains(dt.cost_category_code)
+            )
             .OrderBy(dt => dt.vmf_code)
             .ThenBy(dt => dt.transaction_date)
             .Select(dt => new
@@ -726,27 +883,35 @@ public class FinanceReportController : BaseApiController
             return new List<object>();
 
         var txVmfCodes = txRows.Select(r => r.vmf_code).Distinct().ToList();
-        var vehicleMap = await _context.Vehicles
-            .Where(v => txVmfCodes.Contains(v.vmf_code) && !v.is_deleted)
-            .Select(v => new { v.vmf_code, v.fleet_number, v.registration_number })
+        var vehicleMap = await _context
+            .Vehicles.Where(v => txVmfCodes.Contains(v.vmf_code) && !v.is_deleted)
+            .Select(v => new
+            {
+                v.vmf_code,
+                v.fleet_number,
+                v.registration_number,
+            })
             .ToDictionaryAsync(v => v.vmf_code);
 
         var categoryMap = allCategories.ToDictionary(cc => cc.cost_category_code);
 
-        return txRows.Select(r =>
-        {
-            vehicleMap.TryGetValue(r.vmf_code, out var veh);
-            categoryMap.TryGetValue(r.cost_category_code, out var cat);
-            return (object)new
+        return txRows
+            .Select(r =>
             {
-                r.daily_transaction_code,
-                r.vmf_code,
-                fleet_number        = veh?.fleet_number ?? "",
-                registration_number = veh?.registration_number ?? "",
-                cost_category       = cat?.description ?? "",
-                r.transaction_date,
-            };
-        }).ToList();
+                vehicleMap.TryGetValue(r.vmf_code, out var veh);
+                categoryMap.TryGetValue(r.cost_category_code, out var cat);
+                return (object)
+                    new
+                    {
+                        r.daily_transaction_code,
+                        r.vmf_code,
+                        fleet_number = veh?.fleet_number ?? "",
+                        registration_number = veh?.registration_number ?? "",
+                        cost_category = cat?.description ?? "",
+                        r.transaction_date,
+                    };
+            })
+            .ToList();
     }
 
     /// <summary>
@@ -758,12 +923,17 @@ public class FinanceReportController : BaseApiController
     /// </summary>
     private ActionResult FormatResult(string format, string reportName, object data)
     {
-        if (!format.Equals("html", StringComparison.OrdinalIgnoreCase) &&
-            !format.Equals("csv",  StringComparison.OrdinalIgnoreCase))
+        if (
+            !format.Equals("html", StringComparison.OrdinalIgnoreCase)
+            && !format.Equals("csv", StringComparison.OrdinalIgnoreCase)
+        )
             return Ok(data);
 
         // Serialize to JSON so we can extract rows generically
-        var json = JsonSerializer.Serialize(data, new JsonSerializerOptions { PropertyNamingPolicy = null });
+        var json = JsonSerializer.Serialize(
+            data,
+            new JsonSerializerOptions { PropertyNamingPolicy = null }
+        );
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
 
@@ -782,7 +952,11 @@ public class FinanceReportController : BaseApiController
                 foreach (var row in rows)
                 {
                     var values = row.EnumerateObject()
-                        .Select(p => CsvQuote(p.Value.ValueKind == JsonValueKind.Null ? "" : p.Value.ToString()));
+                        .Select(p =>
+                            CsvQuote(
+                                p.Value.ValueKind == JsonValueKind.Null ? "" : p.Value.ToString()
+                            )
+                        );
                     sb.AppendLine(string.Join(",", values));
                 }
             }
@@ -802,21 +976,26 @@ public class FinanceReportController : BaseApiController
         htmlSb.AppendLine("tr:nth-child(even){background:#f2f2f2}");
         htmlSb.AppendLine("h2{color:#003366}");
         htmlSb.AppendLine("@media print{@page{margin:1cm}}</style></head><body>");
-        htmlSb.AppendLine($"<h2>{System.Web.HttpUtility.HtmlEncode(reportName.Replace("_", " "))}</h2>");
+        htmlSb.AppendLine(
+            $"<h2>{System.Web.HttpUtility.HtmlEncode(reportName.Replace("_", " "))}</h2>"
+        );
 
         if (rows.Count > 0)
         {
             htmlSb.AppendLine("<table><thead><tr>");
             var headers = rows[0].EnumerateObject().Select(p => p.Name).ToList();
             foreach (var h in headers)
-                htmlSb.AppendLine($"<th>{System.Web.HttpUtility.HtmlEncode(h.Replace("_", " "))}</th>");
+                htmlSb.AppendLine(
+                    $"<th>{System.Web.HttpUtility.HtmlEncode(h.Replace("_", " "))}</th>"
+                );
             htmlSb.AppendLine("</tr></thead><tbody>");
             foreach (var row in rows)
             {
                 htmlSb.AppendLine("<tr>");
                 foreach (var prop in row.EnumerateObject())
                 {
-                    var val = prop.Value.ValueKind == JsonValueKind.Null ? "" : prop.Value.ToString();
+                    var val =
+                        prop.Value.ValueKind == JsonValueKind.Null ? "" : prop.Value.ToString();
                     htmlSb.AppendLine($"<td>{System.Web.HttpUtility.HtmlEncode(val)}</td>");
                 }
                 htmlSb.AppendLine("</tr>");
@@ -841,12 +1020,12 @@ public class FinanceReportController : BaseApiController
 
     private sealed class PostingMonthInfo
     {
-        public short   posting_month_code { get; init; }
-        public string? month_name         { get; init; }
-        public int     month_number       { get; init; }
-        public string? year_description   { get; init; }
-        public bool    is_closed          { get; init; }
-        public DateTime PeriodStart       { get; init; }
-        public DateTime PeriodEnd         { get; init; }
+        public short posting_month_code { get; init; }
+        public string? month_name { get; init; }
+        public int month_number { get; init; }
+        public string? year_description { get; init; }
+        public bool is_closed { get; init; }
+        public DateTime PeriodStart { get; init; }
+        public DateTime PeriodEnd { get; init; }
     }
 }

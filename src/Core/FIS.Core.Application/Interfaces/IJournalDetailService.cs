@@ -54,7 +54,8 @@ public interface IJournalDetailService
         short siteCode,
         int departmentCode,
         string contractType,
-        DateTime checkDate);
+        DateTime checkDate
+    );
 
     /// <summary>
     /// Get vehicle tariff (rate) for billing calculation
@@ -70,7 +71,8 @@ public interface IJournalDetailService
         int departmentCode,
         string contractType,
         DateTime checkDate,
-        string tariffType = "FIXED");
+        string tariffType = "FIXED"
+    );
 
     /// <summary>
     /// Get journal details for a vehicle

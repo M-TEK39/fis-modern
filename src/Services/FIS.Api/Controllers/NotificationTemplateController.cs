@@ -15,7 +15,8 @@ public class NotificationTemplateController : BaseApiController
 
     public NotificationTemplateController(
         INotificationTemplateRepository repository,
-        ILogger<NotificationTemplateController> logger)
+        ILogger<NotificationTemplateController> logger
+    )
     {
         _repository = repository;
         _logger = logger;
@@ -118,7 +119,9 @@ public class NotificationTemplateController : BaseApiController
     /// Create a new notification template
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<NotificationTemplateDto>> Create([FromBody] CreateNotificationTemplateDto dto)
+    public async Task<ActionResult<NotificationTemplateDto>> Create(
+        [FromBody] CreateNotificationTemplateDto dto
+    )
     {
         try
         {
@@ -130,11 +133,15 @@ public class NotificationTemplateController : BaseApiController
                 Body = dto.Body,
                 TemplateType = dto.TemplateType,
                 Variables = dto.Variables,
-                IsActive = dto.IsActive
+                IsActive = dto.IsActive,
             };
 
             var created = await _repository.CreateAsync(template, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetById), new { id = created.TemplateID }, MapToDto(created));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = created.TemplateID },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -163,7 +170,7 @@ public class NotificationTemplateController : BaseApiController
                 Body = dto.Body,
                 TemplateType = dto.TemplateType,
                 Variables = dto.Variables,
-                IsActive = dto.IsActive
+                IsActive = dto.IsActive,
             };
 
             await _repository.UpdateAsync(template, GetCurrentUserId());
@@ -207,7 +214,7 @@ public class NotificationTemplateController : BaseApiController
             Variables = template.Variables,
             IsActive = template.IsActive,
             DateCreated = template.date_created,
-            DateUpdated = template.date_updated
+            DateUpdated = template.date_updated,
         };
     }
 }

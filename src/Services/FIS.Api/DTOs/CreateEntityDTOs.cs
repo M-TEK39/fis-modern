@@ -134,6 +134,18 @@ namespace FIS.Api.DTOs
     }
 
     /// <summary>
+    /// DTO for changing only the licence fee assigned to an existing model.
+    /// </summary>
+    public class UpdateModelLicenceFeeDto
+    {
+        [Required]
+        public short model_code { get; set; }
+
+        [Required]
+        public short licence_fee_code { get; set; }
+    }
+
+    /// <summary>
     /// DTO for creating a new Type entity
     /// Excludes auto-generated ID fields
     /// </summary>
@@ -156,22 +168,39 @@ namespace FIS.Api.DTOs
         /// <summary>
         /// Description of the vehicle class (e.g., "Sedan", "SUV", "Truck")
         /// </summary>
-        [MaxLength(255)]
+        [Required]
+        [StringLength(60)]
         public string? description { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string? class_number { get; set; }
+
+        [Required]
+        [StringLength(30)]
+        public string? bank_number { get; set; }
+
+        [Required]
+        public short? months_life { get; set; }
+
+        [Required]
+        public decimal? depreciation_percent { get; set; }
+
+        [Required]
+        public decimal? odometer_life { get; set; }
+
+        [Required]
+        public short? appreciate_percent { get; set; }
+
+        [Required]
+        public decimal? replacement_cost { get; set; }
     }
 
     /// <summary>
     /// DTO for updating an existing Class entity
     /// Excludes audit fields (auto-populated by repository)
     /// </summary>
-    public class UpdateClassDto
-    {
-        /// <summary>
-        /// Description of the vehicle class
-        /// </summary>
-        [MaxLength(255)]
-        public string? description { get; set; }
-    }
+    public class UpdateClassDto : CreateClassDto { }
 
     /// <summary>
     /// DTO for creating a new FuelType entity

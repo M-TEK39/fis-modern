@@ -76,6 +76,23 @@ public class TaxiLog
     [Column("hours")]
     public double? hours { get; set; }
 
+    // Legacy accounting fields. The expanded schema may omit these columns, so they
+    // are carried by the compatibility repository rather than mapped by EF.
+    [NotMapped]
+    public int? batch_num { get; set; }
+
+    [NotMapped]
+    public int? bas_batch { get; set; }
+
+    [NotMapped]
+    public int? prev_batch { get; set; }
+
+    [NotMapped]
+    public string? changed { get; set; }
+
+    [NotMapped]
+    public Guid? journal_detail_code { get; set; }
+
     [Column("quoted_tariff")]
     public float? quoted_tariff { get; set; }
 

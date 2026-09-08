@@ -1,7 +1,10 @@
+using System.Data;
+using System.Data.Common;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
 using FIS.Data.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace FIS.Core.Infrastructure.Repositories;
 
@@ -12,10 +15,41 @@ namespace FIS.Core.Infrastructure.Repositories;
 public class JobCardRepository : IJobCardRepository
 {
     private readonly FisDbContext _context;
+    private readonly LegacyJobCardRepository _legacyRepository;
+    private bool? _modernSchemaAvailable;
+
+    private static readonly string[] ModernRequiredColumns =
+    [
+        "job_card_id",
+        "vmf_code",
+        "extra_code",
+        "status_code",
+        "priority",
+        "assigned_to",
+        "assigned_date",
+        "jcs_comment",
+        "damages",
+        "comments",
+        "authorizer",
+        "reviewed",
+        "labour_cost",
+        "parts_cost",
+        "other_cost",
+        "total_cost",
+        "invoice_number",
+        "invoice_date",
+        "service_provider",
+        "date_created",
+        "date_updated",
+        "created_by_user_code",
+        "modified_by_user_code",
+        "is_deleted",
+    ];
 
     public JobCardRepository(FisDbContext context)
     {
         _context = context;
+        _legacyRepository = new LegacyJobCardRepository(context);
     }
 
     /// <summary>
@@ -23,8 +57,11 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<JobCard?> GetByIdAsync(int jobCardId)
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetByIdAsync(jobCardId);
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
@@ -39,8 +76,11 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<JobCard?> GetByVehicleAndExtraAsync(int vmfCode, short extraCode)
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetByVehicleAndExtraAsync(vmfCode, extraCode);
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
@@ -53,8 +93,11 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<IEnumerable<JobCard>> GetAllAsync()
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetAllAsync();
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
@@ -69,12 +112,17 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<IEnumerable<JobCard>> GetByGGNumberAsync(string ggNumber)
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetByGGNumberAsync(ggNumber);
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
-            .Where(jc => !jc.is_deleted && jc.Vehicle != null && jc.Vehicle.fleet_number == ggNumber)
+            .Where(jc =>
+                !jc.is_deleted && jc.Vehicle != null && jc.Vehicle.fleet_number == ggNumber
+            )
             .OrderByDescending(jc => jc.date_created)
             .ToListAsync();
     }
@@ -85,16 +133,21 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<IEnumerable<JobCard>> GetPriorityUnassignedAsync()
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetPriorityUnassignedAsync();
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
-            .Where(jc => !jc.is_deleted
+            .Where(jc =>
+                !jc.is_deleted
                 && jc.priority == "H"
                 && jc.assigned_to == null
-                && jc.status_code != 5  // Not Complete
-                && jc.status_code != 7) // Not Canceled
+                && jc.status_code != 5 // Not Complete
+                && jc.status_code != 7
+            ) // Not Canceled
             .OrderByDescending(jc => jc.date_created)
             .ToListAsync();
     }
@@ -105,16 +158,21 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<IEnumerable<JobCard>> GetAssignedPriorityAsync()
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetAssignedPriorityAsync();
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
-            .Where(jc => !jc.is_deleted
+            .Where(jc =>
+                !jc.is_deleted
                 && jc.priority == "H"
                 && jc.assigned_to != null
-                && jc.status_code != 5  // Not Complete
-                && jc.status_code != 7) // Not Canceled
+                && jc.status_code != 5 // Not Complete
+                && jc.status_code != 7
+            ) // Not Canceled
             .OrderByDescending(jc => jc.date_created)
             .ToListAsync();
     }
@@ -125,8 +183,11 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<IEnumerable<JobCard>> GetByStatusAsync(int statusCode)
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetByStatusAsync(statusCode);
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
@@ -141,8 +202,11 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<IEnumerable<JobCard>> GetByAuthorizerAsync(int authorizerUserId)
     {
-        return await _context.JobCards
-            .Include(jc => jc.Vehicle)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.GetByAuthorizerAsync(authorizerUserId);
+
+        return await _context
+            .JobCards.Include(jc => jc.Vehicle)
             .Include(jc => jc.ExtraCodeRef)
             .Include(jc => jc.AssignedToUser)
             .Include(jc => jc.AuthorizerUser)
@@ -157,6 +221,9 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<JobCard> CreateAsync(JobCard jobCard, int currentUserId)
     {
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.CreateAsync(jobCard, currentUserId);
+
         // Set audit fields
         jobCard.date_created = DateTime.UtcNow;
         jobCard.created_by_user_code = currentUserId;
@@ -180,8 +247,13 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<JobCard> UpdateAsync(JobCard jobCard, int currentUserId)
     {
-        var existingJobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCard.job_card_id && !jc.is_deleted)
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.UpdateAsync(jobCard, currentUserId);
+
+        var existingJobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCard.job_card_id && !jc.is_deleted
+            )
             ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCard.job_card_id}");
 
         // Update audit fields
@@ -206,9 +278,16 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task DeleteAsync(int jobCardId, int currentUserId)
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+        {
+            await _legacyRepository.DeleteAsync(jobCardId, currentUserId);
+            return;
+        }
+
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
 
         jobCard.is_deleted = true;
         jobCard.date_updated = DateTime.UtcNow;
@@ -223,9 +302,13 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<JobCard> AuthorizeAsync(int jobCardId, int authorizerUserId, string? comment)
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.AuthorizeAsync(jobCardId, authorizerUserId, comment);
+
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
 
         // Update status to Authorized (3)
         jobCard.status_code = 3;
@@ -253,11 +336,19 @@ public class JobCardRepository : IJobCardRepository
     /// Decline a job card
     /// Legacy: Replaces DEV_UPD_JobcardAuthorizersUpdates stored procedure (decline path)
     /// </summary>
-    public async Task<JobCard> DeclineAsync(int jobCardId, int authorizerUserId, string declineReason)
+    public async Task<JobCard> DeclineAsync(
+        int jobCardId,
+        int authorizerUserId,
+        string declineReason
+    )
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.DeclineAsync(jobCardId, authorizerUserId, declineReason);
+
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
 
         // Update status back to Pending (1)
         jobCard.status_code = 1;
@@ -283,9 +374,13 @@ public class JobCardRepository : IJobCardRepository
     /// </summary>
     public async Task<JobCard> CancelAsync(int jobCardId, int currentUserId, string? cancelReason)
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.CancelAsync(jobCardId, currentUserId, cancelReason);
+
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
 
         // Update status to Canceled (7)
         jobCard.status_code = 7;
@@ -310,13 +405,35 @@ public class JobCardRepository : IJobCardRepository
     /// <summary>
     /// Close a job card
     /// </summary>
-    public async Task<JobCard> CloseAsync(int jobCardId, int currentUserId, string? closeNotes,
-        decimal? labourCost = null, decimal? partsCost = null, decimal? otherCost = null,
-        string? invoiceNumber = null, DateTime? invoiceDate = null, string? serviceProvider = null)
+    public async Task<JobCard> CloseAsync(
+        int jobCardId,
+        int currentUserId,
+        string? closeNotes,
+        decimal? labourCost = null,
+        decimal? partsCost = null,
+        decimal? otherCost = null,
+        string? invoiceNumber = null,
+        DateTime? invoiceDate = null,
+        string? serviceProvider = null
+    )
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.CloseAsync(
+                jobCardId,
+                currentUserId,
+                closeNotes,
+                labourCost,
+                partsCost,
+                otherCost,
+                invoiceNumber,
+                invoiceDate,
+                serviceProvider
+            );
+
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
 
         // Update status to Complete (5)
         jobCard.status_code = 5;
@@ -332,7 +449,15 @@ public class JobCardRepository : IJobCardRepository
         }
 
         // Capture repair costs if provided
-        ApplyCosts(jobCard, labourCost, partsCost, otherCost, invoiceNumber, invoiceDate, serviceProvider);
+        ApplyCosts(
+            jobCard,
+            labourCost,
+            partsCost,
+            otherCost,
+            invoiceNumber,
+            invoiceDate,
+            serviceProvider
+        );
 
         await _context.SaveChangesAsync();
 
@@ -340,15 +465,43 @@ public class JobCardRepository : IJobCardRepository
             ?? throw new InvalidOperationException("Failed to retrieve closed job card");
     }
 
-    public async Task<JobCard> UpdateCostsAsync(int jobCardId, int currentUserId,
-        decimal? labourCost, decimal? partsCost, decimal? otherCost,
-        string? invoiceNumber, DateTime? invoiceDate, string? serviceProvider)
+    public async Task<JobCard> UpdateCostsAsync(
+        int jobCardId,
+        int currentUserId,
+        decimal? labourCost,
+        decimal? partsCost,
+        decimal? otherCost,
+        string? invoiceNumber,
+        DateTime? invoiceDate,
+        string? serviceProvider
+    )
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.UpdateCostsAsync(
+                jobCardId,
+                currentUserId,
+                labourCost,
+                partsCost,
+                otherCost,
+                invoiceNumber,
+                invoiceDate,
+                serviceProvider
+            );
 
-        ApplyCosts(jobCard, labourCost, partsCost, otherCost, invoiceNumber, invoiceDate, serviceProvider);
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+
+        ApplyCosts(
+            jobCard,
+            labourCost,
+            partsCost,
+            otherCost,
+            invoiceNumber,
+            invoiceDate,
+            serviceProvider
+        );
         jobCard.date_updated = DateTime.UtcNow;
         jobCard.modified_by_user_code = currentUserId;
 
@@ -362,32 +515,55 @@ public class JobCardRepository : IJobCardRepository
     /// Applies cost fields and auto-calculates total_cost.
     /// Only overwrites fields that are explicitly provided (non-null).
     /// </summary>
-    private static void ApplyCosts(JobCard jobCard,
-        decimal? labourCost, decimal? partsCost, decimal? otherCost,
-        string? invoiceNumber, DateTime? invoiceDate, string? serviceProvider)
+    private static void ApplyCosts(
+        JobCard jobCard,
+        decimal? labourCost,
+        decimal? partsCost,
+        decimal? otherCost,
+        string? invoiceNumber,
+        DateTime? invoiceDate,
+        string? serviceProvider
+    )
     {
-        if (labourCost.HasValue) jobCard.labour_cost = labourCost;
-        if (partsCost.HasValue) jobCard.parts_cost = partsCost;
-        if (otherCost.HasValue) jobCard.other_cost = otherCost;
-        if (invoiceNumber != null) jobCard.invoice_number = invoiceNumber;
-        if (invoiceDate.HasValue) jobCard.invoice_date = invoiceDate;
-        if (serviceProvider != null) jobCard.service_provider = serviceProvider;
+        if (labourCost.HasValue)
+            jobCard.labour_cost = labourCost;
+        if (partsCost.HasValue)
+            jobCard.parts_cost = partsCost;
+        if (otherCost.HasValue)
+            jobCard.other_cost = otherCost;
+        if (invoiceNumber != null)
+            jobCard.invoice_number = invoiceNumber;
+        if (invoiceDate.HasValue)
+            jobCard.invoice_date = invoiceDate;
+        if (serviceProvider != null)
+            jobCard.service_provider = serviceProvider;
 
         // Auto-calculate total from whatever is now set
-        jobCard.total_cost = (jobCard.labour_cost ?? 0)
-                           + (jobCard.parts_cost ?? 0)
-                           + (jobCard.other_cost ?? 0);
+        jobCard.total_cost =
+            (jobCard.labour_cost ?? 0) + (jobCard.parts_cost ?? 0) + (jobCard.other_cost ?? 0);
     }
 
     /// <summary>
     /// Update job card status
     /// Legacy: Replaces DEV_UPD_JobcardUpdateStatusToInProgress and similar procedures
     /// </summary>
-    public async Task<JobCard> UpdateStatusAsync(int jobCardId, int newStatusCode, int currentUserId)
+    public async Task<JobCard> UpdateStatusAsync(
+        int jobCardId,
+        int newStatusCode,
+        int currentUserId
+    )
     {
-        var jobCard = await _context.JobCards
-            .FirstOrDefaultAsync(jc => jc.job_card_id == jobCardId && !jc.is_deleted)
-            ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
+        if (!await IsModernSchemaAvailableAsync())
+            return await _legacyRepository.UpdateStatusAsync(
+                jobCardId,
+                newStatusCode,
+                currentUserId
+            );
+
+        var jobCard =
+            await _context.JobCards.FirstOrDefaultAsync(jc =>
+                jc.job_card_id == jobCardId && !jc.is_deleted
+            ) ?? throw new KeyNotFoundException($"JobCard not found with ID: {jobCardId}");
 
         jobCard.status_code = newStatusCode;
         jobCard.date_updated = DateTime.UtcNow;
@@ -398,5 +574,48 @@ public class JobCardRepository : IJobCardRepository
         // Reload with navigation properties
         return await GetByIdAsync(jobCardId)
             ?? throw new InvalidOperationException("Failed to retrieve updated job card");
+    }
+
+    private async Task<bool> IsModernSchemaAvailableAsync()
+    {
+        if (_modernSchemaAvailable.HasValue)
+            return _modernSchemaAvailable.Value;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+            await connection.OpenAsync();
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.Transaction = _context.Database.CurrentTransaction?.GetDbTransaction();
+            command.CommandText =
+                "SELECT [COLUMN_NAME] FROM [INFORMATION_SCHEMA].[COLUMNS] WHERE [TABLE_SCHEMA] = @schema AND [TABLE_NAME] = @table";
+            AddParameter(command, "@schema", DbType.String, "dbo");
+            AddParameter(command, "@table", DbType.String, "job_cards");
+
+            var columns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                columns.Add(reader.GetString(0));
+
+            _modernSchemaAvailable = ModernRequiredColumns.All(columns.Contains);
+            return _modernSchemaAvailable.Value;
+        }
+        finally
+        {
+            if (shouldClose)
+                await connection.CloseAsync();
+        }
+    }
+
+    private static void AddParameter(DbCommand command, string name, DbType type, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.DbType = type;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
     }
 }

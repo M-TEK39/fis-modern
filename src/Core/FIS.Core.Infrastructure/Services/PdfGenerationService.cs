@@ -1,8 +1,8 @@
+using System.Text;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Financial;
 using Microsoft.Extensions.Logging;
-using System.Text;
 
 namespace FIS.Core.Infrastructure.Services;
 
@@ -21,7 +21,10 @@ public class PdfGenerationService : IPdfGenerationService
 
     public Task<byte[]> GenerateVehicleReportPdfAsync(VehicleReport vehicleReport)
     {
-        _logger.LogInformation("PDF generation requested for vehicle report: VMF {VmfCode}", vehicleReport.VmfCode);
+        _logger.LogInformation(
+            "PDF generation requested for vehicle report: VMF {VmfCode}",
+            vehicleReport.VmfCode
+        );
 
         var lines = new List<string>
         {
@@ -33,7 +36,7 @@ public class PdfGenerationService : IPdfGenerationService
             $"Year: {vehicleReport.YearManufactured}",
             $"Current Odometer: {vehicleReport.CurrentOdometer:N0}",
             $"Status: {vehicleReport.Status}",
-            $"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC"
+            $"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC",
         };
 
         return Task.FromResult(BuildSimplePdf(lines));
@@ -41,7 +44,10 @@ public class PdfGenerationService : IPdfGenerationService
 
     public Task<byte[]> GenerateInvoicePdfAsync(Invoice invoice, List<InvoiceItem> invoiceItems)
     {
-        _logger.LogInformation("PDF generation requested for invoice: {InvoiceCode}", invoice.invoice_code);
+        _logger.LogInformation(
+            "PDF generation requested for invoice: {InvoiceCode}",
+            invoice.invoice_code
+        );
 
         var lines = new List<string>
         {
@@ -50,51 +56,69 @@ public class PdfGenerationService : IPdfGenerationService
             $"Posting Month Code: {invoice.posting_month_code}",
             $"Department Code: {invoice.department_code}",
             $"Created: {invoice.date_created:yyyy-MM-dd}",
-            "Items:"
+            "Items:",
         };
 
-        lines.AddRange(invoiceItems
-            .Take(40)
-            .Select(item =>
-                $"Item {item.item_code} | VMF {item.vmf_code} | Site {item.site_code} | Fixed {item.fixed_tariff_amount:N2} | Odo {item.odo_tariff_amount:N2}"));
+        lines.AddRange(
+            invoiceItems
+                .Take(40)
+                .Select(item =>
+                    $"Item {item.item_code} | VMF {item.vmf_code} | Site {item.site_code} | Fixed {item.fixed_tariff_amount:N2} | Odo {item.odo_tariff_amount:N2}"
+                )
+        );
 
         return Task.FromResult(BuildSimplePdf(lines));
     }
 
-    public Task<byte[]> GenerateFinancialSummaryPdfAsync(string reportTitle, Dictionary<string, decimal> summaryData, DateTime reportDate)
+    public Task<byte[]> GenerateFinancialSummaryPdfAsync(
+        string reportTitle,
+        Dictionary<string, decimal> summaryData,
+        DateTime reportDate
+    )
     {
-        _logger.LogInformation("PDF generation requested for financial summary: {ReportTitle}", reportTitle);
+        _logger.LogInformation(
+            "PDF generation requested for financial summary: {ReportTitle}",
+            reportTitle
+        );
 
         var lines = new List<string>
         {
             reportTitle,
             $"Report Date: {reportDate:yyyy-MM-dd}",
-            "Summary:"
+            "Summary:",
         };
 
-        lines.AddRange(summaryData
-            .Take(60)
-            .Select(kv => $"{kv.Key}: {kv.Value:N2}"));
+        lines.AddRange(summaryData.Take(60).Select(kv => $"{kv.Key}: {kv.Value:N2}"));
 
         return Task.FromResult(BuildSimplePdf(lines));
     }
 
-    public Task<byte[]> GenerateMaintenanceReportPdfAsync(string reportTitle, List<MaintenanceRecord> maintenanceRecords, DateTime reportDate)
+    public Task<byte[]> GenerateMaintenanceReportPdfAsync(
+        string reportTitle,
+        List<MaintenanceRecord> maintenanceRecords,
+        DateTime reportDate
+    )
     {
-        _logger.LogInformation("PDF generation requested for maintenance report: {ReportTitle}", reportTitle);
+        _logger.LogInformation(
+            "PDF generation requested for maintenance report: {ReportTitle}",
+            reportTitle
+        );
 
         var lines = new List<string>
         {
             reportTitle,
             $"Report Date: {reportDate:yyyy-MM-dd}",
             $"Total Records: {maintenanceRecords.Count}",
-            "Records:"
+            "Records:",
         };
 
-        lines.AddRange(maintenanceRecords
-            .Take(50)
-            .Select(record =>
-                $"ID {record.MaintenanceId} | VMF {record.VmfCode} | Type {record.MaintenanceType} | Cost {record.TotalCost:N2} | Date {record.MaintenanceDate:yyyy-MM-dd}"));
+        lines.AddRange(
+            maintenanceRecords
+                .Take(50)
+                .Select(record =>
+                    $"ID {record.MaintenanceId} | VMF {record.VmfCode} | Type {record.MaintenanceType} | Cost {record.TotalCost:N2} | Date {record.MaintenanceDate:yyyy-MM-dd}"
+                )
+        );
 
         return Task.FromResult(BuildSimplePdf(lines));
     }
@@ -130,7 +154,7 @@ public class PdfGenerationService : IPdfGenerationService
             "2 0 obj\n<< /Type /Pages /Count 1 /Kids [3 0 R] >>\nendobj\n",
             "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
             "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-            $"5 0 obj\n<< /Length {Encoding.ASCII.GetByteCount(contentStream)} >>\nstream\n{contentStream}endstream\nendobj\n"
+            $"5 0 obj\n<< /Length {Encoding.ASCII.GetByteCount(contentStream)} >>\nstream\n{contentStream}endstream\nendobj\n",
         };
 
         var pdfBuilder = new StringBuilder();
@@ -161,6 +185,6 @@ public class PdfGenerationService : IPdfGenerationService
         return Encoding.ASCII.GetBytes(pdfBuilder.ToString());
     }
 
-    private static string EscapePdfText(string value)
-        => value.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
+    private static string EscapePdfText(string value) =>
+        value.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
 }

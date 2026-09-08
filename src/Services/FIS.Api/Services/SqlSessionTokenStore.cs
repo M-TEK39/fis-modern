@@ -23,7 +23,12 @@ public class SqlSessionTokenStore : ISessionTokenStore
         _logger = logger;
     }
 
-    public (string AccessToken, DateTimeOffset AccessExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt) IssueTokens(IEnumerable<Claim> claims)
+    public (
+        string AccessToken,
+        DateTimeOffset AccessExpiresAt,
+        string RefreshToken,
+        DateTimeOffset RefreshExpiresAt
+    ) IssueTokens(IEnumerable<Claim> claims)
     {
         var claimList = claims.ToList();
         var claimsJson = SerializeClaims(claimList);
@@ -37,43 +42,53 @@ public class SqlSessionTokenStore : ISessionTokenStore
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
 
-        db.SessionTokens.Add(new SessionToken
-        {
-            token_id = accessToken,
-            token_type = AccessType,
-            session_id = sessionId,
-            claims_json = claimsJson,
-            expires_at = accessExpiresAt,
-            created_at = now
-        });
-        db.SessionTokens.Add(new SessionToken
-        {
-            token_id = refreshToken,
-            token_type = RefreshType,
-            session_id = sessionId,
-            claims_json = claimsJson,
-            expires_at = refreshExpiresAt,
-            created_at = now
-        });
+        db.SessionTokens.Add(
+            new SessionToken
+            {
+                token_id = accessToken,
+                token_type = AccessType,
+                session_id = sessionId,
+                claims_json = claimsJson,
+                expires_at = accessExpiresAt,
+                created_at = now,
+            }
+        );
+        db.SessionTokens.Add(
+            new SessionToken
+            {
+                token_id = refreshToken,
+                token_type = RefreshType,
+                session_id = sessionId,
+                claims_json = claimsJson,
+                expires_at = refreshExpiresAt,
+                created_at = now,
+            }
+        );
         db.SaveChanges();
 
-        return (accessToken, new DateTimeOffset(accessExpiresAt, TimeSpan.Zero),
-                refreshToken, new DateTimeOffset(refreshExpiresAt, TimeSpan.Zero));
+        return (
+            accessToken,
+            new DateTimeOffset(accessExpiresAt, TimeSpan.Zero),
+            refreshToken,
+            new DateTimeOffset(refreshExpiresAt, TimeSpan.Zero)
+        );
     }
 
     public bool TryValidateAccessToken(string accessToken, out IReadOnlyCollection<Claim> claims)
     {
         claims = Array.Empty<Claim>();
-        if (string.IsNullOrWhiteSpace(accessToken)) return false;
+        if (string.IsNullOrWhiteSpace(accessToken))
+            return false;
 
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
 
-        var record = db.SessionTokens
-            .AsNoTracking()
+        var record = db
+            .SessionTokens.AsNoTracking()
             .FirstOrDefault(t => t.token_id == accessToken && t.token_type == AccessType);
 
-        if (record is null) return false;
+        if (record is null)
+            return false;
 
         if (record.expires_at <= DateTime.UtcNow)
         {
@@ -90,19 +105,31 @@ public class SqlSessionTokenStore : ISessionTokenStore
         return true;
     }
 
-    public bool TryRefresh(string refreshToken, out (string AccessToken, DateTimeOffset AccessExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt) refreshedTokens, out IReadOnlyCollection<Claim> claims)
+    public bool TryRefresh(
+        string refreshToken,
+        out (
+            string AccessToken,
+            DateTimeOffset AccessExpiresAt,
+            string RefreshToken,
+            DateTimeOffset RefreshExpiresAt
+        ) refreshedTokens,
+        out IReadOnlyCollection<Claim> claims
+    )
     {
         refreshedTokens = default;
         claims = Array.Empty<Claim>();
-        if (string.IsNullOrWhiteSpace(refreshToken)) return false;
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return false;
 
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
 
-        var record = db.SessionTokens
-            .FirstOrDefault(t => t.token_id == refreshToken && t.token_type == RefreshType);
+        var record = db.SessionTokens.FirstOrDefault(t =>
+            t.token_id == refreshToken && t.token_type == RefreshType
+        );
 
-        if (record is null) return false;
+        if (record is null)
+            return false;
 
         var sessionId = record.session_id;
         var claimsJson = record.claims_json;
@@ -112,7 +139,8 @@ public class SqlSessionTokenStore : ISessionTokenStore
         db.SessionTokens.RemoveRange(all);
         db.SaveChanges();
 
-        if (record.expires_at <= DateTime.UtcNow) return false;
+        if (record.expires_at <= DateTime.UtcNow)
+            return false;
 
         var deserialized = DeserializeClaims(claimsJson);
         claims = deserialized;
@@ -122,11 +150,15 @@ public class SqlSessionTokenStore : ISessionTokenStore
 
     public void RevokeByAccessToken(string accessToken)
     {
-        if (string.IsNullOrWhiteSpace(accessToken)) return;
+        if (string.IsNullOrWhiteSpace(accessToken))
+            return;
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
-        var rec = db.SessionTokens.FirstOrDefault(t => t.token_id == accessToken && t.token_type == AccessType);
-        if (rec is null) return;
+        var rec = db.SessionTokens.FirstOrDefault(t =>
+            t.token_id == accessToken && t.token_type == AccessType
+        );
+        if (rec is null)
+            return;
         var all = db.SessionTokens.Where(t => t.session_id == rec.session_id).ToList();
         db.SessionTokens.RemoveRange(all);
         db.SaveChanges();
@@ -134,11 +166,15 @@ public class SqlSessionTokenStore : ISessionTokenStore
 
     public void RevokeByRefreshToken(string refreshToken)
     {
-        if (string.IsNullOrWhiteSpace(refreshToken)) return;
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return;
         using var scope = _services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<FisDbContext>();
-        var rec = db.SessionTokens.FirstOrDefault(t => t.token_id == refreshToken && t.token_type == RefreshType);
-        if (rec is null) return;
+        var rec = db.SessionTokens.FirstOrDefault(t =>
+            t.token_id == refreshToken && t.token_type == RefreshType
+        );
+        if (rec is null)
+            return;
         var all = db.SessionTokens.Where(t => t.session_id == rec.session_id).ToList();
         db.SessionTokens.RemoveRange(all);
         db.SaveChanges();
@@ -146,13 +182,16 @@ public class SqlSessionTokenStore : ISessionTokenStore
 
     private static string SerializeClaims(IEnumerable<Claim> claims)
     {
-        var array = claims.Select(c => new SerializedClaim(c.Type, c.Value, c.ValueType, c.Issuer)).ToArray();
+        var array = claims
+            .Select(c => new SerializedClaim(c.Type, c.Value, c.ValueType, c.Issuer))
+            .ToArray();
         return JsonSerializer.Serialize(array);
     }
 
     private static IReadOnlyCollection<Claim> DeserializeClaims(string json)
     {
-        var arr = JsonSerializer.Deserialize<SerializedClaim[]>(json) ?? Array.Empty<SerializedClaim>();
+        var arr =
+            JsonSerializer.Deserialize<SerializedClaim[]>(json) ?? Array.Empty<SerializedClaim>();
         return arr.Select(s => new Claim(s.Type, s.Value, s.ValueType, s.Issuer)).ToList();
     }
 
@@ -160,11 +199,13 @@ public class SqlSessionTokenStore : ISessionTokenStore
     {
         Span<byte> bytes = stackalloc byte[32];
         RandomNumberGenerator.Fill(bytes);
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
-    private sealed record SerializedClaim(string Type, string Value, string ValueType, string Issuer);
+    private sealed record SerializedClaim(
+        string Type,
+        string Value,
+        string ValueType,
+        string Issuer
+    );
 }

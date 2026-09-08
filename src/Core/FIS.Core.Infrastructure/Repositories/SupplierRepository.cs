@@ -20,33 +20,34 @@ public class SupplierRepository : ISupplierRepository
 
     public async Task<Supplier?> GetByIdAsync(short supplierId)
     {
-        return await _context.Suppliers
-            .Where(s => !s.is_deleted)
+        return await _context
+            .Suppliers.Where(s => !s.is_deleted)
             .FirstOrDefaultAsync(s => s.supplier_id == supplierId);
     }
 
     public async Task<IEnumerable<Supplier>> GetAllAsync()
     {
-        return await _context.Suppliers
-            .Where(s => !s.is_deleted)
+        return await _context
+            .Suppliers.Where(s => !s.is_deleted)
             .OrderBy(s => s.supplier_name)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Supplier>> GetActiveAsync()
     {
-        return await _context.Suppliers
-            .Where(s => !s.is_deleted && s.is_active)
+        return await _context
+            .Suppliers.Where(s => !s.is_deleted && s.is_active)
             .OrderBy(s => s.supplier_name)
             .ToListAsync();
     }
 
     public async Task<Supplier?> GetByNameAsync(string supplierName)
     {
-        return await _context.Suppliers
-            .Where(s => !s.is_deleted)
-            .FirstOrDefaultAsync(s => s.supplier_name != null && 
-                s.supplier_name.ToLower() == supplierName.ToLower());
+        return await _context
+            .Suppliers.Where(s => !s.is_deleted)
+            .FirstOrDefaultAsync(s =>
+                s.supplier_name != null && s.supplier_name.ToLower() == supplierName.ToLower()
+            );
     }
 
     public async Task<Supplier> CreateAsync(Supplier supplier, int currentUserId)
@@ -67,7 +68,9 @@ public class SupplierRepository : ISupplierRepository
 
         var existing = await _context.Suppliers.FindAsync(supplier.supplier_id);
         if (existing == null || existing.is_deleted)
-            throw new InvalidOperationException($"Supplier with supplier_id {supplier.supplier_id} not found");
+            throw new InvalidOperationException(
+                $"Supplier with supplier_id {supplier.supplier_id} not found"
+            );
 
         supplier.date_updated = DateTime.UtcNow;
         supplier.modified_by_user_code = currentUserId;

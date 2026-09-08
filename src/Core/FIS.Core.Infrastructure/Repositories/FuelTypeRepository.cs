@@ -25,8 +25,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>FuelType entity if found, null otherwise</returns>
         public async Task<FuelTypeEntity?> GetByIdAsync(short fuelTypeCode)
         {
-            return await _context.FuelTypes
-                .Where(x => !x.is_deleted)
+            return await _context
+                .FuelTypes.Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(ft => ft.fuel_type_code == fuelTypeCode);
         }
 
@@ -37,9 +37,12 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>FuelType entity if found, null otherwise</returns>
         public async Task<FuelTypeEntity?> GetByDescriptionAsync(string fuelDescription)
         {
-            return await _context.FuelTypes
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(ft => ft.fuel_description != null && ft.fuel_description.ToLower() == fuelDescription.ToLower());
+            return await _context
+                .FuelTypes.Where(x => !x.is_deleted)
+                .FirstOrDefaultAsync(ft =>
+                    ft.fuel_description != null
+                    && ft.fuel_description.ToLower() == fuelDescription.ToLower()
+                );
         }
 
         /// <summary>
@@ -48,8 +51,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of all fuel type entities</returns>
         public async Task<IEnumerable<FuelTypeEntity>> GetAllFuelTypesAsync()
         {
-            return await _context.FuelTypes
-                .Where(x => !x.is_deleted)
+            return await _context
+                .FuelTypes.Where(x => !x.is_deleted)
                 .OrderBy(ft => ft.fuel_description)
                 .ToListAsync();
         }
@@ -61,8 +64,11 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of matching fuel type entities</returns>
         public async Task<IEnumerable<FuelTypeEntity>> SearchFuelTypesAsync(string searchTerm)
         {
-            return await _context.FuelTypes
-                .Where(ft => ft.fuel_description != null && ft.fuel_description.ToLower().Contains(searchTerm.ToLower()))
+            return await _context
+                .FuelTypes.Where(ft =>
+                    ft.fuel_description != null
+                    && ft.fuel_description.ToLower().Contains(searchTerm.ToLower())
+                )
                 .OrderBy(ft => ft.fuel_description)
                 .ToListAsync();
         }
@@ -79,7 +85,7 @@ namespace FIS.Core.Infrastructure.Repositories
             fuelType.date_created = DateTime.UtcNow;
             fuelType.created_by_user_code = currentUserId;
             fuelType.is_deleted = false;
-            
+
             _context.FuelTypes.Add(fuelType);
             await _context.SaveChangesAsync();
             return fuelType;
@@ -98,7 +104,9 @@ namespace FIS.Core.Infrastructure.Repositories
 
             var existing = await _context.FuelTypes.FindAsync(fuelType.fuel_type_code);
             if (existing == null)
-                throw new InvalidOperationException($"FuelType with fuel_type_code {fuelType.fuel_type_code} not found");
+                throw new InvalidOperationException(
+                    $"FuelType with fuel_type_code {fuelType.fuel_type_code} not found"
+                );
 
             // Preserve creation audit fields
             fuelType.date_created = existing.date_created;
@@ -106,7 +114,7 @@ namespace FIS.Core.Infrastructure.Repositories
             // Set update audit fields
             fuelType.date_updated = DateTime.UtcNow;
             fuelType.modified_by_user_code = currentUserId;
-            
+
             _context.Entry(existing).CurrentValues.SetValues(fuelType);
             await _context.SaveChangesAsync();
             return existing;

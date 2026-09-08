@@ -1,3 +1,4 @@
+using FIS.Api.Services;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,13 +17,19 @@ public class AuditController : BaseApiController
 {
     private readonly FisDbContext _context;
     private readonly ILogger<AuditController> _logger;
+    private readonly LegacyCredentialCompatibilityService _legacyCredentialCompatibility;
 
     private const int MaxPageSize = 200;
 
-    public AuditController(FisDbContext context, ILogger<AuditController> logger)
+    public AuditController(
+        FisDbContext context,
+        ILogger<AuditController> logger,
+        LegacyCredentialCompatibilityService legacyCredentialCompatibility
+    )
     {
         _context = context;
         _logger = logger;
+        _legacyCredentialCompatibility = legacyCredentialCompatibility;
     }
 
     /// <summary>
@@ -30,27 +37,25 @@ public class AuditController : BaseApiController
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAuditTrail(
-        [FromQuery] string?   tableName  = null,
-        [FromQuery] string?   action     = null,
-        [FromQuery] DateTime? fromDate   = null,
-        [FromQuery] DateTime? toDate     = null,
-        [FromQuery] int?      userId     = null,
-        [FromQuery] string?   primaryKey = null,
-        [FromQuery] int       pageNumber = 1,
-        [FromQuery] int       pageSize   = 50)
+        [FromQuery] string? tableName = null,
+        [FromQuery] string? action = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int? userId = null,
+        [FromQuery] string? primaryKey = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50
+    )
     {
         try
         {
-            pageSize   = Math.Min(pageSize, MaxPageSize);
+            pageSize = Math.Min(pageSize, MaxPageSize);
             pageNumber = Math.Max(pageNumber, 1);
 
-            var query = _context.Audits
-                .AsNoTracking()
-                .Where(a => !a.is_deleted);
+            var query = _context.Audits.AsNoTracking().Where(a => !a.is_deleted);
 
             if (!string.IsNullOrWhiteSpace(tableName))
-                query = query.Where(a => a.TableName != null &&
-                    a.TableName.Contains(tableName));
+                query = query.Where(a => a.TableName != null && a.TableName.Contains(tableName));
 
             if (!string.IsNullOrWhiteSpace(action))
                 query = query.Where(a => a.Action == action.ToUpper());
@@ -82,18 +87,20 @@ public class AuditController : BaseApiController
                     a.Changes,
                     a.ActionedBy,
                     a.created_by_user_code,
-                    ChangedAt = a.date_created
+                    ChangedAt = a.date_created,
                 })
                 .ToListAsync();
 
-            return Ok(new
-            {
-                TotalCount  = total,
-                PageNumber  = pageNumber,
-                PageSize    = pageSize,
-                TotalPages  = (int)Math.Ceiling(total / (double)pageSize),
-                Items       = items
-            });
+            return Ok(
+                new
+                {
+                    TotalCount = total,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+                    Items = items,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -110,8 +117,8 @@ public class AuditController : BaseApiController
     {
         try
         {
-            var items = await _context.Audits
-                .AsNoTracking()
+            var items = await _context
+                .Audits.AsNoTracking()
                 .Where(a => a.TableName == tableName && a.PrimaryKey == primaryKey && !a.is_deleted)
                 .OrderByDescending(a => a.date_created)
                 .Select(a => new
@@ -121,7 +128,7 @@ public class AuditController : BaseApiController
                     a.Changes,
                     a.ActionedBy,
                     a.created_by_user_code,
-                    ChangedAt = a.date_created
+                    ChangedAt = a.date_created,
                 })
                 .ToListAsync();
 
@@ -129,7 +136,12 @@ public class AuditController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error querying record history for {TableName}/{PrimaryKey}", tableName, primaryKey);
+            _logger.LogError(
+                ex,
+                "Error querying record history for {TableName}/{PrimaryKey}",
+                tableName,
+                primaryKey
+            );
             return StatusCode(500, "An error occurred while querying record history");
         }
     }
@@ -139,15 +151,16 @@ public class AuditController : BaseApiController
     /// </summary>
     [HttpGet("user-status-history")]
     public async Task<IActionResult> GetUserStatusHistory(
-        [FromQuery] int?      userAccessCode = null,
-        [FromQuery] DateTime? fromDate       = null,
-        [FromQuery] DateTime? toDate         = null,
-        [FromQuery] int       pageNumber     = 1,
-        [FromQuery] int       pageSize       = 50)
+        [FromQuery] int? userAccessCode = null,
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50
+    )
     {
         try
         {
-            pageSize   = Math.Min(pageSize, MaxPageSize);
+            pageSize = Math.Min(pageSize, MaxPageSize);
             pageNumber = Math.Max(pageNumber, 1);
 
             var query = _context.UserStatusHistories.AsNoTracking();
@@ -175,18 +188,20 @@ public class AuditController : BaseApiController
                     h.previous_status,
                     h.changed_by_user_code,
                     h.changed_at,
-                    h.reason
+                    h.reason,
                 })
                 .ToListAsync();
 
-            return Ok(new
-            {
-                TotalCount = total,
-                PageNumber = pageNumber,
-                PageSize   = pageSize,
-                TotalPages = (int)Math.Ceiling(total / (double)pageSize),
-                Items      = items
-            });
+            return Ok(
+                new
+                {
+                    TotalCount = total,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+                    Items = items,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -202,49 +217,69 @@ public class AuditController : BaseApiController
     [HttpGet("password-history")]
     public async Task<IActionResult> GetPasswordHistory(
         [FromQuery] int? userAccessCode = null,
-        [FromQuery] int  pageNumber     = 1,
-        [FromQuery] int  pageSize       = 50)
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 50
+    )
     {
         try
         {
-            pageSize   = Math.Min(pageSize, MaxPageSize);
+            pageSize = Math.Min(pageSize, MaxPageSize);
             pageNumber = Math.Max(pageNumber, 1);
 
-            var query = _context.LegacyUserCredentials
-                .AsNoTracking()
-                .Where(c => c.is_active);
+            var query = _context.LegacyUserCredentials.AsNoTracking().Where(c => c.is_active);
 
             if (userAccessCode.HasValue)
                 query = query.Where(c => c.user_access_code == userAccessCode.Value);
 
             var total = await query.CountAsync();
 
-            var items = await query
+            var credentialRows = await query
                 .OrderByDescending(c => c.last_password_change)
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
                 .Select(c => new
                 {
+                    c.credential_id,
                     c.user_access_code,
                     c.last_password_change,
-                    c.password_expiry_date,
-                    c.changed_by_user_code,
                     c.failed_login_attempts,
                     c.account_locked_until,
-                    IsExpired = c.password_expiry_date.HasValue
-                        ? DateTime.UtcNow > c.password_expiry_date.Value
-                        : false
                 })
                 .ToListAsync();
 
-            return Ok(new
-            {
-                TotalCount = total,
-                PageNumber = pageNumber,
-                PageSize   = pageSize,
-                TotalPages = (int)Math.Ceiling(total / (double)pageSize),
-                Items      = items
-            });
+            var optionalFields = await _legacyCredentialCompatibility.ReadManyAsync(
+                credentialRows.Select(row => row.credential_id)
+            );
+
+            var items = credentialRows
+                .Select(row =>
+                {
+                    optionalFields.TryGetValue(row.credential_id, out var optional);
+                    var expiryDate = optional?.PasswordExpiryDate;
+
+                    return new
+                    {
+                        row.user_access_code,
+                        row.last_password_change,
+                        password_expiry_date = expiryDate,
+                        changed_by_user_code = optional?.ChangedByUserCode,
+                        row.failed_login_attempts,
+                        row.account_locked_until,
+                        IsExpired = expiryDate.HasValue && DateTime.UtcNow > expiryDate.Value,
+                    };
+                })
+                .ToList();
+
+            return Ok(
+                new
+                {
+                    TotalCount = total,
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+                    Items = items,
+                }
+            );
         }
         catch (Exception ex)
         {

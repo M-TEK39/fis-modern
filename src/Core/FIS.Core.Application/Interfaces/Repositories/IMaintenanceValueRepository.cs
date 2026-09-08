@@ -20,7 +20,8 @@ public interface IMaintenanceValueRepository
         int tariffParameterId,
         int classCode,
         int monthsAge,
-        int kilometerAge);
+        int kilometerAge
+    );
 
     /// <summary>
     /// Get all maintenance values for a tariff parameter year.

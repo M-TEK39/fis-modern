@@ -17,6 +17,17 @@ public interface ITripService
     Task<Trip> CreateTripAsync(Trip trip);
 
     /// <summary>
+    /// Create a trip authority and its legacy child rows as one operation.
+    /// The repository negotiates optional columns and table names at runtime.
+    /// </summary>
+    Task<Trip> CreateTripAuthorityAsync(
+        Trip trip,
+        IReadOnlyList<TripAuthorityDriverInput> drivers,
+        IReadOnlyList<TripAuthorityPassengerInput> passengers,
+        IReadOnlyList<TripAuthorityRouteInput> routes
+    );
+
+    /// <summary>
     /// Update an existing trip authority
     /// Legacy: Trip authority modification
     /// Validates that trip is not locked for transfer
@@ -24,9 +35,35 @@ public interface ITripService
     Task UpdateTripAsync(Trip trip);
 
     /// <summary>
+    /// Close a trip authority and persist its route end odometer readings.
+    /// </summary>
+    Task CloseTripAsync(
+        int tripAuthorityCode,
+        IReadOnlyList<TripAuthorityRouteUpdate> routes,
+        int? endOdometer = null
+    );
+
+    /// <summary>
     /// Get trip authority by ID
     /// </summary>
     Task<Trip?> GetTripByIdAsync(int tripAuthorityCode);
+
+    /// <summary>
+    /// Get the complete persisted trip authority record and its related legacy
+    /// rows. Related tables are negotiated at runtime because older client
+    /// databases do not contain every later table or column.
+    /// </summary>
+    Task<TripAuthorityDetails?> GetTripAuthorityDetailsAsync(int tripAuthorityCode);
+
+    /// <summary>
+    /// Get all trip authorities with their contract vehicle context.
+    /// </summary>
+    Task<IEnumerable<Trip>> GetAllTripsAsync();
+
+    /// <summary>
+    /// Get active-contract vehicles used by the Trip Authority filter.
+    /// </summary>
+    Task<IEnumerable<TripAuthorityVehicle>> GetTripAuthorityVehiclesAsync();
 
     /// <summary>
     /// Get all trips for a vehicle (via contract)
@@ -114,3 +151,95 @@ public interface ITripService
     /// </summary>
     Task<bool> ValidateOdometerReadingAsync(int tripAuthorityCode, int odometerReading);
 }
+
+public sealed record TripAuthorityVehicle(
+    int VmfCode,
+    int ContractCode,
+    short SiteCode,
+    string? FleetNumber,
+    string? RegistrationNumber,
+    DateTime? LicenceDueDate,
+    string? MakeDescription,
+    string? ModelDescription,
+    string? ContractType
+);
+
+public sealed record TripAuthorityDetails(
+    Trip Trip,
+    IReadOnlyList<TripAuthorityDriver> Drivers,
+    IReadOnlyList<TripAuthorityPassenger> Passengers,
+    IReadOnlyList<TripAuthorityRoute> Routes
+);
+
+public sealed record TripAuthorityDriver(
+    int TripDriverCode,
+    string? Name,
+    string? IdentityNumber,
+    bool IsPrimary,
+    int? SiteCode,
+    int? LicenceTypeCode,
+    string? PassportNumber,
+    string? PersalNumber,
+    string? ContractNumber,
+    string? LicenceNumber,
+    DateTime? LicenceIssueDate,
+    DateTime? LicenceLastVerifiedDate,
+    bool HasPdp,
+    DateTime? PdpExpiryDate,
+    DateTime? LicenceExpiryDate,
+    bool IsActive
+);
+
+public sealed record TripAuthorityPassenger(int TripPassengerCode, string? Name);
+
+public sealed record TripAuthorityRoute(
+    int RouteCode,
+    DateTime? StartDate,
+    DateTime? EndDate,
+    int? StartOdometer,
+    int? EndOdometer,
+    string? ResponsibilityCode,
+    string? ObjectiveCode,
+    string? StartLocation,
+    string? EndLocation,
+    int? EstimatedDistance,
+    int? Distance,
+    string? ProjectNumber,
+    string? FundCode,
+    int? EditedByUserCode
+);
+
+public sealed record TripAuthorityRouteUpdate(int RouteCode, int EndOdometer, int Distance);
+
+public sealed record TripAuthorityDriverInput(
+    string? Name,
+    string? IdentityNumber,
+    bool IsPrimary,
+    int? SiteCode,
+    int? LicenceTypeCode,
+    string? PassportNumber,
+    string? PersalNumber,
+    string? ContractNumber,
+    string? LicenceNumber,
+    DateTime? LicenceIssueDate,
+    DateTime? LicenceLastVerifiedDate,
+    bool HasPdp,
+    DateTime? PdpExpiryDate,
+    DateTime? LicenceExpiryDate,
+    bool IsActive
+);
+
+public sealed record TripAuthorityPassengerInput(string Name);
+
+public sealed record TripAuthorityRouteInput(
+    DateTime StartDate,
+    DateTime EndDate,
+    string? StartLocation,
+    string? EndLocation,
+    int? EstimatedDistance,
+    string ResponsibilityCode,
+    string ObjectiveCode,
+    string ProjectNumber,
+    string FundCode,
+    int? StartOdometer = null
+);

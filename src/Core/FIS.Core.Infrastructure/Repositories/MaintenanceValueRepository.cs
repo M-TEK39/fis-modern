@@ -25,9 +25,11 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
         int tariffParameterId,
         int classCode,
         int monthsAge,
-        int kilometerAge)
+        int kilometerAge
+    )
     {
-        return await _context.Set<MaintenanceValue>()
+        return await _context
+            .Set<MaintenanceValue>()
             .Where(mv => mv.TariffParameterID == tariffParameterId)
             .Where(mv => mv.class_code == classCode)
             .Where(mv => mv.months_age <= monthsAge)
@@ -42,7 +44,8 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
     /// </summary>
     public async Task<List<MaintenanceValue>> GetByTariffParameterAsync(int tariffParameterId)
     {
-        return await _context.Set<MaintenanceValue>()
+        return await _context
+            .Set<MaintenanceValue>()
             .Where(mv => mv.TariffParameterID == tariffParameterId)
             .OrderBy(mv => mv.class_code)
             .ThenBy(mv => mv.months_age)
@@ -55,7 +58,8 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
     /// </summary>
     public async Task<List<MaintenanceValue>> GetByClassAsync(int tariffParameterId, int classCode)
     {
-        return await _context.Set<MaintenanceValue>()
+        return await _context
+            .Set<MaintenanceValue>()
             .Where(mv => mv.TariffParameterID == tariffParameterId)
             .Where(mv => mv.class_code == classCode)
             .OrderBy(mv => mv.months_age)
@@ -72,14 +76,18 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
         // Since MaintenanceValue has composite key, this is not straightforward
         // For now, we'll search by TariffParameterID (first part of key)
         // In a real implementation, you'd need all key components
-        return await _context.Set<MaintenanceValue>()
+        return await _context
+            .Set<MaintenanceValue>()
             .FirstOrDefaultAsync(mv => mv.TariffParameterID == maintenanceValueId);
     }
 
     /// <summary>
     /// Create new maintenance value.
     /// </summary>
-    public async Task<MaintenanceValue> CreateAsync(MaintenanceValue maintenanceValue, int currentUserId)
+    public async Task<MaintenanceValue> CreateAsync(
+        MaintenanceValue maintenanceValue,
+        int currentUserId
+    )
     {
         maintenanceValue.CaptureDate = DateTime.Now;
         _context.Set<MaintenanceValue>().Add(maintenanceValue);
@@ -90,14 +98,21 @@ public class MaintenanceValueRepository : IMaintenanceValueRepository
     /// <summary>
     /// Update existing maintenance value.
     /// </summary>
-    public async Task<MaintenanceValue> UpdateAsync(MaintenanceValue maintenanceValue, int currentUserId)
+    public async Task<MaintenanceValue> UpdateAsync(
+        MaintenanceValue maintenanceValue,
+        int currentUserId
+    )
     {
         if (maintenanceValue == null)
             throw new ArgumentNullException(nameof(maintenanceValue));
 
-        var existing = await _context.Set<MaintenanceValue>().FindAsync(maintenanceValue.TariffParameterID);
+        var existing = await _context
+            .Set<MaintenanceValue>()
+            .FindAsync(maintenanceValue.TariffParameterID);
         if (existing == null)
-            throw new InvalidOperationException($"MaintenanceValue with TariffParameterID {maintenanceValue.TariffParameterID} not found");
+            throw new InvalidOperationException(
+                $"MaintenanceValue with TariffParameterID {maintenanceValue.TariffParameterID} not found"
+            );
 
         maintenanceValue.ModifiedDate = DateTime.Now;
         _context.Entry(existing).CurrentValues.SetValues(maintenanceValue);

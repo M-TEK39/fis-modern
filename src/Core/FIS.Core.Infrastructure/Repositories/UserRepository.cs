@@ -23,8 +23,7 @@ public class UserRepository : IUserRepository
     /// </summary>
     public async Task<User?> GetByIdAsync(int userAccessCode)
     {
-        return await _context.Users
-                .FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
+        return await _context.Users.FirstOrDefaultAsync(u => u.user_access_code == userAccessCode);
     }
 
     /// <summary>
@@ -35,8 +34,7 @@ public class UserRepository : IUserRepository
         if (string.IsNullOrWhiteSpace(email))
             return null;
 
-        return await _context.Users
-                .FirstOrDefaultAsync(u => u.email == email);
+        return await _context.Users.FirstOrDefaultAsync(u => u.email == email);
     }
 
     /// <summary>
@@ -47,8 +45,7 @@ public class UserRepository : IUserRepository
         if (string.IsNullOrWhiteSpace(telephone))
             return null;
 
-        return await _context.Users
-                .FirstOrDefaultAsync(u => u.tel_no == telephone);
+        return await _context.Users.FirstOrDefaultAsync(u => u.tel_no == telephone);
     }
 
     /// <summary>
@@ -56,9 +53,7 @@ public class UserRepository : IUserRepository
     /// </summary>
     public async Task<IEnumerable<User>> GetAllUsersAsync()
     {
-        return await _context.Users
-            .OrderBy(u => u.user_access_code)
-            .ToListAsync();
+        return await _context.Users.OrderBy(u => u.user_access_code).ToListAsync();
     }
 
     /// <summary>
@@ -84,7 +79,9 @@ public class UserRepository : IUserRepository
 
         var existing = await _context.Users.FindAsync(user.user_access_code);
         if (existing == null)
-            throw new InvalidOperationException($"User with user_access_code {user.user_access_code} not found");
+            throw new InvalidOperationException(
+                $"User with user_access_code {user.user_access_code} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(user);
         await _context.SaveChangesAsync();

@@ -19,40 +19,58 @@ public class MaintenanceService : IMaintenanceService
         IMaintenanceRecordRepository maintenanceRecordRepository,
         IVehicleRepository vehicleRepository,
         ICurrentUserContext currentUserContext,
-        ILogger<MaintenanceService> logger)
+        ILogger<MaintenanceService> logger
+    )
     {
-        _maintenanceRecordRepository = maintenanceRecordRepository ?? throw new ArgumentNullException(nameof(maintenanceRecordRepository));
-        _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
-        _currentUserContext = currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
+        _maintenanceRecordRepository =
+            maintenanceRecordRepository
+            ?? throw new ArgumentNullException(nameof(maintenanceRecordRepository));
+        _vehicleRepository =
+            vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _currentUserContext =
+            currentUserContext ?? throw new ArgumentNullException(nameof(currentUserContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
     /// Create a new maintenance record with automatic next service calculation
     /// </summary>
-    public async Task<MaintenanceRecord> CreateMaintenanceRecordAsync(MaintenanceRecord maintenanceRecord)
+    public async Task<MaintenanceRecord> CreateMaintenanceRecordAsync(
+        MaintenanceRecord maintenanceRecord
+    )
     {
         try
         {
-            _logger.LogInformation("Creating maintenance record for vehicle: {VmfCode}, Type: {MaintenanceType}",
-                maintenanceRecord.VmfCode, maintenanceRecord.MaintenanceType);
+            _logger.LogInformation(
+                "Creating maintenance record for vehicle: {VmfCode}, Type: {MaintenanceType}",
+                maintenanceRecord.VmfCode,
+                maintenanceRecord.MaintenanceType
+            );
 
             // Set creation timestamp
             maintenanceRecord.CreatedDate = DateTime.UtcNow;
 
             // Calculate next service dates if intervals are provided
-            if (maintenanceRecord.ServiceIntervalDays.HasValue && maintenanceRecord.ServiceIntervalDays.Value > 0)
+            if (
+                maintenanceRecord.ServiceIntervalDays.HasValue
+                && maintenanceRecord.ServiceIntervalDays.Value > 0
+            )
             {
                 maintenanceRecord.NextServiceDate = CalculateNextServiceDate(
                     maintenanceRecord.MaintenanceDate,
-                    maintenanceRecord.ServiceIntervalDays.Value);
+                    maintenanceRecord.ServiceIntervalDays.Value
+                );
             }
 
-            if (maintenanceRecord.ServiceIntervalKm.HasValue && maintenanceRecord.ServiceIntervalKm.Value > 0)
+            if (
+                maintenanceRecord.ServiceIntervalKm.HasValue
+                && maintenanceRecord.ServiceIntervalKm.Value > 0
+            )
             {
                 maintenanceRecord.NextServiceOdometer = CalculateNextServiceOdometer(
                     maintenanceRecord.OdometerReading,
-                    maintenanceRecord.ServiceIntervalKm.Value);
+                    maintenanceRecord.ServiceIntervalKm.Value
+                );
             }
 
             // Set default status if not provided
@@ -61,16 +79,27 @@ public class MaintenanceService : IMaintenanceService
                 maintenanceRecord.Status = "COMPLETED";
             }
 
-            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
+            var created = await _maintenanceRecordRepository.CreateAsync(
+                maintenanceRecord,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Maintenance record created: ID {MaintenanceId}, Next service: {NextServiceDate} / {NextServiceOdometer}km",
-                created.MaintenanceId, created.NextServiceDate, created.NextServiceOdometer);
+            _logger.LogInformation(
+                "Maintenance record created: ID {MaintenanceId}, Next service: {NextServiceDate} / {NextServiceOdometer}km",
+                created.MaintenanceId,
+                created.NextServiceDate,
+                created.NextServiceOdometer
+            );
 
             return created;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating maintenance record for vehicle: {VmfCode}", maintenanceRecord.VmfCode);
+            _logger.LogError(
+                ex,
+                "Error creating maintenance record for vehicle: {VmfCode}",
+                maintenanceRecord.VmfCode
+            );
             throw;
         }
     }
@@ -82,33 +111,54 @@ public class MaintenanceService : IMaintenanceService
     {
         try
         {
-            _logger.LogInformation("Updating maintenance record: {MaintenanceId}", maintenanceRecord.MaintenanceId);
+            _logger.LogInformation(
+                "Updating maintenance record: {MaintenanceId}",
+                maintenanceRecord.MaintenanceId
+            );
 
             // Set modification timestamp
             maintenanceRecord.ModifiedDate = DateTime.UtcNow;
 
             // Recalculate next service dates if intervals changed
-            if (maintenanceRecord.ServiceIntervalDays.HasValue && maintenanceRecord.ServiceIntervalDays.Value > 0)
+            if (
+                maintenanceRecord.ServiceIntervalDays.HasValue
+                && maintenanceRecord.ServiceIntervalDays.Value > 0
+            )
             {
                 maintenanceRecord.NextServiceDate = CalculateNextServiceDate(
                     maintenanceRecord.MaintenanceDate,
-                    maintenanceRecord.ServiceIntervalDays.Value);
+                    maintenanceRecord.ServiceIntervalDays.Value
+                );
             }
 
-            if (maintenanceRecord.ServiceIntervalKm.HasValue && maintenanceRecord.ServiceIntervalKm.Value > 0)
+            if (
+                maintenanceRecord.ServiceIntervalKm.HasValue
+                && maintenanceRecord.ServiceIntervalKm.Value > 0
+            )
             {
                 maintenanceRecord.NextServiceOdometer = CalculateNextServiceOdometer(
                     maintenanceRecord.OdometerReading,
-                    maintenanceRecord.ServiceIntervalKm.Value);
+                    maintenanceRecord.ServiceIntervalKm.Value
+                );
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _maintenanceRecordRepository.UpdateAsync(
+                maintenanceRecord,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Maintenance record updated: {MaintenanceId}", maintenanceRecord.MaintenanceId);
+            _logger.LogInformation(
+                "Maintenance record updated: {MaintenanceId}",
+                maintenanceRecord.MaintenanceId
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating maintenance record: {MaintenanceId}", maintenanceRecord.MaintenanceId);
+            _logger.LogError(
+                ex,
+                "Error updating maintenance record: {MaintenanceId}",
+                maintenanceRecord.MaintenanceId
+            );
             throw;
         }
     }
@@ -175,8 +225,11 @@ public class MaintenanceService : IMaintenanceService
             {
                 if (DateTime.Now >= lastService.NextServiceDate.Value)
                 {
-                    _logger.LogInformation("Vehicle {VmfCode} due for service by date: {NextServiceDate}",
-                        vmfCode, lastService.NextServiceDate.Value);
+                    _logger.LogInformation(
+                        "Vehicle {VmfCode} due for service by date: {NextServiceDate}",
+                        vmfCode,
+                        lastService.NextServiceDate.Value
+                    );
                     return true;
                 }
             }
@@ -186,8 +239,12 @@ public class MaintenanceService : IMaintenanceService
             {
                 if (currentOdometer >= lastService.NextServiceOdometer.Value)
                 {
-                    _logger.LogInformation("Vehicle {VmfCode} due for service by odometer: {CurrentOdometer}/{NextServiceOdometer}km",
-                        vmfCode, currentOdometer, lastService.NextServiceOdometer.Value);
+                    _logger.LogInformation(
+                        "Vehicle {VmfCode} due for service by odometer: {CurrentOdometer}/{NextServiceOdometer}km",
+                        vmfCode,
+                        currentOdometer,
+                        lastService.NextServiceOdometer.Value
+                    );
                     return true;
                 }
             }
@@ -196,7 +253,11 @@ public class MaintenanceService : IMaintenanceService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking if maintenance is due for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error checking if maintenance is due for vehicle: {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -215,10 +276,12 @@ public class MaintenanceService : IMaintenanceService
             // Get all completed maintenance records with next service dates
             var allRecords = await _maintenanceRecordRepository.GetByServiceTypeAsync("SERVICE");
 
-            var dueRecords = allRecords.Where(mr =>
-                mr.Status == "COMPLETED" &&
-                (mr.NextServiceDate.HasValue && mr.NextServiceDate.Value <= cutoffDate)
-            ).ToList();
+            var dueRecords = allRecords
+                .Where(mr =>
+                    mr.Status == "COMPLETED"
+                    && (mr.NextServiceDate.HasValue && mr.NextServiceDate.Value <= cutoffDate)
+                )
+                .ToList();
 
             _logger.LogInformation("Found {Count} vehicles due for maintenance", dueRecords.Count);
 
@@ -242,12 +305,17 @@ public class MaintenanceService : IMaintenanceService
 
             var allRecords = await _maintenanceRecordRepository.GetByServiceTypeAsync("SERVICE");
 
-            var overdueRecords = allRecords.Where(mr =>
-                mr.Status == "COMPLETED" &&
-                (mr.NextServiceDate.HasValue && mr.NextServiceDate.Value < DateTime.Now)
-            ).ToList();
+            var overdueRecords = allRecords
+                .Where(mr =>
+                    mr.Status == "COMPLETED"
+                    && (mr.NextServiceDate.HasValue && mr.NextServiceDate.Value < DateTime.Now)
+                )
+                .ToList();
 
-            _logger.LogInformation("Found {Count} vehicles with overdue maintenance", overdueRecords.Count);
+            _logger.LogInformation(
+                "Found {Count} vehicles with overdue maintenance",
+                overdueRecords.Count
+            );
 
             return overdueRecords;
         }
@@ -268,14 +336,21 @@ public class MaintenanceService : IMaintenanceService
             var records = await _maintenanceRecordRepository.GetByVehicleAsync(vmfCode);
             var totalCost = records.Sum(mr => mr.TotalCost);
 
-            _logger.LogInformation("Total maintenance cost for vehicle {VmfCode}: {TotalCost:C}",
-                vmfCode, totalCost);
+            _logger.LogInformation(
+                "Total maintenance cost for vehicle {VmfCode}: {TotalCost:C}",
+                vmfCode,
+                totalCost
+            );
 
             return totalCost;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating total maintenance cost for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error calculating total maintenance cost for vehicle: {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -297,14 +372,21 @@ public class MaintenanceService : IMaintenanceService
 
             var averageCost = recordsList.Average(mr => mr.TotalCost);
 
-            _logger.LogInformation("Average maintenance cost for vehicle {VmfCode}: {AverageCost:C}",
-                vmfCode, averageCost);
+            _logger.LogInformation(
+                "Average maintenance cost for vehicle {VmfCode}: {AverageCost:C}",
+                vmfCode,
+                averageCost
+            );
 
             return averageCost;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating average maintenance cost for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error calculating average maintenance cost for vehicle: {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -336,14 +418,23 @@ public class MaintenanceService : IMaintenanceService
 
             var costPerKm = totalCost / totalKm;
 
-            _logger.LogInformation("Cost per km for vehicle {VmfCode}: {CostPerKm:C} ({TotalCost:C} / {TotalKm}km)",
-                vmfCode, costPerKm, totalCost, totalKm);
+            _logger.LogInformation(
+                "Cost per km for vehicle {VmfCode}: {CostPerKm:C} ({TotalCost:C} / {TotalKm}km)",
+                vmfCode,
+                costPerKm,
+                totalCost,
+                totalKm
+            );
 
             return costPerKm;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error calculating cost per kilometer for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error calculating cost per kilometer for vehicle: {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -351,7 +442,9 @@ public class MaintenanceService : IMaintenanceService
     /// <summary>
     /// Get maintenance records by service type
     /// </summary>
-    public async Task<IEnumerable<MaintenanceRecord>> GetMaintenanceByTypeAsync(string maintenanceType)
+    public async Task<IEnumerable<MaintenanceRecord>> GetMaintenanceByTypeAsync(
+        string maintenanceType
+    )
     {
         return await _maintenanceRecordRepository.GetByServiceTypeAsync(maintenanceType);
     }
@@ -359,7 +452,10 @@ public class MaintenanceService : IMaintenanceService
     /// <summary>
     /// Get maintenance records by date range
     /// </summary>
-    public async Task<IEnumerable<MaintenanceRecord>> GetMaintenanceByDateRangeAsync(DateTime startDate, DateTime endDate)
+    public async Task<IEnumerable<MaintenanceRecord>> GetMaintenanceByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         return await _maintenanceRecordRepository.GetByDateRangeAsync(startDate, endDate);
     }
@@ -393,25 +489,38 @@ public class MaintenanceService : IMaintenanceService
     /// <summary>
     /// Get vehicles with expiring roadworthy certificates
     /// </summary>
-    public async Task<IEnumerable<MaintenanceRecord>> GetExpiringRoadworthyCertificatesAsync(int daysAhead = 30)
+    public async Task<IEnumerable<MaintenanceRecord>> GetExpiringRoadworthyCertificatesAsync(
+        int daysAhead = 30
+    )
     {
         try
         {
-            _logger.LogInformation("Getting expiring roadworthy certificates within {DaysAhead} days", daysAhead);
+            _logger.LogInformation(
+                "Getting expiring roadworthy certificates within {DaysAhead} days",
+                daysAhead
+            );
 
             var cutoffDate = DateTime.Now.AddDays(daysAhead);
             var startDate = DateTime.Now.AddYears(-5); // Look back 5 years
             var endDate = DateTime.Now;
 
-            var allRecords = await _maintenanceRecordRepository.GetByDateRangeAsync(startDate, endDate);
+            var allRecords = await _maintenanceRecordRepository.GetByDateRangeAsync(
+                startDate,
+                endDate
+            );
 
-            var expiringRecords = allRecords.Where(mr =>
-                mr.RoadworthyExpiryDate.HasValue &&
-                mr.RoadworthyExpiryDate.Value <= cutoffDate &&
-                mr.RoadworthyExpiryDate.Value > DateTime.Now
-            ).ToList();
+            var expiringRecords = allRecords
+                .Where(mr =>
+                    mr.RoadworthyExpiryDate.HasValue
+                    && mr.RoadworthyExpiryDate.Value <= cutoffDate
+                    && mr.RoadworthyExpiryDate.Value > DateTime.Now
+                )
+                .ToList();
 
-            _logger.LogInformation("Found {Count} vehicles with expiring roadworthy certificates", expiringRecords.Count);
+            _logger.LogInformation(
+                "Found {Count} vehicles with expiring roadworthy certificates",
+                expiringRecords.Count
+            );
 
             return expiringRecords;
         }
@@ -429,22 +538,33 @@ public class MaintenanceService : IMaintenanceService
     {
         try
         {
-            _logger.LogInformation("Getting expiring warranties within {DaysAhead} days", daysAhead);
+            _logger.LogInformation(
+                "Getting expiring warranties within {DaysAhead} days",
+                daysAhead
+            );
 
             var cutoffDate = DateTime.Now.AddDays(daysAhead);
             var startDate = DateTime.Now.AddYears(-5); // Look back 5 years
             var endDate = DateTime.Now;
 
-            var allRecords = await _maintenanceRecordRepository.GetByDateRangeAsync(startDate, endDate);
+            var allRecords = await _maintenanceRecordRepository.GetByDateRangeAsync(
+                startDate,
+                endDate
+            );
 
-            var expiringRecords = allRecords.Where(mr =>
-                mr.WarrantyExpiryDate.HasValue &&
-                mr.WarrantyExpiryDate.Value <= cutoffDate &&
-                mr.WarrantyExpiryDate.Value > DateTime.Now &&
-                mr.WarrantyWorkFlag == "Y"
-            ).ToList();
+            var expiringRecords = allRecords
+                .Where(mr =>
+                    mr.WarrantyExpiryDate.HasValue
+                    && mr.WarrantyExpiryDate.Value <= cutoffDate
+                    && mr.WarrantyExpiryDate.Value > DateTime.Now
+                    && mr.WarrantyWorkFlag == "Y"
+                )
+                .ToList();
 
-            _logger.LogInformation("Found {Count} vehicles with expiring warranties", expiringRecords.Count);
+            _logger.LogInformation(
+                "Found {Count} vehicles with expiring warranties",
+                expiringRecords.Count
+            );
 
             return expiringRecords;
         }
@@ -497,12 +617,16 @@ public class MaintenanceService : IMaintenanceService
         DateTime scheduledDate,
         string maintenanceType,
         string description,
-        int? estimatedOdometer = null)
+        int? estimatedOdometer = null
+    )
     {
         try
         {
-            _logger.LogInformation("Scheduling maintenance for vehicle {VmfCode} on {ScheduledDate}",
-                vmfCode, scheduledDate);
+            _logger.LogInformation(
+                "Scheduling maintenance for vehicle {VmfCode} on {ScheduledDate}",
+                vmfCode,
+                scheduledDate
+            );
 
             var maintenanceRecord = new MaintenanceRecord
             {
@@ -514,12 +638,18 @@ public class MaintenanceService : IMaintenanceService
                 OdometerReading = estimatedOdometer ?? 0,
                 Status = "SCHEDULED",
                 CreatedDate = DateTime.UtcNow,
-                StillCurrentFlag = "Y"
+                StillCurrentFlag = "Y",
             };
 
-            var created = await _maintenanceRecordRepository.CreateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
+            var created = await _maintenanceRecordRepository.CreateAsync(
+                maintenanceRecord,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Maintenance scheduled: ID {MaintenanceId}", created.MaintenanceId);
+            _logger.LogInformation(
+                "Maintenance scheduled: ID {MaintenanceId}",
+                created.MaintenanceId
+            );
 
             return created;
         }
@@ -538,7 +668,8 @@ public class MaintenanceService : IMaintenanceService
         DateTime actualDate,
         int actualOdometer,
         decimal totalCost,
-        string? mechanicNotes = null)
+        string? mechanicNotes = null
+    )
     {
         try
         {
@@ -547,7 +678,9 @@ public class MaintenanceService : IMaintenanceService
             var maintenanceRecord = await _maintenanceRecordRepository.GetByIdAsync(maintenanceId);
             if (maintenanceRecord == null)
             {
-                throw new InvalidOperationException($"Maintenance record {maintenanceId} not found");
+                throw new InvalidOperationException(
+                    $"Maintenance record {maintenanceId} not found"
+                );
             }
 
             maintenanceRecord.MaintenanceDate = actualDate;
@@ -561,18 +694,28 @@ public class MaintenanceService : IMaintenanceService
             if (maintenanceRecord.ServiceIntervalDays.HasValue)
             {
                 maintenanceRecord.NextServiceDate = CalculateNextServiceDate(
-                    actualDate, maintenanceRecord.ServiceIntervalDays.Value);
+                    actualDate,
+                    maintenanceRecord.ServiceIntervalDays.Value
+                );
             }
 
             if (maintenanceRecord.ServiceIntervalKm.HasValue)
             {
                 maintenanceRecord.NextServiceOdometer = CalculateNextServiceOdometer(
-                    actualOdometer, maintenanceRecord.ServiceIntervalKm.Value);
+                    actualOdometer,
+                    maintenanceRecord.ServiceIntervalKm.Value
+                );
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _maintenanceRecordRepository.UpdateAsync(
+                maintenanceRecord,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
-            _logger.LogInformation("Maintenance {MaintenanceId} completed successfully", maintenanceId);
+            _logger.LogInformation(
+                "Maintenance {MaintenanceId} completed successfully",
+                maintenanceId
+            );
         }
         catch (Exception ex)
         {
@@ -588,13 +731,18 @@ public class MaintenanceService : IMaintenanceService
     {
         try
         {
-            _logger.LogInformation("Cancelling maintenance {MaintenanceId}, Reason: {Reason}",
-                maintenanceId, reason ?? "Not specified");
+            _logger.LogInformation(
+                "Cancelling maintenance {MaintenanceId}, Reason: {Reason}",
+                maintenanceId,
+                reason ?? "Not specified"
+            );
 
             var maintenanceRecord = await _maintenanceRecordRepository.GetByIdAsync(maintenanceId);
             if (maintenanceRecord == null)
             {
-                throw new InvalidOperationException($"Maintenance record {maintenanceId} not found");
+                throw new InvalidOperationException(
+                    $"Maintenance record {maintenanceId} not found"
+                );
             }
 
             maintenanceRecord.Status = "CANCELLED";
@@ -605,7 +753,10 @@ public class MaintenanceService : IMaintenanceService
                 maintenanceRecord.MechanicNotes = $"CANCELLED: {reason}";
             }
 
-            await _maintenanceRecordRepository.UpdateAsync(maintenanceRecord, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _maintenanceRecordRepository.UpdateAsync(
+                maintenanceRecord,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
             _logger.LogInformation("Maintenance {MaintenanceId} cancelled", maintenanceId);
         }
@@ -643,7 +794,10 @@ public class MaintenanceService : IMaintenanceService
     {
         try
         {
-            _logger.LogInformation("Generating maintenance statistics for vehicle {VmfCode}", vmfCode);
+            _logger.LogInformation(
+                "Generating maintenance statistics for vehicle {VmfCode}",
+                vmfCode
+            );
 
             var records = await _maintenanceRecordRepository.GetByVehicleAsync(vmfCode);
             var recordsList = records.ToList();
@@ -669,19 +823,26 @@ public class MaintenanceService : IMaintenanceService
                     .GroupBy(mr => mr.MaintenanceType)
                     .ToDictionary(g => g.Key, g => g.Sum(mr => mr.TotalCost)),
                 MaintenanceDue = await IsMaintenanceDueAsync(vmfCode, currentOdometer),
-                MaintenanceOverdue = lastService?.NextServiceDate.HasValue == true &&
-                                    lastService.NextServiceDate.Value < DateTime.Now,
-                RoadworthyExpiringSoon = lastService?.RoadworthyExpiryDate.HasValue == true &&
-                                        lastService.RoadworthyExpiryDate.Value <= DateTime.Now.AddDays(30),
-                WarrantyExpiringSoon = lastService?.WarrantyExpiryDate.HasValue == true &&
-                                      lastService.WarrantyExpiryDate.Value <= DateTime.Now.AddDays(30)
+                MaintenanceOverdue =
+                    lastService?.NextServiceDate.HasValue == true
+                    && lastService.NextServiceDate.Value < DateTime.Now,
+                RoadworthyExpiringSoon =
+                    lastService?.RoadworthyExpiryDate.HasValue == true
+                    && lastService.RoadworthyExpiryDate.Value <= DateTime.Now.AddDays(30),
+                WarrantyExpiringSoon =
+                    lastService?.WarrantyExpiryDate.HasValue == true
+                    && lastService.WarrantyExpiryDate.Value <= DateTime.Now.AddDays(30),
             };
 
             return stats;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating maintenance statistics for vehicle {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error generating maintenance statistics for vehicle {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -693,7 +854,10 @@ public class MaintenanceService : IMaintenanceService
     {
         try
         {
-            _logger.LogInformation("Generating service history report for vehicle {VmfCode}", vmfCode);
+            _logger.LogInformation(
+                "Generating service history report for vehicle {VmfCode}",
+                vmfCode
+            );
 
             var records = await _maintenanceRecordRepository.GetByVehicleAsync(vmfCode);
             var recordsList = records.OrderBy(mr => mr.MaintenanceDate).ToList();
@@ -706,10 +870,12 @@ public class MaintenanceService : IMaintenanceService
                 RegistrationNumber = vehicle?.registration_number,
                 MaintenanceRecords = recordsList,
                 TotalCost = recordsList.Sum(mr => mr.TotalCost),
-                AverageCostPerService = recordsList.Any() ? recordsList.Average(mr => mr.TotalCost) : 0,
+                AverageCostPerService = recordsList.Any()
+                    ? recordsList.Average(mr => mr.TotalCost)
+                    : 0,
                 TotalServices = recordsList.Count,
                 FirstServiceDate = recordsList.FirstOrDefault()?.MaintenanceDate,
-                LastServiceDate = recordsList.LastOrDefault()?.MaintenanceDate
+                LastServiceDate = recordsList.LastOrDefault()?.MaintenanceDate,
             };
 
             // Calculate average intervals
@@ -733,7 +899,11 @@ public class MaintenanceService : IMaintenanceService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating service history report for vehicle {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error generating service history report for vehicle {VmfCode}",
+                vmfCode
+            );
             throw;
         }
     }
@@ -750,19 +920,28 @@ public class MaintenanceService : IMaintenanceService
             var maintenanceRecord = await _maintenanceRecordRepository.GetByIdAsync(maintenanceId);
             if (maintenanceRecord == null)
             {
-                throw new InvalidOperationException($"Maintenance record {maintenanceId} not found");
+                throw new InvalidOperationException(
+                    $"Maintenance record {maintenanceId} not found"
+                );
             }
 
             // Could add validation here to prevent deletion of certain records
             // For example, don't delete if it's linked to warranty claims, etc.
 
-            await _maintenanceRecordRepository.DeleteAsync(maintenanceId, _currentUserContext.GetCurrentUserIdOrDefault());
+            await _maintenanceRecordRepository.DeleteAsync(
+                maintenanceId,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            );
 
             _logger.LogInformation("Maintenance record deleted: {MaintenanceId}", maintenanceId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting maintenance record: {MaintenanceId}", maintenanceId);
+            _logger.LogError(
+                ex,
+                "Error deleting maintenance record: {MaintenanceId}",
+                maintenanceId
+            );
             throw;
         }
     }

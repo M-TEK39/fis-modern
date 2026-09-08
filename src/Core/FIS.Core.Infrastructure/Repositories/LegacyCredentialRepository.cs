@@ -16,9 +16,9 @@ public class LegacyCredentialRepository : ILegacyCredentialRepository
 
     public async Task<LegacyUserCredential?> GetByUserAccessCodeAsync(int userAccessCode)
     {
-        return await _context.LegacyUserCredentials
-                
-                .FirstOrDefaultAsync(c => c.user_access_code == userAccessCode);
+        return await _context.LegacyUserCredentials.FirstOrDefaultAsync(c =>
+            c.user_access_code == userAccessCode
+        );
     }
 
     public async Task<List<LegacyUserCredential>> GetAllAsync()
@@ -26,22 +26,29 @@ public class LegacyCredentialRepository : ILegacyCredentialRepository
         return await _context.LegacyUserCredentials.ToListAsync();
     }
 
-    public async Task<LegacyUserCredential> CreateAsync(LegacyUserCredential credential, int currentUserId)
+    public async Task<LegacyUserCredential> CreateAsync(
+        LegacyUserCredential credential,
+        int currentUserId
+    )
     {
-            
-            _context.LegacyUserCredentials.Add(credential);
+        _context.LegacyUserCredentials.Add(credential);
         await _context.SaveChangesAsync();
         return credential;
     }
 
-    public async Task<LegacyUserCredential> UpdateAsync(LegacyUserCredential credential, int currentUserId)
+    public async Task<LegacyUserCredential> UpdateAsync(
+        LegacyUserCredential credential,
+        int currentUserId
+    )
     {
         if (credential == null)
             throw new ArgumentNullException(nameof(credential));
 
         var existing = await _context.LegacyUserCredentials.FindAsync(credential.credential_id);
         if (existing == null)
-            throw new InvalidOperationException($"LegacyUserCredential with credential_id {credential.credential_id} not found");
+            throw new InvalidOperationException(
+                $"LegacyUserCredential with credential_id {credential.credential_id} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(credential);
         await _context.SaveChangesAsync();
@@ -60,7 +67,8 @@ public class LegacyCredentialRepository : ILegacyCredentialRepository
 
     public async Task<bool> ExistsAsync(int userAccessCode)
     {
-        return await _context.LegacyUserCredentials
-            .AnyAsync(c => c.user_access_code == userAccessCode);
+        return await _context.LegacyUserCredentials.AnyAsync(c =>
+            c.user_access_code == userAccessCode
+        );
     }
 }

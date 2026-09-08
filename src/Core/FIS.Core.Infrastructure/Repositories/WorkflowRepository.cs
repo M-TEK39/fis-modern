@@ -16,28 +16,30 @@ public class WorkflowRepository : IWorkflowRepository
 
     public async Task<Workflow?> GetByIdAsync(int workflowId)
     {
-        return await _context.Workflows
-            .FirstOrDefaultAsync(w => w.WorkflowID == workflowId && !w.is_deleted);
+        return await _context.Workflows.FirstOrDefaultAsync(w =>
+            w.WorkflowID == workflowId && !w.is_deleted
+        );
     }
 
     public async Task<Workflow?> GetByNameAsync(string workflowName)
     {
-        return await _context.Workflows
-            .FirstOrDefaultAsync(w => w.WorkflowName == workflowName && !w.is_deleted);
+        return await _context.Workflows.FirstOrDefaultAsync(w =>
+            w.WorkflowName == workflowName && !w.is_deleted
+        );
     }
 
     public async Task<IEnumerable<Workflow>> GetAllAsync()
     {
-        return await _context.Workflows
-            .Where(w => !w.is_deleted)
+        return await _context
+            .Workflows.Where(w => !w.is_deleted)
             .OrderBy(w => w.WorkflowName)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Workflow>> GetActiveWorkflowsAsync()
     {
-        return await _context.Workflows
-            .Where(w => !w.is_deleted && w.AlwaysExecute)
+        return await _context
+            .Workflows.Where(w => !w.is_deleted && w.AlwaysExecute)
             .OrderBy(w => w.WorkflowName)
             .ToListAsync();
     }
@@ -60,7 +62,9 @@ public class WorkflowRepository : IWorkflowRepository
 
         var existing = await _context.Workflows.FindAsync(workflow.WorkflowID);
         if (existing == null || existing.is_deleted)
-            throw new InvalidOperationException($"Workflow with ID {workflow.WorkflowID} not found");
+            throw new InvalidOperationException(
+                $"Workflow with ID {workflow.WorkflowID} not found"
+            );
 
         workflow.date_updated = DateTime.Now;
         workflow.modified_by_user_code = currentUserId;

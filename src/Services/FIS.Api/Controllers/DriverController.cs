@@ -86,7 +86,7 @@ public class DriverController : BaseApiController
                 DriverHasPDP = d.driver_hasPDP,
                 DriverPDPExpiryDate = d.driver_PDP_ExpiryDate,
                 DriverLicenceExpiryDate = d.driver_licence_ExpiryDate,
-                DriverActive = d.driver_active
+                DriverActive = d.driver_active,
             });
             return Ok(driverDtos);
         }
@@ -127,7 +127,7 @@ public class DriverController : BaseApiController
                 DriverHasPDP = driver.driver_hasPDP,
                 DriverPDPExpiryDate = driver.driver_PDP_ExpiryDate,
                 DriverLicenceExpiryDate = driver.driver_licence_ExpiryDate,
-                DriverActive = driver.driver_active
+                DriverActive = driver.driver_active,
             };
 
             return Ok(driverDto);
@@ -175,20 +175,26 @@ public class DriverController : BaseApiController
                 DriverHasPDP = driver.driver_hasPDP,
                 DriverPDPExpiryDate = driver.driver_PDP_ExpiryDate,
                 DriverLicenceExpiryDate = driver.driver_licence_ExpiryDate,
-                DriverActive = driver.driver_active
+                DriverActive = driver.driver_active,
             };
 
             return Ok(driverDto);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving driver with licence number {LicenceNumber}", licenceNumber);
+            _logger.LogError(
+                ex,
+                "Error retrieving driver with licence number {LicenceNumber}",
+                licenceNumber
+            );
             return StatusCode(500, "Internal server error");
         }
     }
 
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<DriverDto>>> SearchDrivers([FromQuery] string searchTerm)
+    public async Task<ActionResult<IEnumerable<DriverDto>>> SearchDrivers(
+        [FromQuery] string searchTerm
+    )
     {
         try
         {
@@ -212,7 +218,7 @@ public class DriverController : BaseApiController
                 DriverHasPDP = d.driver_hasPDP,
                 DriverPDPExpiryDate = d.driver_PDP_ExpiryDate,
                 DriverLicenceExpiryDate = d.driver_licence_ExpiryDate,
-                DriverActive = d.driver_active
+                DriverActive = d.driver_active,
             });
             return Ok(driverDtos);
         }
@@ -224,7 +230,9 @@ public class DriverController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<DriverDto>> CreateDriver([FromBody] CreateDriverDto createDriverDto)
+    public async Task<ActionResult<DriverDto>> CreateDriver(
+        [FromBody] CreateDriverDto createDriverDto
+    )
     {
         try
         {
@@ -246,7 +254,7 @@ public class DriverController : BaseApiController
                 driver_hasPDP = createDriverDto.DriverHasPDP,
                 driver_PDP_ExpiryDate = createDriverDto.DriverPDPExpiryDate,
                 driver_licence_ExpiryDate = createDriverDto.DriverLicenceExpiryDate,
-                driver_active = createDriverDto.DriverActive
+                driver_active = createDriverDto.DriverActive,
             };
 
             var createdDriver = await _driverRepository.CreateAsync(driver, currentUserId);
@@ -268,10 +276,14 @@ public class DriverController : BaseApiController
                 DriverHasPDP = createdDriver.driver_hasPDP,
                 DriverPDPExpiryDate = createdDriver.driver_PDP_ExpiryDate,
                 DriverLicenceExpiryDate = createdDriver.driver_licence_ExpiryDate,
-                DriverActive = createdDriver.driver_active
+                DriverActive = createdDriver.driver_active,
             };
 
-            return CreatedAtAction(nameof(GetDriver), new { id = createdDriver.site_driver_code.ToString() }, driverDto);
+            return CreatedAtAction(
+                nameof(GetDriver),
+                new { id = createdDriver.site_driver_code.ToString() },
+                driverDto
+            );
         }
         catch (Exception ex)
         {
@@ -281,7 +293,10 @@ public class DriverController : BaseApiController
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<DriverDto>> UpdateDriver(string id, [FromBody] UpdateDriverDto updateDriverDto)
+    public async Task<ActionResult<DriverDto>> UpdateDriver(
+        string id,
+        [FromBody] UpdateDriverDto updateDriverDto
+    )
     {
         try
         {
@@ -303,7 +318,8 @@ public class DriverController : BaseApiController
             existingDriver.driver_contractnumber = updateDriverDto.DriverContractNumber;
             existingDriver.driver_licence_number = updateDriverDto.DriverLicenceNumber;
             existingDriver.driver_licence_issuedate = updateDriverDto.DriverLicenceIssueDate;
-            existingDriver.driver_licence_lastVerifiedDate = updateDriverDto.DriverLicenceLastVerifiedDate;
+            existingDriver.driver_licence_lastVerifiedDate =
+                updateDriverDto.DriverLicenceLastVerifiedDate;
             existingDriver.driver_hasPDP = updateDriverDto.DriverHasPDP;
             existingDriver.driver_PDP_ExpiryDate = updateDriverDto.DriverPDPExpiryDate;
             existingDriver.driver_licence_ExpiryDate = updateDriverDto.DriverLicenceExpiryDate;
@@ -328,7 +344,7 @@ public class DriverController : BaseApiController
                 DriverHasPDP = existingDriver.driver_hasPDP,
                 DriverPDPExpiryDate = existingDriver.driver_PDP_ExpiryDate,
                 DriverLicenceExpiryDate = existingDriver.driver_licence_ExpiryDate,
-                DriverActive = existingDriver.driver_active
+                DriverActive = existingDriver.driver_active,
             };
 
             return Ok(driverDto);

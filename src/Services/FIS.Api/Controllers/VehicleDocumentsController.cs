@@ -27,8 +27,16 @@ public class VehicleDocumentsController : BaseApiController
 {
     private static readonly HashSet<string> ValidCategories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Accident", "Licence", "Fine", "Logbook", "Maintenance",
-        "Contract", "Registration", "Insurance", "RoadWorthy", "Other"
+        "Accident",
+        "Licence",
+        "Fine",
+        "Logbook",
+        "Maintenance",
+        "Contract",
+        "Registration",
+        "Insurance",
+        "RoadWorthy",
+        "Other",
     };
 
     private readonly IVehicleDocumentRepository _repository;
@@ -40,7 +48,8 @@ public class VehicleDocumentsController : BaseApiController
         IVehicleDocumentRepository repository,
         IVehicleRepository vehicleRepository,
         IConfiguration config,
-        ILogger<VehicleDocumentsController> logger)
+        ILogger<VehicleDocumentsController> logger
+    )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
@@ -60,13 +69,15 @@ public class VehicleDocumentsController : BaseApiController
             var docs = await _repository.GetByVehicleAsync(vmfCode, category);
             var result = docs.Select(MapToDto).ToList();
 
-            return Ok(new
-            {
-                vmf_code = vmfCode,
-                category_filter = category,
-                total_count = result.Count,
-                documents = result
-            });
+            return Ok(
+                new
+                {
+                    vmf_code = vmfCode,
+                    category_filter = category,
+                    total_count = result.Count,
+                    documents = result,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -78,8 +89,7 @@ public class VehicleDocumentsController : BaseApiController
     // ── GET /api/vehicles/{vmfCode}/documents/categories ─────────────────
     /// <summary>Returns the valid document category list for populating dropdowns.</summary>
     [HttpGet("categories")]
-    public ActionResult GetCategories() =>
-        Ok(ValidCategories.OrderBy(c => c).ToList());
+    public ActionResult GetCategories() => Ok(ValidCategories.OrderBy(c => c).ToList());
 
     // ── POST /api/vehicles/{vmfCode}/documents ────────────────────────────
     /// <summary>
@@ -96,7 +106,8 @@ public class VehicleDocumentsController : BaseApiController
         [FromForm] string category = "Other",
         [FromForm] string? description = null,
         [FromForm] string? reference_type = null,
-        [FromForm] int? reference_id = null)
+        [FromForm] int? reference_id = null
+    )
     {
         try
         {
@@ -107,32 +118,44 @@ public class VehicleDocumentsController : BaseApiController
 
             // Validate category
             if (!ValidCategories.Contains(category))
-                return BadRequest(new { error = $"Invalid category '{category}'. Valid values: {string.Join(", ", ValidCategories.OrderBy(c => c))}" });
+                return BadRequest(
+                    new
+                    {
+                        error = $"Invalid category '{category}'. Valid values: {string.Join(", ", ValidCategories.OrderBy(c => c))}",
+                    }
+                );
 
             // Validate file
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file provided" });
 
-            var allowedMimes = _config.GetSection("DocumentStorage:AllowedMimeTypes").Get<string[]>()
-                               ?? new[] { "image/jpeg", "image/png", "application/pdf" };
+            var allowedMimes =
+                _config.GetSection("DocumentStorage:AllowedMimeTypes").Get<string[]>() ?? new[]
+                {
+                    "image/jpeg",
+                    "image/png",
+                    "application/pdf",
+                };
 
             var maxSize = _config.GetValue<long>("DocumentStorage:MaxFileSizeBytes", 20_971_520);
 
             if (file.Length > maxSize)
-                return BadRequest(new { error = $"File exceeds maximum size of {maxSize / 1_048_576} MB" });
+                return BadRequest(
+                    new { error = $"File exceeds maximum size of {maxSize / 1_048_576} MB" }
+                );
 
             var mimeType = file.ContentType?.ToLower() ?? "application/octet-stream";
             if (!allowedMimes.Contains(mimeType))
                 return BadRequest(new { error = $"File type '{mimeType}' is not allowed" });
 
             // Build storage path: {basePath}/{vmfCode}/{category}/{guid}{ext}
-            var basePath  = _config["DocumentStorage:BasePath"] ?? "uploads/documents";
-            var ext       = Path.GetExtension(file.FileName);
+            var basePath = _config["DocumentStorage:BasePath"] ?? "uploads/documents";
+            var ext = Path.GetExtension(file.FileName);
             var storedName = $"{Guid.NewGuid()}{ext}";
-            var relDir    = Path.Combine(vmfCode.ToString(), category);
-            var relPath   = Path.Combine(relDir, storedName);
-            var absDir    = Path.Combine(Directory.GetCurrentDirectory(), basePath, relDir);
-            var absPath   = Path.Combine(absDir, storedName);
+            var relDir = Path.Combine(vmfCode.ToString(), category);
+            var relPath = Path.Combine(relDir, storedName);
+            var absDir = Path.Combine(Directory.GetCurrentDirectory(), basePath, relDir);
+            var absPath = Path.Combine(absDir, storedName);
 
             Directory.CreateDirectory(absDir);
 
@@ -141,27 +164,33 @@ public class VehicleDocumentsController : BaseApiController
 
             var document = new VehicleDocument
             {
-                vmf_code           = vmfCode,
-                document_category  = category,
+                vmf_code = vmfCode,
+                document_category = category,
                 document_description = description,
                 original_file_name = file.FileName,
-                stored_file_path   = relPath.Replace('\\', '/'),
-                mime_type          = mimeType,
-                file_size_bytes    = file.Length,
-                reference_type     = reference_type,
-                reference_id       = reference_id,
-                created_by_user_code = GetCurrentUserId()
+                stored_file_path = relPath.Replace('\\', '/'),
+                mime_type = mimeType,
+                file_size_bytes = file.Length,
+                reference_type = reference_type,
+                reference_id = reference_id,
+                created_by_user_code = GetCurrentUserId(),
             };
 
             var created = await _repository.CreateAsync(document);
 
             _logger.LogInformation(
                 "Document uploaded: vehicle {VmfCode}, category {Category}, file {FileName}, size {Size} bytes",
-                vmfCode, category, file.FileName, file.Length);
+                vmfCode,
+                category,
+                file.FileName,
+                file.Length
+            );
 
-            return CreatedAtAction(nameof(Download),
+            return CreatedAtAction(
+                nameof(Download),
                 new { vmfCode, documentId = created.document_id },
-                MapToDto(created));
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -185,7 +214,11 @@ public class VehicleDocumentsController : BaseApiController
                 return NotFound(new { error = "Document not found" });
 
             var basePath = _config["DocumentStorage:BasePath"] ?? "uploads/documents";
-            var absPath  = Path.Combine(Directory.GetCurrentDirectory(), basePath, doc.stored_file_path.Replace('/', Path.DirectorySeparatorChar));
+            var absPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                basePath,
+                doc.stored_file_path.Replace('/', Path.DirectorySeparatorChar)
+            );
 
             if (!System.IO.File.Exists(absPath))
                 return NotFound(new { error = "File not found on server" });
@@ -195,7 +228,12 @@ public class VehicleDocumentsController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error downloading document {DocumentId} for vehicle {VmfCode}", documentId, vmfCode);
+            _logger.LogError(
+                ex,
+                "Error downloading document {DocumentId} for vehicle {VmfCode}",
+                documentId,
+                vmfCode
+            );
             return StatusCode(500, new { error = "Failed to retrieve document" });
         }
     }
@@ -213,18 +251,31 @@ public class VehicleDocumentsController : BaseApiController
 
             // Remove physical file
             var basePath = _config["DocumentStorage:BasePath"] ?? "uploads/documents";
-            var absPath  = Path.Combine(Directory.GetCurrentDirectory(), basePath, doc.stored_file_path.Replace('/', Path.DirectorySeparatorChar));
+            var absPath = Path.Combine(
+                Directory.GetCurrentDirectory(),
+                basePath,
+                doc.stored_file_path.Replace('/', Path.DirectorySeparatorChar)
+            );
             if (System.IO.File.Exists(absPath))
                 System.IO.File.Delete(absPath);
 
             await _repository.DeleteAsync(documentId);
 
-            _logger.LogInformation("Document {DocumentId} deleted for vehicle {VmfCode}", documentId, vmfCode);
+            _logger.LogInformation(
+                "Document {DocumentId} deleted for vehicle {VmfCode}",
+                documentId,
+                vmfCode
+            );
             return Ok(new { message = "Document deleted", document_id = documentId });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting document {DocumentId} for vehicle {VmfCode}", documentId, vmfCode);
+            _logger.LogError(
+                ex,
+                "Error deleting document {DocumentId} for vehicle {VmfCode}",
+                documentId,
+                vmfCode
+            );
             return StatusCode(500, new { error = "Failed to delete document" });
         }
     }
@@ -235,13 +286,25 @@ public class VehicleDocumentsController : BaseApiController
     /// e.g. GET .../documents/by-reference?type=Accident&amp;id=42
     /// </summary>
     [HttpGet("by-reference")]
-    public async Task<ActionResult> GetByReference(int vmfCode, [FromQuery] string type, [FromQuery] int id)
+    public async Task<ActionResult> GetByReference(
+        int vmfCode,
+        [FromQuery] string type,
+        [FromQuery] int id
+    )
     {
         try
         {
             var docs = await _repository.GetByReferenceAsync(type, id);
             var filtered = docs.Where(d => d.vmf_code == vmfCode).Select(MapToDto).ToList();
-            return Ok(new { reference_type = type, reference_id = id, total_count = filtered.Count, documents = filtered });
+            return Ok(
+                new
+                {
+                    reference_type = type,
+                    reference_id = id,
+                    total_count = filtered.Count,
+                    documents = filtered,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -251,20 +314,21 @@ public class VehicleDocumentsController : BaseApiController
     }
 
     // ── Mapping ───────────────────────────────────────────────────────────
-    private static object MapToDto(VehicleDocument d) => new
-    {
-        d.document_id,
-        d.vmf_code,
-        d.document_category,
-        d.document_description,
-        d.original_file_name,
-        d.mime_type,
-        file_size_kb    = Math.Round(d.file_size_bytes / 1024.0, 1),
-        d.reference_type,
-        d.reference_id,
-        d.date_created,
-        download_url    = $"/api/vehicles/{d.vmf_code}/documents/{d.document_id}/download",
-        is_image        = d.mime_type.StartsWith("image/"),
-        is_pdf          = d.mime_type == "application/pdf"
-    };
+    private static object MapToDto(VehicleDocument d) =>
+        new
+        {
+            d.document_id,
+            d.vmf_code,
+            d.document_category,
+            d.document_description,
+            d.original_file_name,
+            d.mime_type,
+            file_size_kb = Math.Round(d.file_size_bytes / 1024.0, 1),
+            d.reference_type,
+            d.reference_id,
+            d.date_created,
+            download_url = $"/api/vehicles/{d.vmf_code}/documents/{d.document_id}/download",
+            is_image = d.mime_type.StartsWith("image/"),
+            is_pdf = d.mime_type == "application/pdf",
+        };
 }

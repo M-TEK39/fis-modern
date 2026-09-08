@@ -18,7 +18,8 @@ public class UserClaimsService : IUserClaimsService
     public UserClaimsService(
         IEntraIdUserMappingRepository mappingRepository,
         IUserRepository userRepository,
-        ICurrentUserContext currentUserContext)
+        ICurrentUserContext currentUserContext
+    )
     {
         _mappingRepository = mappingRepository;
         _userRepository = userRepository;
@@ -79,7 +80,10 @@ public class UserClaimsService : IUserClaimsService
                 // Update existing mapping
                 existingMapping.user_access_code = userAccessCode;
                 existingMapping.created_date = DateTime.UtcNow; // Update timestamp
-                await _mappingRepository.UpdateAsync(existingMapping, _currentUserContext.GetCurrentUserIdOrDefault());
+                await _mappingRepository.UpdateAsync(
+                    existingMapping,
+                    _currentUserContext.GetCurrentUserIdOrDefault()
+                );
             }
             else
             {
@@ -88,9 +92,12 @@ public class UserClaimsService : IUserClaimsService
                 {
                     entra_object_id = entraObjectId,
                     user_access_code = userAccessCode,
-                    created_date = DateTime.UtcNow
+                    created_date = DateTime.UtcNow,
                 };
-                await _mappingRepository.CreateAsync(newMapping, _currentUserContext.GetCurrentUserIdOrDefault());
+                await _mappingRepository.CreateAsync(
+                    newMapping,
+                    _currentUserContext.GetCurrentUserIdOrDefault()
+                );
             }
 
             return true;

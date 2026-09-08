@@ -76,8 +76,11 @@ public class ConditionEvaluator : IConditionEvaluator
             // Check if it has errors
             if (ncalcExpression.HasErrors())
             {
-                _logger.LogWarning("Invalid expression: {Expression} - {Error}", 
-                    expression, ncalcExpression.Error);
+                _logger.LogWarning(
+                    "Invalid expression: {Expression} - {Error}",
+                    expression,
+                    ncalcExpression.Error
+                );
                 return false;
             }
 

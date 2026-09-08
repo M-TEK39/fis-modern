@@ -25,8 +25,8 @@ public class InvoiceRepository : IInvoiceRepository
     /// <returns>Invoice if found</returns>
     public async Task<Invoice?> GetByIdAsync(int id)
     {
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
             .FirstOrDefaultAsync(i => i.invoice_code == id);
     }
 
@@ -36,8 +36,8 @@ public class InvoiceRepository : IInvoiceRepository
     /// <returns>List of all invoices</returns>
     public async Task<List<Invoice>> GetAllAsync()
     {
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
             .OrderByDescending(i => i.posting_month_code)
             .ToListAsync();
     }
@@ -69,7 +69,9 @@ public class InvoiceRepository : IInvoiceRepository
 
         var existing = await _context.Invoices.FindAsync(invoice.invoice_code);
         if (existing == null)
-            throw new InvalidOperationException($"Invoice with invoice_code {invoice.invoice_code} not found");
+            throw new InvalidOperationException(
+                $"Invoice with invoice_code {invoice.invoice_code} not found"
+            );
 
         _context.Entry(existing).CurrentValues.SetValues(invoice);
         await _context.SaveChangesAsync();
@@ -88,8 +90,8 @@ public class InvoiceRepository : IInvoiceRepository
             return false;
 
         // Soft delete instead of hard delete
-                invoice.is_deleted = true;
-                invoice.date_updated = DateTime.UtcNow;
+        invoice.is_deleted = true;
+        invoice.date_updated = DateTime.UtcNow;
         await _context.SaveChangesAsync();
         return true;
     }
@@ -105,16 +107,19 @@ public class InvoiceRepository : IInvoiceRepository
     public async Task<List<Invoice>> GetByDepartmentAndPeriodAsync(
         int departmentCode,
         DateTime fromDate,
-        DateTime toDate)
+        DateTime toDate
+    )
     {
         var fromMonthCode = (short)(fromDate.Year * 100 + fromDate.Month);
         var toMonthCode = (short)(toDate.Year * 100 + toDate.Month);
-        
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
-            .Where(i => i.department_code == departmentCode && 
-                       i.posting_month_code >= fromMonthCode && 
-                       i.posting_month_code <= toMonthCode)
+
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
+            .Where(i =>
+                i.department_code == departmentCode
+                && i.posting_month_code >= fromMonthCode
+                && i.posting_month_code <= toMonthCode
+            )
             .OrderByDescending(i => i.posting_month_code)
             .ToListAsync();
     }
@@ -126,8 +131,8 @@ public class InvoiceRepository : IInvoiceRepository
     /// <returns>List of invoices for the department</returns>
     public async Task<List<Invoice>> GetByDepartmentAsync(short departmentCode)
     {
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
             .Where(i => i.department_code == departmentCode)
             .OrderByDescending(i => i.posting_month_code)
             .ToListAsync();
@@ -140,8 +145,8 @@ public class InvoiceRepository : IInvoiceRepository
     /// <returns>List of invoices for the month</returns>
     public async Task<List<Invoice>> GetByPostingMonthAsync(short postingMonthCode)
     {
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
             .Where(i => i.posting_month_code == postingMonthCode)
             .ToListAsync();
     }
@@ -154,9 +159,11 @@ public class InvoiceRepository : IInvoiceRepository
     /// <returns>List of invoices in the month range</returns>
     public async Task<List<Invoice>> GetByMonthRangeAsync(short fromMonthCode, short toMonthCode)
     {
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
-            .Where(i => i.posting_month_code >= fromMonthCode && i.posting_month_code <= toMonthCode)
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
+            .Where(i =>
+                i.posting_month_code >= fromMonthCode && i.posting_month_code <= toMonthCode
+            )
             .OrderByDescending(i => i.posting_month_code)
             .ToListAsync();
     }
@@ -168,8 +175,8 @@ public class InvoiceRepository : IInvoiceRepository
     /// <returns>Invoice if found</returns>
     public async Task<Invoice?> GetByCodeAsync(int invoiceCode)
     {
-        return await _context.Invoices
-            .Include(i => i.InvoiceItems)
+        return await _context
+            .Invoices.Include(i => i.InvoiceItems)
             .FirstOrDefaultAsync(i => i.invoice_code == invoiceCode);
     }
 
@@ -186,7 +193,7 @@ public class InvoiceRepository : IInvoiceRepository
             throw new ArgumentException($"Invoice with code {invoiceCode} not found");
 
         invoice.department_code = departmentCode;
-        
+
         await _context.SaveChangesAsync();
         return invoice;
     }

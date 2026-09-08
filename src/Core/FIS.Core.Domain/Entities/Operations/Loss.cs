@@ -89,6 +89,67 @@ public class Loss
     [Column("case_number")]
     public string? case_number { get; set; }
 
+    /// <summary>
+    /// Legacy loss workflow fields. These columns predate the modern API and
+    /// must remain available when the client database is used.
+    /// </summary>
+    [Column("cancelled")]
+    public decimal? cancelled { get; set; }
+
+    [Column("cover_forfeit")]
+    public decimal? cover_forfeit { get; set; }
+
+    [Column("prosecute")]
+    public decimal? prosecute { get; set; }
+
+    [Column("compensation_order")]
+    public decimal? compensation_order { get; set; }
+
+    [Column("remarks")]
+    public string? remarks { get; set; }
+
+    [Column("hq_reference")]
+    public string? hq_reference { get; set; }
+
+    [Column("place_of_loss")]
+    public string? place_of_loss { get; set; }
+
+    [Column("garaging_authority")]
+    public decimal? garaging_authority { get; set; }
+
+    [Column("driver_name")]
+    public string? driver_name { get; set; }
+
+    [Column("report_from_dept")]
+    public decimal? report_from_dept { get; set; }
+
+    [Column("date_reported_ggmt")]
+    public DateTime? date_reported_ggmt { get; set; }
+
+    [Column("date_reported_sapd")]
+    public DateTime? date_reported_sapd { get; set; }
+
+    [Column("Call_Refer")]
+    public decimal? Call_Refer { get; set; }
+
+    [Column("Tow_need")]
+    public string? Tow_need { get; set; }
+
+    /// <summary>
+    /// Modern status value when the expanded losses table provides it.
+    /// </summary>
+    [Column("loss_status")]
+    public string? loss_status { get; set; }
+
+    [NotMapped]
+    public string? vehicle_identifier { get; set; }
+
+    [NotMapped]
+    public string? loss_type_description { get; set; }
+
+    [NotMapped]
+    public string? site_description { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Associated vehicle

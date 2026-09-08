@@ -16,8 +16,8 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task<WorkflowNotification?> GetByIdAsync(int notificationId)
     {
-        return await _context.WorkflowNotifications
-            .Include(n => n.Workflow)
+        return await _context
+            .WorkflowNotifications.Include(n => n.Workflow)
             .Include(n => n.Step)
             .Include(n => n.NotificationTemplate)
             .FirstOrDefaultAsync(n => n.NotificationID == notificationId && !n.is_deleted);
@@ -25,8 +25,8 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task<IEnumerable<WorkflowNotification>> GetAllAsync()
     {
-        return await _context.WorkflowNotifications
-            .Where(n => !n.is_deleted)
+        return await _context
+            .WorkflowNotifications.Where(n => !n.is_deleted)
             .Include(n => n.Workflow)
             .Include(n => n.Step)
             .ToListAsync();
@@ -34,23 +34,25 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task<IEnumerable<WorkflowNotification>> GetByWorkflowIdAsync(int workflowId)
     {
-        return await _context.WorkflowNotifications
-            .Where(n => n.WorkflowID == workflowId && !n.is_deleted)
+        return await _context
+            .WorkflowNotifications.Where(n => n.WorkflowID == workflowId && !n.is_deleted)
             .Include(n => n.Step)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowNotification>> GetByStepIdAsync(int stepId)
     {
-        return await _context.WorkflowNotifications
-            .Where(n => n.StepID == stepId && !n.is_deleted)
+        return await _context
+            .WorkflowNotifications.Where(n => n.StepID == stepId && !n.is_deleted)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<WorkflowNotification>> GetByEventTypeAsync(string eventType)
     {
-        return await _context.WorkflowNotifications
-            .Where(n => n.EventType == eventType && !n.is_deleted && n.IsActive)
+        return await _context
+            .WorkflowNotifications.Where(n =>
+                n.EventType == eventType && !n.is_deleted && n.IsActive
+            )
             .Include(n => n.Workflow)
             .Include(n => n.Step)
             .ToListAsync();
@@ -58,14 +60,17 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task<IEnumerable<WorkflowNotification>> GetActiveNotificationsAsync()
     {
-        return await _context.WorkflowNotifications
-            .Where(n => n.IsActive && !n.is_deleted)
+        return await _context
+            .WorkflowNotifications.Where(n => n.IsActive && !n.is_deleted)
             .Include(n => n.Workflow)
             .Include(n => n.Step)
             .ToListAsync();
     }
 
-    public async Task<WorkflowNotification> CreateAsync(WorkflowNotification notification, int currentUserId)
+    public async Task<WorkflowNotification> CreateAsync(
+        WorkflowNotification notification,
+        int currentUserId
+    )
     {
         notification.date_created = DateTime.UtcNow;
         notification.created_by_user_code = currentUserId;
@@ -79,11 +84,14 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task UpdateAsync(WorkflowNotification notification, int currentUserId)
     {
-        var existing = await _context.WorkflowNotifications
-            .FirstOrDefaultAsync(n => n.NotificationID == notification.NotificationID);
+        var existing = await _context.WorkflowNotifications.FirstOrDefaultAsync(n =>
+            n.NotificationID == notification.NotificationID
+        );
 
         if (existing == null)
-            throw new InvalidOperationException($"WorkflowNotification {notification.NotificationID} not found");
+            throw new InvalidOperationException(
+                $"WorkflowNotification {notification.NotificationID} not found"
+            );
 
         // Tracking-safe update pattern
         _context.Entry(existing).CurrentValues.SetValues(notification);
@@ -95,8 +103,9 @@ public class WorkflowNotificationRepository : IWorkflowNotificationRepository
 
     public async Task DeleteAsync(int notificationId, int currentUserId)
     {
-        var notification = await _context.WorkflowNotifications
-            .FirstOrDefaultAsync(n => n.NotificationID == notificationId);
+        var notification = await _context.WorkflowNotifications.FirstOrDefaultAsync(n =>
+            n.NotificationID == notificationId
+        );
 
         if (notification != null)
         {

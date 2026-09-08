@@ -34,33 +34,37 @@ public class FinancialYearRolloverJob
         // Its code is YYYY+1 (the year it ends).
         var newFyCode = (short)(today.Year + 1);
         var startDate = new DateTime(today.Year, 4, 1);
-        var endDate   = new DateTime(today.Year + 1, 3, 31);
-        var fyName    = $"{today.Year}/{today.Year + 1}";
+        var endDate = new DateTime(today.Year + 1, 3, 31);
+        var fyName = $"{today.Year}/{today.Year + 1}";
 
         _logger.LogInformation(
             "FinancialYearRolloverJob: checking for FY{Code} ({Name})",
-            newFyCode, fyName);
+            newFyCode,
+            fyName
+        );
 
         // Idempotency: do nothing if the record already exists
-        var exists = await _context.FinancialYears
-            .AnyAsync(y => y.financial_year_code == newFyCode && !y.is_deleted);
+        var exists = await _context.FinancialYears.AnyAsync(y =>
+            y.financial_year_code == newFyCode && !y.is_deleted
+        );
 
         if (exists)
         {
             _logger.LogInformation(
                 "FinancialYearRolloverJob: FY{Code} already exists — no action needed.",
-                newFyCode);
+                newFyCode
+            );
             return;
         }
 
         var newYear = new FinancialYear
         {
-            financial_year_code  = newFyCode,
-            financial_year_name  = fyName,
-            start_date           = startDate,
-            end_date             = endDate,
-            date_created         = DateTime.UtcNow,
-            is_deleted           = false
+            financial_year_code = newFyCode,
+            financial_year_name = fyName,
+            start_date = startDate,
+            end_date = endDate,
+            date_created = DateTime.UtcNow,
+            is_deleted = false,
         };
 
         _context.FinancialYears.Add(newYear);
@@ -68,6 +72,10 @@ public class FinancialYearRolloverJob
 
         _logger.LogInformation(
             "FinancialYearRolloverJob: FY{Code} ({Name}) created — {Start:yyyy-MM-dd} to {End:yyyy-MM-dd}",
-            newFyCode, fyName, startDate, endDate);
+            newFyCode,
+            fyName,
+            startDate,
+            endDate
+        );
     }
 }

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Json;
 using FIS.Api.Services;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
@@ -5,7 +7,6 @@ using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 
 namespace FIS.Api.Controllers;
 
@@ -21,17 +22,46 @@ public class ReportController : BaseApiController
 {
     private readonly IReportingService _reportingService;
     private readonly ILegacyReportResultService _legacyReportResultService;
+    private readonly IFineRepository _fineRepository;
+    private readonly IVehicleSourceRepository _vehicleSourceRepository;
+    private readonly IVehicleStatusReportRepository _vehicleStatusReportRepository;
+    private readonly IFmlReportRepository _fmlReportRepository;
+    private readonly IJobCardRepository _jobCardRepository;
+    private readonly ILogbookRepository _logbookRepository;
     private readonly FisDbContext _context;
     private readonly ILogger<ReportController> _logger;
 
     public ReportController(
         IReportingService reportingService,
         ILegacyReportResultService legacyReportResultService,
+        IFineRepository fineRepository,
+        IVehicleSourceRepository vehicleSourceRepository,
+        IVehicleStatusReportRepository vehicleStatusReportRepository,
+        IFmlReportRepository fmlReportRepository,
+        IJobCardRepository jobCardRepository,
+        ILogbookRepository logbookRepository,
         FisDbContext context,
-        ILogger<ReportController> logger)
+        ILogger<ReportController> logger
+    )
     {
-        _reportingService = reportingService ?? throw new ArgumentNullException(nameof(reportingService));
-        _legacyReportResultService = legacyReportResultService ?? throw new ArgumentNullException(nameof(legacyReportResultService));
+        _reportingService =
+            reportingService ?? throw new ArgumentNullException(nameof(reportingService));
+        _legacyReportResultService =
+            legacyReportResultService
+            ?? throw new ArgumentNullException(nameof(legacyReportResultService));
+        _fineRepository = fineRepository ?? throw new ArgumentNullException(nameof(fineRepository));
+        _vehicleSourceRepository =
+            vehicleSourceRepository
+            ?? throw new ArgumentNullException(nameof(vehicleSourceRepository));
+        _vehicleStatusReportRepository =
+            vehicleStatusReportRepository
+            ?? throw new ArgumentNullException(nameof(vehicleStatusReportRepository));
+        _fmlReportRepository =
+            fmlReportRepository ?? throw new ArgumentNullException(nameof(fmlReportRepository));
+        _jobCardRepository =
+            jobCardRepository ?? throw new ArgumentNullException(nameof(jobCardRepository));
+        _logbookRepository =
+            logbookRepository ?? throw new ArgumentNullException(nameof(logbookRepository));
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -45,12 +75,23 @@ public class ReportController : BaseApiController
     [HttpGet("dynamic/{reportKey}")]
     [ProducesResponseType(typeof(LegacyReportResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<LegacyReportResultDto>> GetDynamicLegacyReport(string reportKey, CancellationToken cancellationToken)
+    public async Task<ActionResult<LegacyReportResultDto>> GetDynamicLegacyReport(
+        string reportKey,
+        CancellationToken cancellationToken
+    )
     {
+        if (IsFineReportKey(reportKey) && !HasReportsRole())
+        {
+            return Forbid();
+        }
+
         try
         {
-            var filters = Request.Query
-                .ToDictionary(pair => pair.Key, pair => (string?)pair.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+            var filters = Request.Query.ToDictionary(
+                pair => pair.Key,
+                pair => (string?)pair.Value.ToString(),
+                StringComparer.OrdinalIgnoreCase
+            );
 
             if (filters.ContainsKey("view"))
             {
@@ -60,7 +101,11 @@ public class ReportController : BaseApiController
             ExpandLegacyParameterPairs(filters);
             NormalizeLegacyAliases(filters);
 
-            var report = await _legacyReportResultService.GetReportAsync(reportKey, filters, cancellationToken);
+            var report = await _legacyReportResultService.GetReportAsync(
+                reportKey,
+                filters,
+                cancellationToken
+            );
             return Ok(report);
         }
         catch (KeyNotFoundException ex)
@@ -71,13 +116,18 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating dynamic legacy report {ReportKey}", reportKey);
-            return StatusCode(500, new { error = "Failed to generate legacy report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate legacy report", message = ex.Message }
+            );
         }
     }
 
     private static void ExpandLegacyParameterPairs(IDictionary<string, string?> filters)
     {
-        var hasNumberedParameters = filters.Keys.Any(key => key.StartsWith("ParamName", StringComparison.OrdinalIgnoreCase));
+        var hasNumberedParameters = filters.Keys.Any(key =>
+            key.StartsWith("ParamName", StringComparison.OrdinalIgnoreCase)
+        );
         if (!hasNumberedParameters)
         {
             return;
@@ -88,7 +138,10 @@ public class ReportController : BaseApiController
             var nameKey = $"ParamName{index}";
             var valueKey = $"ParamValue{index}";
 
-            if (!filters.TryGetValue(nameKey, out var parameterName) || string.IsNullOrWhiteSpace(parameterName))
+            if (
+                !filters.TryGetValue(nameKey, out var parameterName)
+                || string.IsNullOrWhiteSpace(parameterName)
+            )
             {
                 continue;
             }
@@ -113,7 +166,11 @@ public class ReportController : BaseApiController
         CopyAliasIfMissing(filters, "vmf", "v_code");
     }
 
-    private static void CopyAliasIfMissing(IDictionary<string, string?> filters, string canonicalKey, string aliasKey)
+    private static void CopyAliasIfMissing(
+        IDictionary<string, string?> filters,
+        string canonicalKey,
+        string aliasKey
+    )
     {
         if (filters.ContainsKey(canonicalKey))
         {
@@ -142,7 +199,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating vehicle report for VMF {VmfCode}", vmfCode);
-            return StatusCode(500, new { error = "Failed to generate vehicle report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate vehicle report", message = ex.Message }
+            );
         }
     }
 
@@ -182,7 +242,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating master file report");
-            return StatusCode(500, new { error = "Failed to generate master file report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate master file report", message = ex.Message }
+            );
         }
     }
 
@@ -203,171 +266,152 @@ public class ReportController : BaseApiController
         [FromQuery] short? make_code = null,
         [FromQuery] short? model_code = null,
         [FromQuery] short? vehicle_status_code = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null
+    )
     {
         try
         {
-            // Base: new (status 2) and in-service (status 1) vehicles,
-            // unless a specific status is requested
-            var query = _context.Vehicles
-                .Where(v => !v.is_deleted &&
-                    (vehicle_status_code.HasValue
-                        ? v.vehicle_status_code == vehicle_status_code.Value
-                        : (v.vehicle_status_code == 1 || v.vehicle_status_code == 2)))
-                .AsQueryable();
+            var reportPage = await _vehicleStatusReportRepository.GetPageAsync(
+                new VehicleStatusReportQuery(
+                    vs_code,
+                    type_code,
+                    location_code,
+                    make_code,
+                    model_code,
+                    vehicle_status_code,
+                    search
+                )
+            );
 
-            if (vs_code.HasValue)
-                query = query.Where(v => v.vs_code == vs_code.Value);
+            // Use the compatibility repository for vehicle sources. The client
+            // database may not have the expanded audit/contact columns mapped
+            // by EF, while the report only needs the source code and name.
+            var sourcePage = await _vehicleSourceRepository.GetPageAsync();
+            var allSources = sourcePage
+                .Items.Where(source => !string.IsNullOrWhiteSpace(source.Name))
+                .ToDictionary(source => source.SourceCode, source => source.Name!);
 
-            if (type_code.HasValue)
-                query = query.Where(v => v.type_code == type_code.Value);
+            var allSites = reportPage.Sites.ToDictionary(
+                site => site.Code,
+                site => site.Description
+            );
+            var allStatuses = reportPage.Statuses.ToDictionary(
+                status => status.Code,
+                status => status.Description
+            );
+            var allTypes = reportPage.Types.ToDictionary(
+                type => type.Code,
+                type => type.Description
+            );
+            var allModels = reportPage.Models.ToDictionary(model => model.Code);
+            var allMakes = reportPage.Makes.ToDictionary(
+                make => make.Code,
+                make => make.Description
+            );
 
-            if (location_code.HasValue)
-                query = query.Where(v => v.location_code == location_code.Value);
-
-            if (make_code.HasValue)
-                query = query.Include(v => v.Model)
-                             .Where(v => v.Model != null && v.Model.make_code == make_code.Value);
-
-            if (model_code.HasValue)
-                query = query.Where(v => v.model_code == model_code.Value);
-
-            // Free-text search: fleet number, registration, chassis, engine, invoice number
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                var term = search.Trim().ToLower();
-                query = query.Where(v =>
-                    (v.fleet_number        != null && v.fleet_number.ToLower().Contains(term)) ||
-                    (v.registration_number != null && v.registration_number.ToLower().Contains(term)) ||
-                    (v.chassis_number      != null && v.chassis_number.ToLower().Contains(term)) ||
-                    (v.engine_number_1     != null && v.engine_number_1.ToLower().Contains(term)) ||
-                    (v.invoice_number      != null && v.invoice_number.ToLower().Contains(term)));
-            }
-
-            var vehicles = await query
-                .OrderBy(v => v.fleet_number)
-                .Select(v => new
+            var result = reportPage
+                .Vehicles.Select(v =>
                 {
-                    v.vmf_code,
-                    v.fleet_number,
-                    v.registration_number,
-                    v.vehicle_status_code,
-                    v.type_code,
-                    v.vs_code,
-                    v.model_code,
-                    v.location_code,
-                    v.chassis_number,
-                    v.engine_number_1,
-                    v.year_manufactured,
-                    v.take_on_date,
-                    v.invoice_number,
-                    v.date_created,
-                    v.current_odo
-                })
-                .ToListAsync();
+                    string? hiredFrom =
+                        v.VehicleSourceCode.HasValue
+                        && allSources.TryGetValue(v.VehicleSourceCode.Value, out var srcName)
+                            ? srcName
+                            : null;
+                    allSites.TryGetValue(v.LocationCode ?? 0, out var siteName);
+                    allStatuses.TryGetValue(v.VehicleStatusCode ?? 0, out var statusText);
+                    allTypes.TryGetValue(v.TypeCode ?? 0, out var typeDesc);
+                    allModels.TryGetValue(v.ModelCode ?? 0, out var modelInfo);
+                    var makeDescription =
+                        modelInfo?.MakeCode is int modelMakeCode
+                        && allMakes.TryGetValue(modelMakeCode, out var makeName)
+                            ? makeName
+                            : string.Empty;
 
-            // ── Load all reference lookups in parallel ───────────────────────
-            var sourcesTask = _context.VehicleSources
-                .Where(s => !s.is_deleted)
-                .ToDictionaryAsync(s => s.vs_code, s => s.name);
-
-            var sitesTask = _context.Sites
-                .Where(s => !s.is_deleted)
-                .ToDictionaryAsync(s => s.Site_code, s => s.description ?? string.Empty);
-
-            var statusesTask = _context.VehicleStatuses
-                .ToDictionaryAsync(s => s.vehicle_status_code, s => s.status_description ?? string.Empty);
-
-            var typesTask = _context.VehicleTypes
-                .Where(t => !t.is_deleted)
-                .ToDictionaryAsync(t => t.type_code, t => t.type_description);
-
-            var modelsTask = _context.Models
-                .Include(m => m.Make)
-                .Where(m => !m.is_deleted)
-                .ToDictionaryAsync(m => m.model_code,
-                    m => new { make = m.Make != null ? m.Make.make_description : string.Empty, model = m.model_description });
-
-            await Task.WhenAll(sourcesTask, sitesTask, statusesTask, typesTask, modelsTask);
-
-            var allSources  = await sourcesTask;
-            var allSites    = await sitesTask;
-            var allStatuses = await statusesTask;
-            var allTypes    = await typesTask;
-            var allModels   = await modelsTask;
-
-            // Fetch latest active remark per vehicle for the report
-            var vmfCodes = vehicles.Select(v => v.vmf_code).ToList();
-            var activeRemarks = await _context.VehicleRemarks
-                .Where(r => !r.is_deleted && !r.is_resolved && vmfCodes.Contains(r.vmf_code))
-                .OrderByDescending(r => r.date_created)
-                .Select(r => new { r.vmf_code, r.remark_id, r.remark_category, r.remark_text, r.date_created })
-                .ToListAsync();
-
-            // Keep only the most recent active remark per vehicle
-            var latestRemark = activeRemarks
-                .GroupBy(r => r.vmf_code)
-                .ToDictionary(g => g.Key, g => g.First());
-
-            var result = vehicles.Select(v =>
-            {
-                string? hiredFrom = v.vs_code.HasValue && allSources.TryGetValue(v.vs_code.Value, out var srcName) ? srcName : null;
-                allSites.TryGetValue(v.location_code, out var siteName);
-                allStatuses.TryGetValue(v.vehicle_status_code, out var statusText);
-                allTypes.TryGetValue(v.type_code, out var typeDesc);
-                allModels.TryGetValue(v.model_code, out var modelInfo);
-                latestRemark.TryGetValue(v.vmf_code, out var remark);
-
-                return new
-                {
-                    v.vmf_code,
-                    v.fleet_number,
-                    v.registration_number,
-                    v.vehicle_status_code,
-                    status_text = statusText ?? (v.vehicle_status_code == 1 ? "In Service" : "Out of Service"),
-                    v.type_code,
-                    type_description = typeDesc ?? string.Empty,
-                    v.vs_code,
-                    hired_from = hiredFrom,
-                    v.model_code,
-                    make_description = modelInfo?.make ?? string.Empty,
-                    model_description = modelInfo?.model ?? string.Empty,
-                    v.location_code,
-                    site_name = siteName ?? string.Empty,
-                    v.chassis_number,
-                    v.engine_number_1,
-                    v.year_manufactured,
-                    v.take_on_date,
-                    v.invoice_number,
-                    v.date_created,
-                    v.current_odo,
-                    // Active remark (null if none)
-                    active_remark = remark == null ? null : (object)new
+                    return new
                     {
-                        remark.remark_id,
-                        remark.remark_category,
-                        remark.remark_text,
-                        remark.date_created
-                    }
-                };
-            }).ToList();
+                        vmf_code = v.VmfCode,
+                        fleet_number = v.FleetNumber,
+                        registration_number = v.RegistrationNumber,
+                        vehicle_status_code = v.VehicleStatusCode,
+                        status_text = statusText
+                            ?? (v.VehicleStatusCode == 1 ? "In Service" : "Out of Service"),
+                        type_code = v.TypeCode,
+                        type_description = typeDesc ?? string.Empty,
+                        vs_code = v.VehicleSourceCode,
+                        hired_from = hiredFrom,
+                        model_code = v.ModelCode,
+                        make_description = makeDescription,
+                        model_description = modelInfo?.Description ?? string.Empty,
+                        location_code = v.LocationCode,
+                        site_name = siteName ?? string.Empty,
+                        chassis_number = v.ChassisNumber,
+                        engine_number_1 = v.EngineNumber,
+                        year_manufactured = v.YearManufactured,
+                        take_on_date = v.TakeOnDate,
+                        invoice_number = v.InvoiceNumber,
+                        date_created = v.DateCreated,
+                        current_odo = v.CurrentOdometer,
+                        // Active remark (null if none)
+                        active_remark = v.ActiveRemark == null
+                            ? null
+                            : (object)
+                                new
+                                {
+                                    remark_id = v.ActiveRemark.RemarkId,
+                                    remark_category = v.ActiveRemark.Category,
+                                    remark_text = v.ActiveRemark.Text,
+                                    date_created = v.ActiveRemark.DateCreated,
+                                },
+                    };
+                })
+                .ToList();
 
             _logger.LogInformation(
                 "New/In-Service report: {Count} vehicles (search={Search}, vs_code={VsCode}, type={TypeCode}, location={Loc}, make={Make}, model={Model}, status={Status})",
-                result.Count, search, vs_code, type_code, location_code, make_code, model_code, vehicle_status_code);
+                result.Count,
+                search,
+                vs_code,
+                type_code,
+                location_code,
+                make_code,
+                model_code,
+                vehicle_status_code
+            );
 
-            return Ok(new
-            {
-                total_count = result.Count,
-                filters_applied = new { search, vs_code, type_code, location_code, make_code, model_code, vehicle_status_code },
-                assumption_note = "Status 1=InService, 2=OutOfService treated as New/Available. Confirm with business unit.",
-                vehicles = result
-            });
+            return Ok(
+                new
+                {
+                    total_count = result.Count,
+                    remarks_available = reportPage.RemarksAvailable,
+                    filters_applied = new
+                    {
+                        search,
+                        vs_code,
+                        type_code,
+                        location_code,
+                        make_code,
+                        model_code,
+                        vehicle_status_code,
+                    },
+                    available_filters = new
+                    {
+                        sites = reportPage.Sites,
+                        types = reportPage.Types,
+                        makes = reportPage.Makes,
+                        statuses = reportPage.Statuses,
+                    },
+                    assumption_note = "Status 1=InService, 2=OutOfService treated as New/Available. Confirm with business unit.",
+                    vehicles = result,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating New/In-Service report");
-            return StatusCode(500, new { error = "Failed to generate New/In-Service report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate New/In-Service report", message = ex.Message }
+            );
         }
     }
 
@@ -386,7 +430,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating universal report");
-            return StatusCode(500, new { error = "Failed to generate universal report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate universal report", message = ex.Message }
+            );
         }
     }
 
@@ -396,7 +443,9 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/profitability")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceProfitabilityReport([FromBody] FinanceProfitabilityRequest request)
+    public async Task<ActionResult> GetFinanceProfitabilityReport(
+        [FromBody] FinanceProfitabilityRequest request
+    )
     {
         try
         {
@@ -406,8 +455,8 @@ public class ReportController : BaseApiController
                 Parameters = new Dictionary<string, object>
                 {
                     ["mode"] = "profitability",
-                    ["financialYear"] = request.FinancialYear ?? string.Empty
-                }
+                    ["financialYear"] = request.FinancialYear ?? string.Empty,
+                },
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -416,7 +465,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating finance profitability report");
-            return StatusCode(500, new { error = "Failed to generate profitability report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate profitability report", message = ex.Message }
+            );
         }
     }
 
@@ -426,7 +478,9 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/outstanding")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceOutstandingReport([FromBody] FinanceOutstandingRequest request)
+    public async Task<ActionResult> GetFinanceOutstandingReport(
+        [FromBody] FinanceOutstandingRequest request
+    )
     {
         try
         {
@@ -435,14 +489,14 @@ public class ReportController : BaseApiController
                 ["mode"] = request.Mode ?? string.Empty,
                 ["departmentCode"] = request.DepartmentCode ?? string.Empty,
                 ["siteCode"] = request.SiteCode ?? string.Empty,
-                ["financialYear"] = request.FinancialYear ?? string.Empty
+                ["financialYear"] = request.FinancialYear ?? string.Empty,
             };
 
             var universalRequest = new UniversalReportRequest
             {
                 ReportType = "financial",
                 Parameters = parameters,
-                VmfCode = request.VmfCode
+                VmfCode = request.VmfCode,
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -451,7 +505,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating finance outstanding report");
-            return StatusCode(500, new { error = "Failed to generate outstanding report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate outstanding report", message = ex.Message }
+            );
         }
     }
 
@@ -461,14 +518,16 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/wesbank")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceWesbankReport([FromBody] FinanceWesbankRequest request)
+    public async Task<ActionResult> GetFinanceWesbankReport(
+        [FromBody] FinanceWesbankRequest request
+    )
     {
         try
         {
             var parameters = new Dictionary<string, object>
             {
                 ["mode"] = request.Mode ?? string.Empty,
-                ["provinceCode"] = request.ProvinceCode ?? string.Empty
+                ["provinceCode"] = request.ProvinceCode ?? string.Empty,
             };
 
             var universalRequest = new UniversalReportRequest
@@ -476,7 +535,7 @@ public class ReportController : BaseApiController
                 ReportType = "financial",
                 Parameters = parameters,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -485,7 +544,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating finance wesbank report");
-            return StatusCode(500, new { error = "Failed to generate wesbank report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate wesbank report", message = ex.Message }
+            );
         }
     }
 
@@ -495,7 +557,9 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/audit-trail")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceAuditTrailReport([FromBody] FinanceAuditTrailRequest request)
+    public async Task<ActionResult> GetFinanceAuditTrailReport(
+        [FromBody] FinanceAuditTrailRequest request
+    )
     {
         try
         {
@@ -505,7 +569,7 @@ public class ReportController : BaseApiController
                 ["auditType"] = request.AuditType ?? string.Empty,
                 ["outputFormat"] = request.OutputFormat ?? string.Empty,
                 ["departmentCode"] = request.DepartmentCode ?? string.Empty,
-                ["siteCode"] = request.SiteCode ?? string.Empty
+                ["siteCode"] = request.SiteCode ?? string.Empty,
             };
 
             var universalRequest = new UniversalReportRequest
@@ -514,7 +578,7 @@ public class ReportController : BaseApiController
                 Parameters = parameters,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                VmfCode = request.VmfCode
+                VmfCode = request.VmfCode,
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -523,7 +587,14 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating finance audit trail report");
-            return StatusCode(500, new { error = "Failed to generate finance audit trail report", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "Failed to generate finance audit trail report",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -533,7 +604,9 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/regional")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceRegionalReport([FromBody] FinanceRegionalRequest request)
+    public async Task<ActionResult> GetFinanceRegionalReport(
+        [FromBody] FinanceRegionalRequest request
+    )
     {
         try
         {
@@ -542,7 +615,7 @@ public class ReportController : BaseApiController
                 ["mode"] = request.Mode ?? string.Empty,
                 ["departmentCode"] = request.DepartmentCode ?? string.Empty,
                 ["siteCode"] = request.SiteCode ?? string.Empty,
-                ["provinceCode"] = request.ProvinceCode ?? string.Empty
+                ["provinceCode"] = request.ProvinceCode ?? string.Empty,
             };
 
             if (!string.IsNullOrWhiteSpace(request.SummaryType))
@@ -552,10 +625,12 @@ public class ReportController : BaseApiController
 
             var universalRequest = new UniversalReportRequest
             {
-                ReportType = string.IsNullOrWhiteSpace(request.ReportType) ? "financial" : request.ReportType!,
+                ReportType = string.IsNullOrWhiteSpace(request.ReportType)
+                    ? "financial"
+                    : request.ReportType!,
                 Parameters = parameters,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -564,7 +639,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating finance regional report");
-            return StatusCode(500, new { error = "Failed to generate finance regional report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate finance regional report", message = ex.Message }
+            );
         }
     }
 
@@ -574,7 +652,9 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/missing-kilometres")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceMissingKilometresReport([FromBody] FinanceMissingKilometresRequest request)
+    public async Task<ActionResult> GetFinanceMissingKilometresReport(
+        [FromBody] FinanceMissingKilometresRequest request
+    )
     {
         try
         {
@@ -584,7 +664,7 @@ public class ReportController : BaseApiController
                 ["departmentCode"] = request.DepartmentCode ?? string.Empty,
                 ["provinceCode"] = request.ProvinceCode ?? string.Empty,
                 ["financialYear"] = request.FinancialYear ?? string.Empty,
-                ["excludeUnposted"] = request.ExcludeUnposted
+                ["excludeUnposted"] = request.ExcludeUnposted,
             };
 
             var universalRequest = new UniversalReportRequest
@@ -592,7 +672,7 @@ public class ReportController : BaseApiController
                 ReportType = "financial",
                 Parameters = parameters,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -601,7 +681,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating missing kilometres report");
-            return StatusCode(500, new { error = "Failed to generate missing kilometres report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate missing kilometres report", message = ex.Message }
+            );
         }
     }
 
@@ -611,7 +694,9 @@ public class ReportController : BaseApiController
     /// </summary>
     [HttpPost("finance/reports")]
     [ProducesResponseType(typeof(UniversalReport), StatusCodes.Status200OK)]
-    public async Task<ActionResult> GetFinanceReportsPageReport([FromBody] FinanceReportsPageRequest request)
+    public async Task<ActionResult> GetFinanceReportsPageReport(
+        [FromBody] FinanceReportsPageRequest request
+    )
     {
         try
         {
@@ -623,7 +708,7 @@ public class ReportController : BaseApiController
                 ["siteCode"] = request.SiteCode ?? string.Empty,
                 ["province"] = request.Province ?? string.Empty,
                 ["financialYear"] = request.FinancialYear ?? string.Empty,
-                ["batchDate"] = request.BatchDate ?? string.Empty
+                ["batchDate"] = request.BatchDate ?? string.Empty,
             };
 
             var universalRequest = new UniversalReportRequest
@@ -632,7 +717,7 @@ public class ReportController : BaseApiController
                 Parameters = parameters,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                VmfCode = request.VmfCode
+                VmfCode = request.VmfCode,
             };
 
             var report = await _reportingService.GenerateUniversalReportAsync(universalRequest);
@@ -641,7 +726,14 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating finance reports page report");
-            return StatusCode(500, new { error = "Failed to generate finance reports page report", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "Failed to generate finance reports page report",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -664,7 +756,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating service history for VMF {VmfCode}", vmfCode);
-            return StatusCode(500, new { error = "Failed to generate service history", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate service history", message = ex.Message }
+            );
         }
     }
 
@@ -676,17 +771,25 @@ public class ReportController : BaseApiController
     public async Task<ActionResult> GetMaintenanceCostReport(
         [FromQuery] int? vmfCode,
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime endDate
+    )
     {
         try
         {
-            var report = await _reportingService.GenerateMaintenanceCostReportAsync(vmfCode, startDate, endDate);
+            var report = await _reportingService.GenerateMaintenanceCostReportAsync(
+                vmfCode,
+                startDate,
+                endDate
+            );
             return Ok(report);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating maintenance cost report");
-            return StatusCode(500, new { error = "Failed to generate maintenance cost report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate maintenance cost report", message = ex.Message }
+            );
         }
     }
 
@@ -697,17 +800,28 @@ public class ReportController : BaseApiController
     [ProducesResponseType(typeof(MaintenanceScheduleReport), StatusCodes.Status200OK)]
     public async Task<ActionResult> GetMaintenanceScheduleReport(
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime endDate
+    )
     {
         try
         {
-            var report = await _reportingService.GenerateMaintenanceScheduleReportAsync(startDate, endDate);
+            var report = await _reportingService.GenerateMaintenanceScheduleReportAsync(
+                startDate,
+                endDate
+            );
             return Ok(report);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating maintenance schedule report");
-            return StatusCode(500, new { error = "Failed to generate maintenance schedule report", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "Failed to generate maintenance schedule report",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -724,13 +838,19 @@ public class ReportController : BaseApiController
     {
         try
         {
-            var report = await _reportingService.GenerateVehicleBillingHistoryAsync(vmfCode, financialYear);
+            var report = await _reportingService.GenerateVehicleBillingHistoryAsync(
+                vmfCode,
+                financialYear
+            );
             return Ok(report);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating billing history for VMF {VmfCode}", vmfCode);
-            return StatusCode(500, new { error = "Failed to generate billing history", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate billing history", message = ex.Message }
+            );
         }
     }
 
@@ -742,17 +862,29 @@ public class ReportController : BaseApiController
     public async Task<ActionResult> GetContractBilling(
         int contractId,
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime endDate
+    )
     {
         try
         {
-            var report = await _reportingService.GenerateContractBillingReportAsync(contractId, startDate, endDate);
+            var report = await _reportingService.GenerateContractBillingReportAsync(
+                contractId,
+                startDate,
+                endDate
+            );
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating contract billing for contract {ContractId}", contractId);
-            return StatusCode(500, new { error = "Failed to generate contract billing", message = ex.Message });
+            _logger.LogError(
+                ex,
+                "Error generating contract billing for contract {ContractId}",
+                contractId
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to generate contract billing", message = ex.Message }
+            );
         }
     }
 
@@ -768,17 +900,25 @@ public class ReportController : BaseApiController
     public async Task<ActionResult> GetTripSummary(
         [FromQuery] int? vmfCode,
         [FromQuery] DateTime startDate,
-        [FromQuery] DateTime endDate)
+        [FromQuery] DateTime endDate
+    )
     {
         try
         {
-            var report = await _reportingService.GenerateTripSummaryReportAsync(vmfCode, startDate, endDate);
+            var report = await _reportingService.GenerateTripSummaryReportAsync(
+                vmfCode,
+                startDate,
+                endDate
+            );
             return Ok(report);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating trip summary");
-            return StatusCode(500, new { error = "Failed to generate trip summary", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate trip summary", message = ex.Message }
+            );
         }
     }
 
@@ -797,7 +937,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating trip detail for trip {TripId}", tripId);
-            return StatusCode(500, new { error = "Failed to generate trip detail", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate trip detail", message = ex.Message }
+            );
         }
     }
 
@@ -820,7 +963,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating contract summary");
-            return StatusCode(500, new { error = "Failed to generate contract summary", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate contract summary", message = ex.Message }
+            );
         }
     }
 
@@ -838,8 +984,15 @@ public class ReportController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating authority report for contract {ContractId}", contractId);
-            return StatusCode(500, new { error = "Failed to generate authority report", message = ex.Message });
+            _logger.LogError(
+                ex,
+                "Error generating authority report for contract {ContractId}",
+                contractId
+            );
+            return StatusCode(
+                500,
+                new { error = "Failed to generate authority report", message = ex.Message }
+            );
         }
     }
 
@@ -854,355 +1007,51 @@ public class ReportController : BaseApiController
         [FromQuery] string? finYear = null,
         [FromQuery] string? ggNum = null,
         [FromQuery] string? mode = null,
-        [FromQuery] string? search = null)
+        [FromQuery] string? search = null
+    )
     {
-        var from = startDate?.Date ?? DateTime.MinValue.Date;
-        var to = endDate?.Date ?? DateTime.MaxValue.Date;
+        var parsedFinancialYear = int.TryParse(finYear, out var financialYear)
+            ? financialYear
+            : (int?)null;
         var normalizedSearch = string.IsNullOrWhiteSpace(search) ? ggNum?.Trim() : search.Trim();
-
-        var maintenance = _context.MaintenanceRecords
-            .AsNoTracking()
-            .Where(x => !x.is_deleted && x.MaintenanceDate.Date >= from && x.MaintenanceDate.Date <= to)
-            .AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(normalizedSearch))
-        {
-            maintenance = maintenance.Where(m =>
-                _context.Vehicles.Any(v =>
-                    !v.is_deleted &&
-                    v.vmf_code == m.VmfCode &&
-                    ((v.fleet_number != null && v.fleet_number.Contains(normalizedSearch)) ||
-                     (v.registration_number != null && v.registration_number.Contains(normalizedSearch)))));
-        }
-
-        var rows = await maintenance
-            .Join(_context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
-                m => m.VmfCode,
-                v => v.vmf_code,
-                (m, v) => new { m, v })
-            .GroupJoin(_context.VehicleStatuses.AsNoTracking(),
-                mv => mv.v.vehicle_status_code,
-                s => s.vehicle_status_code,
-                (mv, status) => new { mv, status = status.FirstOrDefault() })
-            .GroupJoin(_context.VehicleSources.AsNoTracking(),
-                mvs => mvs.mv.v.vs_code,
-                src => src.vs_code,
-                (mvs, source) => new { mvs, source = source.FirstOrDefault() })
-            .GroupJoin(_context.Models.AsNoTracking(),
-                mvss => mvss.mvs.mv.v.model_code,
-                model => model.model_code,
-                (mvss, model) => new { mvss, model = model.FirstOrDefault() })
-            .Select(x => new
-            {
-                x.mvss.mvs.mv.v.fleet_number,
-                x.mvss.mvs.mv.v.year_manufactured,
-                model_description = x.model != null ? x.model.model_description : null,
-                current_status = x.mvss.mvs.status != null ? x.mvss.mvs.status.status_description : null,
-                current_status_date = x.mvss.mvs.mv.v.date_updated ?? x.mvss.mvs.mv.v.date_created,
-                hired_from = x.mvss.source != null ? x.mvss.source.name : null,
-                maintenance_type = x.mvss.mvs.mv.m.MaintenanceType,
-                total_cost = x.mvss.mvs.mv.m.TotalCost
-            })
-            .ToListAsync();
-
-        var grouped = rows
-            .GroupBy(x => new
-            {
-                x.fleet_number,
-                x.year_manufactured,
-                x.model_description,
-                x.current_status,
-                x.current_status_date,
-                x.hired_from,
-                x.maintenance_type
-            })
-            .Select(g => new
-            {
-                GgNumber = g.Key.fleet_number,
-                YearManufactured = g.Key.year_manufactured,
-                ModelDescription = g.Key.model_description,
-                CurrentStatus = g.Key.current_status,
-                CurrentStatusDate = g.Key.current_status_date,
-                HiredFrom = g.Key.hired_from,
-                MaintenanceExpenseType = g.Key.maintenance_type,
-                TotalCostOverDateRange = g.Sum(x => x.total_cost)
-            })
-            .OrderBy(x => x.GgNumber)
-            .ToList();
-
-        return Ok(new
-        {
-            Records = grouped,
-            GrandTotal = grouped.Sum(x => x.TotalCostOverDateRange),
-            TotalCount = grouped.Count
-        });
+        var report = await _fmlReportRepository.GetMaintenanceHistoryAsync(
+            startDate,
+            endDate,
+            parsedFinancialYear,
+            normalizedSearch
+        );
+        return Ok(report);
     }
 
     [HttpGet("fml/contracts-expiring")]
     public async Task<ActionResult> GetFmlContractsExpiring()
     {
-        var today = DateTime.Today;
-        var cutoff = today.AddMonths(3);
-
-        var contracts = await BuildFmlContractRowsAsync(
-            c => !c.is_deleted &&
-                 (c.still_current == "Y" || c.end_date == null || c.end_date >= today) &&
-                 c.target_return_date.HasValue &&
-                 c.target_return_date.Value.Date >= today &&
-                 c.target_return_date.Value.Date <= cutoff);
-
-        return Ok(new
-        {
-            Contracts = contracts,
-            TotalCount = contracts.Count
-        });
+        var report = await _fmlReportRepository.GetContractsExpiringAsync();
+        return Ok(report);
     }
 
     [HttpGet("fml/expired-open")]
     public async Task<ActionResult> GetFmlExpiredOpen()
     {
-        var today = DateTime.Today;
-        var contracts = await BuildFmlContractRowsAsync(
-            c => !c.is_deleted &&
-                 (c.still_current == "Y" || c.end_date == null || c.end_date >= today) &&
-                 c.target_return_date.HasValue &&
-                 c.target_return_date.Value.Date < today);
-
-        return Ok(new
-        {
-            Contracts = contracts,
-            TotalCount = contracts.Count
-        });
+        var report = await _fmlReportRepository.GetExpiredOpenContractsAsync();
+        return Ok(report);
     }
 
     [HttpGet("fml/vehicles-no-contracts")]
     public async Task<ActionResult> GetFmlVehiclesNoContracts()
     {
-        var activeContractVmfCodes = await _context.Contracts
-            .AsNoTracking()
-            .Where(c => !c.is_deleted && c.still_current == "Y")
-            .Select(c => c.vmf_code)
-            .Distinct()
-            .ToListAsync();
-
-        var activeSet = activeContractVmfCodes.ToHashSet();
-
-        var vehicles = await _context.Vehicles
-            .AsNoTracking()
-            .Where(v => !v.is_deleted && !activeSet.Contains(v.vmf_code))
-            .OrderBy(v => v.fleet_number)
-            .Take(2000)
-            .Select(v => new
-            {
-                v.vmf_code,
-                v.fleet_number,
-                v.registration_number,
-                v.vs_code,
-                v.vehicle_status_code,
-                v.location_code,
-                v.year_manufactured,
-                v.model_code,
-                v.purchase_amount
-            })
-            .ToListAsync();
-
-        var sourceMap = await _context.VehicleSources.AsNoTracking().ToDictionaryAsync(x => x.vs_code, x => x.name ?? string.Empty);
-        var statusMap = await _context.VehicleStatuses.AsNoTracking().ToDictionaryAsync(x => x.vehicle_status_code, x => x.status_description ?? string.Empty);
-        var siteMap = await _context.Sites.AsNoTracking().ToDictionaryAsync(x => x.Site_code, x => x.description ?? string.Empty);
-        var modelMap = await _context.Models.AsNoTracking().ToDictionaryAsync(x => x.model_code, x => x.model_description);
-        var classMap = await _context.Classes.AsNoTracking().ToDictionaryAsync(x => x.class_code, x => x.description ?? string.Empty);
-
-        var modelClassMap = await _context.Models.AsNoTracking()
-            .ToDictionaryAsync(m => m.model_code, m => m.class_code);
-
-        var rows = vehicles.Select((v, idx) =>
-        {
-            var modelDescription = modelMap.TryGetValue(v.model_code, out var md) ? md : string.Empty;
-            var cls = modelClassMap.TryGetValue(v.model_code, out var classCode) ? classCode : (short)0;
-            return new
-            {
-                VehicleCounter = idx + 1,
-                GgNumber = v.fleet_number,
-                RegistrationNumber = v.registration_number,
-                HiredFrom = v.vs_code.HasValue && sourceMap.TryGetValue(v.vs_code.Value, out var source) ? source : string.Empty,
-                VehicleStatus = statusMap.TryGetValue(v.vehicle_status_code, out var status) ? status : string.Empty,
-                Location = siteMap.TryGetValue(v.location_code, out var site) ? site : string.Empty,
-                YearModel = v.year_manufactured,
-                ModelDescription = modelDescription,
-                ClassDescription = classMap.TryGetValue(cls, out var classDesc) ? classDesc : string.Empty,
-                PurchaseAmount = v.purchase_amount
-            };
-        }).ToList();
-
-        return Ok(new
-        {
-            Vehicles = rows,
-            TotalCount = rows.Count
-        });
+        var report = await _fmlReportRepository.GetVehiclesNoContractsAsync();
+        return Ok(report);
     }
 
     [HttpGet("fml/over-utilized")]
-    public async Task<ActionResult> GetFmlOverUtilized([FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null)
+    public async Task<ActionResult> GetFmlOverUtilized(
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null
+    )
     {
-        var from = startDate?.Date ?? DateTime.Today.AddMonths(-3);
-        var to = endDate?.Date ?? DateTime.Today;
-
-        var contracts = await _context.Contracts
-            .AsNoTracking()
-            .Where(c => !c.is_deleted && c.still_current == "Y" && c.monthly_km.HasValue && c.monthly_km > 0)
-            .Select(c => new
-            {
-                c.contract_code,
-                c.vmf_code,
-                c.start_date,
-                c.target_return_date,
-                c.monthly_km
-            })
-            .ToListAsync();
-
-        var contractIds = contracts.Select(x => (int?)x.contract_code).ToHashSet();
-        var kilos = await _context.VehicleKilos
-            .AsNoTracking()
-            .Where(k => !k.is_deleted &&
-                        k.contract_code.HasValue &&
-                        contractIds.Contains(k.contract_code) &&
-                        k.date_created.Date >= from &&
-                        k.date_created.Date <= to)
-            .ToListAsync();
-
-        var vehicleMap = await _context.Vehicles.AsNoTracking().Where(v => !v.is_deleted).ToDictionaryAsync(v => v.vmf_code);
-        var sourceMap = await _context.VehicleSources.AsNoTracking().ToDictionaryAsync(x => x.vs_code, x => x.name ?? string.Empty);
-        var modelMap = await _context.Models.AsNoTracking().ToDictionaryAsync(x => x.model_code, x => x.model_description);
-
-        var rows = contracts
-            .Select((c, idx) =>
-            {
-                if (!vehicleMap.TryGetValue(c.vmf_code, out var vehicle))
-                {
-                    return null;
-                }
-
-                var kRows = kilos.Where(k => k.contract_code == c.contract_code).ToList();
-                var minOdo = kRows.Count > 0 ? (decimal?)kRows.Min(x => (decimal?)(x.start_odo ?? 0d)) : vehicle.take_on_odo;
-                var maxOdo = kRows.Count > 0 ? (decimal?)kRows.Max(x => (decimal?)(x.end_odo ?? 0d)) : vehicle.current_odo;
-                var actualKilos = (maxOdo ?? 0m) - (minOdo ?? 0m);
-
-                var start = c.start_date.Date;
-                var end = (c.target_return_date ?? DateTime.Today).Date;
-                var contractMonths = Math.Max(1, ((end.Year - start.Year) * 12) + end.Month - start.Month + 1);
-                var agreedMonthly = c.monthly_km ?? 0;
-                var agreedOverall = agreedMonthly * contractMonths;
-                var excess = actualKilos - agreedOverall;
-                var avgMonthly = contractMonths > 0 ? actualKilos / contractMonths : actualKilos;
-                if (excess <= 0)
-                {
-                    return null;
-                }
-
-                var projectedEndDate = avgMonthly > 0
-                    ? start.AddMonths((int)Math.Ceiling((double)(agreedOverall / avgMonthly)))
-                    : (DateTime?)null;
-
-                return new
-                {
-                    VehicleCounter = idx + 1,
-                    GgNumber = vehicle.fleet_number,
-                    GpNumber = vehicle.registration_number,
-                    HiredFrom = vehicle.vs_code.HasValue && sourceMap.TryGetValue(vehicle.vs_code.Value, out var source) ? source : string.Empty,
-                    Month = $"{from:yyyy-MM} to {to:yyyy-MM}",
-                    MaxOdoMeter = maxOdo,
-                    MinOdoMeter = minOdo,
-                    ActualKilos = actualKilos,
-                    AgreedKilos = (decimal?)agreedMonthly,
-                    ExcessKilos = excess,
-                    AgreedOverallKilo = (decimal?)agreedOverall,
-                    AgreedTerms = (decimal?)contractMonths,
-                    ActualTerm = (decimal?)contractMonths,
-                    TotalKilos = actualKilos,
-                    TotalExcessKilos = excess,
-                    AverageMonthlyKilos = avgMonthly,
-                    ProjectedEndMonth = projectedEndDate?.ToString("yyyy-MM"),
-                    ProjectedEndDate = projectedEndDate,
-                    YearModel = vehicle.year_manufactured,
-                    ModelDescription = modelMap.TryGetValue(vehicle.model_code, out var model) ? model : string.Empty,
-                    PurchaseAmount = vehicle.purchase_amount
-                };
-            })
-            .Where(x => x != null)
-            .ToList();
-
-        return Ok(new
-        {
-            Vehicles = rows,
-            TotalCount = rows.Count
-        });
-    }
-
-    private async Task<List<object>> BuildFmlContractRowsAsync(System.Linq.Expressions.Expression<Func<Contract, bool>> predicate)
-    {
-        var rowsBase = await _context.Contracts
-            .AsNoTracking()
-            .Where(predicate)
-            .Join(_context.Vehicles.AsNoTracking().Where(v => !v.is_deleted),
-                c => c.vmf_code,
-                v => v.vmf_code,
-                (c, v) => new { c, v })
-            .GroupJoin(_context.Models.AsNoTracking(),
-                cv => cv.v.model_code,
-                m => m.model_code,
-                (cv, model) => new { cv, model = model.FirstOrDefault() })
-            .GroupJoin(_context.VehicleSources.AsNoTracking(),
-                cvm => cvm.cv.v.vs_code,
-                src => src.vs_code,
-                (cvm, source) => new { cvm, source = source.FirstOrDefault() })
-            .GroupJoin(_context.VehicleTypes.AsNoTracking(),
-                cvms => cvms.cvm.cv.v.type_code,
-                type => type.type_code,
-                (cvms, type) => new { cvms, type = type.FirstOrDefault() })
-            .GroupJoin(_context.Sites.AsNoTracking(),
-                cvmst => cvmst.cvms.cvm.cv.c.site_code,
-                site => site.Site_code,
-                (cvmst, site) => new { cvmst, site = site.FirstOrDefault() })
-            .OrderBy(x => x.cvmst.cvms.cvm.cv.v.fleet_number)
-            .Select(x => new
-            {
-                x.cvmst.cvms.cvm.cv.v.vmf_code,
-                GgNumber = x.cvmst.cvms.cvm.cv.v.fleet_number,
-                GpNumber = x.cvmst.cvms.cvm.cv.v.registration_number,
-                Model = x.cvmst.cvms.cvm.model != null ? x.cvmst.cvms.cvm.model.model_description : string.Empty,
-                YearModel = x.cvmst.cvms.cvm.cv.v.year_manufactured,
-                HiredFrom = x.cvmst.cvms.source != null ? x.cvmst.cvms.source.name : string.Empty,
-                HireType = x.cvmst.type != null ? x.cvmst.type.type_description : string.Empty,
-                StillCurrent = x.cvmst.cvms.cvm.cv.c.still_current,
-                ContractStartDate = x.cvmst.cvms.cvm.cv.c.start_date,
-                TargetReturnDate = x.cvmst.cvms.cvm.cv.c.target_return_date,
-                ContractType = x.cvmst.cvms.cvm.cv.c.contract_type,
-                SiteName = x.site != null ? x.site.description : string.Empty,
-                FixedTariff = (decimal?)null
-            })
-            .ToListAsync();
-
-        var rows = rowsBase
-            .Select((x, idx) => new
-            {
-                RowNumber = idx + 1,
-                x.GgNumber,
-                x.GpNumber,
-                x.Model,
-                x.YearModel,
-                x.HiredFrom,
-                x.HireType,
-                x.StillCurrent,
-                x.ContractStartDate,
-                x.TargetReturnDate,
-                x.ContractType,
-                x.SiteName,
-                x.FixedTariff
-            })
-            .Cast<object>()
-            .ToList();
-
-        return rows;
+        var report = await _fmlReportRepository.GetOverUtilizedAsync(startDate, endDate);
+        return Ok(report);
     }
 
     #endregion
@@ -1212,50 +1061,83 @@ public class ReportController : BaseApiController
     [HttpGet("losses")]
     public ActionResult GetLossesRoot()
     {
-        return Ok(new
-        {
-            module = "Losses Reports",
-            modes = new[] { "vehicle", "all", "no-report", "with-report", "dept-period" }
-        });
+        return Ok(
+            new
+            {
+                module = "Losses Reports",
+                modes = new[] { "vehicle", "all", "no-report", "with-report", "dept-period" },
+            }
+        );
     }
 
     [HttpGet("licences")]
     public ActionResult GetLicencesRoot()
     {
-        return Ok(new
-        {
-            module = "Licences Reports",
-            modes = new[]
+        return Ok(
+            new
             {
-                "gg-number","gp-number","register-number","engine-number","chassis-number","site","all",
-                "dept-period","expire-date","month-fees","old-expire","sap","cof","model-fees",
-                "gg-model-fees","workgroup","workgroup-latest","ggmt-received"
+                module = "Licences Reports",
+                modes = new[]
+                {
+                    "gg-number",
+                    "gp-number",
+                    "register-number",
+                    "engine-number",
+                    "chassis-number",
+                    "site",
+                    "all",
+                    "dept-period",
+                    "expire-date",
+                    "month-fees",
+                    "old-expire",
+                    "sap",
+                    "cof",
+                    "model-fees",
+                    "gg-model-fees",
+                    "workgroup",
+                    "workgroup-latest",
+                    "ggmt-received",
+                },
             }
-        });
+        );
     }
 
     [HttpPost("losses/vehicle")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesVehicleReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-one-vehicle", payload, cancellationToken));
+    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesVehicleReport(
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken
+    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "one-vehicle", cancellationToken));
 
     [HttpPost("losses/all")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesAllReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses", payload, cancellationToken));
+    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesAllReport(
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken
+    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "all", cancellationToken));
 
     [HttpPost("losses/no-report")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesNoReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-outstanding-report", payload, cancellationToken));
+    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesNoReport(
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken
+    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "no-report", cancellationToken));
 
     [HttpPost("losses/with-report")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesWithReport([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-with-report", payload, cancellationToken));
+    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesWithReport(
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken
+    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "with-report", cancellationToken));
 
     [HttpPost("losses/dept-period")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesDeptPeriod([FromBody] JsonElement payload, CancellationToken cancellationToken)
-        => Ok(await ExecuteLegacyGridAsync("losses-site-period-vip-gg-hire", payload, cancellationToken));
+    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLossesDeptPeriod(
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken
+    ) => Ok(await ExecuteLegacyGridAsync("losses", payload, "dept-period", cancellationToken));
 
     [HttpPost("licences/{mode}")]
-    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLicencesByMode(string mode, [FromBody] JsonElement payload, CancellationToken cancellationToken)
+    public async Task<ActionResult<List<Dictionary<string, object?>>>> GetLicencesByMode(
+        string mode,
+        [FromBody] JsonElement payload,
+        CancellationToken cancellationToken
+    )
     {
         var key = mode.ToLowerInvariant() switch
         {
@@ -1277,20 +1159,30 @@ public class ReportController : BaseApiController
             "workgroup" => "licences-data-workgroup",
             "workgroup-latest" => "licences-data-workgroup-latest",
             "ggmt-received" => "licences-received-by-ggmt",
-            _ => throw new KeyNotFoundException($"Unsupported licence report mode '{mode}'")
+            _ => throw new KeyNotFoundException($"Unsupported licence report mode '{mode}'"),
         };
 
-        return Ok(await ExecuteLegacyGridAsync(key, payload, cancellationToken));
+        return Ok(await ExecuteLegacyGridAsync(key, payload, null, cancellationToken));
     }
 
     private async Task<List<Dictionary<string, object?>>> ExecuteLegacyGridAsync(
         string reportKey,
         JsonElement payload,
-        CancellationToken cancellationToken)
+        string? reportMode,
+        CancellationToken cancellationToken
+    )
     {
         var filters = JsonPayloadToFilters(payload);
+        if (!string.IsNullOrWhiteSpace(reportMode))
+        {
+            filters["mode"] = reportMode;
+        }
         NormalizeLegacyAliases(filters);
-        var report = await _legacyReportResultService.GetReportAsync(reportKey, filters, cancellationToken);
+        var report = await _legacyReportResultService.GetReportAsync(
+            reportKey,
+            filters,
+            cancellationToken
+        );
 
         var rows = new List<Dictionary<string, object?>>(report.Rows.Count);
         foreach (var row in report.Rows)
@@ -1324,7 +1216,7 @@ public class ReportController : BaseApiController
                 JsonValueKind.String => property.Value.GetString(),
                 JsonValueKind.True => bool.TrueString,
                 JsonValueKind.False => bool.FalseString,
-                _ => property.Value.ToString()
+                _ => property.Value.ToString(),
             };
 
             if (!string.IsNullOrWhiteSpace(value))
@@ -1375,13 +1267,23 @@ public class ReportController : BaseApiController
         {
             _logger.LogInformation("Excel export requested for {Filename}", request.Filename);
 
-            var excelBytes = await _reportingService.ExportToExcelAsync(request.Data, request.Filename);
-            return File(excelBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", request.Filename);
+            var excelBytes = await _reportingService.ExportToExcelAsync(
+                request.Data,
+                request.Filename
+            );
+            return File(
+                excelBytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                request.Filename
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error exporting to Excel");
-            return StatusCode(500, new { error = "Failed to export to Excel", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to export to Excel", message = ex.Message }
+            );
         }
     }
 
@@ -1404,7 +1306,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving available reports");
-            return StatusCode(500, new { error = "Failed to retrieve available reports", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to retrieve available reports", message = ex.Message }
+            );
         }
     }
 
@@ -1418,25 +1323,27 @@ public class ReportController : BaseApiController
         var help = new ReportHelpDto
         {
             Title = "Reporting System Help",
-            Description = "Generate comprehensive reports for vehicles, contracts, maintenance, and financial data",
+            Description =
+                "Generate comprehensive reports for vehicles, contracts, maintenance, and financial data",
             Sections = new List<HelpSectionDto>
             {
                 new HelpSectionDto
                 {
                     Title = "Vehicle Reports",
-                    Content = "Access detailed vehicle information including history, maintenance, and utilization"
+                    Content =
+                        "Access detailed vehicle information including history, maintenance, and utilization",
                 },
                 new HelpSectionDto
                 {
                     Title = "Financial Reports",
-                    Content = "Review billing, contract costs, and financial summaries"
+                    Content = "Review billing, contract costs, and financial summaries",
                 },
                 new HelpSectionDto
                 {
                     Title = "Export Options",
-                    Content = "Export report data to CSV or Excel formats"
-                }
-            }
+                    Content = "Export report data to CSV or Excel formats",
+                },
+            },
         };
         return Ok(help);
     }
@@ -1450,11 +1357,9 @@ public class ReportController : BaseApiController
     {
         if (string.IsNullOrWhiteSpace(request.ReportType))
         {
-            return BadRequest(new ReportRequestResultDto
-            {
-                Success = false,
-                Message = "Report type is required."
-            });
+            return BadRequest(
+                new ReportRequestResultDto { Success = false, Message = "Report type is required." }
+            );
         }
 
         try
@@ -1462,17 +1367,24 @@ public class ReportController : BaseApiController
             var now = DateTime.UtcNow;
             var currentUserId = GetCurrentUserId();
 
-            var nextCodeInt = ((int?)await _context.RequestChanges
-                .Where(x => !x.is_deleted)
-                .MaxAsync(x => (short?)x.request_code) ?? 0) + 1;
+            var nextCodeInt =
+                (
+                    (int?)
+                        await _context
+                            .RequestChanges.Where(x => !x.is_deleted)
+                            .MaxAsync(x => (short?)x.request_code) ?? 0
+                ) + 1;
 
             if (nextCodeInt > short.MaxValue)
             {
-                return StatusCode(500, new ReportRequestResultDto
-                {
-                    Success = false,
-                    Message = "Unable to allocate request code for report request."
-                });
+                return StatusCode(
+                    500,
+                    new ReportRequestResultDto
+                    {
+                        Success = false,
+                        Message = "Unable to allocate request code for report request.",
+                    }
+                );
             }
 
             var category = GetParameterString(request.Parameters, "category");
@@ -1486,39 +1398,63 @@ public class ReportController : BaseApiController
             {
                 request_code = (short)nextCodeInt,
                 request_date = now,
-                request_name = string.IsNullOrWhiteSpace(subject) ? request.ReportType.Trim() : subject!.Trim(),
+                request_name = string.IsNullOrWhiteSpace(subject)
+                    ? request.ReportType.Trim()
+                    : subject!.Trim(),
                 captured_by_userid = currentUserId > 0 ? currentUserId : null,
-                change_description = string.IsNullOrWhiteSpace(details) ? request.ReportType.Trim() : details!.Trim(),
-                sub_system_affected = string.IsNullOrWhiteSpace(module) ? "Reports" : module!.Trim(),
-                request_comment = BuildRequestComment(request.RequestedBy, email, category, priority),
+                change_description = string.IsNullOrWhiteSpace(details)
+                    ? request.ReportType.Trim()
+                    : details!.Trim(),
+                sub_system_affected = string.IsNullOrWhiteSpace(module)
+                    ? "Reports"
+                    : module!.Trim(),
+                request_comment = BuildRequestComment(
+                    request.RequestedBy,
+                    email,
+                    category,
+                    priority
+                ),
                 tech_description = SerializeParameters(request.Parameters),
                 approve_or_not = "Pending",
                 date_created = now,
                 created_by_user_code = currentUserId > 0 ? currentUserId : null,
-                is_deleted = false
+                is_deleted = false,
             };
 
             await _context.RequestChanges.AddAsync(entity);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Additional report request captured with request_code {RequestCode} for type {ReportType}", entity.request_code, request.ReportType);
+            _logger.LogInformation(
+                "Additional report request captured with request_code {RequestCode} for type {ReportType}",
+                entity.request_code,
+                request.ReportType
+            );
 
-            return Ok(new ReportRequestResultDto
-            {
-                Success = true,
-                RequestId = entity.request_code.ToString(),
-                Message = "Report request submitted successfully",
-                EstimatedCompletionTime = now.AddMinutes(5)
-            });
+            return Ok(
+                new ReportRequestResultDto
+                {
+                    Success = true,
+                    RequestId = entity.request_code.ToString(),
+                    Message = "Report request submitted successfully",
+                    EstimatedCompletionTime = now.AddMinutes(5),
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error capturing additional report request for report type {ReportType}", request.ReportType);
-            return StatusCode(500, new ReportRequestResultDto
-            {
-                Success = false,
-                Message = "Failed to submit report request."
-            });
+            _logger.LogError(
+                ex,
+                "Error capturing additional report request for report type {ReportType}",
+                request.ReportType
+            );
+            return StatusCode(
+                500,
+                new ReportRequestResultDto
+                {
+                    Success = false,
+                    Message = "Failed to submit report request.",
+                }
+            );
         }
     }
 
@@ -1531,7 +1467,8 @@ public class ReportController : BaseApiController
     public async Task<ActionResult> GetAuditTrail(
         [FromQuery] DateTime? startDate,
         [FromQuery] DateTime? endDate,
-        [FromQuery] string? userId)
+        [FromQuery] string? userId
+    )
     {
         try
         {
@@ -1541,7 +1478,9 @@ public class ReportController : BaseApiController
                 query = query.Where(a => a.performed_at >= startDate.Value.Date);
 
             if (endDate.HasValue)
-                query = query.Where(a => a.performed_at <= endDate.Value.Date.AddDays(1).AddSeconds(-1));
+                query = query.Where(a =>
+                    a.performed_at <= endDate.Value.Date.AddDays(1).AddSeconds(-1)
+                );
 
             if (!string.IsNullOrWhiteSpace(userId) && int.TryParse(userId, out var userCode))
                 query = query.Where(a => a.performed_by_user_code == userCode);
@@ -1555,7 +1494,7 @@ public class ReportController : BaseApiController
                     ReportType = "Contract",
                     UserId = a.performed_by_user_code.ToString(),
                     AccessedDate = a.performed_at,
-                    Action = a.action
+                    Action = a.action,
                 })
                 .ToListAsync();
 
@@ -1565,7 +1504,10 @@ public class ReportController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating audit trail report");
-            return StatusCode(500, new { error = "Failed to generate audit trail report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate audit trail report", message = ex.Message }
+            );
         }
     }
 
@@ -1579,7 +1521,8 @@ public class ReportController : BaseApiController
         [FromQuery] int? vmfCode,
         [FromQuery] int? departmentCode,
         [FromQuery] string? mode,
-        [FromQuery] string? search)
+        [FromQuery] string? search
+    )
     {
         try
         {
@@ -1590,13 +1533,14 @@ public class ReportController : BaseApiController
                 "CHASSIS" => "VIN",
                 "VIN" => "VIN",
                 "INVOICE" => "INVOICE",
-                _ => "GG"
+                _ => "GG",
             };
             var normalizedSearch = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
 
             var query =
                 from scanDoc in _context.ScanDocs.AsNoTracking()
-                join vehicle in _context.Vehicles.AsNoTracking() on scanDoc.vmf_code equals vehicle.vmf_code
+                join vehicle in _context.Vehicles.AsNoTracking()
+                    on scanDoc.vmf_code equals vehicle.vmf_code
                 where !scanDoc.is_deleted && !vehicle.is_deleted
                 select new
                 {
@@ -1609,7 +1553,7 @@ public class ReportController : BaseApiController
                     scanDoc.period_begin,
                     scanDoc.period_end,
                     scanDoc.image,
-                    DateUploaded = scanDoc.date_updated ?? scanDoc.date_created
+                    DateUploaded = scanDoc.date_updated ?? scanDoc.date_created,
                 };
 
             if (vmfCode.HasValue)
@@ -1620,11 +1564,23 @@ public class ReportController : BaseApiController
             {
                 query = normalizedMode switch
                 {
-                    "GP" => query.Where(row => row.registration_number != null && row.registration_number.Contains(normalizedSearch)),
-                    "ENGINE" => query.Where(row => row.engine_number_1 != null && row.engine_number_1.Contains(normalizedSearch)),
-                    "VIN" => query.Where(row => row.chassis_number != null && row.chassis_number.Contains(normalizedSearch)),
-                    "INVOICE" => query.Where(row => row.invoice_number != null && row.invoice_number.Contains(normalizedSearch)),
-                    _ => query.Where(row => row.fleet_number != null && row.fleet_number.Contains(normalizedSearch))
+                    "GP" => query.Where(row =>
+                        row.registration_number != null
+                        && row.registration_number.Contains(normalizedSearch)
+                    ),
+                    "ENGINE" => query.Where(row =>
+                        row.engine_number_1 != null
+                        && row.engine_number_1.Contains(normalizedSearch)
+                    ),
+                    "VIN" => query.Where(row =>
+                        row.chassis_number != null && row.chassis_number.Contains(normalizedSearch)
+                    ),
+                    "INVOICE" => query.Where(row =>
+                        row.invoice_number != null && row.invoice_number.Contains(normalizedSearch)
+                    ),
+                    _ => query.Where(row =>
+                        row.fleet_number != null && row.fleet_number.Contains(normalizedSearch)
+                    ),
                 };
             }
 
@@ -1640,17 +1596,33 @@ public class ReportController : BaseApiController
                     PeriodFrom = row.period_begin,
                     PeriodTo = row.period_end,
                     DateUploaded = row.DateUploaded,
-                    RegistrationCertificate = row.image ?? string.Empty
+                    RegistrationCertificate = row.image ?? string.Empty,
                 })
                 .ToListAsync();
 
-            _logger.LogInformation("Registration certificates report: {Count} records", certificates.Count);
-            return Ok(new RegistrationCertificatesReportDto { Certificates = certificates, TotalCount = certificates.Count });
+            _logger.LogInformation(
+                "Registration certificates report: {Count} records",
+                certificates.Count
+            );
+            return Ok(
+                new RegistrationCertificatesReportDto
+                {
+                    Certificates = certificates,
+                    TotalCount = certificates.Count,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating registration certificates report");
-            return StatusCode(500, new { error = "Failed to generate registration certificates report", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "Failed to generate registration certificates report",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -1667,7 +1639,8 @@ public class ReportController : BaseApiController
         [FromQuery] string? module = null,
         [FromQuery] short? site_code = null,
         [FromQuery] int? vmf_code = null,
-        [FromQuery] int? captured_by = null)
+        [FromQuery] int? captured_by = null
+    )
     {
         try
         {
@@ -1678,29 +1651,49 @@ public class ReportController : BaseApiController
             var filtersApplied = new Dictionary<string, object?>();
             filtersApplied["date_from"] = fromDate.ToString("yyyy-MM-dd");
             filtersApplied["date_to"] = toDate.Date.ToString("yyyy-MM-dd");
-            if (moduleFilter != "All") filtersApplied["module"] = moduleFilter;
-            if (site_code.HasValue) filtersApplied["site_code"] = site_code;
-            if (vmf_code.HasValue) filtersApplied["vmf_code"] = vmf_code;
-            if (captured_by.HasValue) filtersApplied["captured_by"] = captured_by;
+            if (moduleFilter != "All")
+                filtersApplied["module"] = moduleFilter;
+            if (site_code.HasValue)
+                filtersApplied["site_code"] = site_code;
+            if (vmf_code.HasValue)
+                filtersApplied["vmf_code"] = vmf_code;
+            if (captured_by.HasValue)
+                filtersApplied["captured_by"] = captured_by;
 
             // Build a lookup of vmf_code → (fleet_number, registration_number, veh_site_code) to enrich results
             // Only load vehicles that match site/vmf filters to keep query light
             var vehicleBase = _context.Vehicles.Where(v => !v.is_deleted);
-            if (vmf_code.HasValue) vehicleBase = vehicleBase.Where(v => v.vmf_code == vmf_code.Value);
-            if (site_code.HasValue) vehicleBase = vehicleBase.Where(v => v.veh_site_code == site_code.Value);
+            if (vmf_code.HasValue)
+                vehicleBase = vehicleBase.Where(v => v.vmf_code == vmf_code.Value);
+            if (site_code.HasValue)
+                vehicleBase = vehicleBase.Where(v => v.veh_site_code == site_code.Value);
             var vehicleMap = await vehicleBase
-                .Select(v => new { v.vmf_code, v.fleet_number, v.registration_number, v.veh_site_code })
+                .Select(v => new
+                {
+                    v.vmf_code,
+                    v.fleet_number,
+                    v.registration_number,
+                    v.veh_site_code,
+                })
                 .ToDictionaryAsync(v => v.vmf_code, v => v);
 
             // Helper: resolve vehicle info
-            string? FleetNum(int? code) => (code.HasValue && vehicleMap.TryGetValue(code.Value, out var fv)) ? fv.fleet_number : null;
-            string? RegNum(int? code) => (code.HasValue && vehicleMap.TryGetValue(code.Value, out var rv)) ? rv.registration_number : null;
+            string? FleetNum(int? code) =>
+                (code.HasValue && vehicleMap.TryGetValue(code.Value, out var fv))
+                    ? fv.fleet_number
+                    : null;
+            string? RegNum(int? code) =>
+                (code.HasValue && vehicleMap.TryGetValue(code.Value, out var rv))
+                    ? rv.registration_number
+                    : null;
 
             // Helper: check if a vmf_code passes site/vmf filter
             bool VehicleInScope(int? code)
             {
-                if (!vmf_code.HasValue && !site_code.HasValue) return true;
-                if (code == null) return false;
+                if (!vmf_code.HasValue && !site_code.HasValue)
+                    return true;
+                if (code == null)
+                    return false;
                 return vehicleMap.ContainsKey(code.Value);
             }
 
@@ -1710,12 +1703,15 @@ public class ReportController : BaseApiController
             // ── Vehicles ─────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Vehicles")
             {
-                var q = _context.Vehicles
-                    .Where(v => !v.is_deleted
-                        && v.date_created >= fromDate && v.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(v => v.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(v => v.vmf_code == vmf_code.Value);
-                if (site_code.HasValue) q = q.Where(v => v.veh_site_code == site_code.Value);
+                var q = _context.Vehicles.Where(v =>
+                    !v.is_deleted && v.date_created >= fromDate && v.date_created <= toDate
+                );
+                if (captured_by.HasValue)
+                    q = q.Where(v => v.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue)
+                    q = q.Where(v => v.vmf_code == vmf_code.Value);
+                if (site_code.HasValue)
+                    q = q.Where(v => v.veh_site_code == site_code.Value);
                 var rows = await q.OrderByDescending(v => v.date_created)
                     .Select(v => new CaptureActivityEntry
                     {
@@ -1723,11 +1719,13 @@ public class ReportController : BaseApiController
                         vmf_code = v.vmf_code,
                         fleet_number = v.fleet_number,
                         registration_number = v.registration_number,
-                        description = $"Vehicle {v.fleet_number ?? v.registration_number ?? v.vmf_code.ToString()} added",
+                        description =
+                            $"Vehicle {v.fleet_number ?? v.registration_number ?? v.vmf_code.ToString()} added",
                         date_captured = v.date_created,
                         captured_by_user_code = v.created_by_user_code,
-                        module = "Vehicles"
-                    }).ToListAsync();
+                        module = "Vehicles",
+                    })
+                    .ToListAsync();
                 summary["Vehicles"] = rows.Count;
                 details["Vehicles"] = rows.Cast<object>().ToList();
             }
@@ -1735,27 +1733,43 @@ public class ReportController : BaseApiController
             // ── Contracts ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Contracts")
             {
-                var q = _context.Contracts
-                    .Where(c => !c.is_deleted
-                        && c.date_created >= fromDate && c.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(c => c.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(c => c.vmf_code == vmf_code.Value);
-                if (site_code.HasValue) q = q.Where(c => c.site_code == site_code.Value);
+                var q = _context.Contracts.Where(c =>
+                    !c.is_deleted && c.date_created >= fromDate && c.date_created <= toDate
+                );
+                if (captured_by.HasValue)
+                    q = q.Where(c => c.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue)
+                    q = q.Where(c => c.vmf_code == vmf_code.Value);
+                if (site_code.HasValue)
+                    q = q.Where(c => c.site_code == site_code.Value);
                 var rows = await q.OrderByDescending(c => c.date_created)
-                    .Select(c => new { c.contract_code, c.vmf_code, c.site_code, c.date_created, c.created_by_user_code, c.still_current })
+                    .Select(c => new
+                    {
+                        c.contract_code,
+                        c.vmf_code,
+                        c.site_code,
+                        c.date_created,
+                        c.created_by_user_code,
+                        c.still_current,
+                    })
                     .ToListAsync();
                 var mapped = rows.Where(c => VehicleInScope(c.vmf_code) || site_code == null)
-                    .Select(c => (object)new CaptureActivityEntry
-                    {
-                        record_id = c.contract_code,
-                        vmf_code = c.vmf_code,
-                        fleet_number = FleetNum(c.vmf_code),
-                        registration_number = RegNum(c.vmf_code),
-                        description = $"Contract captured (status: {(c.still_current == "Y" ? "Active" : "Inactive")})",
-                        date_captured = c.date_created,
-                        captured_by_user_code = c.created_by_user_code,
-                        module = "Contracts"
-                    }).ToList();
+                    .Select(c =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = c.contract_code,
+                                vmf_code = c.vmf_code,
+                                fleet_number = FleetNum(c.vmf_code),
+                                registration_number = RegNum(c.vmf_code),
+                                description =
+                                    $"Contract captured (status: {(c.still_current == "Y" ? "Active" : "Inactive")})",
+                                date_captured = c.date_created,
+                                captured_by_user_code = c.created_by_user_code,
+                                module = "Contracts",
+                            }
+                    )
+                    .ToList();
                 summary["Contracts"] = mapped.Count;
                 details["Contracts"] = mapped;
             }
@@ -1763,26 +1777,39 @@ public class ReportController : BaseApiController
             // ── Accidents ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Accidents")
             {
-                var q = _context.Accidents
-                    .Where(a => !a.is_deleted
-                        && a.date_created >= fromDate && a.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(a => a.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(a => a.vmf_code == vmf_code.Value);
+                var q = _context.Accidents.Where(a =>
+                    !a.is_deleted && a.date_created >= fromDate && a.date_created <= toDate
+                );
+                if (captured_by.HasValue)
+                    q = q.Where(a => a.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue)
+                    q = q.Where(a => a.vmf_code == vmf_code.Value);
                 var rows = await q.OrderByDescending(a => a.date_created)
-                    .Select(a => new { a.accident_code, a.vmf_code, a.description, a.date_created, a.created_by_user_code })
+                    .Select(a => new
+                    {
+                        a.accident_code,
+                        a.vmf_code,
+                        a.description,
+                        a.date_created,
+                        a.created_by_user_code,
+                    })
                     .ToListAsync();
                 var mapped = rows.Where(a => VehicleInScope(a.vmf_code))
-                    .Select(a => (object)new CaptureActivityEntry
-                    {
-                        record_id = a.accident_code,
-                        vmf_code = a.vmf_code,
-                        fleet_number = FleetNum(a.vmf_code),
-                        registration_number = RegNum(a.vmf_code),
-                        description = a.description ?? "Accident recorded",
-                        date_captured = a.date_created,
-                        captured_by_user_code = a.created_by_user_code,
-                        module = "Accidents"
-                    }).ToList();
+                    .Select(a =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = a.accident_code,
+                                vmf_code = a.vmf_code,
+                                fleet_number = FleetNum(a.vmf_code),
+                                registration_number = RegNum(a.vmf_code),
+                                description = a.description ?? "Accident recorded",
+                                date_captured = a.date_created,
+                                captured_by_user_code = a.created_by_user_code,
+                                module = "Accidents",
+                            }
+                    )
+                    .ToList();
                 summary["Accidents"] = mapped.Count;
                 details["Accidents"] = mapped;
             }
@@ -1790,26 +1817,40 @@ public class ReportController : BaseApiController
             // ── Fines ────────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Fines")
             {
-                var q = _context.Fines
-                    .Where(f => !f.is_deleted
-                        && f.date_created >= fromDate && f.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(f => f.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(f => f.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(f => f.date_created)
-                    .Select(f => new { f.Fine_code, f.vmf_code, f.Offence_reference, f.date_created, f.created_by_user_code })
-                    .ToListAsync();
-                var mapped = rows.Where(f => VehicleInScope(f.vmf_code))
-                    .Select(f => (object)new CaptureActivityEntry
+                var q = (await _fineRepository.GetAllAsync()).Where(f =>
+                    !f.is_deleted && f.date_created >= fromDate && f.date_created <= toDate
+                );
+                if (captured_by.HasValue)
+                    q = q.Where(f => f.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue)
+                    q = q.Where(f => f.vmf_code == vmf_code.Value);
+                var rows = q.OrderByDescending(f => f.date_created)
+                    .Select(f => new
                     {
-                        record_id = f.Fine_code,
-                        vmf_code = f.vmf_code,
-                        fleet_number = FleetNum(f.vmf_code),
-                        registration_number = RegNum(f.vmf_code),
-                        description = $"Fine {f.Offence_reference ?? f.Fine_code.ToString()} captured",
-                        date_captured = f.date_created,
-                        captured_by_user_code = f.created_by_user_code,
-                        module = "Fines"
-                    }).ToList();
+                        f.Fine_code,
+                        f.vmf_code,
+                        f.Offence_reference,
+                        f.date_created,
+                        f.created_by_user_code,
+                    })
+                    .ToList();
+                var mapped = rows.Where(f => VehicleInScope(f.vmf_code))
+                    .Select(f =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = f.Fine_code,
+                                vmf_code = f.vmf_code,
+                                fleet_number = FleetNum(f.vmf_code),
+                                registration_number = RegNum(f.vmf_code),
+                                description =
+                                    $"Fine {f.Offence_reference ?? f.Fine_code.ToString()} captured",
+                                date_captured = f.date_created,
+                                captured_by_user_code = f.created_by_user_code,
+                                module = "Fines",
+                            }
+                    )
+                    .ToList();
                 summary["Fines"] = mapped.Count;
                 details["Fines"] = mapped;
             }
@@ -1817,26 +1858,47 @@ public class ReportController : BaseApiController
             // ── Job Cards ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "JobCards")
             {
-                var q = _context.JobCards
-                    .Where(j => !j.is_deleted
-                        && j.date_created >= fromDate && j.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(j => j.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(j => j.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(j => j.date_created)
-                    .Select(j => new { j.job_card_id, j.vmf_code, j.jcs_comment, j.status_code, j.date_created, j.created_by_user_code })
-                    .ToListAsync();
-                var mapped = rows.Where(j => VehicleInScope(j.vmf_code))
-                    .Select(j => (object)new CaptureActivityEntry
+                // Use the compatibility repository here instead of querying
+                // the expanded job_cards table directly. The client database
+                // uses dbo.Jobcards and must remain reportable before the
+                // expanded schema is installed.
+                var rows = (await _jobCardRepository.GetAllAsync())
+                    .Where(j =>
+                        !j.is_deleted && j.date_created >= fromDate && j.date_created <= toDate
+                    )
+                    .Where(j =>
+                        !captured_by.HasValue || j.created_by_user_code == captured_by.Value
+                    )
+                    .Where(j => !vmf_code.HasValue || j.vmf_code == vmf_code.Value)
+                    .OrderByDescending(j => j.date_created)
+                    .Select(j => new
                     {
-                        record_id = j.job_card_id,
-                        vmf_code = j.vmf_code,
-                        fleet_number = FleetNum(j.vmf_code),
-                        registration_number = RegNum(j.vmf_code),
-                        description = j.jcs_comment ?? $"Job card #{j.job_card_id} (status {j.status_code})",
-                        date_captured = j.date_created,
-                        captured_by_user_code = j.created_by_user_code,
-                        module = "JobCards"
-                    }).ToList();
+                        j.job_card_id,
+                        j.vmf_code,
+                        j.jcs_comment,
+                        j.status_code,
+                        j.date_created,
+                        j.created_by_user_code,
+                    })
+                    .ToList();
+                var mapped = rows.Where(j => VehicleInScope(j.vmf_code))
+                    .Select(j =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = j.job_card_id,
+                                vmf_code = j.vmf_code,
+                                fleet_number = FleetNum(j.vmf_code),
+                                registration_number = RegNum(j.vmf_code),
+                                description =
+                                    j.jcs_comment
+                                    ?? $"Job card #{j.job_card_id} (status {j.status_code})",
+                                date_captured = j.date_created,
+                                captured_by_user_code = j.created_by_user_code,
+                                module = "JobCards",
+                            }
+                    )
+                    .ToList();
                 summary["JobCards"] = mapped.Count;
                 details["JobCards"] = mapped;
             }
@@ -1844,26 +1906,39 @@ public class ReportController : BaseApiController
             // ── Logbooks ─────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Logbooks")
             {
-                var q = _context.Logbooks
-                    .Where(l => !l.is_deleted
-                        && l.date_created >= fromDate && l.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(l => l.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(l => l.vmf_code == vmf_code.Value);
-                var rows = await q.OrderByDescending(l => l.date_created)
-                    .Select(l => new { l.logbookcode, l.vmf_code, l.date_created, l.created_by_user_code })
-                    .ToListAsync();
-                var mapped = rows.Where(l => VehicleInScope(l.vmf_code))
-                    .Select(l => (object)new CaptureActivityEntry
+                var rows = (await _logbookRepository.GetAllAsync())
+                    .Where(l =>
+                        !l.is_deleted && l.date_created >= fromDate && l.date_created <= toDate
+                    )
+                    .Where(l =>
+                        !captured_by.HasValue || l.created_by_user_code == captured_by.Value
+                    )
+                    .Where(l => !vmf_code.HasValue || l.vmf_code == vmf_code.Value)
+                    .OrderByDescending(l => l.date_created)
+                    .Select(l => new
                     {
-                        record_id = l.logbookcode,
-                        vmf_code = l.vmf_code,
-                        fleet_number = FleetNum(l.vmf_code),
-                        registration_number = RegNum(l.vmf_code),
-                        description = $"Logbook entry #{l.logbookcode}",
-                        date_captured = l.date_created,
-                        captured_by_user_code = l.created_by_user_code,
-                        module = "Logbooks"
-                    }).ToList();
+                        l.logbookcode,
+                        l.vmf_code,
+                        l.date_created,
+                        l.created_by_user_code,
+                    })
+                    .ToList();
+                var mapped = rows.Where(l => VehicleInScope(l.vmf_code))
+                    .Select(l =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = l.logbookcode,
+                                vmf_code = l.vmf_code,
+                                fleet_number = FleetNum(l.vmf_code),
+                                registration_number = RegNum(l.vmf_code),
+                                description = $"Logbook entry #{l.logbookcode}",
+                                date_captured = l.date_created,
+                                captured_by_user_code = l.created_by_user_code,
+                                module = "Logbooks",
+                            }
+                    )
+                    .ToList();
                 summary["Logbooks"] = mapped.Count;
                 details["Logbooks"] = mapped;
             }
@@ -1871,26 +1946,41 @@ public class ReportController : BaseApiController
             // ── Documents ────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Documents")
             {
-                var q = _context.VehicleDocuments
-                    .Where(d => !d.is_deleted
-                        && d.date_created >= fromDate && d.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(d => d.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(d => d.vmf_code == vmf_code.Value);
+                var q = _context.VehicleDocuments.Where(d =>
+                    !d.is_deleted && d.date_created >= fromDate && d.date_created <= toDate
+                );
+                if (captured_by.HasValue)
+                    q = q.Where(d => d.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue)
+                    q = q.Where(d => d.vmf_code == vmf_code.Value);
                 var rows = await q.OrderByDescending(d => d.date_created)
-                    .Select(d => new { d.document_id, d.vmf_code, d.document_category, d.original_file_name, d.date_created, d.created_by_user_code })
+                    .Select(d => new
+                    {
+                        d.document_id,
+                        d.vmf_code,
+                        d.document_category,
+                        d.original_file_name,
+                        d.date_created,
+                        d.created_by_user_code,
+                    })
                     .ToListAsync();
                 var mapped = rows.Where(d => VehicleInScope(d.vmf_code))
-                    .Select(d => (object)new CaptureActivityEntry
-                    {
-                        record_id = d.document_id,
-                        vmf_code = d.vmf_code,
-                        fleet_number = FleetNum(d.vmf_code),
-                        registration_number = RegNum(d.vmf_code),
-                        description = $"{d.document_category} document: {d.original_file_name}",
-                        date_captured = d.date_created,
-                        captured_by_user_code = d.created_by_user_code,
-                        module = "Documents"
-                    }).ToList();
+                    .Select(d =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = d.document_id,
+                                vmf_code = d.vmf_code,
+                                fleet_number = FleetNum(d.vmf_code),
+                                registration_number = RegNum(d.vmf_code),
+                                description =
+                                    $"{d.document_category} document: {d.original_file_name}",
+                                date_captured = d.date_created,
+                                captured_by_user_code = d.created_by_user_code,
+                                module = "Documents",
+                            }
+                    )
+                    .ToList();
                 summary["Documents"] = mapped.Count;
                 details["Documents"] = mapped;
             }
@@ -1898,26 +1988,39 @@ public class ReportController : BaseApiController
             // ── Remarks ──────────────────────────────────────────────────────────
             if (moduleFilter == "All" || moduleFilter == "Remarks")
             {
-                var q = _context.VehicleRemarks
-                    .Where(r => !r.is_deleted
-                        && r.date_created >= fromDate && r.date_created <= toDate);
-                if (captured_by.HasValue) q = q.Where(r => r.created_by_user_code == captured_by.Value);
-                if (vmf_code.HasValue) q = q.Where(r => r.vmf_code == vmf_code.Value);
+                var q = _context.VehicleRemarks.Where(r =>
+                    !r.is_deleted && r.date_created >= fromDate && r.date_created <= toDate
+                );
+                if (captured_by.HasValue)
+                    q = q.Where(r => r.created_by_user_code == captured_by.Value);
+                if (vmf_code.HasValue)
+                    q = q.Where(r => r.vmf_code == vmf_code.Value);
                 var rows = await q.OrderByDescending(r => r.date_created)
-                    .Select(r => new { r.remark_id, r.vmf_code, r.remark_text, r.date_created, r.created_by_user_code })
+                    .Select(r => new
+                    {
+                        r.remark_id,
+                        r.vmf_code,
+                        r.remark_text,
+                        r.date_created,
+                        r.created_by_user_code,
+                    })
                     .ToListAsync();
                 var mapped = rows.Where(r => VehicleInScope(r.vmf_code))
-                    .Select(r => (object)new CaptureActivityEntry
-                    {
-                        record_id = r.remark_id,
-                        vmf_code = r.vmf_code,
-                        fleet_number = FleetNum(r.vmf_code),
-                        registration_number = RegNum(r.vmf_code),
-                        description = r.remark_text ?? $"Remark #{r.remark_id}",
-                        date_captured = r.date_created,
-                        captured_by_user_code = r.created_by_user_code,
-                        module = "Remarks"
-                    }).ToList();
+                    .Select(r =>
+                        (object)
+                            new CaptureActivityEntry
+                            {
+                                record_id = r.remark_id,
+                                vmf_code = r.vmf_code,
+                                fleet_number = FleetNum(r.vmf_code),
+                                registration_number = RegNum(r.vmf_code),
+                                description = r.remark_text ?? $"Remark #{r.remark_id}",
+                                date_captured = r.date_created,
+                                captured_by_user_code = r.created_by_user_code,
+                                module = "Remarks",
+                            }
+                    )
+                    .ToList();
                 summary["Remarks"] = mapped.Count;
                 details["Remarks"] = mapped;
             }
@@ -1925,15 +2028,21 @@ public class ReportController : BaseApiController
             var totalCount = summary.Values.Sum();
             _logger.LogInformation(
                 "Capture activity report: {From} – {To}, module={Module}, total={Total}",
-                fromDate, toDate.Date, moduleFilter, totalCount);
+                fromDate,
+                toDate.Date,
+                moduleFilter,
+                totalCount
+            );
 
-            return Ok(new
-            {
-                filters_applied = filtersApplied,
-                total_count = totalCount,
-                summary,
-                details
-            });
+            return Ok(
+                new
+                {
+                    filters_applied = filtersApplied,
+                    total_count = totalCount,
+                    summary,
+                    details,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -1944,32 +2053,74 @@ public class ReportController : BaseApiController
 
     #endregion
 
-    private static string? GetParameterString(Dictionary<string, object> parameters, string key)
-{
-    if (!parameters.TryGetValue(key, out var value) || value is null)
-    {
-        return null;
-    }
+    private static bool IsFineReportKey(string reportKey) =>
+        reportKey.Equals("fines", StringComparison.OrdinalIgnoreCase)
+        || reportKey.StartsWith("fines-", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("appear-date", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("reissue-submission", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("traffic-dept-detail", StringComparison.OrdinalIgnoreCase)
+        || reportKey.Equals("dept-site-period", StringComparison.OrdinalIgnoreCase);
 
-    if (value is JsonElement element)
+    private bool HasReportsRole() => HasAnyRole("Reports");
+
+    private bool HasAnyRole(params string[] expectedRoles)
     {
-        return element.ValueKind switch
+        if (expectedRoles.Any(User.IsInRole))
         {
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Null => null,
-            _ => element.GetRawText()
-        };
+            return true;
+        }
+
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
     }
 
-    return value.ToString();
-}
+    private static string? GetParameterString(Dictionary<string, object> parameters, string key)
+    {
+        if (!parameters.TryGetValue(key, out var value) || value is null)
+        {
+            return null;
+        }
+
+        if (value is JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.String => element.GetString(),
+                JsonValueKind.Null => null,
+                _ => element.GetRawText(),
+            };
+        }
+
+        return value.ToString();
+    }
 
     private static string SerializeParameters(Dictionary<string, object> parameters)
     {
         return JsonSerializer.Serialize(parameters);
     }
 
-    private static string BuildRequestComment(string requestedBy, string? email, string? category, string? priority)
+    private static string BuildRequestComment(
+        string requestedBy,
+        string? email,
+        string? category,
+        string? priority
+    )
     {
         var parts = new List<string>();
         if (!string.IsNullOrWhiteSpace(requestedBy))

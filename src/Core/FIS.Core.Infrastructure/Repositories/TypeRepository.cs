@@ -25,8 +25,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Type entity if found, null otherwise</returns>
         public async Task<TypeEntity?> GetByIdAsync(short typeCode)
         {
-            return await _context.VehicleTypes
-                .Where(x => !x.is_deleted)
+            return await _context
+                .VehicleTypes.Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(t => t.type_code == typeCode);
         }
 
@@ -37,8 +37,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Type entity if found, null otherwise</returns>
         public async Task<TypeEntity?> GetByNameAsync(string typeName)
         {
-            return await _context.VehicleTypes
-                .Where(x => !x.is_deleted)
+            return await _context
+                .VehicleTypes.Where(x => !x.is_deleted)
                 .FirstOrDefaultAsync(t => t.type_description.ToLower() == typeName.ToLower());
         }
 
@@ -48,8 +48,8 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of all type entities</returns>
         public async Task<IEnumerable<TypeEntity>> GetAllTypesAsync()
         {
-            return await _context.VehicleTypes
-                .Where(x => !x.is_deleted)
+            return await _context
+                .VehicleTypes.Where(x => !x.is_deleted)
                 .OrderBy(t => t.type_description)
                 .ToListAsync();
         }
@@ -61,8 +61,10 @@ namespace FIS.Core.Infrastructure.Repositories
         /// <returns>Collection of matching type entities</returns>
         public async Task<IEnumerable<TypeEntity>> SearchTypesAsync(string searchTerm)
         {
-            return await _context.VehicleTypes
-                .Where(t => t.type_description.ToLower().Contains(searchTerm.ToLower()))
+            return await _context
+                .VehicleTypes.Where(t =>
+                    t.type_description.ToLower().Contains(searchTerm.ToLower())
+                )
                 .OrderBy(t => t.type_description)
                 .ToListAsync();
         }
@@ -77,7 +79,7 @@ namespace FIS.Core.Infrastructure.Repositories
             // Auto-populate audit fields
             type.date_created = DateTime.UtcNow;
             type.is_deleted = false;
-            
+
             _context.VehicleTypes.Add(type);
             await _context.SaveChangesAsync();
             return type;
@@ -95,7 +97,9 @@ namespace FIS.Core.Infrastructure.Repositories
 
             var existing = await _context.VehicleTypes.FindAsync(type.type_code);
             if (existing == null)
-                throw new InvalidOperationException($"Type with type_code {type.type_code} not found");
+                throw new InvalidOperationException(
+                    $"Type with type_code {type.type_code} not found"
+                );
 
             _context.Entry(existing).CurrentValues.SetValues(type);
             await _context.SaveChangesAsync();

@@ -18,7 +18,8 @@ public class LocationController : BaseApiController
 
     public LocationController(
         ILocationRepository locationRepository,
-        ILogger<LocationController> logger)
+        ILogger<LocationController> logger
+    )
     {
         _locationRepository = locationRepository;
         _logger = logger;
@@ -62,7 +63,11 @@ public class LocationController : BaseApiController
                 return NotFound($"Location with ID {locationId} not found");
             }
 
-            _logger.LogInformation("Retrieved location {LocationId}: {LocationName}", locationId, location.LocationName);
+            _logger.LogInformation(
+                "Retrieved location {LocationId}: {LocationName}",
+                locationId,
+                location.LocationName
+            );
             return Ok(location);
         }
         catch (Exception ex)
@@ -89,13 +94,20 @@ public class LocationController : BaseApiController
                 return NotFound($"Location with name '{locationName}' not found");
             }
 
-            _logger.LogInformation("Retrieved location by name '{LocationName}': {LocationId}", 
-                locationName, location.LocationId);
+            _logger.LogInformation(
+                "Retrieved location by name '{LocationName}': {LocationId}",
+                locationName,
+                location.LocationId
+            );
             return Ok(location);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving location by name '{LocationName}'", locationName);
+            _logger.LogError(
+                ex,
+                "Error retrieving location by name '{LocationName}'",
+                locationName
+            );
             return StatusCode(500, "An error occurred while retrieving the location by name");
         }
     }
@@ -111,7 +123,11 @@ public class LocationController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var locations = await _locationRepository.GetByCountryAsync(country);
-            _logger.LogInformation("Found {Count} locations in country '{Country}'", locations.Count(), country);
+            _logger.LogInformation(
+                "Found {Count} locations in country '{Country}'",
+                locations.Count(),
+                country
+            );
             return Ok(locations);
         }
         catch (Exception ex)
@@ -132,7 +148,11 @@ public class LocationController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var locations = await _locationRepository.GetByProvinceAsync(province);
-            _logger.LogInformation("Found {Count} locations in province '{Province}'", locations.Count(), province);
+            _logger.LogInformation(
+                "Found {Count} locations in province '{Province}'",
+                locations.Count(),
+                province
+            );
             return Ok(locations);
         }
         catch (Exception ex)
@@ -146,15 +166,20 @@ public class LocationController : BaseApiController
     /// Search locations by name, description, city, province, or country
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<Location>>> SearchLocations([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<Location>>> SearchLocations(
+        [FromQuery] string? searchTerm
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
 
             var locations = await _locationRepository.SearchLocationsAsync(searchTerm ?? "");
-            _logger.LogInformation("Found {Count} locations matching search term '{SearchTerm}'", 
-                locations.Count(), searchTerm);
+            _logger.LogInformation(
+                "Found {Count} locations matching search term '{SearchTerm}'",
+                locations.Count(),
+                searchTerm
+            );
             return Ok(locations);
         }
         catch (Exception ex)
@@ -178,17 +203,26 @@ public class LocationController : BaseApiController
             var existingLocation = await _locationRepository.GetByNameAsync(location.LocationName);
             if (existingLocation != null)
             {
-                _logger.LogWarning("Attempt to create location with duplicate name: {LocationName}", location.LocationName);
+                _logger.LogWarning(
+                    "Attempt to create location with duplicate name: {LocationName}",
+                    location.LocationName
+                );
                 return Conflict($"Location with name '{location.LocationName}' already exists");
             }
 
             location.IsActive = true;
             var createdLocation = await _locationRepository.CreateAsync(location, currentUserId);
-            _logger.LogInformation("Created location {LocationId}: {LocationName}", 
-                createdLocation.LocationId, createdLocation.LocationName);
-            
-            return CreatedAtAction(nameof(GetLocation), 
-                new { locationId = createdLocation.LocationId }, createdLocation);
+            _logger.LogInformation(
+                "Created location {LocationId}: {LocationName}",
+                createdLocation.LocationId,
+                createdLocation.LocationName
+            );
+
+            return CreatedAtAction(
+                nameof(GetLocation),
+                new { locationId = createdLocation.LocationId },
+                createdLocation
+            );
         }
         catch (Exception ex)
         {
@@ -201,7 +235,10 @@ public class LocationController : BaseApiController
     /// Update an existing location
     /// </summary>
     [HttpPut("{locationId}")]
-    public async Task<ActionResult<Location>> UpdateLocation(int locationId, [FromBody] Location location)
+    public async Task<ActionResult<Location>> UpdateLocation(
+        int locationId,
+        [FromBody] Location location
+    )
     {
         try
         {
@@ -215,7 +252,10 @@ public class LocationController : BaseApiController
             var existingLocation = await _locationRepository.GetByIdAsync(locationId);
             if (existingLocation == null)
             {
-                _logger.LogWarning("Location with ID {LocationId} not found for update", locationId);
+                _logger.LogWarning(
+                    "Location with ID {LocationId} not found for update",
+                    locationId
+                );
                 return NotFound($"Location with ID {locationId} not found");
             }
 
@@ -225,15 +265,22 @@ public class LocationController : BaseApiController
                 var nameConflict = await _locationRepository.GetByNameAsync(location.LocationName);
                 if (nameConflict != null && nameConflict.LocationId != locationId)
                 {
-                    _logger.LogWarning("Attempt to update location {LocationId} with duplicate name: {LocationName}", 
-                        locationId, location.LocationName);
+                    _logger.LogWarning(
+                        "Attempt to update location {LocationId} with duplicate name: {LocationName}",
+                        locationId,
+                        location.LocationName
+                    );
                     return Conflict($"Location with name '{location.LocationName}' already exists");
                 }
             }
 
             await _locationRepository.UpdateAsync(location, currentUserId);
-            _logger.LogInformation("Updated location {LocationId}: {LocationName}", locationId, location.LocationName);
-            
+            _logger.LogInformation(
+                "Updated location {LocationId}: {LocationName}",
+                locationId,
+                location.LocationName
+            );
+
             return Ok(location);
         }
         catch (Exception ex)
@@ -256,14 +303,20 @@ public class LocationController : BaseApiController
             var existingLocation = await _locationRepository.GetByIdAsync(locationId);
             if (existingLocation == null)
             {
-                _logger.LogWarning("Location with ID {LocationId} not found for deletion", locationId);
+                _logger.LogWarning(
+                    "Location with ID {LocationId} not found for deletion",
+                    locationId
+                );
                 return NotFound($"Location with ID {locationId} not found");
             }
 
             await _locationRepository.DeleteAsync(locationId, currentUserId); // This performs soft delete
-            _logger.LogInformation("Soft deleted location {LocationId}: {LocationName}", 
-                locationId, existingLocation.LocationName);
-            
+            _logger.LogInformation(
+                "Soft deleted location {LocationId}: {LocationName}",
+                locationId,
+                existingLocation.LocationName
+            );
+
             return NoContent();
         }
         catch (Exception ex)

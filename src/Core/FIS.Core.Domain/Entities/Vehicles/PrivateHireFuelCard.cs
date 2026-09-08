@@ -25,6 +25,57 @@ public class PrivateHireFuelCard
     [StringLength(50)]
     public string? PAN_number { get; set; }
 
+    [Column("PetReceiver")]
+    [StringLength(20)]
+    public string? PetReceiver { get; set; }
+
+    [Column("PetRecTel")]
+    [StringLength(16)]
+    public string? PetRecTel { get; set; }
+
+    [Column("PetTaken")]
+    public DateTime? PetTaken { get; set; }
+
+    [Column("PetExpire")]
+    public DateTime? PetExpire { get; set; }
+
+    [Column("ExpReason")]
+    [StringLength(20)]
+    public string? ExpReason { get; set; }
+
+    [Column("PetComment")]
+    [StringLength(80)]
+    public string? PetComment { get; set; }
+
+    [Column("Status_date")]
+    public DateTime? Status_date { get; set; }
+
+    [Column("PetRecId")]
+    [StringLength(13)]
+    public string? PetRecId { get; set; }
+
+    [Column("PetRecFax")]
+    [StringLength(15)]
+    public string? PetRecFax { get; set; }
+
+    [Column("Bank_cnt")]
+    [StringLength(2)]
+    public string? Bank_cnt { get; set; }
+
+    [Column("Inciddat")]
+    public DateTime? Inciddat { get; set; }
+
+    [Column("Petrecsite")]
+    public short? Petrecsite { get; set; }
+
+    [Column("Petprint")]
+    [StringLength(1)]
+    public string? Petprint { get; set; }
+
+    [Column("Garage")]
+    [StringLength(1)]
+    public string? Garage { get; set; }
+
     // Global audit fields
     [Column("date_created")]
     public DateTime date_created { get; set; }

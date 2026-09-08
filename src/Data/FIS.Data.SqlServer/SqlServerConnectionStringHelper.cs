@@ -20,7 +20,7 @@ public static class SqlServerConnectionStringHelper
 
         var builder = new SqlConnectionStringBuilder(effectiveConnectionString)
         {
-            TrustServerCertificate = true
+            TrustServerCertificate = true,
         };
 
         builder["Encrypt"] = false;
@@ -30,7 +30,8 @@ public static class SqlServerConnectionStringHelper
 
     public static bool IsDevelopmentEnvironment()
     {
-        var environmentName = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+        var environmentName =
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
             ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 
         return string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase);

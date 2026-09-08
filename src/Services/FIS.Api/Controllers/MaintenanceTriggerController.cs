@@ -17,7 +17,9 @@ namespace FIS.Api.Controllers
     {
         private readonly IMaintenanceTriggerRepository _maintenanceTriggerRepository;
 
-        public MaintenanceTriggerController(IMaintenanceTriggerRepository maintenanceTriggerRepository)
+        public MaintenanceTriggerController(
+            IMaintenanceTriggerRepository maintenanceTriggerRepository
+        )
         {
             _maintenanceTriggerRepository = maintenanceTriggerRepository;
         }
@@ -27,18 +29,23 @@ namespace FIS.Api.Controllers
         /// </summary>
         /// <returns>List of all maintenance triggers</returns>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<MaintenanceTriggerEntity>>> GetAllMaintenanceTriggers()
+        public async Task<
+            ActionResult<IEnumerable<MaintenanceTriggerEntity>>
+        > GetAllMaintenanceTriggers()
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var triggers = await _maintenanceTriggerRepository.GetAllMaintenanceTriggersAsync();
                 return Ok(triggers);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while retrieving maintenance triggers: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving maintenance triggers: {ex.Message}"
+                );
             }
         }
 
@@ -52,7 +59,7 @@ namespace FIS.Api.Controllers
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var trigger = await _maintenanceTriggerRepository.GetByIdAsync(id);
                 if (trigger == null)
@@ -63,7 +70,10 @@ namespace FIS.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while retrieving maintenance trigger {id}: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving maintenance trigger {id}: {ex.Message}"
+                );
             }
         }
 
@@ -73,22 +83,31 @@ namespace FIS.Api.Controllers
         /// <param name="description">The maintenance trigger description</param>
         /// <returns>The maintenance trigger if found</returns>
         [HttpGet("by-description/{description}")]
-        public async Task<ActionResult<MaintenanceTriggerEntity>> GetMaintenanceTriggerByDescription(string description)
+        public async Task<
+            ActionResult<MaintenanceTriggerEntity>
+        > GetMaintenanceTriggerByDescription(string description)
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
-                var trigger = await _maintenanceTriggerRepository.GetByDescriptionAsync(description);
+                var trigger = await _maintenanceTriggerRepository.GetByDescriptionAsync(
+                    description
+                );
                 if (trigger == null)
                 {
-                    return NotFound($"Maintenance trigger with description '{description}' not found");
+                    return NotFound(
+                        $"Maintenance trigger with description '{description}' not found"
+                    );
                 }
                 return Ok(trigger);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while retrieving maintenance trigger by description '{description}': {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving maintenance trigger by description '{description}': {ex.Message}"
+                );
             }
         }
 
@@ -98,11 +117,13 @@ namespace FIS.Api.Controllers
         /// <param name="triggerId">The trigger ID</param>
         /// <returns>The maintenance trigger if found</returns>
         [HttpGet("by-trigger-id/{triggerId}")]
-        public async Task<ActionResult<MaintenanceTriggerEntity>> GetMaintenanceTriggerByTriggerId(string triggerId)
+        public async Task<ActionResult<MaintenanceTriggerEntity>> GetMaintenanceTriggerByTriggerId(
+            string triggerId
+        )
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var trigger = await _maintenanceTriggerRepository.GetByTriggerIdAsync(triggerId);
                 if (trigger == null)
@@ -113,7 +134,10 @@ namespace FIS.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while retrieving maintenance trigger by trigger ID '{triggerId}': {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving maintenance trigger by trigger ID '{triggerId}': {ex.Message}"
+                );
             }
         }
 
@@ -123,18 +147,25 @@ namespace FIS.Api.Controllers
         /// <param name="searchTerm">The search term</param>
         /// <returns>List of matching maintenance triggers</returns>
         [HttpGet("search/{searchTerm}")]
-        public async Task<ActionResult<IEnumerable<MaintenanceTriggerEntity>>> SearchMaintenanceTriggers(string searchTerm)
+        public async Task<
+            ActionResult<IEnumerable<MaintenanceTriggerEntity>>
+        > SearchMaintenanceTriggers(string searchTerm)
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
-                var triggers = await _maintenanceTriggerRepository.SearchMaintenanceTriggersAsync(searchTerm);
+                var triggers = await _maintenanceTriggerRepository.SearchMaintenanceTriggersAsync(
+                    searchTerm
+                );
                 return Ok(triggers);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while searching maintenance triggers with term '{searchTerm}': {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while searching maintenance triggers with term '{searchTerm}': {ex.Message}"
+                );
             }
         }
 
@@ -144,11 +175,13 @@ namespace FIS.Api.Controllers
         /// <param name="createMaintenanceTriggerDto">The maintenance trigger data to create</param>
         /// <returns>The created maintenance trigger</returns>
         [HttpPost]
-        public async Task<ActionResult<MaintenanceTriggerEntity>> CreateMaintenanceTrigger(CreateMaintenanceTriggerDto createMaintenanceTriggerDto)
+        public async Task<ActionResult<MaintenanceTriggerEntity>> CreateMaintenanceTrigger(
+            CreateMaintenanceTriggerDto createMaintenanceTriggerDto
+        )
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 if (!ModelState.IsValid)
                 {
@@ -159,15 +192,25 @@ namespace FIS.Api.Controllers
                 var trigger = new MaintenanceTriggerEntity
                 {
                     description = createMaintenanceTriggerDto.description,
-                    trigger_id = createMaintenanceTriggerDto.trigger_id
+                    trigger_id = createMaintenanceTriggerDto.trigger_id,
                 };
 
-                var createdTrigger = await _maintenanceTriggerRepository.CreateAsync(trigger, currentUserId);
-                return CreatedAtAction(nameof(GetMaintenanceTrigger), new { id = createdTrigger.maint_trigger_code }, createdTrigger);
+                var createdTrigger = await _maintenanceTriggerRepository.CreateAsync(
+                    trigger,
+                    currentUserId
+                );
+                return CreatedAtAction(
+                    nameof(GetMaintenanceTrigger),
+                    new { id = createdTrigger.maint_trigger_code },
+                    createdTrigger
+                );
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while creating maintenance trigger: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while creating maintenance trigger: {ex.Message}"
+                );
             }
         }
 
@@ -178,11 +221,14 @@ namespace FIS.Api.Controllers
         /// <param name="trigger">The maintenance trigger data to update</param>
         /// <returns>The updated maintenance trigger</returns>
         [HttpPut("{id}")]
-        public async Task<ActionResult<MaintenanceTriggerEntity>> UpdateMaintenanceTrigger(short id, MaintenanceTriggerEntity trigger)
+        public async Task<ActionResult<MaintenanceTriggerEntity>> UpdateMaintenanceTrigger(
+            short id,
+            MaintenanceTriggerEntity trigger
+        )
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 if (id != trigger.maint_trigger_code)
                 {
@@ -200,12 +246,18 @@ namespace FIS.Api.Controllers
                     return NotFound($"Maintenance trigger with code {id} not found");
                 }
 
-                var updatedTrigger = await _maintenanceTriggerRepository.UpdateAsync(trigger, currentUserId);
+                var updatedTrigger = await _maintenanceTriggerRepository.UpdateAsync(
+                    trigger,
+                    currentUserId
+                );
                 return Ok(updatedTrigger);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while updating maintenance trigger {id}: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while updating maintenance trigger {id}: {ex.Message}"
+                );
             }
         }
 
@@ -219,7 +271,7 @@ namespace FIS.Api.Controllers
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var existingTrigger = await _maintenanceTriggerRepository.GetByIdAsync(id);
                 if (existingTrigger == null)
@@ -232,7 +284,10 @@ namespace FIS.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while deleting maintenance trigger {id}: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while deleting maintenance trigger {id}: {ex.Message}"
+                );
             }
         }
     }

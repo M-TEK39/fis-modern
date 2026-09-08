@@ -19,33 +19,33 @@ namespace FIS.Core.Infrastructure.Repositories
 
         public async Task<FuelTariff?> GetByIdAsync(short fuelTariffCode)
         {
-            return await _context.FuelTariffs
-                .Where(ft => !ft.is_deleted && ft.fuel_tariff_code == fuelTariffCode)
+            return await _context
+                .FuelTariffs.Where(ft => !ft.is_deleted && ft.fuel_tariff_code == fuelTariffCode)
                 .FirstOrDefaultAsync();
         }
 
         public async Task<FuelTariff?> GetCurrentTariffAsync(short fuelTypeCode)
         {
-            return await _context.FuelTariffs
-                .Where(ft => !ft.is_deleted
-                    && ft.fuel_type_code == fuelTypeCode
-                    && ft.end_date == null)
+            return await _context
+                .FuelTariffs.Where(ft =>
+                    !ft.is_deleted && ft.fuel_type_code == fuelTypeCode && ft.end_date == null
+                )
                 .OrderByDescending(ft => ft.start_date)
                 .FirstOrDefaultAsync();
         }
 
         public async Task<IEnumerable<FuelTariff>> GetTariffHistoryAsync(short fuelTypeCode)
         {
-            return await _context.FuelTariffs
-                .Where(ft => !ft.is_deleted && ft.fuel_type_code == fuelTypeCode)
+            return await _context
+                .FuelTariffs.Where(ft => !ft.is_deleted && ft.fuel_type_code == fuelTypeCode)
                 .OrderByDescending(ft => ft.start_date)
                 .ToListAsync();
         }
 
         public async Task<IEnumerable<FuelTariff>> GetAllCurrentTariffsAsync()
         {
-            return await _context.FuelTariffs
-                .Where(ft => !ft.is_deleted && ft.end_date == null)
+            return await _context
+                .FuelTariffs.Where(ft => !ft.is_deleted && ft.end_date == null)
                 .ToListAsync();
         }
 
@@ -58,19 +58,26 @@ namespace FIS.Core.Infrastructure.Repositories
             _context.FuelTariffs.Add(fuelTariff);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Created fuel tariff {TariffCode} for fuel type {FuelTypeCode} with rate {Rate}",
-                fuelTariff.fuel_tariff_code, fuelTariff.fuel_type_code, fuelTariff.fuel_tariff);
+            _logger.LogInformation(
+                "Created fuel tariff {TariffCode} for fuel type {FuelTypeCode} with rate {Rate}",
+                fuelTariff.fuel_tariff_code,
+                fuelTariff.fuel_type_code,
+                fuelTariff.fuel_tariff
+            );
 
             return fuelTariff;
         }
 
         public async Task<FuelTariff> UpdateAsync(FuelTariff fuelTariff, int currentUserId)
         {
-            var existing = await _context.FuelTariffs
-                .FirstOrDefaultAsync(ft => ft.fuel_tariff_code == fuelTariff.fuel_tariff_code && !ft.is_deleted);
+            var existing = await _context.FuelTariffs.FirstOrDefaultAsync(ft =>
+                ft.fuel_tariff_code == fuelTariff.fuel_tariff_code && !ft.is_deleted
+            );
 
             if (existing == null)
-                throw new KeyNotFoundException($"Fuel tariff {fuelTariff.fuel_tariff_code} not found");
+                throw new KeyNotFoundException(
+                    $"Fuel tariff {fuelTariff.fuel_tariff_code} not found"
+                );
 
             existing.fuel_tariff = fuelTariff.fuel_tariff;
             existing.fuel_tariff_notes = fuelTariff.fuel_tariff_notes;
@@ -81,13 +88,21 @@ namespace FIS.Core.Infrastructure.Repositories
 
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("Updated fuel tariff {TariffCode} for fuel type {FuelTypeCode}",
-                fuelTariff.fuel_tariff_code, fuelTariff.fuel_type_code);
+            _logger.LogInformation(
+                "Updated fuel tariff {TariffCode} for fuel type {FuelTypeCode}",
+                fuelTariff.fuel_tariff_code,
+                fuelTariff.fuel_type_code
+            );
 
             return existing;
         }
 
-        public async Task<FuelTariff> CreateNewRateAsync(short fuelTypeCode, decimal newRate, string? notes, int currentUserId)
+        public async Task<FuelTariff> CreateNewRateAsync(
+            short fuelTypeCode,
+            decimal newRate,
+            string? notes,
+            int currentUserId
+        )
         {
             // Close the current tariff by setting end_date
             var currentTariff = await GetCurrentTariffAsync(fuelTypeCode);
@@ -98,8 +113,11 @@ namespace FIS.Core.Infrastructure.Repositories
                 currentTariff.modified_by_user_code = currentUserId;
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation("Closed fuel tariff {TariffCode} for fuel type {FuelTypeCode}",
-                    currentTariff.fuel_tariff_code, fuelTypeCode);
+                _logger.LogInformation(
+                    "Closed fuel tariff {TariffCode} for fuel type {FuelTypeCode}",
+                    currentTariff.fuel_tariff_code,
+                    fuelTypeCode
+                );
             }
 
             // Create new tariff
@@ -112,7 +130,7 @@ namespace FIS.Core.Infrastructure.Repositories
                 end_date = null, // Current/active tariff
                 date_created = DateTime.UtcNow,
                 created_by_user_code = currentUserId,
-                is_deleted = false
+                is_deleted = false,
             };
 
             return await CreateAsync(newTariff, currentUserId);
@@ -120,8 +138,9 @@ namespace FIS.Core.Infrastructure.Repositories
 
         public async Task DeleteAsync(short fuelTariffCode, int currentUserId)
         {
-            var fuelTariff = await _context.FuelTariffs
-                .FirstOrDefaultAsync(ft => ft.fuel_tariff_code == fuelTariffCode);
+            var fuelTariff = await _context.FuelTariffs.FirstOrDefaultAsync(ft =>
+                ft.fuel_tariff_code == fuelTariffCode
+            );
 
             if (fuelTariff == null)
                 throw new KeyNotFoundException($"Fuel tariff {fuelTariffCode} not found");

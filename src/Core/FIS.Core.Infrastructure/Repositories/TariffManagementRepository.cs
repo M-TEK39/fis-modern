@@ -25,15 +25,15 @@ public class TariffManagementRepository : ITariffManagementRepository
 
     public async Task<Tariff?> GetByIdAsync(int tariffCode)
     {
-        return await _context.Tariffs
-            .Where(t => !t.is_deleted)
+        return await _context
+            .Tariffs.Where(t => !t.is_deleted)
             .FirstOrDefaultAsync(t => t.tariff_code == tariffCode);
     }
 
     public async Task<IEnumerable<Tariff>> GetAllAsync()
     {
-        return await _context.Tariffs
-            .Where(t => !t.is_deleted)
+        return await _context
+            .Tariffs.Where(t => !t.is_deleted)
             .OrderBy(t => t.class_code)
             .ThenByDescending(t => t.effective_start_date)
             .ToListAsync();
@@ -41,8 +41,8 @@ public class TariffManagementRepository : ITariffManagementRepository
 
     public async Task<IEnumerable<Tariff>> GetApprovedAsync()
     {
-        return await _context.Tariffs
-            .Where(t => !t.is_deleted && t.tariff_approval_status == 2)
+        return await _context
+            .Tariffs.Where(t => !t.is_deleted && t.tariff_approval_status == 2)
             .OrderBy(t => t.class_code)
             .ThenByDescending(t => t.effective_start_date)
             .ToListAsync();
@@ -50,8 +50,8 @@ public class TariffManagementRepository : ITariffManagementRepository
 
     public async Task<IEnumerable<Tariff>> GetPendingApprovalAsync()
     {
-        return await _context.Tariffs
-            .Where(t => !t.is_deleted && t.tariff_approval_status == 1)
+        return await _context
+            .Tariffs.Where(t => !t.is_deleted && t.tariff_approval_status == 1)
             .OrderBy(t => t.date_created)
             .ToListAsync();
     }
@@ -63,9 +63,10 @@ public class TariffManagementRepository : ITariffManagementRepository
         tariff.is_deleted = false;
 
         // Auto-approve if below threshold — no approval needed for small tariffs
-        tariff.tariff_approval_status = tariff.monthly_fixed_amount > ApprovalThreshold
-            ? (short)0  // Draft — must be submitted and approved
-            : (short)2; // Auto-approved — below threshold
+        tariff.tariff_approval_status =
+            tariff.monthly_fixed_amount > ApprovalThreshold
+                ? (short)0 // Draft — must be submitted and approved
+                : (short)2; // Auto-approved — below threshold
 
         _context.Tariffs.Add(tariff);
         await _context.SaveChangesAsync();
@@ -74,21 +75,22 @@ public class TariffManagementRepository : ITariffManagementRepository
 
     public async Task UpdateAsync(Tariff tariff, int currentUserId)
     {
-        var existing = await _context.Tariffs.FindAsync(tariff.tariff_code)
+        var existing =
+            await _context.Tariffs.FindAsync(tariff.tariff_code)
             ?? throw new InvalidOperationException($"Tariff {tariff.tariff_code} not found");
 
         // Only allow editing Draft (0) or Rejected (3) tariffs
         if (existing.tariff_approval_status != 0 && existing.tariff_approval_status != 3)
             throw new InvalidOperationException(
-                "Only Draft or Rejected tariffs can be edited. " +
-                "Approved or Pending tariffs must be rejected first.");
+                "Only Draft or Rejected tariffs can be edited. "
+                    + "Approved or Pending tariffs must be rejected first."
+            );
 
         tariff.date_updated = DateTime.Now;
         tariff.modified_by_user_code = currentUserId;
         // Re-evaluate threshold after edit
-        tariff.tariff_approval_status = tariff.monthly_fixed_amount > ApprovalThreshold
-            ? (short)0
-            : (short)2;
+        tariff.tariff_approval_status =
+            tariff.monthly_fixed_amount > ApprovalThreshold ? (short)0 : (short)2;
         // Clear any previous rejection reason on edit
         tariff.rejection_reason = null;
 
@@ -98,17 +100,22 @@ public class TariffManagementRepository : ITariffManagementRepository
 
     public async Task<Tariff> SubmitForApprovalAsync(int tariffCode, int currentUserId)
     {
-        var tariff = await _context.Tariffs.FindAsync(tariffCode)
+        var tariff =
+            await _context.Tariffs.FindAsync(tariffCode)
             ?? throw new InvalidOperationException($"Tariff {tariffCode} not found");
 
         if (tariff.tariff_approval_status != 0 && tariff.tariff_approval_status != 3)
             throw new InvalidOperationException(
-                "Only Draft (0) or Rejected (3) tariffs can be submitted for approval.");
+                "Only Draft (0) or Rejected (3) tariffs can be submitted for approval."
+            );
 
-        if (tariff.created_by_user_code.HasValue &&
-            tariff.created_by_user_code.Value != currentUserId)
+        if (
+            tariff.created_by_user_code.HasValue
+            && tariff.created_by_user_code.Value != currentUserId
+        )
             throw new UnauthorizedAccessException(
-                "Only the original capturer can submit this tariff for approval.");
+                "Only the original capturer can submit this tariff for approval."
+            );
 
         tariff.tariff_approval_status = 1; // Pending Approval
         tariff.date_updated = DateTime.Now;
@@ -121,12 +128,14 @@ public class TariffManagementRepository : ITariffManagementRepository
 
     public async Task<Tariff> ApproveAsync(int tariffCode, int approverUserId)
     {
-        var tariff = await _context.Tariffs.FindAsync(tariffCode)
+        var tariff =
+            await _context.Tariffs.FindAsync(tariffCode)
             ?? throw new InvalidOperationException($"Tariff {tariffCode} not found");
 
         if (tariff.tariff_approval_status != 1)
             throw new InvalidOperationException(
-                "Only Pending Approval (1) tariffs can be approved.");
+                "Only Pending Approval (1) tariffs can be approved."
+            );
 
         tariff.tariff_approval_status = 2; // Approved
         tariff.approver_code = approverUserId;
@@ -138,14 +147,20 @@ public class TariffManagementRepository : ITariffManagementRepository
         return tariff;
     }
 
-    public async Task<Tariff> RejectAsync(int tariffCode, int approverUserId, string rejectionReason)
+    public async Task<Tariff> RejectAsync(
+        int tariffCode,
+        int approverUserId,
+        string rejectionReason
+    )
     {
-        var tariff = await _context.Tariffs.FindAsync(tariffCode)
+        var tariff =
+            await _context.Tariffs.FindAsync(tariffCode)
             ?? throw new InvalidOperationException($"Tariff {tariffCode} not found");
 
         if (tariff.tariff_approval_status != 1)
             throw new InvalidOperationException(
-                "Only Pending Approval (1) tariffs can be rejected.");
+                "Only Pending Approval (1) tariffs can be rejected."
+            );
 
         tariff.tariff_approval_status = 3; // Rejected
         tariff.approver_code = approverUserId;

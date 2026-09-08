@@ -20,5 +20,4 @@ public class User
 
     [Column("email")]
     public string? email { get; set; }
-
 }

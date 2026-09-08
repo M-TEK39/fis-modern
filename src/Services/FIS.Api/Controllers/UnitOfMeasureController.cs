@@ -18,7 +18,10 @@ public class UnitOfMeasureController : BaseApiController
     private readonly IUnitOfMeasureRepository _unitOfMeasureRepository;
     private readonly ILogger<UnitOfMeasureController> _logger;
 
-    public UnitOfMeasureController(IUnitOfMeasureRepository unitOfMeasureRepository, ILogger<UnitOfMeasureController> logger)
+    public UnitOfMeasureController(
+        IUnitOfMeasureRepository unitOfMeasureRepository,
+        ILogger<UnitOfMeasureController> logger
+    )
     {
         _unitOfMeasureRepository = unitOfMeasureRepository;
         _logger = logger;
@@ -90,7 +93,11 @@ public class UnitOfMeasureController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving unit of measure with description {Description}", description);
+            _logger.LogError(
+                ex,
+                "Error retrieving unit of measure with description {Description}",
+                description
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -115,7 +122,11 @@ public class UnitOfMeasureController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving unit of measure with abbreviation {Abbreviation}", abbreviation);
+            _logger.LogError(
+                ex,
+                "Error retrieving unit of measure with abbreviation {Abbreviation}",
+                abbreviation
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -137,7 +148,11 @@ public class UnitOfMeasureController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving units of measure with category {Category}", category);
+            _logger.LogError(
+                ex,
+                "Error retrieving units of measure with category {Category}",
+                category
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -159,7 +174,11 @@ public class UnitOfMeasureController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching units of measure with term {SearchTerm}", searchTerm);
+            _logger.LogError(
+                ex,
+                "Error searching units of measure with term {SearchTerm}",
+                searchTerm
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -170,7 +189,9 @@ public class UnitOfMeasureController : BaseApiController
     /// <param name="createUnitDto">The unit of measure data to create</param>
     /// <returns>The created unit of measure entity</returns>
     [HttpPost]
-    public async Task<ActionResult<UnitOfMeasure>> CreateUnit([FromBody] CreateUnitOfMeasureDto createUnitDto)
+    public async Task<ActionResult<UnitOfMeasure>> CreateUnit(
+        [FromBody] CreateUnitOfMeasureDto createUnitDto
+    )
     {
         try
         {
@@ -183,11 +204,15 @@ public class UnitOfMeasureController : BaseApiController
             {
                 unit_description = createUnitDto.unit_description,
                 unit_abbreviation = createUnitDto.unit_abbreviation,
-                unit_category = createUnitDto.unit_category
+                unit_category = createUnitDto.unit_category,
             };
 
             var createdUnit = await _unitOfMeasureRepository.CreateAsync(unit, currentUserId);
-            return CreatedAtAction(nameof(GetUnit), new { unitCode = createdUnit.unit_of_measure_code }, createdUnit);
+            return CreatedAtAction(
+                nameof(GetUnit),
+                new { unitCode = createdUnit.unit_of_measure_code },
+                createdUnit
+            );
         }
         catch (Exception ex)
         {
@@ -203,7 +228,10 @@ public class UnitOfMeasureController : BaseApiController
     /// <param name="unit">The updated unit of measure data</param>
     /// <returns>The updated unit of measure entity</returns>
     [HttpPut("{unitCode}")]
-    public async Task<ActionResult<UnitOfMeasure>> UpdateUnit(short unitCode, [FromBody] UnitOfMeasure unit)
+    public async Task<ActionResult<UnitOfMeasure>> UpdateUnit(
+        short unitCode,
+        [FromBody] UnitOfMeasure unit
+    )
     {
         try
         {

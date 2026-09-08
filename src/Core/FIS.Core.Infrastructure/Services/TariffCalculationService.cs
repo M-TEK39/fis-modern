@@ -24,7 +24,8 @@ public class TariffCalculationService : ITariffCalculationService
         ITariffRepository tariffRepository,
         IVehicleTariffRepository vehicleTariffRepository,
         ILeaseTariffRepository leaseTariffRepository,
-        IFuelTariffRepository fuelTariffRepository)
+        IFuelTariffRepository fuelTariffRepository
+    )
     {
         _logger = logger;
         _context = context;
@@ -35,12 +36,19 @@ public class TariffCalculationService : ITariffCalculationService
         _fuelTariffRepository = fuelTariffRepository;
     }
 
-    public async Task<TariffResult> GetVehicleTariffAsync(int contractCode, DateTime checkDate, TariffType tariffType)
+    public async Task<TariffResult> GetVehicleTariffAsync(
+        int contractCode,
+        DateTime checkDate,
+        TariffType tariffType
+    )
     {
         var contract = await _contractRepository.GetByIdAsync(contractCode);
         if (contract is null || contract.Vehicle is null || contract.is_deleted)
         {
-            return TariffResult.Error(TariffStatus.NoMatch, $"Contract {contractCode} was not found.");
+            return TariffResult.Error(
+                TariffStatus.NoMatch,
+                $"Contract {contractCode} was not found."
+            );
         }
 
         return await GetVehicleTariffAsync(
@@ -53,7 +61,8 @@ public class TariffCalculationService : ITariffCalculationService
             contract.Site?.Depatrment_code ?? 0,
             contract.contract_type ?? "A",
             checkDate,
-            tariffType);
+            tariffType
+        );
     }
 
     public async Task<TariffResult> GetVehicleTariffAsync(
@@ -66,10 +75,11 @@ public class TariffCalculationService : ITariffCalculationService
         int departmentCode,
         string contractType,
         DateTime checkDate,
-        TariffType tariffType)
+        TariffType tariffType
+    )
     {
-        var vehicle = await _context.Vehicles
-            .Include(v => v.Model)
+        var vehicle = await _context
+            .Vehicles.Include(v => v.Model)
             .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
 
         if (vehicle is null)
@@ -77,7 +87,10 @@ public class TariffCalculationService : ITariffCalculationService
             return TariffResult.Error(TariffStatus.NoMatch, $"Vehicle {vmfCode} was not found.");
         }
 
-        if (IsGGMTInternal(siteCode, departmentCode) || IsVehicleMissing(vehicle.vehicle_status_code))
+        if (
+            IsGGMTInternal(siteCode, departmentCode)
+            || IsVehicleMissing(vehicle.vehicle_status_code)
+        )
         {
             return TariffResult.Success(0m, TariffSource.SpecialRule);
         }
@@ -92,7 +105,10 @@ public class TariffCalculationService : ITariffCalculationService
             var leaseTariff = await GetLeaseTariffAsync(vmfCode, checkDate);
             if (leaseTariff is null)
             {
-                return TariffResult.Error(TariffStatus.NoMatch, $"No lease tariff configured for vehicle {vmfCode}.");
+                return TariffResult.Error(
+                    TariffStatus.NoMatch,
+                    $"No lease tariff configured for vehicle {vmfCode}."
+                );
             }
 
             if (tariffType == TariffType.Kilos)
@@ -107,53 +123,88 @@ public class TariffCalculationService : ITariffCalculationService
         var yearManufactured = vehicle.year_manufactured;
         if (!yearManufactured.HasValue)
         {
-            return TariffResult.Error(TariffStatus.YearNotFound, $"Vehicle {vmfCode} has no year_manufactured value.");
+            return TariffResult.Error(
+                TariffStatus.YearNotFound,
+                $"Vehicle {vmfCode} has no year_manufactured value."
+            );
         }
 
         var tariffSystem = DetermineTariffSystem(yearManufactured.Value, startDate);
         if (tariffSystem == TariffSystem.Modern)
         {
             var parameterYear = (short)(checkDate.Month >= 4 ? checkDate.Year + 1 : checkDate.Year);
-            var vehicleTariff = await GetConfiguredVehicleTariffAsync(vmfCode, parameterYear, checkDate);
+            var vehicleTariff = await GetConfiguredVehicleTariffAsync(
+                vmfCode,
+                parameterYear,
+                checkDate
+            );
             if (vehicleTariff is null)
             {
-                return TariffResult.Error(TariffStatus.NoMatch, $"No modern tariff found for vehicle {vmfCode}.");
+                return TariffResult.Error(
+                    TariffStatus.NoMatch,
+                    $"No modern tariff found for vehicle {vmfCode}."
+                );
             }
 
             var validation = ValidateTariff(vehicleTariff);
             if (!validation.IsValid)
             {
-                return TariffResult.Error(validation.Status, string.Join("; ", validation.Messages));
+                return TariffResult.Error(
+                    validation.Status,
+                    string.Join("; ", validation.Messages)
+                );
             }
 
-            var amount = tariffType == TariffType.Fixed
-                ? GetModernFixedTariff(vehicleTariff, contractType)
-                : GetModernKilometerTariff(vehicleTariff, contractType);
+            var amount =
+                tariffType == TariffType.Fixed
+                    ? GetModernFixedTariff(vehicleTariff, contractType)
+                    : GetModernKilometerTariff(vehicleTariff, contractType);
 
             return TariffResult.Success(amount, TariffSource.Modern);
         }
 
         if (vehicle.Model is null)
         {
-            return TariffResult.Error(TariffStatus.NoMatch, $"Vehicle {vmfCode} has no class code linked from model.");
+            return TariffResult.Error(
+                TariffStatus.NoMatch,
+                $"Vehicle {vmfCode} has no class code linked from model."
+            );
         }
 
         var classCode = vehicle.Model.class_code;
-        var legacyAmount = tariffType == TariffType.Fixed
-            ? await GetLegacyFixedTariffAsync(classCode, yearManufactured.Value, checkDate, contractType)
-            : await GetLegacyKilometerTariffAsync(classCode, yearManufactured.Value, checkDate);
+        var legacyAmount =
+            tariffType == TariffType.Fixed
+                ? await GetLegacyFixedTariffAsync(
+                    classCode,
+                    yearManufactured.Value,
+                    checkDate,
+                    contractType
+                )
+                : await GetLegacyKilometerTariffAsync(classCode, yearManufactured.Value, checkDate);
 
         if (legacyAmount < 0)
         {
-            return TariffResult.Error(TariffStatus.NoMatch, $"No legacy tariff found for class {classCode}, year {yearManufactured}.");
+            return TariffResult.Error(
+                TariffStatus.NoMatch,
+                $"No legacy tariff found for class {classCode}, year {yearManufactured}."
+            );
         }
 
         return TariffResult.Success(legacyAmount, TariffSource.Legacy);
     }
 
-    public async Task<decimal> GetLegacyFixedTariffAsync(int vehicleClassCode, int yearManufactured, DateTime effectiveDate, string contractType)
+    public async Task<decimal> GetLegacyFixedTariffAsync(
+        int vehicleClassCode,
+        int yearManufactured,
+        DateTime effectiveDate,
+        string contractType
+    )
     {
-        var tariff = await _tariffRepository.GetTariffAsync((short)vehicleClassCode, (short)yearManufactured, effectiveDate);
+        var tariff = await _tariffRepository.GetTariffAsync(
+            (short)vehicleClassCode,
+            (short)yearManufactured,
+            effectiveDate
+        );
         if (tariff is null)
         {
             return -2m;
@@ -165,20 +216,32 @@ public class TariffCalculationService : ITariffCalculationService
             "B" => tariff.daily_fixed_amount ?? 0m,
             "C" => tariff.hourly_fixed_amount ?? 0m,
             "F" => 0m,
-            _ => Math.Round((tariff.monthly_fixed_amount * 12m) / 365m, 6)
+            _ => Math.Round((tariff.monthly_fixed_amount * 12m) / 365m, 6),
         };
     }
 
-    public async Task<decimal> GetLegacyKilometerTariffAsync(int vehicleClassCode, int yearManufactured, DateTime effectiveDate)
+    public async Task<decimal> GetLegacyKilometerTariffAsync(
+        int vehicleClassCode,
+        int yearManufactured,
+        DateTime effectiveDate
+    )
     {
-        var tariff = await _tariffRepository.GetTariffAsync((short)vehicleClassCode, (short)yearManufactured, effectiveDate);
+        var tariff = await _tariffRepository.GetTariffAsync(
+            (short)vehicleClassCode,
+            (short)yearManufactured,
+            effectiveDate
+        );
         return tariff?.monthly_odo_amount ?? -2m;
     }
 
-    public async Task<VehicleTariff?> GetConfiguredVehicleTariffAsync(int vmfCode, int parameterYear, DateTime effectiveDate)
+    public async Task<VehicleTariff?> GetConfiguredVehicleTariffAsync(
+        int vmfCode,
+        int parameterYear,
+        DateTime effectiveDate
+    )
     {
-        var activeTariff = await _context.VehicleTariffs
-            .Where(t => t.vmf_code == vmfCode && !t.is_deleted)
+        var activeTariff = await _context
+            .VehicleTariffs.Where(t => t.vmf_code == vmfCode && !t.is_deleted)
             .Where(t => t.parameter_year == parameterYear)
             .Where(t => t.start_date <= effectiveDate)
             .Where(t => t.end_date == null || t.end_date >= effectiveDate)
@@ -199,9 +262,13 @@ public class TariffCalculationService : ITariffCalculationService
         {
             "A" => vehicleTariff.vehicle_fixed_daily_tariff
                 ?? Math.Round(((vehicleTariff.vehicle_fixed_tariff ?? 0m) * 12m) / 365m, 6),
-            "B" => vehicleTariff.vehicle_fixed_tariff_pool ?? vehicleTariff.vehicle_fixed_tariff ?? 0m,
-            "C" => (vehicleTariff.vehicle_fixed_tariff_pool ?? vehicleTariff.vehicle_fixed_tariff ?? 0m) / 8m,
-            _ => vehicleTariff.vehicle_fixed_tariff ?? 0m
+            "B" => vehicleTariff.vehicle_fixed_tariff_pool
+                ?? vehicleTariff.vehicle_fixed_tariff
+                ?? 0m,
+            "C" => (
+                vehicleTariff.vehicle_fixed_tariff_pool ?? vehicleTariff.vehicle_fixed_tariff ?? 0m
+            ) / 8m,
+            _ => vehicleTariff.vehicle_fixed_tariff ?? 0m,
         };
     }
 
@@ -225,7 +292,11 @@ public class TariffCalculationService : ITariffCalculationService
         return contractStartDate.Day >= 16;
     }
 
-    public decimal CalculateLeaseExcessCharge(LeaseTariff leaseTariff, int actualKilometers, int contractedKilometers)
+    public decimal CalculateLeaseExcessCharge(
+        LeaseTariff leaseTariff,
+        int actualKilometers,
+        int contractedKilometers
+    )
     {
         var excess = Math.Max(0, actualKilometers - contractedKilometers);
         if (excess <= 0)
@@ -240,14 +311,16 @@ public class TariffCalculationService : ITariffCalculationService
 
     public async Task<decimal> GetFuelTariffAsync(int fuelTypeCode, DateTime effectiveDate)
     {
-        var currentFuelTariff = await _fuelTariffRepository.GetCurrentTariffAsync((short)fuelTypeCode);
+        var currentFuelTariff = await _fuelTariffRepository.GetCurrentTariffAsync(
+            (short)fuelTypeCode
+        );
         if (currentFuelTariff is not null)
         {
             return currentFuelTariff.fuel_tariff;
         }
 
-        var tariffAtDate = await _context.FuelTariffs
-            .Where(t => !t.is_deleted && t.fuel_type_code == fuelTypeCode)
+        var tariffAtDate = await _context
+            .FuelTariffs.Where(t => !t.is_deleted && t.fuel_type_code == fuelTypeCode)
             .Where(t => t.start_date <= effectiveDate)
             .Where(t => t.end_date == null || t.end_date >= effectiveDate)
             .OrderByDescending(t => t.start_date)
@@ -276,39 +349,50 @@ public class TariffCalculationService : ITariffCalculationService
         return TariffSystem.Legacy;
     }
 
-    public async Task<List<BatchTariffResult>> CalculateBatchTariffsAsync(List<BatchTariffRequest> requests)
+    public async Task<List<BatchTariffResult>> CalculateBatchTariffsAsync(
+        List<BatchTariffRequest> requests
+    )
     {
         var results = new List<BatchTariffResult>(requests.Count);
         foreach (var request in requests)
         {
-            var requestTariffType = request.TariffType == FIS.Core.Domain.Enums.TariffType.Kilos
-                ? TariffType.Kilos
-                : TariffType.Fixed;
+            var requestTariffType =
+                request.TariffType == FIS.Core.Domain.Enums.TariffType.Kilos
+                    ? TariffType.Kilos
+                    : TariffType.Fixed;
 
             var result = await GetVehicleTariffAsync(
                 request.ContractCode,
                 request.CheckDate,
-                requestTariffType);
+                requestTariffType
+            );
 
-            results.Add(new BatchTariffResult
-            {
-                ContractCode = request.ContractCode,
-                CheckDate = request.CheckDate,
-                TariffType = request.TariffType,
-                Amount = result.Amount,
-                Status = MapToDomainTariffStatus(result.Status),
-                Source = MapToDomainTariffSource(result.Source),
-                Message = result.Message,
-                IsSuccess = result.Status == TariffStatus.Valid,
-                Reference = request.Reference,
-                VmfCode = request.VmfCode
-            });
+            results.Add(
+                new BatchTariffResult
+                {
+                    ContractCode = request.ContractCode,
+                    CheckDate = request.CheckDate,
+                    TariffType = request.TariffType,
+                    Amount = result.Amount,
+                    Status = MapToDomainTariffStatus(result.Status),
+                    Source = MapToDomainTariffSource(result.Source),
+                    Message = result.Message,
+                    IsSuccess = result.Status == TariffStatus.Valid,
+                    Reference = request.Reference,
+                    VmfCode = request.VmfCode,
+                }
+            );
         }
 
         return results;
     }
 
-    public async Task<MonthlyBillingResult> CalculateMonthlyBillingAsync(int siteCode, int departmentCode, DateTime billingPeriodStart, DateTime billingPeriodEnd)
+    public async Task<MonthlyBillingResult> CalculateMonthlyBillingAsync(
+        int siteCode,
+        int departmentCode,
+        DateTime billingPeriodStart,
+        DateTime billingPeriodEnd
+    )
     {
         var result = new MonthlyBillingResult
         {
@@ -317,61 +401,83 @@ public class TariffCalculationService : ITariffCalculationService
             BillingPeriodStart = billingPeriodStart,
             BillingPeriodEnd = billingPeriodEnd,
             GrandTotal = 0m,
-            ContractBillings = new List<ContractBilling>()
+            ContractBillings = new List<ContractBilling>(),
         };
 
-        var contracts = await _context.Contracts
-            .Where(c => !c.is_deleted && c.site_code == siteCode && c.still_current == "Y")
+        var contracts = await _context
+            .Contracts.Where(c =>
+                !c.is_deleted && c.site_code == siteCode && c.still_current == "Y"
+            )
             .Include(c => c.Vehicle)
             .ToListAsync();
 
-        foreach (var contract in contracts.Where(c => (c.Site?.Depatrment_code ?? 0) == departmentCode))
+        foreach (
+            var contract in contracts.Where(c => (c.Site?.Depatrment_code ?? 0) == departmentCode)
+        )
         {
-            var fixedResult = await GetVehicleTariffAsync(contract.contract_code, billingPeriodEnd, TariffType.Fixed);
-            var kiloResult = await GetVehicleTariffAsync(contract.contract_code, billingPeriodEnd, TariffType.Kilos);
+            var fixedResult = await GetVehicleTariffAsync(
+                contract.contract_code,
+                billingPeriodEnd,
+                TariffType.Fixed
+            );
+            var kiloResult = await GetVehicleTariffAsync(
+                contract.contract_code,
+                billingPeriodEnd,
+                TariffType.Kilos
+            );
             var quantityDays = Math.Max(0, (billingPeriodEnd.Date - billingPeriodStart.Date).Days);
 
             var fixedAmount = Math.Round(quantityDays * fixedResult.Amount, 2);
             var variableAmount = 0m;
-            if (contract.end_odometer.HasValue && contract.end_odometer.Value > contract.start_odometer)
+            if (
+                contract.end_odometer.HasValue
+                && contract.end_odometer.Value > contract.start_odometer
+            )
             {
-                variableAmount = Math.Round((contract.end_odometer.Value - contract.start_odometer) * kiloResult.Amount, 2);
+                variableAmount = Math.Round(
+                    (contract.end_odometer.Value - contract.start_odometer) * kiloResult.Amount,
+                    2
+                );
             }
 
             var total = fixedAmount + variableAmount;
-            result.ContractBillings.Add(new ContractBilling
-            {
-                ContractCode = contract.contract_code,
-                VmfCode = contract.vmf_code,
-                ContractType = contract.contract_type ?? string.Empty,
-                TotalFixedCharges = fixedAmount,
-                TotalKilometerCharges = variableAmount,
-                TotalExcessCharges = 0m,
-                TotalAmount = total,
-                BillingItems = new List<FIS.Core.Domain.Entities.Financial.BillingItem>
+            result.ContractBillings.Add(
+                new ContractBilling
                 {
-                    new()
+                    ContractCode = contract.contract_code,
+                    VmfCode = contract.vmf_code,
+                    ContractType = contract.contract_type ?? string.Empty,
+                    TotalFixedCharges = fixedAmount,
+                    TotalKilometerCharges = variableAmount,
+                    TotalExcessCharges = 0m,
+                    TotalAmount = total,
+                    BillingItems = new List<FIS.Core.Domain.Entities.Financial.BillingItem>
                     {
-                        Date = billingPeriodEnd.Date,
-                        Description = "Fixed tariff charge",
-                        Amount = fixedAmount,
-                        TariffType = FIS.Core.Domain.Enums.TariffType.Fixed,
-                        Source = MapToDomainTariffSource(fixedResult.Source),
-                        Quantity = quantityDays,
-                        Rate = fixedResult.Amount
+                        new()
+                        {
+                            Date = billingPeriodEnd.Date,
+                            Description = "Fixed tariff charge",
+                            Amount = fixedAmount,
+                            TariffType = FIS.Core.Domain.Enums.TariffType.Fixed,
+                            Source = MapToDomainTariffSource(fixedResult.Source),
+                            Quantity = quantityDays,
+                            Rate = fixedResult.Amount,
+                        },
+                        new()
+                        {
+                            Date = billingPeriodEnd.Date,
+                            Description = "Kilometer tariff charge",
+                            Amount = variableAmount,
+                            TariffType = FIS.Core.Domain.Enums.TariffType.Kilos,
+                            Source = MapToDomainTariffSource(kiloResult.Source),
+                            Quantity = contract.end_odometer.HasValue
+                                ? Math.Max(0, contract.end_odometer.Value - contract.start_odometer)
+                                : 0,
+                            Rate = kiloResult.Amount,
+                        },
                     },
-                    new()
-                    {
-                        Date = billingPeriodEnd.Date,
-                        Description = "Kilometer tariff charge",
-                        Amount = variableAmount,
-                        TariffType = FIS.Core.Domain.Enums.TariffType.Kilos,
-                        Source = MapToDomainTariffSource(kiloResult.Source),
-                        Quantity = contract.end_odometer.HasValue ? Math.Max(0, contract.end_odometer.Value - contract.start_odometer) : 0,
-                        Rate = kiloResult.Amount
-                    }
                 }
-            });
+            );
 
             result.TotalFixedCharges += fixedAmount;
             result.TotalKilometerCharges += variableAmount;
@@ -381,7 +487,12 @@ public class TariffCalculationService : ITariffCalculationService
         return result;
     }
 
-    public async Task<FinancialReconciliation> ReconcileTariffsAsync(DateTime periodStart, DateTime periodEnd, int? siteCode = null, int? departmentCode = null)
+    public async Task<FinancialReconciliation> ReconcileTariffsAsync(
+        DateTime periodStart,
+        DateTime periodEnd,
+        int? siteCode = null,
+        int? departmentCode = null
+    )
     {
         await Task.CompletedTask;
         return new FinancialReconciliation
@@ -394,7 +505,7 @@ public class TariffCalculationService : ITariffCalculationService
             Discrepancies = new List<TariffDiscrepancy>(),
             TotalDiscrepancies = 0,
             TotalDifference = 0m,
-            RequiresAction = false
+            RequiresAction = false,
         };
     }
 
@@ -428,7 +539,7 @@ public class TariffCalculationService : ITariffCalculationService
             TariffStatus.YearNotFound => FIS.Core.Domain.Enums.TariffStatus.YearNotFound,
             TariffStatus.NoMatch => FIS.Core.Domain.Enums.TariffStatus.NoMatch,
             TariffStatus.Incomplete => FIS.Core.Domain.Enums.TariffStatus.Incomplete,
-            _ => FIS.Core.Domain.Enums.TariffStatus.NoMatch
+            _ => FIS.Core.Domain.Enums.TariffStatus.NoMatch,
         };
     }
 
@@ -441,7 +552,7 @@ public class TariffCalculationService : ITariffCalculationService
             TariffSource.Modern => FIS.Core.Domain.Enums.TariffSource.Modern,
             TariffSource.Lease => FIS.Core.Domain.Enums.TariffSource.Lease,
             TariffSource.SpecialRule => FIS.Core.Domain.Enums.TariffSource.SpecialRule,
-            _ => FIS.Core.Domain.Enums.TariffSource.None
+            _ => FIS.Core.Domain.Enums.TariffSource.None,
         };
     }
 }

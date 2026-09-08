@@ -16,38 +16,39 @@ public class StatusRepository : IStatusRepository
 
     public async Task<Status?> GetByIdAsync(int statusId)
     {
-        return await _context.Statuses
-            .FirstOrDefaultAsync(s => s.StatusID == statusId && !s.is_deleted);
+        return await _context.Statuses.FirstOrDefaultAsync(s =>
+            s.StatusID == statusId && !s.is_deleted
+        );
     }
 
     public async Task<IEnumerable<Status>> GetAllAsync()
     {
-        return await _context.Statuses
-            .Where(s => !s.is_deleted)
+        return await _context
+            .Statuses.Where(s => !s.is_deleted)
             .OrderByDescending(s => s.DateStarted)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Status>> GetByStepIdAsync(int stepId)
     {
-        return await _context.Statuses
-            .Where(s => s.StepID == stepId && !s.is_deleted)
+        return await _context
+            .Statuses.Where(s => s.StepID == stepId && !s.is_deleted)
             .OrderByDescending(s => s.DateStarted)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Status>> GetActiveStatusesAsync()
     {
-        return await _context.Statuses
-            .Where(s => !s.is_deleted && s.IsBusy && s.DateCompleted == null)
+        return await _context
+            .Statuses.Where(s => !s.is_deleted && s.IsBusy && s.DateCompleted == null)
             .OrderBy(s => s.DateStarted)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<Status>> GetByUserAsync(string userName)
     {
-        return await _context.Statuses
-            .Where(s => !s.is_deleted && s.StartedByUserName == userName)
+        return await _context
+            .Statuses.Where(s => !s.is_deleted && s.StartedByUserName == userName)
             .OrderByDescending(s => s.DateStarted)
             .ToListAsync();
     }

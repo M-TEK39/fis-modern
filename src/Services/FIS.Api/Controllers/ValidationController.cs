@@ -37,8 +37,8 @@ public class ValidationController : BaseApiController
                 "Loss Types",
                 "Vehicle Classes",
                 "Fuel Types",
-                "Maintenance Triggers"
-            }
+                "Maintenance Triggers",
+            },
         };
         return Ok(menu);
     }
@@ -58,24 +58,27 @@ public class ValidationController : BaseApiController
                 new HelpSectionDto
                 {
                     Title = "Driver Licence Types",
-                    Content = "Manage valid driver licence type codes and descriptions (e.g., C1, C, EB, EC)"
+                    Content =
+                        "Manage valid driver licence type codes and descriptions (e.g., C1, C, EB, EC)",
                 },
                 new HelpSectionDto
                 {
                     Title = "Licence Fees",
-                    Content = "Configure licence renewal fees by vehicle type and province"
+                    Content = "Configure licence renewal fees by vehicle type and province",
                 },
                 new HelpSectionDto
                 {
                     Title = "Extra Codes",
-                    Content = "Define additional classification codes for special vehicle categories"
+                    Content =
+                        "Define additional classification codes for special vehicle categories",
                 },
                 new HelpSectionDto
                 {
                     Title = "Loss Types",
-                    Content = "Categorize different types of vehicle losses (theft, accident, write-off, etc.)"
-                }
-            }
+                    Content =
+                        "Categorize different types of vehicle losses (theft, accident, write-off, etc.)",
+                },
+            },
         };
         return Ok(help);
     }

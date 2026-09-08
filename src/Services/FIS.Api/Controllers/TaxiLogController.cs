@@ -2,10 +2,8 @@ using System.Globalization;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities;
 using FIS.Core.Domain.Entities.Operations;
-using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -19,20 +17,36 @@ public class TaxiLogController : BaseApiController
     private readonly ITaxiRepository _taxiRepository;
     private readonly ITaxiLogRepository _taxiLogRepository;
     private readonly ITaxiLogNoteRepository _taxiLogNoteRepository;
-    private readonly FisDbContext _context;
+    private readonly IPrivateHireRepository _privateHireRepository;
+    private readonly IContractorTaxiClassRepository _taxiClassRepository;
+    private readonly IVehicleRepository _vehicleRepository;
+    private readonly IModelRepository _modelRepository;
+    private readonly IClassRepository _classRepository;
+    private readonly ITaxiWhiteLogRepository _taxiWhiteLogRepository;
     private readonly ILogger<TaxiLogController> _logger;
 
     public TaxiLogController(
         ITaxiRepository taxiRepository,
         ITaxiLogRepository taxiLogRepository,
         ITaxiLogNoteRepository taxiLogNoteRepository,
-        FisDbContext context,
-        ILogger<TaxiLogController> logger)
+        IPrivateHireRepository privateHireRepository,
+        IContractorTaxiClassRepository taxiClassRepository,
+        IVehicleRepository vehicleRepository,
+        IModelRepository modelRepository,
+        IClassRepository classRepository,
+        ITaxiWhiteLogRepository taxiWhiteLogRepository,
+        ILogger<TaxiLogController> logger
+    )
     {
         _taxiRepository = taxiRepository;
         _taxiLogRepository = taxiLogRepository;
         _taxiLogNoteRepository = taxiLogNoteRepository;
-        _context = context;
+        _privateHireRepository = privateHireRepository;
+        _taxiClassRepository = taxiClassRepository;
+        _vehicleRepository = vehicleRepository;
+        _modelRepository = modelRepository;
+        _classRepository = classRepository;
+        _taxiWhiteLogRepository = taxiWhiteLogRepository;
         _logger = logger;
     }
 
@@ -41,45 +55,47 @@ public class TaxiLogController : BaseApiController
     {
         try
         {
-            var contractors = await _context.ContractorTaxiClasses
-                .AsNoTracking()
-                .Where(item => !item.is_deleted)
-                .Join(
-                    _context.Contractors.AsNoTracking(),
-                    taxiClass => taxiClass.contractor_id,
-                    contractor => contractor.contractor_id,
-                    (taxiClass, contractor) => new
-                    {
-                        taxiClass.contractor_id,
-                        contractor.contractor_name
-                    })
-                .GroupBy(item => new { item.contractor_id, item.contractor_name })
-                .Select(group => new TaxiLogContractorOptionDto(
-                    group.Key.contractor_id,
-                    string.IsNullOrWhiteSpace(group.Key.contractor_name)
-                        ? $"Contractor {group.Key.contractor_id}"
-                        : group.Key.contractor_name))
-                .OrderBy(item => item.ContractorName)
-                .ToListAsync();
+            var classRows = (await _taxiClassRepository.GetAllAsync()).ToList();
+            var contractorRows = (await _privateHireRepository.GetContractorsAsync()).ToDictionary(
+                item => item.contractor_id
+            );
 
-            var classOptions = await _context.ContractorTaxiClasses
-                .AsNoTracking()
-                .Where(item => !item.is_deleted)
+            // Preserve the legacy inner join: a taxi class is selectable only
+            // when its contractor still exists in Contractors.
+            var contractors = classRows
+                .Where(item => contractorRows.ContainsKey(item.contractor_id))
+                .Select(item => item.contractor_id)
+                .Distinct()
+                .Select(contractorId => new TaxiLogContractorOptionDto(
+                    contractorId,
+                    string.IsNullOrWhiteSpace(contractorRows[contractorId].contractor_name)
+                        ? $"Contractor {contractorId}"
+                        : contractorRows[contractorId].contractor_name!
+                ))
+                .OrderBy(item => item.ContractorName)
+                .ToList();
+
+            var classOptions = classRows
+                .Where(item => contractorRows.ContainsKey(item.contractor_id))
                 .OrderBy(item => item.contractor_id)
                 .ThenBy(item => item.description)
                 .Select(item => new TaxiLogClassOptionDto(
                     item.contractor_id,
                     item.class_id,
-                    string.IsNullOrWhiteSpace(item.description) ? $"Class {item.class_id}" : item.description,
+                    string.IsNullOrWhiteSpace(item.description)
+                        ? $"Class {item.class_id}"
+                        : item.description,
                     item.km_tariff,
                     item.driver_per_hour,
-                    item.daily_tariff))
-                .ToListAsync();
+                    item.daily_tariff
+                ))
+                .ToList();
 
             var notes = (await _taxiLogNoteRepository.GetAllAsync())
                 .Select(note => new TaxiLogNoteOptionDto(
                     note.taxi_log_note_code,
-                    note.taxi_log_note_description ?? $"Note {note.taxi_log_note_code}"))
+                    note.taxi_log_note_description ?? $"Note {note.taxi_log_note_code}"
+                ))
                 .ToList();
 
             return Ok(new TaxiLogReferenceResponse(contractors, classOptions, notes));
@@ -92,7 +108,10 @@ public class TaxiLogController : BaseApiController
     }
 
     [HttpGet("lookup/{rekNum}")]
-    public async Task<ActionResult<TaxiLogLookupResponse>> Lookup(string rekNum, [FromQuery] string? mode = null)
+    public async Task<ActionResult<TaxiLogLookupResponse>> Lookup(
+        string rekNum,
+        [FromQuery] string? mode = null
+    )
     {
         try
         {
@@ -118,7 +137,9 @@ public class TaxiLogController : BaseApiController
 
             if (normalizedMode == "ENTER" && log != null)
             {
-                return Conflict($"Logsheet {normalizedRekNum} has already been entered. Use Edit Taxi Log to change logs entered.");
+                return Conflict(
+                    $"Logsheet {normalizedRekNum} has already been entered. Use Edit Taxi Log to change logs entered."
+                );
             }
 
             if (normalizedMode == "EDIT" && log == null)
@@ -136,7 +157,9 @@ public class TaxiLogController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<TaxiLogLookupResponse>> Create([FromBody] SaveTaxiLogRequest request)
+    public async Task<ActionResult<TaxiLogLookupResponse>> Create(
+        [FromBody] SaveTaxiLogRequest request
+    )
     {
         try
         {
@@ -158,10 +181,14 @@ public class TaxiLogController : BaseApiController
                 return BadRequest($"Requisition number {normalizedRekNum} has been cancelled.");
             }
 
-            var existingLog = await _taxiLogRepository.GetLatestByRequisitionAsync(normalizedRekNum);
+            var existingLog = await _taxiLogRepository.GetLatestByRequisitionAsync(
+                normalizedRekNum
+            );
             if (existingLog != null)
             {
-                return Conflict($"Logsheet {normalizedRekNum} has already been entered. Use Edit Taxi Log to change logs entered.");
+                return Conflict(
+                    $"Logsheet {normalizedRekNum} has already been entered. Use Edit Taxi Log to change logs entered."
+                );
             }
 
             var prepared = await PrepareSaveAsync(taxiRequest, request, existingLog);
@@ -175,13 +202,20 @@ public class TaxiLogController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating taxi log for requisition {RekNum}", request.rek_num);
+            _logger.LogError(
+                ex,
+                "Error creating taxi log for requisition {RekNum}",
+                request.rek_num
+            );
             return StatusCode(500);
         }
     }
 
     [HttpPut("{logId:int}")]
-    public async Task<ActionResult<TaxiLogLookupResponse>> Update(int logId, [FromBody] SaveTaxiLogRequest request)
+    public async Task<ActionResult<TaxiLogLookupResponse>> Update(
+        int logId,
+        [FromBody] SaveTaxiLogRequest request
+    )
     {
         try
         {
@@ -235,7 +269,11 @@ public class TaxiLogController : BaseApiController
         return await _taxiRepository.GetLatestByRequisitionAsync(normalizedRekNum);
     }
 
-    private async Task<PrepareTaxiLogResult> PrepareSaveAsync(Taxi taxiRequest, SaveTaxiLogRequest request, TaxiLog? existingLog)
+    private async Task<PrepareTaxiLogResult> PrepareSaveAsync(
+        Taxi taxiRequest,
+        SaveTaxiLogRequest request,
+        TaxiLog? existingLog
+    )
     {
         var normalizedRekNum = NormalizeKey(request.rek_num);
         var normalizedRegistration = NormalizeKey(request.reg_num);
@@ -252,7 +290,12 @@ public class TaxiLogController : BaseApiController
         }
 
         var (startDateTime, endDateTime) = CombineJourneyDateTimes(request);
-        var durationValidationError = ValidateJourneyRange(startDateTime, endDateTime, request.driver_start_odo, request.driver_end_odo);
+        var durationValidationError = ValidateJourneyRange(
+            startDateTime,
+            endDateTime,
+            request.driver_start_odo,
+            request.driver_end_odo
+        );
         if (durationValidationError != null)
         {
             return PrepareTaxiLogResult.Failure(BadRequest(durationValidationError));
@@ -263,17 +306,22 @@ public class TaxiLogController : BaseApiController
 
         Vehicle? ggVehicle = null;
         short? effectiveVehicleTypeCode = request.vehicle_type_code;
-        var effectiveQuotedTariff = request.vehicle_type_code is null or 0 ? request.quoted_tariff : null;
+        var effectiveQuotedTariff = request.vehicle_type_code is null or 0
+            ? request.quoted_tariff
+            : null;
 
         if (request.contractor_id == GgContractorId)
         {
             ggVehicle = await FindVehicleByRegistrationAsync(normalizedRegistration);
             if (ggVehicle == null)
             {
-                return PrepareTaxiLogResult.Failure(NotFound($"{normalizedRegistration} not found."));
+                return PrepareTaxiLogResult.Failure(
+                    NotFound($"{normalizedRegistration} not found.")
+                );
             }
 
-            effectiveVehicleTypeCode = await ResolveVehicleClassCodeAsync(ggVehicle.model_code) ?? ggVehicle.type_code;
+            effectiveVehicleTypeCode =
+                await ResolveVehicleClassCodeAsync(ggVehicle.model_code) ?? ggVehicle.type_code;
             effectiveQuotedTariff = null;
 
             var ggOverlapError = await ValidateGgOverlapAsync(
@@ -281,7 +329,8 @@ public class TaxiLogController : BaseApiController
                 normalizedRekNum,
                 existingLog?.log_id,
                 request.driver_start_odo.Value,
-                request.driver_end_odo.Value);
+                request.driver_end_odo.Value
+            );
             if (ggOverlapError != null)
             {
                 return PrepareTaxiLogResult.Failure(BadRequest(ggOverlapError));
@@ -295,7 +344,8 @@ public class TaxiLogController : BaseApiController
                 normalizedRekNum,
                 existingLog?.log_id,
                 request.driver_start_odo.Value,
-                request.driver_end_odo.Value);
+                request.driver_end_odo.Value
+            );
             if (contractorOverlapError != null)
             {
                 return PrepareTaxiLogResult.Failure(BadRequest(contractorOverlapError));
@@ -321,14 +371,18 @@ public class TaxiLogController : BaseApiController
         log.driver_end_odo = request.driver_end_odo;
         log.driver_start_date = request.driver_start_date?.Date;
         log.driver_end_date = request.driver_end_date?.Date;
-        log.driver_start_time = request.driver_start_date?.Date.Add(request.driver_start_time!.Value);
+        log.driver_start_time = request.driver_start_date?.Date.Add(
+            request.driver_start_time!.Value
+        );
         log.driver_end_time = request.driver_end_date?.Date.Add(request.driver_end_time!.Value);
         log.userid = ToLegacyShortUserId(GetCurrentUserId());
         log.enter_date = DateTime.Today;
         log.distance = distance;
         log.days = duration.Days;
         log.hours = duration.Hours;
-        log.quoted_tariff = effectiveQuotedTariff.HasValue ? (float?)effectiveQuotedTariff.Value : null;
+        log.quoted_tariff = effectiveQuotedTariff.HasValue
+            ? (float?)effectiveQuotedTariff.Value
+            : null;
         log.taxi_log_note_code = request.taxi_log_note_code;
 
         return PrepareTaxiLogResult.FromSuccess(updatedRequest, log);
@@ -337,19 +391,13 @@ public class TaxiLogController : BaseApiController
     private async Task<TaxiLogLookupResponse> BuildLookupResponseAsync(Taxi request, TaxiLog? log)
     {
         var contractorName = request.contractor_id.HasValue
-            ? await _context.Contractors
-                .AsNoTracking()
-                .Where(item => item.contractor_id == request.contractor_id.Value)
-                .Select(item => item.contractor_name)
-                .FirstOrDefaultAsync()
+            ? (
+                await _privateHireRepository.GetContractorByIdAsync(request.contractor_id.Value)
+            )?.contractor_name
             : null;
 
         var classDescription = request.vehicle_type_code.HasValue
-            ? await _context.Classes
-                .AsNoTracking()
-                .Where(item => item.class_code == request.vehicle_type_code.Value)
-                .Select(item => item.description)
-                .FirstOrDefaultAsync()
+            ? (await _classRepository.GetByIdAsync(request.vehicle_type_code.Value))?.description
             : null;
 
         var vehicle = await ResolveVehicleFromTaxiRequestAsync(request);
@@ -383,40 +431,41 @@ public class TaxiLogController : BaseApiController
                     FormatTime(log.driver_start_time),
                     FormatTime(log.driver_end_time),
                     log.taxi_log_note_code,
-                    log.quoted_tariff.HasValue ? Convert.ToDecimal(log.quoted_tariff.Value, CultureInfo.InvariantCulture) : null));
+                    log.quoted_tariff.HasValue
+                        ? Convert.ToDecimal(log.quoted_tariff.Value, CultureInfo.InvariantCulture)
+                        : null
+                )
+        );
     }
 
     private async Task<Vehicle?> ResolveVehicleFromTaxiRequestAsync(Taxi taxiRequest)
     {
-        if (!int.TryParse(taxiRequest.vmf_code, NumberStyles.Integer, CultureInfo.InvariantCulture, out var vmfCode))
+        if (
+            !int.TryParse(
+                taxiRequest.vmf_code,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var vmfCode
+            )
+        )
         {
             return null;
         }
 
-        return await _context.Vehicles
-            .AsNoTracking()
-            .FirstOrDefaultAsync(vehicle => vehicle.vmf_code == vmfCode && !vehicle.is_deleted);
+        return await _vehicleRepository.GetByIdAsync(vmfCode);
     }
 
     private async Task<Vehicle?> FindVehicleByRegistrationAsync(string registration)
     {
         var normalized = NormalizeKey(registration);
 
-        return await _context.Vehicles
-            .AsNoTracking()
-            .Where(vehicle => !vehicle.is_deleted)
-            .FirstOrDefaultAsync(vehicle =>
-                (vehicle.fleet_number ?? string.Empty).ToUpper() == normalized ||
-                (vehicle.registration_number ?? string.Empty).ToUpper() == normalized);
+        return await _vehicleRepository.GetByFleetNumberAsync(normalized)
+            ?? await _vehicleRepository.GetByRegistrationNumberAsync(normalized);
     }
 
     private async Task<short?> ResolveVehicleClassCodeAsync(short modelCode)
     {
-        return await _context.Models
-            .AsNoTracking()
-            .Where(model => model.model_code == modelCode && !model.is_deleted)
-            .Select(model => (short?)model.class_code)
-            .FirstOrDefaultAsync();
+        return (await _modelRepository.GetByIdAsync(modelCode))?.class_code;
     }
 
     private async Task<string?> ValidateGgOverlapAsync(
@@ -424,37 +473,60 @@ public class TaxiLogController : BaseApiController
         string rekNum,
         int? excludeLogId,
         decimal startOdo,
-        decimal endOdo)
+        decimal endOdo
+    )
     {
-        var overlappingLogs = await (
-            from taxi in _context.Taxis.AsNoTracking()
-            join log in _context.TaxiLogs.AsNoTracking() on taxi.rek_num equals log.rek_num
-            where !taxi.is_deleted
-                  && !log.is_deleted
-                  && taxi.vmf_code == vmfCode.ToString()
-                  && !_context.Taxis.Any(child => child.parent_taxi_code == taxi.request_id)
-                  && !_context.TaxiLogs.Any(child => child.parent_taxi_log_code == log.log_id && !child.is_deleted)
-                  && taxi.rek_num != rekNum
-                  && (!excludeLogId.HasValue || log.log_id != excludeLogId.Value)
-            select new OdoRangeDto(
-                taxi.rek_num ?? string.Empty,
-                log.driver_start_odo,
-                log.driver_end_odo))
-            .ToListAsync();
+        var taxis = (await _taxiRepository.GetAllAsync()).ToList();
+        var logs = (await _taxiLogRepository.GetAllAsync()).ToList();
+        var childTaxiIds = taxis
+            .Where(taxi => taxi.parent_taxi_code.HasValue)
+            .Select(taxi => taxi.parent_taxi_code!.Value)
+            .ToHashSet();
+        var childLogIds = logs.Where(log => log.parent_taxi_log_code.HasValue)
+            .Select(log => log.parent_taxi_log_code!.Value)
+            .ToHashSet();
 
-        var overlap = overlappingLogs.FirstOrDefault(item => IsOverlap(startOdo, endOdo, item.StartOdo, item.EndOdo));
+        var overlappingLogs = taxis
+            .Where(taxi =>
+                !childTaxiIds.Contains(taxi.request_id)
+                && string.Equals(
+                    taxi.vmf_code?.Trim(),
+                    vmfCode.ToString(CultureInfo.InvariantCulture),
+                    StringComparison.OrdinalIgnoreCase
+                )
+                && !string.Equals(taxi.rek_num?.Trim(), rekNum, StringComparison.OrdinalIgnoreCase)
+            )
+            .Join(
+                logs.Where(log =>
+                    !childLogIds.Contains(log.log_id)
+                    && (!excludeLogId.HasValue || log.log_id != excludeLogId.Value)
+                ),
+                taxi => NormalizeKey(taxi.rek_num),
+                log => NormalizeKey(log.rek_num),
+                (taxi, log) =>
+                    new OdoRangeDto(
+                        taxi.rek_num ?? string.Empty,
+                        log.driver_start_odo,
+                        log.driver_end_odo
+                    )
+            )
+            .ToList();
+
+        var overlap = overlappingLogs.FirstOrDefault(item =>
+            IsOverlap(startOdo, endOdo, item.StartOdo, item.EndOdo)
+        );
         if (overlap != null)
         {
             return $"Odometer values overlap with log {overlap.RekNum} values.\nStart odo = {FormatDecimal(overlap.StartOdo)}\nEnd odo = {FormatDecimal(overlap.EndOdo)}.";
         }
 
-        var whiteLogs = await _context.TaxiWhiteLogs
-            .AsNoTracking()
-            .Where(item => !item.is_deleted && item.vmf_code == vmfCode)
+        var whiteLogs = (await _taxiWhiteLogRepository.GetByVehicleAsync(vmfCode))
             .Select(item => new OdoRangeDto("WHITE LOG", item.start_odo, item.end_odo))
-            .ToListAsync();
+            .ToList();
 
-        var whiteLogOverlap = whiteLogs.FirstOrDefault(item => IsOverlap(startOdo, endOdo, item.StartOdo, item.EndOdo));
+        var whiteLogOverlap = whiteLogs.FirstOrDefault(item =>
+            IsOverlap(startOdo, endOdo, item.StartOdo, item.EndOdo)
+        );
         if (whiteLogOverlap != null)
         {
             return $"Odometer values overlap with white log :\nStart odo = {FormatDecimal(whiteLogOverlap.StartOdo)}\nEnd odo = {FormatDecimal(whiteLogOverlap.EndOdo)}.";
@@ -469,26 +541,53 @@ public class TaxiLogController : BaseApiController
         string rekNum,
         int? excludeLogId,
         decimal startOdo,
-        decimal endOdo)
+        decimal endOdo
+    )
     {
-        var overlaps = await (
-            from taxi in _context.Taxis.AsNoTracking()
-            join log in _context.TaxiLogs.AsNoTracking() on taxi.rek_num equals log.rek_num
-            where !taxi.is_deleted
-                  && !log.is_deleted
-                  && taxi.contractor_id == contractorId
-                  && (taxi.reg_num ?? string.Empty).ToUpper() == registration
-                  && !_context.Taxis.Any(child => child.parent_taxi_code == taxi.request_id)
-                  && !_context.TaxiLogs.Any(child => child.parent_taxi_log_code == log.log_id && !child.is_deleted)
-                  && taxi.rek_num != rekNum
-                  && (!excludeLogId.HasValue || log.log_id != excludeLogId.Value)
-            select new OdoRangeDto(
-                taxi.rek_num ?? string.Empty,
-                log.driver_start_odo,
-                log.driver_end_odo))
-            .ToListAsync();
+        var taxis = (await _taxiRepository.GetAllAsync()).ToList();
+        var logs = (await _taxiLogRepository.GetAllAsync()).ToList();
+        var childTaxiIds = taxis
+            .Where(taxi => taxi.parent_taxi_code.HasValue)
+            .Select(taxi => taxi.parent_taxi_code!.Value)
+            .ToHashSet();
+        var childLogIds = logs.Where(log => log.parent_taxi_log_code.HasValue)
+            .Select(log => log.parent_taxi_log_code!.Value)
+            .ToHashSet();
 
-        var overlap = overlaps.FirstOrDefault(item => IsOverlap(startOdo, endOdo, item.StartOdo, item.EndOdo));
+        var overlaps = taxis
+            .Where(taxi =>
+                !childTaxiIds.Contains(taxi.request_id)
+                && taxi.contractor_id == contractorId
+                && string.Equals(
+                    NormalizeKey(taxi.reg_num),
+                    registration,
+                    StringComparison.OrdinalIgnoreCase
+                )
+                && !string.Equals(
+                    NormalizeKey(taxi.rek_num),
+                    rekNum,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            .Join(
+                logs.Where(log =>
+                    !childLogIds.Contains(log.log_id)
+                    && (!excludeLogId.HasValue || log.log_id != excludeLogId.Value)
+                ),
+                taxi => NormalizeKey(taxi.rek_num),
+                log => NormalizeKey(log.rek_num),
+                (taxi, log) =>
+                    new OdoRangeDto(
+                        taxi.rek_num ?? string.Empty,
+                        log.driver_start_odo,
+                        log.driver_end_odo
+                    )
+            )
+            .ToList();
+
+        var overlap = overlaps.FirstOrDefault(item =>
+            IsOverlap(startOdo, endOdo, item.StartOdo, item.EndOdo)
+        );
         if (overlap != null)
         {
             return $"Odometer values overlap with log {overlap.RekNum} values.\nStart odo = {FormatDecimal(overlap.StartOdo)}\nEnd odo = {FormatDecimal(overlap.EndOdo)}.";
@@ -539,12 +638,21 @@ public class TaxiLogController : BaseApiController
             return "Driver start odometer greater than or equal to end odometer.";
         }
 
-        if (request.driver_start_date is null || request.driver_end_date is null || request.driver_start_time is null || request.driver_end_time is null)
+        if (
+            request.driver_start_date is null
+            || request.driver_end_date is null
+            || request.driver_start_time is null
+            || request.driver_end_time is null
+        )
         {
             return "Please complete Start/End date and time.";
         }
 
-        if (request.contractor_id != GgContractorId && (request.vehicle_type_code is null or 0) && request.quoted_tariff is not > 0)
+        if (
+            request.contractor_id != GgContractorId
+            && (request.vehicle_type_code is null or 0)
+            && request.quoted_tariff is not > 0
+        )
         {
             return "Quoted tariff amount must be entered.";
         }
@@ -552,14 +660,21 @@ public class TaxiLogController : BaseApiController
         return null;
     }
 
-    private static (DateTime Start, DateTime End) CombineJourneyDateTimes(SaveTaxiLogRequest request)
+    private static (DateTime Start, DateTime End) CombineJourneyDateTimes(
+        SaveTaxiLogRequest request
+    )
     {
         var start = request.driver_start_date!.Value.Date.Add(request.driver_start_time!.Value);
         var end = request.driver_end_date!.Value.Date.Add(request.driver_end_time!.Value);
         return (start, end);
     }
 
-    private static string? ValidateJourneyRange(DateTime start, DateTime end, decimal? startOdo, decimal? endOdo)
+    private static string? ValidateJourneyRange(
+        DateTime start,
+        DateTime end,
+        decimal? startOdo,
+        decimal? endOdo
+    )
     {
         if (start >= end)
         {
@@ -624,7 +739,12 @@ public class TaxiLogController : BaseApiController
         return new TaxiDuration(days, remainingHours + roundedFractionalHours);
     }
 
-    private static bool IsOverlap(decimal start, decimal end, decimal? existingStart, decimal? existingEnd)
+    private static bool IsOverlap(
+        decimal start,
+        decimal end,
+        decimal? existingStart,
+        decimal? existingEnd
+    )
     {
         if (!existingStart.HasValue || !existingEnd.HasValue)
         {
@@ -638,34 +758,47 @@ public class TaxiLogController : BaseApiController
     {
         if (userId > short.MaxValue || userId < short.MinValue)
         {
-            throw new InvalidOperationException($"User id {userId} cannot be stored in legacy taxi log userid column.");
+            throw new InvalidOperationException(
+                $"User id {userId} cannot be stored in legacy taxi log userid column."
+            );
         }
 
         return (short)userId;
     }
 
-    private static string NormalizeKey(string? value) => (value ?? string.Empty).Trim().ToUpperInvariant();
+    private static string NormalizeKey(string? value) =>
+        (value ?? string.Empty).Trim().ToUpperInvariant();
 
-    private static string? FormatTime(DateTime? value) => value?.ToString("HH:mm", CultureInfo.InvariantCulture);
+    private static string? FormatTime(DateTime? value) =>
+        value?.ToString("HH:mm", CultureInfo.InvariantCulture);
 
-    private static string FormatDecimal(decimal? value) => value?.ToString("0.##", CultureInfo.InvariantCulture) ?? "0";
+    private static string FormatDecimal(decimal? value) =>
+        value?.ToString("0.##", CultureInfo.InvariantCulture) ?? "0";
 
     private sealed record OdoRangeDto(string RekNum, decimal? StartOdo, decimal? EndOdo);
 
     private sealed record TaxiDuration(short Days, double Hours);
 
-    private sealed record PrepareTaxiLogResult(bool Success, ActionResult<TaxiLogLookupResponse>? Result, Taxi? TaxiRequest, TaxiLog? Log)
+    private sealed record PrepareTaxiLogResult(
+        bool Success,
+        ActionResult<TaxiLogLookupResponse>? Result,
+        Taxi? TaxiRequest,
+        TaxiLog? Log
+    )
     {
-        public static PrepareTaxiLogResult Failure(ActionResult<TaxiLogLookupResponse> result) => new(false, result, null, null);
+        public static PrepareTaxiLogResult Failure(ActionResult<TaxiLogLookupResponse> result) =>
+            new(false, result, null, null);
 
-        public static PrepareTaxiLogResult FromSuccess(Taxi taxiRequest, TaxiLog log) => new(true, null, taxiRequest, log);
+        public static PrepareTaxiLogResult FromSuccess(Taxi taxiRequest, TaxiLog log) =>
+            new(true, null, taxiRequest, log);
     }
 }
 
 public sealed record TaxiLogReferenceResponse(
     IReadOnlyList<TaxiLogContractorOptionDto> Contractors,
     IReadOnlyList<TaxiLogClassOptionDto> Classes,
-    IReadOnlyList<TaxiLogNoteOptionDto> Notes);
+    IReadOnlyList<TaxiLogNoteOptionDto> Notes
+);
 
 public sealed record TaxiLogContractorOptionDto(short ContractorId, string ContractorName);
 
@@ -675,7 +808,8 @@ public sealed record TaxiLogClassOptionDto(
     string Description,
     decimal? KmTariff,
     decimal? DriverPerHour,
-    decimal? DailyTariff);
+    decimal? DailyTariff
+);
 
 public sealed record TaxiLogNoteOptionDto(short NoteCode, string Description);
 
@@ -694,7 +828,8 @@ public sealed record TaxiLogLookupResponse(
     DateTime TimeRequired,
     short? DepartmentCode,
     string? DepartmentName,
-    TaxiLogDetailDto? Log);
+    TaxiLogDetailDto? Log
+);
 
 public sealed record TaxiLogDetailDto(
     int LogId,
@@ -705,7 +840,8 @@ public sealed record TaxiLogDetailDto(
     string? DriverStartTime,
     string? DriverEndTime,
     short? TaxiLogNoteCode,
-    decimal? QuotedTariff);
+    decimal? QuotedTariff
+);
 
 public sealed class SaveTaxiLogRequest
 {

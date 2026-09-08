@@ -1,7 +1,7 @@
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Financial;
-using Microsoft.EntityFrameworkCore;
 using FIS.Data.SqlServer;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
 
@@ -30,7 +30,8 @@ public class MonthlyBillingJob
     public MonthlyBillingJob(
         FisDbContext context,
         IJournalDetailService journalDetailService,
-        ILogger<MonthlyBillingJob> logger)
+        ILogger<MonthlyBillingJob> logger
+    )
     {
         _context = context;
         _journalDetailService = journalDetailService;
@@ -45,17 +46,20 @@ public class MonthlyBillingJob
         var today = DateTime.Today;
         _logger.LogInformation("MonthlyBillingJob: starting for period ending {Today}", today);
 
-        int billed = 0, skipped = 0, errors = 0;
+        int billed = 0,
+            skipped = 0,
+            errors = 0;
 
         // Load all active contracts — still_current = 'Y' is the ONLY stop condition.
         // end_date is intentionally NOT filtered here.
-        var contracts = await _context.Contracts
-            .Where(c =>
-                !c.is_deleted &&
-                c.still_current == "Y")
+        var contracts = await _context
+            .Contracts.Where(c => !c.is_deleted && c.still_current == "Y")
             .ToListAsync();
 
-        _logger.LogInformation("MonthlyBillingJob: found {Count} active contracts to evaluate", contracts.Count);
+        _logger.LogInformation(
+            "MonthlyBillingJob: found {Count} active contracts to evaluate",
+            contracts.Count
+        );
 
         foreach (var contract in contracts)
         {
@@ -97,37 +101,43 @@ public class MonthlyBillingJob
                         contract.site_code,
                         departmentCode,
                         contract.contract_type ?? "H",
-                        today);
+                        today
+                    );
 
                     // Negative values indicate tariff lookup failure — fall back to 0 and log
                     if (amount < 0)
                     {
                         _logger.LogWarning(
                             "MonthlyBillingJob: tariff lookup failed (code {Code}) for contract {ContractCode}, vehicle {VmfCode}. Billing at R0.",
-                            amount, contract.contract_code, contract.vmf_code);
+                            amount,
+                            contract.contract_code,
+                            contract.vmf_code
+                        );
                         amount = 0m;
                     }
                 }
                 catch (Exception tariffEx)
                 {
-                    _logger.LogError(tariffEx,
+                    _logger.LogError(
+                        tariffEx,
                         "MonthlyBillingJob: tariff calculation error for contract {ContractCode}. Billing at R0.",
-                        contract.contract_code);
+                        contract.contract_code
+                    );
                     amount = 0m;
                 }
 
                 // Create journal detail
                 var journalDetail = new JournalDetail
                 {
-                    vmf_code            = contract.vmf_code,
-                    site_code           = contract.site_code,
-                    department_code     = departmentCode,
+                    vmf_code = contract.vmf_code,
+                    site_code = contract.site_code,
+                    department_code = departmentCode,
                     journal_detail_quantity = days,
-                    journal_detail_amount   = amount,
-                    journal_detail_isdebit  = true,
+                    journal_detail_amount = amount,
+                    journal_detail_isdebit = true,
                     journal_detail_type_code = 1, // Fixed
                     journal_detail_description =
-                        $"Monthly billing: Contract {contract.contract_code} | {billingFrom:yyyy-MM-dd} – {billingTo:yyyy-MM-dd} | {days} days"
+                        $"Monthly billing: Contract {contract.contract_code} | {billingFrom:yyyy-MM-dd} – {billingTo:yyyy-MM-dd} | {days} days",
                 };
 
                 await _journalDetailService.CreateJournalDetailAsync(journalDetail);
@@ -141,19 +151,28 @@ public class MonthlyBillingJob
 
                 _logger.LogInformation(
                     "MonthlyBillingJob: billed Contract {ContractCode} (vehicle {VmfCode}) {Days} days @ R{Amount}",
-                    contract.contract_code, contract.vmf_code, days, amount);
+                    contract.contract_code,
+                    contract.vmf_code,
+                    days,
+                    amount
+                );
             }
             catch (Exception ex)
             {
                 errors++;
-                _logger.LogError(ex,
+                _logger.LogError(
+                    ex,
                     "MonthlyBillingJob: unhandled error processing contract {ContractCode}",
-                    contract.contract_code);
+                    contract.contract_code
+                );
             }
         }
 
         _logger.LogInformation(
             "MonthlyBillingJob: complete — {Billed} billed, {Skipped} already current, {Errors} errors",
-            billed, skipped, errors);
+            billed,
+            skipped,
+            errors
+        );
     }
 }

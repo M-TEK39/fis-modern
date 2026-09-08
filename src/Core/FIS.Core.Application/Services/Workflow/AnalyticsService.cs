@@ -25,7 +25,8 @@ public class AnalyticsService : IAnalyticsService
         IStepRepository stepRepository,
         IWorkflowRepository workflowRepository,
         ICurrentUserContext currentUserContext,
-        ILogger<AnalyticsService> logger)
+        ILogger<AnalyticsService> logger
+    )
     {
         _historyRepository = historyRepository;
         _metricRepository = metricRepository;
@@ -36,12 +37,17 @@ public class AnalyticsService : IAnalyticsService
         _logger = logger;
     }
 
-    public async Task<int> RecordStepExecutionAsync(int statusId, int stepId, int workflowId, string? handlerType)
+    public async Task<int> RecordStepExecutionAsync(
+        int statusId,
+        int stepId,
+        int workflowId,
+        string? handlerType
+    )
     {
         try
         {
             var step = await _stepRepository.GetByIdAsync(stepId);
-            
+
             var history = new StepExecutionHistory
             {
                 StatusID = statusId,
@@ -50,13 +56,17 @@ public class AnalyticsService : IAnalyticsService
                 StepName = step?.StepName,
                 HandlerType = handlerType,
                 StartedAt = DateTime.UtcNow,
-                ExecutionStatus = "Running"
+                ExecutionStatus = "Running",
             };
 
             var created = await _historyRepository.CreateAsync(history);
-            _logger.LogInformation("Recorded step execution: WorkflowID={WorkflowId}, StepID={StepId}, HistoryID={HistoryId}", 
-                workflowId, stepId, created.ExecutionHistoryID);
-            
+            _logger.LogInformation(
+                "Recorded step execution: WorkflowID={WorkflowId}, StepID={StepId}, HistoryID={HistoryId}",
+                workflowId,
+                stepId,
+                created.ExecutionHistoryID
+            );
+
             return created.ExecutionHistoryID;
         }
         catch (Exception ex)
@@ -66,21 +76,30 @@ public class AnalyticsService : IAnalyticsService
         }
     }
 
-    public async Task CompleteStepExecutionAsync(int executionHistoryId, bool success, string? errorMessage = null)
+    public async Task CompleteStepExecutionAsync(
+        int executionHistoryId,
+        bool success,
+        string? errorMessage = null
+    )
     {
         try
         {
             var history = await _historyRepository.GetByIdAsync(executionHistoryId);
-            if (history == null) return;
+            if (history == null)
+                return;
 
             history.CompletedAt = DateTime.UtcNow;
-            history.DurationSeconds = (int)(history.CompletedAt.Value - history.StartedAt).TotalSeconds;
+            history.DurationSeconds = (int)
+                (history.CompletedAt.Value - history.StartedAt).TotalSeconds;
             history.ExecutionStatus = success ? "Completed" : "Failed";
             history.ErrorMessage = errorMessage;
 
             await _historyRepository.UpdateAsync(history);
-            _logger.LogInformation("Completed step execution: HistoryID={HistoryId}, Status={Status}", 
-                executionHistoryId, history.ExecutionStatus);
+            _logger.LogInformation(
+                "Completed step execution: HistoryID={HistoryId}, Status={Status}",
+                executionHistoryId,
+                history.ExecutionStatus
+            );
         }
         catch (Exception ex)
         {
@@ -105,26 +124,37 @@ public class AnalyticsService : IAnalyticsService
                 SuccessfulExecutions = dayExecutions.Count(e => e.ExecutionStatus == "Completed"),
                 FailedExecutions = dayExecutions.Count(e => e.ExecutionStatus == "Failed"),
                 CancelledExecutions = dayExecutions.Count(e => e.ExecutionStatus == "Cancelled"),
-                AverageDurationSeconds = dayExecutions.Any(e => e.DurationSeconds.HasValue) 
-                    ? (decimal)dayExecutions.Where(e => e.DurationSeconds.HasValue).Average(e => e.DurationSeconds!.Value)
+                AverageDurationSeconds = dayExecutions.Any(e => e.DurationSeconds.HasValue)
+                    ? (decimal)
+                        dayExecutions
+                            .Where(e => e.DurationSeconds.HasValue)
+                            .Average(e => e.DurationSeconds!.Value)
                     : 0,
                 MinDurationSeconds = dayExecutions.Any(e => e.DurationSeconds.HasValue)
-                    ? dayExecutions.Where(e => e.DurationSeconds.HasValue).Min(e => e.DurationSeconds!.Value)
+                    ? dayExecutions
+                        .Where(e => e.DurationSeconds.HasValue)
+                        .Min(e => e.DurationSeconds!.Value)
                     : null,
                 MaxDurationSeconds = dayExecutions.Any(e => e.DurationSeconds.HasValue)
-                    ? dayExecutions.Where(e => e.DurationSeconds.HasValue).Max(e => e.DurationSeconds!.Value)
+                    ? dayExecutions
+                        .Where(e => e.DurationSeconds.HasValue)
+                        .Max(e => e.DurationSeconds!.Value)
                     : null,
                 TotalStepsExecuted = dayExecutions.Count,
-                AverageStepsPerWorkflow = dayExecutions.Any() ? dayExecutions.Count / (decimal)dayExecutions.Select(e => e.WorkflowID).Distinct().Count() : 0
+                AverageStepsPerWorkflow = dayExecutions.Any()
+                    ? dayExecutions.Count
+                        / (decimal)dayExecutions.Select(e => e.WorkflowID).Distinct().Count()
+                    : 0,
             };
 
             // Detect bottleneck
             var stepPerformance = dayExecutions
                 .Where(e => e.DurationSeconds.HasValue)
                 .GroupBy(e => e.StepID)
-                .Select(g => new {
+                .Select(g => new
+                {
                     StepID = g.Key,
-                    AvgDuration = g.Average(e => e.DurationSeconds!.Value)
+                    AvgDuration = g.Average(e => e.DurationSeconds!.Value),
                 })
                 .OrderByDescending(s => s.AvgDuration)
                 .FirstOrDefault();
@@ -134,7 +164,10 @@ public class AnalyticsService : IAnalyticsService
                 metric.BottleneckStepID = stepPerformance.StepID;
             }
 
-            await _metricRepository.CreateAsync(metric, _currentUserContext.GetCurrentUserIdOrDefault()); // System-generated
+            await _metricRepository.CreateAsync(
+                metric,
+                _currentUserContext.GetCurrentUserIdOrDefault()
+            ); // System-generated
             return metric;
         }
         catch (Exception ex)
@@ -144,27 +177,40 @@ public class AnalyticsService : IAnalyticsService
         }
     }
 
-    public async Task<WorkflowPerformanceReport> GetWorkflowPerformanceAsync(int workflowId, DateTime startDate, DateTime endDate)
+    public async Task<WorkflowPerformanceReport> GetWorkflowPerformanceAsync(
+        int workflowId,
+        DateTime startDate,
+        DateTime endDate
+    )
     {
         try
         {
             var workflow = await _workflowRepository.GetByIdAsync(workflowId);
             var executions = await _historyRepository.GetByWorkflowIdAsync(workflowId);
-            var periodExecutions = executions.Where(e => e.StartedAt >= startDate && e.StartedAt <= endDate).ToList();
+            var periodExecutions = executions
+                .Where(e => e.StartedAt >= startDate && e.StartedAt <= endDate)
+                .ToList();
 
             var report = new WorkflowPerformanceReport
             {
                 WorkflowID = workflowId,
                 WorkflowName = workflow?.WorkflowName,
                 TotalExecutions = periodExecutions.Count,
-                SuccessfulExecutions = periodExecutions.Count(e => e.ExecutionStatus == "Completed"),
+                SuccessfulExecutions = periodExecutions.Count(e =>
+                    e.ExecutionStatus == "Completed"
+                ),
                 FailedExecutions = periodExecutions.Count(e => e.ExecutionStatus == "Failed"),
-                SuccessRate = periodExecutions.Any() 
-                    ? (decimal)periodExecutions.Count(e => e.ExecutionStatus == "Completed") / periodExecutions.Count * 100
+                SuccessRate = periodExecutions.Any()
+                    ? (decimal)periodExecutions.Count(e => e.ExecutionStatus == "Completed")
+                        / periodExecutions.Count
+                        * 100
                     : 0,
                 AverageDurationMinutes = periodExecutions.Any(e => e.DurationSeconds.HasValue)
-                    ? (decimal)periodExecutions.Where(e => e.DurationSeconds.HasValue).Average(e => e.DurationSeconds!.Value) / 60
-                    : 0
+                    ? (decimal)
+                        periodExecutions
+                            .Where(e => e.DurationSeconds.HasValue)
+                            .Average(e => e.DurationSeconds!.Value) / 60
+                    : 0,
             };
 
             // Step performance breakdown
@@ -176,7 +222,7 @@ public class AnalyticsService : IAnalyticsService
                     StepID = g.Key.StepID,
                     StepName = g.Key.StepName,
                     AverageDurationSeconds = (decimal)g.Average(e => e.DurationSeconds!.Value),
-                    ExecutionCount = g.Count()
+                    ExecutionCount = g.Count(),
                 })
                 .OrderByDescending(s => s.AverageDurationSeconds)
                 .ToList();
@@ -205,12 +251,17 @@ public class AnalyticsService : IAnalyticsService
                 StepName = step?.StepName,
                 TotalExecutions = executions.Count(),
                 AverageDurationSeconds = executions.Any(e => e.DurationSeconds.HasValue)
-                    ? (decimal)executions.Where(e => e.DurationSeconds.HasValue).Average(e => e.DurationSeconds!.Value)
+                    ? (decimal)
+                        executions
+                            .Where(e => e.DurationSeconds.HasValue)
+                            .Average(e => e.DurationSeconds!.Value)
                     : 0,
                 FailureCount = executions.Count(e => e.ExecutionStatus == "Failed"),
                 FailureRate = executions.Any()
-                    ? (decimal)executions.Count(e => e.ExecutionStatus == "Failed") / executions.Count() * 100
-                    : 0
+                    ? (decimal)executions.Count(e => e.ExecutionStatus == "Failed")
+                        / executions.Count()
+                        * 100
+                    : 0,
             };
 
             return report;
@@ -229,7 +280,8 @@ public class AnalyticsService : IAnalyticsService
             var executions = await _historyRepository.GetByWorkflowIdAsync(workflowId);
             var completedExecutions = executions.Where(e => e.DurationSeconds.HasValue).ToList();
 
-            if (!completedExecutions.Any()) return new List<BottleneckInfo>();
+            if (!completedExecutions.Any())
+                return new List<BottleneckInfo>();
 
             var totalTime = completedExecutions.Sum(e => e.DurationSeconds!.Value);
 
@@ -240,7 +292,9 @@ public class AnalyticsService : IAnalyticsService
                     StepID = g.Key.StepID,
                     StepName = g.Key.StepName,
                     AverageDurationSeconds = (decimal)g.Average(e => e.DurationSeconds!.Value),
-                    PercentOfTotalTime = (int)(g.Sum(e => e.DurationSeconds!.Value) / (decimal)totalTime * 100)
+                    PercentOfTotalTime = (int)(
+                        g.Sum(e => e.DurationSeconds!.Value) / (decimal)totalTime * 100
+                    ),
                 })
                 .OrderByDescending(b => b.AverageDurationSeconds)
                 .Take(5)
@@ -270,9 +324,12 @@ public class AnalyticsService : IAnalyticsService
                 CompletedToday = todaySummaries.Count(s => s.ExecutionStatus == "Completed"),
                 FailedToday = todaySummaries.Count(s => s.ExecutionStatus == "Failed"),
                 AverageCompletionTime = todaySummaries.Any(s => s.DurationSeconds.HasValue)
-                    ? (decimal)todaySummaries.Where(s => s.DurationSeconds.HasValue).Average(s => s.DurationSeconds!.Value) / 60
+                    ? (decimal)
+                        todaySummaries
+                            .Where(s => s.DurationSeconds.HasValue)
+                            .Average(s => s.DurationSeconds!.Value) / 60
                     : 0,
-                RecentExecutions = (await _summaryRepository.GetRecentExecutionsAsync(10)).ToList()
+                RecentExecutions = (await _summaryRepository.GetRecentExecutionsAsync(10)).ToList(),
             };
 
             return stats;

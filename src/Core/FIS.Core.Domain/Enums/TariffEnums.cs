@@ -28,7 +28,7 @@ public enum TariffStatus
     /// <summary>
     /// Error during calculation.
     /// </summary>
-    Error = -99
+    Error = -99,
 }
 
 /// <summary>
@@ -64,7 +64,7 @@ public enum TariffSource
     /// <summary>
     /// Error occurred during calculation.
     /// </summary>
-    Error
+    Error,
 }
 
 /// <summary>
@@ -85,7 +85,7 @@ public enum TariffType
     /// <summary>
     /// Excess kilometer charges for lease vehicles.
     /// </summary>
-    Excess
+    Excess,
 }
 
 /// <summary>
@@ -106,5 +106,5 @@ public enum TariffSystem
     /// <summary>
     /// LeaseTariff table (lease-specific).
     /// </summary>
-    Lease
+    Lease,
 }

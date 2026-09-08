@@ -37,7 +37,9 @@ public class NoticeSchedulesController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<NoticeScheduleDto>> Create([FromBody] CreateNoticeScheduleDto request)
+    public async Task<ActionResult<NoticeScheduleDto>> Create(
+        [FromBody] CreateNoticeScheduleDto request
+    )
     {
         var noticeSchedule = new NoticeSchedule
         {
@@ -45,15 +47,21 @@ public class NoticeSchedulesController : BaseApiController
             title_field = request.TitleField,
             start_date = request.StartDate,
             end_date = request.EndDate,
-            sort_order = request.SortOrder
+            sort_order = request.SortOrder,
         };
 
-        var created = await _noticeScheduleRepository.CreateAsync(noticeSchedule, GetCurrentUserId());
+        var created = await _noticeScheduleRepository.CreateAsync(
+            noticeSchedule,
+            GetCurrentUserId()
+        );
         return Ok(ToDto(created));
     }
 
     [HttpPut("{id:int}")]
-    public async Task<ActionResult<NoticeScheduleDto>> Update(int id, [FromBody] UpdateNoticeScheduleDto request)
+    public async Task<ActionResult<NoticeScheduleDto>> Update(
+        int id,
+        [FromBody] UpdateNoticeScheduleDto request
+    )
     {
         if (id != request.NoticeScheduleId)
             return BadRequest("ID mismatch");
@@ -92,7 +100,7 @@ public class NoticeSchedulesController : BaseApiController
             TitleField = schedule.title_field ?? string.Empty,
             StartDate = schedule.start_date,
             EndDate = schedule.end_date,
-            SortOrder = schedule.sort_order
+            SortOrder = schedule.sort_order,
         };
     }
 }

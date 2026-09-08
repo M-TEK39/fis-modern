@@ -8,7 +8,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 MSSQL_HOST_PORT="${MSSQL_HOST_PORT:-1433}"
-MSSQL_DB_NAME="${MSSQL_DB_NAME:-legacy}"
+MSSQL_DB_NAME="${MSSQL_DB_NAME:-fis_dev}"
 MSSQL_SA_PASSWORD="${MSSQL_SA_PASSWORD:-Behox@1903}"
 DB_HOST="${DB_HOST:-192.0.2.10}"
 DB_PORT="${DB_PORT:-1433}"
@@ -64,17 +64,19 @@ Usage: $0 [COMMAND]
 
 Commands:
   start-db       Start only the SQL Server database for local development
+                 Creates the local fis_dev database and applies its schema
+  seed-db        Explicitly seed local development demo data
   stop-db        Stop the database container
   restart-db     Restart the database container
   logs-db        Show database container logs
   
-  start-full     Start application services using external SQL Server, API, web
+  start-full     Start application services using external SQL Server, API, Next.js
   stop-full      Stop all services
   restart-full   Restart all services
   logs-full      Show logs for all services
   
   build-api      Build the API Docker image
-  build-web      Build the Web Docker image
+  build-web      Build the Next.js Web Docker image
   build-all      Build all Docker images
   
   clean          Clean up all containers and images
@@ -104,9 +106,17 @@ check_docker() {
 start_db() {
     print_header "Starting SQL Server Database"
     cd "$PROJECT_ROOT"
-    run_compose -f docker/docker-compose.dev.yml up -d
+    run_compose -f docker/docker-compose.dev.yml up -d mssql
+    run_compose -f docker/docker-compose.dev.yml up db-bootstrap
     print_status "Database started successfully!"
-    print_status "Connection string: Server=localhost,${MSSQL_HOST_PORT};Database=${MSSQL_DB_NAME};User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;"
+    print_status "Connection: Server=localhost,${MSSQL_HOST_PORT};Database=${MSSQL_DB_NAME};User Id=sa;Encrypt=True;TrustServerCertificate=True; (password supplied via MSSQL_SA_PASSWORD)"
+}
+
+seed_db() {
+    print_header "Seeding Local Development Database"
+    cd "$PROJECT_ROOT"
+    run_compose -f docker/docker-compose.dev.yml --profile seed run --rm db-seed
+    print_status "Local development seed completed."
 }
 
 stop_db() {
@@ -134,8 +144,8 @@ start_full() {
     cd "$PROJECT_ROOT"
     run_compose -f docker/docker-compose.yml up -d
     print_status "Full application started successfully!"
-    print_status "API: http://localhost:5000"
-    print_status "Web: http://localhost:5001"
+    print_status "API: https://localhost:5443"
+    print_status "Web: https://localhost (Next.js via nginx)"
     print_status "Database: ${DB_HOST}:${DB_PORT} (external Windows SQL Server)"
 }
 
@@ -167,10 +177,10 @@ build_api() {
 }
 
 build_web() {
-    print_header "Building Web Docker Image"
+    print_header "Building Next.js Web Docker Image"
     cd "$PROJECT_ROOT"
-    docker build -f docker/Dockerfile.web -t fis-web:latest .
-    print_status "Web image built successfully!"
+    docker build -f docker/Dockerfile.web-next -t fis-web-next:latest .
+    print_status "Next.js Web image built successfully!"
 }
 
 build_all() {
@@ -258,6 +268,9 @@ main() {
     case "${1:-help}" in
         "start-db"|"db")
             start_db
+            ;;
+        "seed-db"|"seed")
+            seed_db
             ;;
         "stop-db")
             stop_db

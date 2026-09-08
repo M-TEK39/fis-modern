@@ -22,7 +22,8 @@ namespace FIS.Api.Controllers
         public FuelTypeController(
             IFuelTypeRepository fuelTypeRepository,
             IFuelTariffRepository fuelTariffRepository,
-            ILogger<FuelTypeController> logger)
+            ILogger<FuelTypeController> logger
+        )
         {
             _fuelTypeRepository = fuelTypeRepository;
             _fuelTariffRepository = fuelTariffRepository;
@@ -44,18 +45,23 @@ namespace FIS.Api.Controllers
 
                 // Fetch current tariffs for all fuel types
                 var currentTariffs = await _fuelTariffRepository.GetAllCurrentTariffsAsync();
-                var tariffLookup = currentTariffs.ToDictionary(t => t.fuel_type_code, t => t.fuel_tariff);
+                var tariffLookup = currentTariffs.ToDictionary(
+                    t => t.fuel_type_code,
+                    t => t.fuel_tariff
+                );
 
                 var fuelTypeDtos = fuelTypes.Select(ft => new FuelTypeResponseDto
                 {
                     fuel_type_code = ft.fuel_type_code,
                     fuel_description = ft.fuel_description ?? string.Empty,
-                    rate_per_litre = tariffLookup.ContainsKey(ft.fuel_type_code) ? tariffLookup[ft.fuel_type_code] : null,
+                    rate_per_litre = tariffLookup.ContainsKey(ft.fuel_type_code)
+                        ? tariffLookup[ft.fuel_type_code]
+                        : null,
                     date_created = ft.date_created,
                     date_updated = ft.date_updated,
                     created_by_user_code = ft.created_by_user_code,
                     modified_by_user_code = ft.modified_by_user_code,
-                    is_deleted = ft.is_deleted
+                    is_deleted = ft.is_deleted,
                 });
 
                 return Ok(fuelTypeDtos);
@@ -63,7 +69,10 @@ namespace FIS.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving fuel types");
-                return StatusCode(500, $"An error occurred while retrieving fuel types: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving fuel types: {ex.Message}"
+                );
             }
         }
 
@@ -97,7 +106,7 @@ namespace FIS.Api.Controllers
                     date_updated = fuelType.date_updated,
                     created_by_user_code = fuelType.created_by_user_code,
                     modified_by_user_code = fuelType.modified_by_user_code,
-                    is_deleted = fuelType.is_deleted
+                    is_deleted = fuelType.is_deleted,
                 };
 
                 return Ok(fuelTypeDto);
@@ -105,7 +114,10 @@ namespace FIS.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error retrieving fuel type {Id}", id);
-                return StatusCode(500, $"An error occurred while retrieving fuel type {id}: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving fuel type {id}: {ex.Message}"
+                );
             }
         }
 
@@ -119,7 +131,7 @@ namespace FIS.Api.Controllers
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var fuelType = await _fuelTypeRepository.GetByDescriptionAsync(description);
                 if (fuelType == null)
@@ -130,7 +142,10 @@ namespace FIS.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while retrieving fuel type by description '{description}': {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while retrieving fuel type by description '{description}': {ex.Message}"
+                );
             }
         }
 
@@ -140,18 +155,23 @@ namespace FIS.Api.Controllers
         /// <param name="searchTerm">The search term</param>
         /// <returns>List of matching fuel types</returns>
         [HttpGet("search/{searchTerm}")]
-        public async Task<ActionResult<IEnumerable<FuelTypeEntity>>> SearchFuelTypes(string searchTerm)
+        public async Task<ActionResult<IEnumerable<FuelTypeEntity>>> SearchFuelTypes(
+            string searchTerm
+        )
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var fuelTypes = await _fuelTypeRepository.SearchFuelTypesAsync(searchTerm);
                 return Ok(fuelTypes);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while searching fuel types with term '{searchTerm}': {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while searching fuel types with term '{searchTerm}': {ex.Message}"
+                );
             }
         }
 
@@ -161,7 +181,9 @@ namespace FIS.Api.Controllers
         /// <param name="createFuelTypeDto">The fuel type data to create</param>
         /// <returns>The created fuel type</returns>
         [HttpPost]
-        public async Task<ActionResult<FuelTypeResponseDto>> CreateFuelType(CreateFuelTypeDto createFuelTypeDto)
+        public async Task<ActionResult<FuelTypeResponseDto>> CreateFuelType(
+            CreateFuelTypeDto createFuelTypeDto
+        )
         {
             try
             {
@@ -175,23 +197,30 @@ namespace FIS.Api.Controllers
                 // Create FuelType entity from DTO (ID will be auto-generated)
                 var fuelType = new FuelTypeEntity
                 {
-                    fuel_description = createFuelTypeDto.fuel_description
+                    fuel_description = createFuelTypeDto.fuel_description,
                 };
 
-                var createdFuelType = await _fuelTypeRepository.CreateAsync(fuelType, currentUserId);
+                var createdFuelType = await _fuelTypeRepository.CreateAsync(
+                    fuelType,
+                    currentUserId
+                );
 
                 // Create initial tariff if rate_per_litre is provided
                 decimal? currentRate = null;
                 if (createFuelTypeDto.rate_per_litre.HasValue)
                 {
-                    _logger.LogInformation("Creating initial tariff for fuel type {FuelTypeCode} with rate {Rate}",
-                        createdFuelType.fuel_type_code, createFuelTypeDto.rate_per_litre.Value);
+                    _logger.LogInformation(
+                        "Creating initial tariff for fuel type {FuelTypeCode} with rate {Rate}",
+                        createdFuelType.fuel_type_code,
+                        createFuelTypeDto.rate_per_litre.Value
+                    );
 
                     await _fuelTariffRepository.CreateNewRateAsync(
                         createdFuelType.fuel_type_code,
                         createFuelTypeDto.rate_per_litre.Value,
                         createFuelTypeDto.rate_notes,
-                        currentUserId);
+                        currentUserId
+                    );
 
                     currentRate = createFuelTypeDto.rate_per_litre.Value;
                 }
@@ -205,10 +234,14 @@ namespace FIS.Api.Controllers
                     date_updated = createdFuelType.date_updated,
                     created_by_user_code = createdFuelType.created_by_user_code,
                     modified_by_user_code = createdFuelType.modified_by_user_code,
-                    is_deleted = createdFuelType.is_deleted
+                    is_deleted = createdFuelType.is_deleted,
                 };
 
-                return CreatedAtAction(nameof(GetFuelType), new { id = createdFuelType.fuel_type_code }, responseDto);
+                return CreatedAtAction(
+                    nameof(GetFuelType),
+                    new { id = createdFuelType.fuel_type_code },
+                    responseDto
+                );
             }
             catch (Exception ex)
             {
@@ -224,7 +257,10 @@ namespace FIS.Api.Controllers
         /// <param name="updateDto">The fuel type data to update</param>
         /// <returns>The updated fuel type</returns>
         [HttpPut("{id}")]
-        public async Task<ActionResult<FuelTypeResponseDto>> UpdateFuelType(short id, UpdateFuelTypeDto updateDto)
+        public async Task<ActionResult<FuelTypeResponseDto>> UpdateFuelType(
+            short id,
+            UpdateFuelTypeDto updateDto
+        )
         {
             try
             {
@@ -243,7 +279,10 @@ namespace FIS.Api.Controllers
 
                 // Update fuel type description
                 existingFuelType.fuel_description = updateDto.fuel_description;
-                var updatedFuelType = await _fuelTypeRepository.UpdateAsync(existingFuelType, currentUserId);
+                var updatedFuelType = await _fuelTypeRepository.UpdateAsync(
+                    existingFuelType,
+                    currentUserId
+                );
 
                 // Handle rate update if provided
                 decimal? currentRate = null;
@@ -252,16 +291,24 @@ namespace FIS.Api.Controllers
                     var existingTariff = await _fuelTariffRepository.GetCurrentTariffAsync(id);
 
                     // Only create new tariff if rate is different or no tariff exists
-                    if (existingTariff == null || existingTariff.fuel_tariff != updateDto.rate_per_litre.Value)
+                    if (
+                        existingTariff == null
+                        || existingTariff.fuel_tariff != updateDto.rate_per_litre.Value
+                    )
                     {
-                        _logger.LogInformation("Updating tariff for fuel type {FuelTypeCode} from {OldRate} to {NewRate}",
-                            id, existingTariff?.fuel_tariff, updateDto.rate_per_litre.Value);
+                        _logger.LogInformation(
+                            "Updating tariff for fuel type {FuelTypeCode} from {OldRate} to {NewRate}",
+                            id,
+                            existingTariff?.fuel_tariff,
+                            updateDto.rate_per_litre.Value
+                        );
 
                         await _fuelTariffRepository.CreateNewRateAsync(
                             id,
                             updateDto.rate_per_litre.Value,
                             updateDto.rate_notes,
-                            currentUserId);
+                            currentUserId
+                        );
 
                         currentRate = updateDto.rate_per_litre.Value;
                     }
@@ -286,7 +333,7 @@ namespace FIS.Api.Controllers
                     date_updated = updatedFuelType.date_updated,
                     created_by_user_code = updatedFuelType.created_by_user_code,
                     modified_by_user_code = updatedFuelType.modified_by_user_code,
-                    is_deleted = updatedFuelType.is_deleted
+                    is_deleted = updatedFuelType.is_deleted,
                 };
 
                 return Ok(responseDto);
@@ -294,7 +341,10 @@ namespace FIS.Api.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating fuel type {Id}", id);
-                return StatusCode(500, $"An error occurred while updating fuel type {id}: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while updating fuel type {id}: {ex.Message}"
+                );
             }
         }
 
@@ -308,7 +358,7 @@ namespace FIS.Api.Controllers
         {
             try
             {
-            int currentUserId = GetCurrentUserId();
+                int currentUserId = GetCurrentUserId();
 
                 var existingFuelType = await _fuelTypeRepository.GetByIdAsync(id);
                 if (existingFuelType == null)
@@ -321,7 +371,10 @@ namespace FIS.Api.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, $"An error occurred while deleting fuel type {id}: {ex.Message}");
+                return StatusCode(
+                    500,
+                    $"An error occurred while deleting fuel type {id}: {ex.Message}"
+                );
             }
         }
     }

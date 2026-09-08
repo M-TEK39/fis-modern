@@ -46,14 +46,19 @@ public class LegacyUserCredential
 
     /// <summary>
     /// Absolute date/time after which the password is expired.
-    /// Calculated at change time as last_password_change + 90 days.
+    /// Calculated by the API at password-change time from its configured
+    /// password expiry period.
     /// Null for legacy records (fall back to config-based calculation).
     /// </summary>
-    [Column("password_expiry_date")]
+    // Optional expanded column. It is intentionally not statically mapped:
+    // the client database may contain Legacy_User_Credentials without it.
+    [NotMapped]
     public DateTime? password_expiry_date { get; set; }
 
     /// <summary>FK to TS_Users — who last changed this password (admin reset or self-service).</summary>
-    [Column("changed_by_user_code")]
+    // Optional expanded column. It is intentionally not statically mapped:
+    // the client database may contain Legacy_User_Credentials without it.
+    [NotMapped]
     public int? changed_by_user_code { get; set; }
 
     [Column("created_date")]

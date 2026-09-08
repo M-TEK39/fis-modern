@@ -26,13 +26,18 @@ public class ContractValidationService : IContractValidationService
         ISiteRepository siteRepository,
         ITariffRepository tariffRepository,
         ITripRepository tripRepository,
-        ILogger<ContractValidationService> logger)
+        ILogger<ContractValidationService> logger
+    )
     {
-        _contractRepository = contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
-        _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
-        _modelRepository = modelRepository ?? throw new ArgumentNullException(nameof(modelRepository));
+        _contractRepository =
+            contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
+        _vehicleRepository =
+            vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _modelRepository =
+            modelRepository ?? throw new ArgumentNullException(nameof(modelRepository));
         _siteRepository = siteRepository ?? throw new ArgumentNullException(nameof(siteRepository));
-        _tariffRepository = tariffRepository ?? throw new ArgumentNullException(nameof(tariffRepository));
+        _tariffRepository =
+            tariffRepository ?? throw new ArgumentNullException(nameof(tariffRepository));
         _tripRepository = tripRepository ?? throw new ArgumentNullException(nameof(tripRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -42,7 +47,9 @@ public class ContractValidationService : IContractValidationService
     /// <summary>
     /// Legacy: NEW_DEV_SEL_ContractByReg
     /// </summary>
-    public async Task<ContractValidationResult> ValidateContractRegistrationNumberAsync(string registrationNumber)
+    public async Task<ContractValidationResult> ValidateContractRegistrationNumberAsync(
+        string registrationNumber
+    )
     {
         try
         {
@@ -62,7 +69,11 @@ public class ContractValidationService : IContractValidationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating contract registration number: {Registration}", registrationNumber);
+            _logger.LogError(
+                ex,
+                "Error validating contract registration number: {Registration}",
+                registrationNumber
+            );
             return ContractValidationResult.Failed($"Validation error: {ex.Message}");
         }
     }
@@ -70,7 +81,9 @@ public class ContractValidationService : IContractValidationService
     /// <summary>
     /// Legacy: NEW_DEV_VAL_Registration
     /// </summary>
-    public async Task<ContractValidationResult> ValidateVehicleRegistrationNumberAsync(string registrationNumber)
+    public async Task<ContractValidationResult> ValidateVehicleRegistrationNumberAsync(
+        string registrationNumber
+    )
     {
         try
         {
@@ -84,7 +97,11 @@ public class ContractValidationService : IContractValidationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating vehicle registration number: {Registration}", registrationNumber);
+            _logger.LogError(
+                ex,
+                "Error validating vehicle registration number: {Registration}",
+                registrationNumber
+            );
             return ContractValidationResult.Failed($"Validation error: {ex.Message}");
         }
     }
@@ -103,10 +120,11 @@ public class ContractValidationService : IContractValidationService
                 var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
                 var site = activeContract.Site;
 
-                var errorMessage = $"There is already an open Contract for this vehicle {vehicle?.registration_number ?? "Unknown"} " +
-                    $"at this site {site?.description ?? "Unknown"}. " +
-                    $"The open contract number at this site is {activeContract.contract_code}. " +
-                    $"No duplicate open contracts are allowed for a given vehicle.";
+                var errorMessage =
+                    $"There is already an open Contract for this vehicle {vehicle?.registration_number ?? "Unknown"} "
+                    + $"at this site {site?.description ?? "Unknown"}. "
+                    + $"The open contract number at this site is {activeContract.contract_code}. "
+                    + $"No duplicate open contracts are allowed for a given vehicle.";
 
                 return ContractValidationResult.Failed(errorMessage);
             }
@@ -115,7 +133,11 @@ public class ContractValidationService : IContractValidationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking duplicate contract for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error checking duplicate contract for vehicle: {VmfCode}",
+                vmfCode
+            );
             return ContractValidationResult.Failed($"Validation error: {ex.Message}");
         }
     }
@@ -139,21 +161,29 @@ public class ContractValidationService : IContractValidationService
 
             // Check for any trips with expiry dates in the future
             var openTripAuthorities = trips
-                .Where(t => t.contract_code == contractCode &&
-                           t.expiry_date.HasValue &&
-                           t.expiry_date.Value > DateTime.Now)
+                .Where(t =>
+                    t.contract_code == contractCode
+                    && t.expiry_date.HasValue
+                    && t.expiry_date.Value > DateTime.Now
+                )
                 .ToList();
 
             if (openTripAuthorities.Any())
             {
-                return ContractValidationResult.Failed("The contract has an open trip authority and cannot be closed");
+                return ContractValidationResult.Failed(
+                    "The contract has an open trip authority and cannot be closed"
+                );
             }
 
             return ContractValidationResult.Success();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking open trip authorities for contract: {ContractCode}", contractCode);
+            _logger.LogError(
+                ex,
+                "Error checking open trip authorities for contract: {ContractCode}",
+                contractCode
+            );
             return ContractValidationResult.Failed($"Validation error: {ex.Message}");
         }
     }
@@ -191,7 +221,10 @@ public class ContractValidationService : IContractValidationService
     /// Legacy: NEW_DEV_VAL_Contracts (for start date on add)
     /// Ensures new contract start date doesn't overlap with previous contract
     /// </summary>
-    public async Task<ContractValidationResult> ValidateStartDateAsync(int vmfCode, DateTime startDate)
+    public async Task<ContractValidationResult> ValidateStartDateAsync(
+        int vmfCode,
+        DateTime startDate
+    )
     {
         try
         {
@@ -206,8 +239,9 @@ public class ContractValidationService : IContractValidationService
                 if (startDate < previousContract.end_date!.Value)
                 {
                     return ContractValidationResult.Failed(
-                        $"The previous contract's end date was {previousContract.end_date.Value:yyyy-MM-dd}. " +
-                        $"Please select a start date that does not overlap with the previous contract's end date");
+                        $"The previous contract's end date was {previousContract.end_date.Value:yyyy-MM-dd}. "
+                            + $"Please select a start date that does not overlap with the previous contract's end date"
+                    );
                 }
             }
 
@@ -229,7 +263,10 @@ public class ContractValidationService : IContractValidationService
     /// <summary>
     /// Legacy: NEW_DEV_VAL_Contracts (for start date on modify - less restrictive)
     /// </summary>
-    public async Task<ContractValidationResult> ValidateStartDateModifyAsync(int vmfCode, DateTime startDate)
+    public async Task<ContractValidationResult> ValidateStartDateModifyAsync(
+        int vmfCode,
+        DateTime startDate
+    )
     {
         try
         {
@@ -244,7 +281,8 @@ public class ContractValidationService : IContractValidationService
                 if (startDate < previousContract.end_date!.Value)
                 {
                     return ContractValidationResult.Failed(
-                        $"The previous contract's end date was {previousContract.end_date.Value:yyyy-MM-dd}");
+                        $"The previous contract's end date was {previousContract.end_date.Value:yyyy-MM-dd}"
+                    );
                 }
             }
 
@@ -253,7 +291,11 @@ public class ContractValidationService : IContractValidationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating start date (modify) for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error validating start date (modify) for vehicle: {VmfCode}",
+                vmfCode
+            );
             return ContractValidationResult.Failed($"Validation error: {ex.Message}");
         }
     }
@@ -266,9 +308,7 @@ public class ContractValidationService : IContractValidationService
         try
         {
             var contracts = await _contractRepository.GetContractsByVehicleAsync(vmfCode);
-            var currentContract = contracts
-                .Where(c => c.still_current == "Y")
-                .FirstOrDefault();
+            var currentContract = contracts.Where(c => c.still_current == "Y").FirstOrDefault();
 
             if (currentContract == null)
             {
@@ -278,13 +318,16 @@ public class ContractValidationService : IContractValidationService
             if (endDate < currentContract.start_date)
             {
                 return ContractValidationResult.Failed(
-                    $"The current contract's start date is {currentContract.start_date:yyyy-MM-dd}. " +
-                    $"Please select an end date after the start date");
+                    $"The current contract's start date is {currentContract.start_date:yyyy-MM-dd}. "
+                        + $"Please select an end date after the start date"
+                );
             }
 
             if (endDate > DateTime.Now)
             {
-                return ContractValidationResult.Failed("The contract's closing date cannot be in the future");
+                return ContractValidationResult.Failed(
+                    "The contract's closing date cannot be in the future"
+                );
             }
 
             return ContractValidationResult.Success();
@@ -299,7 +342,10 @@ public class ContractValidationService : IContractValidationService
     /// <summary>
     /// Legacy: NEW_DEV_VAL_Contracts (for start odometer)
     /// </summary>
-    public async Task<ContractValidationResult> ValidateStartOdometerAsync(int vmfCode, int startOdometer)
+    public async Task<ContractValidationResult> ValidateStartOdometerAsync(
+        int vmfCode,
+        int startOdometer
+    )
     {
         try
         {
@@ -314,7 +360,8 @@ public class ContractValidationService : IContractValidationService
                 if (startOdometer < previousContract.end_odometer!.Value)
                 {
                     return ContractValidationResult.Failed(
-                        $"The previous contract's end odometer reading was {previousContract.end_odometer.Value}");
+                        $"The previous contract's end odometer reading was {previousContract.end_odometer.Value}"
+                    );
                 }
             }
 
@@ -330,14 +377,15 @@ public class ContractValidationService : IContractValidationService
     /// <summary>
     /// Legacy: CheckEndOdoClose validation
     /// </summary>
-    public async Task<ContractValidationResult> ValidateEndOdometerCloseAsync(int vmfCode, int endOdometer)
+    public async Task<ContractValidationResult> ValidateEndOdometerCloseAsync(
+        int vmfCode,
+        int endOdometer
+    )
     {
         try
         {
             var contracts = await _contractRepository.GetContractsByVehicleAsync(vmfCode);
-            var currentContract = contracts
-                .Where(c => c.still_current == "Y")
-                .FirstOrDefault();
+            var currentContract = contracts.Where(c => c.still_current == "Y").FirstOrDefault();
 
             if (currentContract == null)
             {
@@ -347,14 +395,19 @@ public class ContractValidationService : IContractValidationService
             if (endOdometer < currentContract.start_odometer)
             {
                 return ContractValidationResult.Failed(
-                    $"The contract's end odometer reading must be greater than the start odometer reading of {currentContract.start_odometer}");
+                    $"The contract's end odometer reading must be greater than the start odometer reading of {currentContract.start_odometer}"
+                );
             }
 
             return ContractValidationResult.Success();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error validating end odometer (close) for vehicle: {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error validating end odometer (close) for vehicle: {VmfCode}",
+                vmfCode
+            );
             return ContractValidationResult.Failed($"Validation error: {ex.Message}");
         }
     }
@@ -366,8 +419,11 @@ public class ContractValidationService : IContractValidationService
     {
         if (endOdometer > 0)
         {
-            return Task.FromResult(ContractValidationResult.Failed(
-                "The contract's end odometer reading must be 0 when the contract is open"));
+            return Task.FromResult(
+                ContractValidationResult.Failed(
+                    "The contract's end odometer reading must be 0 when the contract is open"
+                )
+            );
         }
 
         return Task.FromResult(ContractValidationResult.Success());
@@ -380,8 +436,11 @@ public class ContractValidationService : IContractValidationService
     {
         if (stillCurrent != "Y")
         {
-            return Task.FromResult(ContractValidationResult.Failed(
-                "The contract is current and the still current field must be set to 'Y'"));
+            return Task.FromResult(
+                ContractValidationResult.Failed(
+                    "The contract is current and the still current field must be set to 'Y'"
+                )
+            );
         }
 
         return Task.FromResult(ContractValidationResult.Success());
@@ -394,8 +453,11 @@ public class ContractValidationService : IContractValidationService
     {
         if (stillCurrent != "N")
         {
-            return Task.FromResult(ContractValidationResult.Failed(
-                "The contract is closed and the still current field must be set to 'N'"));
+            return Task.FromResult(
+                ContractValidationResult.Failed(
+                    "The contract is closed and the still current field must be set to 'N'"
+                )
+            );
         }
 
         return Task.FromResult(ContractValidationResult.Success());
@@ -408,8 +470,11 @@ public class ContractValidationService : IContractValidationService
     {
         if (targetReturnDate < DateTime.Now)
         {
-            return Task.FromResult(ContractValidationResult.Failed(
-                "The contract's Target Return Date has to be today or in the future"));
+            return Task.FromResult(
+                ContractValidationResult.Failed(
+                    "The contract's Target Return Date has to be today or in the future"
+                )
+            );
         }
 
         return Task.FromResult(ContractValidationResult.Success());
@@ -425,11 +490,17 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public async Task<ContractValidationResult> ValidateContractAddAsync(Contract contract)
     {
-        var result = new ContractValidationResult { ValidationRuleset = ContractValidationRulesets.Add };
+        var result = new ContractValidationResult
+        {
+            ValidationRuleset = ContractValidationRulesets.Add,
+        };
 
         try
         {
-            _logger.LogInformation("Validating contract add for vehicle: {VmfCode}", contract.vmf_code);
+            _logger.LogInformation(
+                "Validating contract add for vehicle: {VmfCode}",
+                contract.vmf_code
+            );
 
             // 1. Validate registration number exists
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
@@ -439,7 +510,9 @@ public class ContractValidationService : IContractValidationService
                 return result;
             }
 
-            var regValidation = await ValidateVehicleRegistrationNumberAsync(vehicle.registration_number!);
+            var regValidation = await ValidateVehicleRegistrationNumberAsync(
+                vehicle.registration_number!
+            );
             if (!regValidation.IsValid)
                 result.AddErrors(regValidation.Errors);
 
@@ -459,12 +532,18 @@ public class ContractValidationService : IContractValidationService
                 result.AddErrors(siteValidation.Errors);
 
             // 5. Validate start date
-            var startDateValidation = await ValidateStartDateAsync(contract.vmf_code, contract.start_date);
+            var startDateValidation = await ValidateStartDateAsync(
+                contract.vmf_code,
+                contract.start_date
+            );
             if (!startDateValidation.IsValid)
                 result.AddErrors(startDateValidation.Errors);
 
             // 6. Validate start odometer
-            var startOdoValidation = await ValidateStartOdometerAsync(contract.vmf_code, contract.start_odometer);
+            var startOdoValidation = await ValidateStartOdometerAsync(
+                contract.vmf_code,
+                contract.start_odometer
+            );
             if (!startOdoValidation.IsValid)
                 result.AddErrors(startOdoValidation.Errors);
 
@@ -481,13 +560,18 @@ public class ContractValidationService : IContractValidationService
             // 9. Validate target return date
             if (contract.target_return_date.HasValue)
             {
-                var targetDateValidation = await ValidateTargetReturnDateAsync(contract.target_return_date.Value);
+                var targetDateValidation = await ValidateTargetReturnDateAsync(
+                    contract.target_return_date.Value
+                );
                 if (!targetDateValidation.IsValid)
                     result.AddErrors(targetDateValidation.Errors);
             }
 
-            _logger.LogInformation("Contract add validation completed: {IsValid}, Errors: {ErrorCount}",
-                result.IsValid, result.Errors.Count);
+            _logger.LogInformation(
+                "Contract add validation completed: {IsValid}, Errors: {ErrorCount}",
+                result.IsValid,
+                result.Errors.Count
+            );
 
             return result;
         }
@@ -499,22 +583,29 @@ public class ContractValidationService : IContractValidationService
         }
     }
 
-    private async Task<ContractValidationResult> ValidateVehicleTariffAsync(Vehicle vehicle, DateTime? effectiveDate)
+    private async Task<ContractValidationResult> ValidateVehicleTariffAsync(
+        Vehicle vehicle,
+        DateTime? effectiveDate
+    )
     {
         var model = await _modelRepository.GetByIdAsync(vehicle.model_code);
         if (model == null)
         {
-            return ContractValidationResult.Failed("This vehicle cannot be contracted because its model configuration is missing.");
+            return ContractValidationResult.Failed(
+                "This vehicle cannot be contracted because its model configuration is missing."
+            );
         }
 
         var approvedTariff = await _tariffRepository.GetApprovedTariffForClassAsync(
             model.class_code,
-            (effectiveDate ?? DateTime.Today).Date);
+            (effectiveDate ?? DateTime.Today).Date
+        );
 
         return approvedTariff != null
             ? ContractValidationResult.Success()
             : ContractValidationResult.Failed(
-                $"No approved tariff is captured for vehicle class {model.class_code}. Capture the tariff before opening or submitting this contract.");
+                $"No approved tariff is captured for vehicle class {model.class_code}. Capture the tariff before opening or submitting this contract."
+            );
     }
 
     /// <summary>
@@ -523,17 +614,25 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public async Task<ContractValidationResult> ValidateContractModifyAsync(Contract contract)
     {
-        var result = new ContractValidationResult { ValidationRuleset = ContractValidationRulesets.Modify };
+        var result = new ContractValidationResult
+        {
+            ValidationRuleset = ContractValidationRulesets.Modify,
+        };
 
         try
         {
-            _logger.LogInformation("Validating contract modify for contract: {ContractCode}", contract.contract_code);
+            _logger.LogInformation(
+                "Validating contract modify for contract: {ContractCode}",
+                contract.contract_code
+            );
 
             // Validate vehicle registration
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
             if (vehicle != null)
             {
-                var regValidation = await ValidateVehicleRegistrationNumberAsync(vehicle.registration_number!);
+                var regValidation = await ValidateVehicleRegistrationNumberAsync(
+                    vehicle.registration_number!
+                );
                 if (!regValidation.IsValid)
                     result.AddErrors(regValidation.Errors);
             }
@@ -544,7 +643,10 @@ public class ContractValidationService : IContractValidationService
                 result.AddErrors(siteValidation.Errors);
 
             // Validate start date (modify version - less restrictive)
-            var startDateValidation = await ValidateStartDateModifyAsync(contract.vmf_code, contract.start_date);
+            var startDateValidation = await ValidateStartDateModifyAsync(
+                contract.vmf_code,
+                contract.start_date
+            );
             if (!startDateValidation.IsValid)
                 result.AddErrors(startDateValidation.Errors);
 
@@ -564,21 +666,32 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public async Task<ContractValidationResult> ValidateContractCloseAsync(Contract contract)
     {
-        var result = new ContractValidationResult { ValidationRuleset = ContractValidationRulesets.Close };
+        var result = new ContractValidationResult
+        {
+            ValidationRuleset = ContractValidationRulesets.Close,
+        };
 
         try
         {
-            _logger.LogInformation("Validating contract close for contract: {ContractCode}", contract.contract_code);
+            _logger.LogInformation(
+                "Validating contract close for contract: {ContractCode}",
+                contract.contract_code
+            );
 
             // 1. Check for open trip authorities
-            var tripAuthorityValidation = await ValidateNoOpenTripAuthoritiesAsync(contract.contract_code);
+            var tripAuthorityValidation = await ValidateNoOpenTripAuthoritiesAsync(
+                contract.contract_code
+            );
             if (!tripAuthorityValidation.IsValid)
                 result.AddErrors(tripAuthorityValidation.Errors);
 
             // 2. Validate end date
             if (contract.end_date.HasValue)
             {
-                var endDateValidation = await ValidateEndDateAsync(contract.vmf_code, contract.end_date.Value);
+                var endDateValidation = await ValidateEndDateAsync(
+                    contract.vmf_code,
+                    contract.end_date.Value
+                );
                 if (!endDateValidation.IsValid)
                     result.AddErrors(endDateValidation.Errors);
             }
@@ -590,7 +703,10 @@ public class ContractValidationService : IContractValidationService
             // 3. Validate end odometer
             if (contract.end_odometer.HasValue)
             {
-                var endOdoValidation = await ValidateEndOdometerCloseAsync(contract.vmf_code, contract.end_odometer.Value);
+                var endOdoValidation = await ValidateEndOdometerCloseAsync(
+                    contract.vmf_code,
+                    contract.end_odometer.Value
+                );
                 if (!endOdoValidation.IsValid)
                     result.AddErrors(endOdoValidation.Errors);
             }
@@ -600,7 +716,9 @@ public class ContractValidationService : IContractValidationService
             }
 
             // 4. Validate still_current is 'N'
-            var stillCurrentValidation = await ValidateStillCurrentCloseAsync(contract.still_current);
+            var stillCurrentValidation = await ValidateStillCurrentCloseAsync(
+                contract.still_current
+            );
             if (!stillCurrentValidation.IsValid)
                 result.AddErrors(stillCurrentValidation.Errors);
 
@@ -608,7 +726,9 @@ public class ContractValidationService : IContractValidationService
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
             if (vehicle != null)
             {
-                var regValidation = await ValidateVehicleRegistrationNumberAsync(vehicle.registration_number!);
+                var regValidation = await ValidateVehicleRegistrationNumberAsync(
+                    vehicle.registration_number!
+                );
                 if (!regValidation.IsValid)
                     result.AddErrors(regValidation.Errors);
             }
@@ -634,7 +754,10 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public async Task<ContractValidationResult> ValidateContractSplitAsync(Contract contract)
     {
-        var result = new ContractValidationResult { ValidationRuleset = ContractValidationRulesets.Split };
+        var result = new ContractValidationResult
+        {
+            ValidationRuleset = ContractValidationRulesets.Split,
+        };
 
         try
         {
@@ -642,7 +765,9 @@ public class ContractValidationService : IContractValidationService
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
             if (vehicle != null)
             {
-                var regValidation = await ValidateVehicleRegistrationNumberAsync(vehicle.registration_number!);
+                var regValidation = await ValidateVehicleRegistrationNumberAsync(
+                    vehicle.registration_number!
+                );
                 if (!regValidation.IsValid)
                     result.AddErrors(regValidation.Errors);
             }
@@ -654,7 +779,9 @@ public class ContractValidationService : IContractValidationService
             // Validate target return date
             if (contract.target_return_date.HasValue)
             {
-                var targetDateValidation = await ValidateTargetReturnDateAsync(contract.target_return_date.Value);
+                var targetDateValidation = await ValidateTargetReturnDateAsync(
+                    contract.target_return_date.Value
+                );
                 if (!targetDateValidation.IsValid)
                     result.AddErrors(targetDateValidation.Errors);
             }
@@ -675,7 +802,10 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public async Task<ContractValidationResult> ValidateContractExtendAsync(Contract contract)
     {
-        var result = new ContractValidationResult { ValidationRuleset = ContractValidationRulesets.Extend };
+        var result = new ContractValidationResult
+        {
+            ValidationRuleset = ContractValidationRulesets.Extend,
+        };
 
         try
         {
@@ -683,7 +813,9 @@ public class ContractValidationService : IContractValidationService
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
             if (vehicle != null)
             {
-                var regValidation = await ValidateVehicleRegistrationNumberAsync(vehicle.registration_number!);
+                var regValidation = await ValidateVehicleRegistrationNumberAsync(
+                    vehicle.registration_number!
+                );
                 if (!regValidation.IsValid)
                     result.AddErrors(regValidation.Errors);
             }
@@ -708,7 +840,10 @@ public class ContractValidationService : IContractValidationService
     /// </summary>
     public async Task<ContractValidationResult> ValidateContractCancelAsync(Contract contract)
     {
-        var result = new ContractValidationResult { ValidationRuleset = ContractValidationRulesets.Cancel };
+        var result = new ContractValidationResult
+        {
+            ValidationRuleset = ContractValidationRulesets.Cancel,
+        };
 
         try
         {
@@ -716,7 +851,9 @@ public class ContractValidationService : IContractValidationService
             var vehicle = await _vehicleRepository.GetByIdAsync(contract.vmf_code);
             if (vehicle != null)
             {
-                var regValidation = await ValidateVehicleRegistrationNumberAsync(vehicle.registration_number!);
+                var regValidation = await ValidateVehicleRegistrationNumberAsync(
+                    vehicle.registration_number!
+                );
                 if (!regValidation.IsValid)
                     result.AddErrors(regValidation.Errors);
             }

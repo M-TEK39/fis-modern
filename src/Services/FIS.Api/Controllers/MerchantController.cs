@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.ReferenceData;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +23,8 @@ public class MerchantController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<MerchantDto>>> GetAll()
     {
+        if (!HasMerchantReadRole())
+            return Forbid();
         try
         {
             var merchants = await _repository.GetAllAsync();
@@ -37,6 +40,8 @@ public class MerchantController : BaseApiController
     [HttpGet("{id}")]
     public async Task<ActionResult<MerchantDto>> GetById(int id)
     {
+        if (!HasMerchantReadRole())
+            return Forbid();
         try
         {
             var merchant = await _repository.GetByIdAsync(id);
@@ -52,15 +57,18 @@ public class MerchantController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<MerchantDto>> Create([FromBody] MerchantCreateDto dto)
     {
+        if (!HasMerchantWriteRole())
+            return Forbid();
         try
         {
-            var merchant = new MerchantReference
-            {
-                Merchant_name = dto.Merchant_Name
-            };
+            var merchant = new MerchantReference { Merchant_name = dto.Merchant_Name };
 
             var created = await _repository.CreateAsync(merchant, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetById), new { id = created.Merchant_code }, MapToDto(created));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = created.Merchant_code },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -72,12 +80,14 @@ public class MerchantController : BaseApiController
     [HttpPut("{id}")]
     public async Task<ActionResult<MerchantDto>> Update(int id, [FromBody] MerchantCreateDto dto)
     {
+        if (!HasMerchantWriteRole())
+            return Forbid();
         try
         {
             var merchant = new MerchantReference
             {
                 Merchant_code = id,
-                Merchant_name = dto.Merchant_Name
+                Merchant_name = dto.Merchant_Name,
             };
 
             var updated = await _repository.UpdateAsync(merchant, GetCurrentUserId());
@@ -97,8 +107,30 @@ public class MerchantController : BaseApiController
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(int id)
     {
+        if (!HasMerchantWriteRole())
+            return Forbid();
         try
         {
+            var merchant = await _repository.GetByIdAsync(id);
+            if (merchant == null)
+            {
+                return NotFound();
+            }
+
+            var clearanceCount = await _repository.CountClearancesAsync(id);
+            if (clearanceCount > 0)
+            {
+                return Conflict(
+                    new MerchantDeleteCheckDto
+                    {
+                        MerchantCode = id,
+                        MerchantName = merchant.Merchant_name,
+                        ClearanceCount = clearanceCount,
+                        CanDelete = false,
+                    }
+                );
+            }
+
             await _repository.DeleteAsync(id, GetCurrentUserId());
             return NoContent();
         }
@@ -113,13 +145,76 @@ public class MerchantController : BaseApiController
         }
     }
 
+    [HttpGet("{id}/delete-check")]
+    public async Task<ActionResult<MerchantDeleteCheckDto>> GetDeleteCheck(int id)
+    {
+        if (!HasMerchantWriteRole())
+            return Forbid();
+
+        try
+        {
+            var merchant = await _repository.GetByIdAsync(id);
+            if (merchant == null)
+            {
+                return NotFound();
+            }
+
+            var clearanceCount = await _repository.CountClearancesAsync(id);
+            return Ok(
+                new MerchantDeleteCheckDto
+                {
+                    MerchantCode = id,
+                    MerchantName = merchant.Merchant_name,
+                    ClearanceCount = clearanceCount,
+                    CanDelete = clearanceCount == 0,
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking merchant deletion {MerchantCode}", id);
+            return StatusCode(500);
+        }
+    }
+
     private static MerchantDto MapToDto(MerchantReference merchant)
     {
         return new MerchantDto
         {
             Merchant_code = merchant.Merchant_code,
-            Merchant_Name = merchant.Merchant_name
+            Merchant_Name = merchant.Merchant_name,
         };
+    }
+
+    private bool HasMerchantReadRole() => HasAnyRole("Clearance", "Workshop", "Reports");
+
+    private bool HasMerchantWriteRole() => HasAnyRole("Clearance", "Workshop");
+
+    private bool HasAnyRole(params string[] expectedRoles)
+    {
+        if (expectedRoles.Any(User.IsInRole))
+        {
+            return true;
+        }
+
+        var roleClaims = User
+            .Claims.Where(claim =>
+                claim.Type == ClaimTypes.Role
+                || claim.Type.Equals("role", StringComparison.OrdinalIgnoreCase)
+                || claim.Type.Equals("roles", StringComparison.OrdinalIgnoreCase)
+            )
+            .SelectMany(claim =>
+                claim.Value.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            );
+
+        return roleClaims.Any(role =>
+            expectedRoles.Any(expected =>
+                string.Equals(role, expected, StringComparison.OrdinalIgnoreCase)
+            )
+        );
     }
 }
 
@@ -132,4 +227,12 @@ public class MerchantDto
 public class MerchantCreateDto
 {
     public string? Merchant_Name { get; set; }
+}
+
+public class MerchantDeleteCheckDto
+{
+    public int MerchantCode { get; set; }
+    public string? MerchantName { get; set; }
+    public int ClearanceCount { get; set; }
+    public bool CanDelete { get; set; }
 }

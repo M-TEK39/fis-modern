@@ -21,22 +21,82 @@ public class PreVehicleMaster
     /// <summary>
     /// Vehicle chassis number (VIN) - unique identifier for pre-capture
     /// </summary>
-    [StringLength(50)]
+    [StringLength(60)]
     [Column("chassis_number")]
     public string? chassis_number { get; set; }
 
     /// <summary>
     /// Engine number
     /// </summary>
-    [StringLength(50)]
+    [StringLength(60)]
     [Column("engine_number")]
     public string? engine_number { get; set; }
+
+    /// <summary>
+    /// Fleet number supplied during an edit/replace capture. New vehicles are
+    /// normally allocated a GG number during authorization.
+    /// </summary>
+    [StringLength(20)]
+    [Column("fleet_number")]
+    public string? fleet_number { get; set; }
 
     /// <summary>
     /// Model code - FK to model table
     /// </summary>
     [Column("model_code")]
     public short model_code { get; set; }
+
+    /// <summary>Legacy year captured on the inception record.</summary>
+    [Column("year_manufactured")]
+    public short? year_manufactured { get; set; }
+
+    /// <summary>Legacy operating location.</summary>
+    [Column("location_code")]
+    public short? location_code { get; set; }
+
+    /// <summary>Initial vehicle status written by the legacy capture flow.</summary>
+    [Column("vehicle_status_code")]
+    public short? vehicle_status_code { get; set; }
+
+    [Column("vehicle_status_date")]
+    public DateTime? vehicle_status_date { get; set; }
+
+    /// <summary>Legacy hire/type code.</summary>
+    [Column("type_code")]
+    public short? type_code { get; set; }
+
+    /// <summary>Legacy vehicle source / hired-from code.</summary>
+    [Column("vs_code")]
+    public byte? vs_code { get; set; }
+
+    /// <summary>Capturer comment stored in the legacy pre-vehicle row.</summary>
+    [StringLength(90)]
+    [Column("comment")]
+    public string? comment { get; set; }
+
+    [Column("captured_by_user_code")]
+    public short? captured_by_user_code { get; set; }
+
+    [Column("action_user_access_code")]
+    public short? action_user_access_code { get; set; }
+
+    [Column("site_code")]
+    public short? site_code { get; set; }
+
+    [Column("captured_date")]
+    public DateTime? captured_date { get; set; }
+
+    [StringLength(1)]
+    [Column("printed")]
+    public string? printed { get; set; }
+
+    [StringLength(60)]
+    [Column("invoice_number")]
+    public string? invoice_number { get; set; }
+
+    [StringLength(9)]
+    [Column("gp_number")]
+    public string? gp_number { get; set; }
 
     /// <summary>
     /// Registration number
@@ -48,7 +108,7 @@ public class PreVehicleMaster
     /// <summary>
     /// Color of the vehicle
     /// </summary>
-    [StringLength(50)]
+    [StringLength(15)]
     [Column("colour")]
     public string? colour { get; set; }
 
@@ -67,7 +127,7 @@ public class PreVehicleMaster
     /// <summary>
     /// Purchased from (vendor/supplier)
     /// </summary>
-    [StringLength(200)]
+    [StringLength(60)]
     [Column("purchase_from")]
     public string? purchase_from { get; set; }
 
@@ -93,6 +153,7 @@ public class PreVehicleMaster
     /// <summary>
     /// Fleet management comments/notes
     /// </summary>
+    [StringLength(255)]
     [Column("Fleet_Notes")]
     public string? Fleet_Notes { get; set; }
 
@@ -106,6 +167,7 @@ public class PreVehicleMaster
     /// <summary>
     /// Damage description/comments
     /// </summary>
+    [StringLength(500)]
     [Column("damages_comment")]
     public string? damages_comment { get; set; }
 
@@ -161,6 +223,27 @@ public class PreVehicleMaster
 
     [Column("is_deleted")]
     public bool is_deleted { get; set; } = false;
+
+    // These values are intentionally not mapped by EF. The compatibility
+    // repository writes them through legacy procedures/tables when those
+    // objects exist, and otherwise writes supported expanded columns.
+    [NotMapped]
+    public List<short> ExtraCodes { get; set; } = [];
+
+    [NotMapped]
+    public short? MaintenanceTypeCode { get; set; }
+
+    [NotMapped]
+    public DateTime? MaintenanceStartDate { get; set; }
+
+    [NotMapped]
+    public int? MaintenancePeriodMonths { get; set; }
+
+    [NotMapped]
+    public int? MaintenanceKilos { get; set; }
+
+    [NotMapped]
+    public decimal? MaintenanceValue { get; set; }
 
     // Navigation properties
     [ForeignKey("model_code")]

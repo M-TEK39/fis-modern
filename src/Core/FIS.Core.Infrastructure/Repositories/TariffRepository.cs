@@ -25,9 +25,11 @@ public class TariffRepository : ITariffRepository
     public async Task<Tariff?> GetTariffAsync(
         short classCode,
         short yearManufactured,
-        DateTime effectiveDate)
+        DateTime effectiveDate
+    )
     {
-        return await _context.Set<Tariff>()
+        return await _context
+            .Set<Tariff>()
             .Where(t => t.class_code == classCode)
             .Where(t => t.year_manufactured == yearManufactured)
             .Where(t => t.effective_start_date <= effectiveDate)
@@ -36,9 +38,13 @@ public class TariffRepository : ITariffRepository
             .FirstOrDefaultAsync();
     }
 
-    public async Task<Tariff?> GetApprovedTariffForClassAsync(short classCode, DateTime effectiveDate)
+    public async Task<Tariff?> GetApprovedTariffForClassAsync(
+        short classCode,
+        DateTime effectiveDate
+    )
     {
-        return await _context.Set<Tariff>()
+        return await _context
+            .Set<Tariff>()
             .Where(t => t.class_code == classCode)
             .Where(t => !t.is_deleted)
             .Where(t => t.tariff_approval_status == 2)
@@ -54,7 +60,8 @@ public class TariffRepository : ITariffRepository
     /// </summary>
     public async Task<List<Tariff>> GetTariffsByClassAsync(short classCode)
     {
-        return await _context.Set<Tariff>()
+        return await _context
+            .Set<Tariff>()
             .Where(t => t.class_code == classCode)
             .OrderByDescending(t => t.effective_start_date)
             .ToListAsync();
@@ -65,7 +72,8 @@ public class TariffRepository : ITariffRepository
     /// </summary>
     public async Task<List<Tariff>> GetTariffsByDateAsync(DateTime effectiveDate)
     {
-        return await _context.Set<Tariff>()
+        return await _context
+            .Set<Tariff>()
             .Where(t => t.effective_start_date <= effectiveDate)
             .Where(t => t.effective_end_date == null || t.effective_end_date >= effectiveDate)
             .OrderBy(t => t.class_code)
@@ -78,8 +86,7 @@ public class TariffRepository : ITariffRepository
     /// </summary>
     public async Task<Tariff?> GetByIdAsync(int tariffCode)
     {
-        return await _context.Set<Tariff>()
-            .FirstOrDefaultAsync(t => t.tariff_code == tariffCode);
+        return await _context.Set<Tariff>().FirstOrDefaultAsync(t => t.tariff_code == tariffCode);
     }
 
     /// <summary>
@@ -87,7 +94,8 @@ public class TariffRepository : ITariffRepository
     /// </summary>
     public async Task<List<Tariff>> GetAllAsync()
     {
-        return await _context.Set<Tariff>()
+        return await _context
+            .Set<Tariff>()
             .OrderByDescending(t => t.effective_start_date)
             .ThenBy(t => t.class_code)
             .ToListAsync();
@@ -114,7 +122,9 @@ public class TariffRepository : ITariffRepository
 
         var existing = await _context.Set<Tariff>().FindAsync(tariff.tariff_code);
         if (existing == null)
-            throw new InvalidOperationException($"Tariff with tariff_code {tariff.tariff_code} not found");
+            throw new InvalidOperationException(
+                $"Tariff with tariff_code {tariff.tariff_code} not found"
+            );
 
         tariff.date_modified = DateTime.Now;
         _context.Entry(existing).CurrentValues.SetValues(tariff);

@@ -195,7 +195,8 @@ public class EmailNotificationService : IEmailNotificationService
         ["ContractExpiryReminder"] = new EmailTemplate
         {
             TemplateName = "ContractExpiryReminder",
-            Subject = "REMINDER: Vehicle Contract Expiring in {DaysRemaining} Days — {FleetNumber} ({Registration})",
+            Subject =
+                "REMINDER: Vehicle Contract Expiring in {DaysRemaining} Days — {FleetNumber} ({Registration})",
             HtmlBody =
                 @"<h2>Vehicle Hire Contract — Expiry Reminder</h2>
                 <p>Dear {RecipientName},</p>
@@ -220,8 +221,15 @@ public class EmailNotificationService : IEmailNotificationService
                 <p>Thank you,<br/>Fleet Management System</p>",
             RequiredPlaceholders = new List<string>
             {
-                "RecipientName", "DaysRemaining", "ContractNumber", "FleetNumber",
-                "Registration", "DriverId", "SiteName", "StartDate", "ExpiryDate",
+                "RecipientName",
+                "DaysRemaining",
+                "ContractNumber",
+                "FleetNumber",
+                "Registration",
+                "DriverId",
+                "SiteName",
+                "StartDate",
+                "ExpiryDate",
             },
             IsActive = true,
         },
@@ -246,8 +254,14 @@ public class EmailNotificationService : IEmailNotificationService
                 <p>Thank you,<br/>Fleet Management System</p>",
             RequiredPlaceholders = new List<string>
             {
-                "RecipientName", "ContractNumber", "FleetNumber", "Registration",
-                "DriverId", "SiteCode", "StartDate", "TargetReturnDate",
+                "RecipientName",
+                "ContractNumber",
+                "FleetNumber",
+                "Registration",
+                "DriverId",
+                "SiteCode",
+                "StartDate",
+                "TargetReturnDate",
             },
             IsActive = true,
         },
@@ -271,8 +285,14 @@ public class EmailNotificationService : IEmailNotificationService
                 <p>Thank you,<br/>Fleet Management System</p>",
             RequiredPlaceholders = new List<string>
             {
-                "RecipientName", "ContractNumber", "FleetNumber", "Registration",
-                "StartDate", "EndDate", "PerformedBy", "ClosureReason",
+                "RecipientName",
+                "ContractNumber",
+                "FleetNumber",
+                "Registration",
+                "StartDate",
+                "EndDate",
+                "PerformedBy",
+                "ClosureReason",
             },
             IsActive = true,
         },
@@ -317,13 +337,16 @@ public class EmailNotificationService : IEmailNotificationService
             .ToLowerInvariant();
         _graphTenantId = emailConfig["GraphTenantId"]?.Trim() ?? string.Empty;
         _graphClientId = emailConfig["GraphClientId"]?.Trim() ?? string.Empty;
-        _graphManagedIdentityClientId = emailConfig["GraphManagedIdentityClientId"]?.Trim() ?? string.Empty;
+        _graphManagedIdentityClientId =
+            emailConfig["GraphManagedIdentityClientId"]?.Trim() ?? string.Empty;
         _graphSenderUserPrincipalName = (
             emailConfig["GraphSenderUserPrincipalName"]
             ?? emailConfig["FromAddress"]
             ?? string.Empty
         ).Trim();
-        _graphEndpoint = (emailConfig["GraphEndpoint"] ?? "https://graph.microsoft.com/v1.0").TrimEnd('/');
+        _graphEndpoint = (
+            emailConfig["GraphEndpoint"] ?? "https://graph.microsoft.com/v1.0"
+        ).TrimEnd('/');
         _fromName = emailConfig["FromName"] ?? "Fleet Management System";
 
         if (_provider is "microsoftgraph" or "graph")
@@ -687,23 +710,30 @@ public class EmailNotificationService : IEmailNotificationService
     public async Task<bool> SendContractOpenedNotificationAsync(
         int contractId,
         int capturerUserId,
-        int approverUserId)
+        int approverUserId
+    )
     {
         try
         {
             _logger.LogInformation(
-                "Sending contract-opened notification for Contract {ContractId}", contractId);
+                "Sending contract-opened notification for Contract {ContractId}",
+                contractId
+            );
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
             {
-                _logger.LogWarning("Contract {ContractId} not found for opened notification", contractId);
+                _logger.LogWarning(
+                    "Contract {ContractId} not found for opened notification",
+                    contractId
+                );
                 return false;
             }
 
-            var vehicle = contract.vmf_code > 0
-                ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
-                : null;
+            var vehicle =
+                contract.vmf_code > 0
+                    ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
+                    : null;
 
             var template = _defaultTemplates["ContractOpened"];
             var site = await _siteRepository.GetByIdAsync(contract.site_code);
@@ -723,7 +753,9 @@ public class EmailNotificationService : IEmailNotificationService
             if (recipients.Count == 0)
             {
                 _logger.LogWarning(
-                    "No email addresses found for contract-opened notification (Contract {ContractId})", contractId);
+                    "No email addresses found for contract-opened notification (Contract {ContractId})",
+                    contractId
+                );
                 return false;
             }
 
@@ -735,7 +767,8 @@ public class EmailNotificationService : IEmailNotificationService
                 ["DriverId"] = contract.Driver_id ?? "N/A",
                 ["SiteCode"] = site?.description ?? contract.site_code.ToString(),
                 ["StartDate"] = contract.start_date.ToString("yyyy-MM-dd"),
-                ["TargetReturnDate"] = contract.target_return_date?.ToString("yyyy-MM-dd") ?? "Open-ended",
+                ["TargetReturnDate"] =
+                    contract.target_return_date?.ToString("yyyy-MM-dd") ?? "Open-ended",
             };
 
             bool allOk = true;
@@ -745,13 +778,18 @@ public class EmailNotificationService : IEmailNotificationService
                 var subject = ReplacePlaceholders(template.Subject, placeholders);
                 var htmlBody = ReplacePlaceholders(template.HtmlBody, placeholders);
                 var ok = await SendHtmlEmailAsync(email, subject, htmlBody);
-                if (!ok) allOk = false;
+                if (!ok)
+                    allOk = false;
             }
             return allOk;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending contract-opened notification for Contract {ContractId}", contractId);
+            _logger.LogError(
+                ex,
+                "Error sending contract-opened notification for Contract {ContractId}",
+                contractId
+            );
             return false;
         }
     }
@@ -759,23 +797,30 @@ public class EmailNotificationService : IEmailNotificationService
     public async Task<bool> SendContractClosedNotificationAsync(
         int contractId,
         int performedByUserId,
-        string closureReason)
+        string closureReason
+    )
     {
         try
         {
             _logger.LogInformation(
-                "Sending contract-closed notification for Contract {ContractId}", contractId);
+                "Sending contract-closed notification for Contract {ContractId}",
+                contractId
+            );
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
             {
-                _logger.LogWarning("Contract {ContractId} not found for closed notification", contractId);
+                _logger.LogWarning(
+                    "Contract {ContractId} not found for closed notification",
+                    contractId
+                );
                 return false;
             }
 
-            var vehicle = contract.vmf_code > 0
-                ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
-                : null;
+            var vehicle =
+                contract.vmf_code > 0
+                    ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
+                    : null;
 
             var template = _defaultTemplates["ContractClosed"];
             var site = await _siteRepository.GetByIdAsync(contract.site_code);
@@ -801,7 +846,9 @@ public class EmailNotificationService : IEmailNotificationService
             if (recipients.Count == 0)
             {
                 _logger.LogWarning(
-                    "No email addresses found for contract-closed notification (Contract {ContractId})", contractId);
+                    "No email addresses found for contract-closed notification (Contract {ContractId})",
+                    contractId
+                );
                 return false;
             }
 
@@ -813,7 +860,9 @@ public class EmailNotificationService : IEmailNotificationService
                 ["FleetNumber"] = vehicle?.fleet_number ?? "N/A",
                 ["Registration"] = vehicle?.registration_number ?? "N/A",
                 ["StartDate"] = contract.start_date.ToString("yyyy-MM-dd"),
-                ["EndDate"] = contract.end_date?.ToString("yyyy-MM-dd") ?? DateTime.Now.ToString("yyyy-MM-dd"),
+                ["EndDate"] =
+                    contract.end_date?.ToString("yyyy-MM-dd")
+                    ?? DateTime.Now.ToString("yyyy-MM-dd"),
                 ["PerformedBy"] = performedByUser?.email ?? performedByUserId.ToString(),
                 ["ClosureReason"] = closureReason,
             };
@@ -825,13 +874,18 @@ public class EmailNotificationService : IEmailNotificationService
                 var subject = ReplacePlaceholders(template.Subject, placeholders);
                 var htmlBody = ReplacePlaceholders(template.HtmlBody, placeholders);
                 var ok = await SendHtmlEmailAsync(email, subject, htmlBody);
-                if (!ok) allOk = false;
+                if (!ok)
+                    allOk = false;
             }
             return allOk;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending contract-closed notification for Contract {ContractId}", contractId);
+            _logger.LogError(
+                ex,
+                "Error sending contract-closed notification for Contract {ContractId}",
+                contractId
+            );
             return false;
         }
     }
@@ -842,18 +896,24 @@ public class EmailNotificationService : IEmailNotificationService
         {
             _logger.LogInformation(
                 "Sending expiry reminder for Contract {ContractId} ({DaysRemaining} days remaining)",
-                contractId, daysRemaining);
+                contractId,
+                daysRemaining
+            );
 
             var contract = await _contractRepository.GetByIdAsync(contractId);
             if (contract == null)
             {
-                _logger.LogWarning("Contract {ContractId} not found for expiry reminder", contractId);
+                _logger.LogWarning(
+                    "Contract {ContractId} not found for expiry reminder",
+                    contractId
+                );
                 return false;
             }
 
-            var vehicle = contract.vmf_code > 0
-                ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
-                : null;
+            var vehicle =
+                contract.vmf_code > 0
+                    ? await _vehicleRepository.GetByIdAsync(contract.vmf_code)
+                    : null;
 
             var site = await _siteRepository.GetByIdAsync(contract.site_code);
             var template = _defaultTemplates["ContractExpiryReminder"];
@@ -868,7 +928,9 @@ public class EmailNotificationService : IEmailNotificationService
             // Internal capturer so fleet management is also aware
             if (contract.created_by_user_code.HasValue)
             {
-                var capturer = await _userRepository.GetByIdAsync(contract.created_by_user_code.Value);
+                var capturer = await _userRepository.GetByIdAsync(
+                    contract.created_by_user_code.Value
+                );
                 if (capturer?.email != null && !recipients.Any(r => r.email == capturer.email))
                     recipients.Add((capturer.email, capturer.email));
             }
@@ -876,7 +938,9 @@ public class EmailNotificationService : IEmailNotificationService
             if (recipients.Count == 0)
             {
                 _logger.LogWarning(
-                    "No email addresses for expiry reminder (Contract {ContractId})", contractId);
+                    "No email addresses for expiry reminder (Contract {ContractId})",
+                    contractId
+                );
                 return false;
             }
 
@@ -899,13 +963,18 @@ public class EmailNotificationService : IEmailNotificationService
                 var subject = ReplacePlaceholders(template.Subject, placeholders);
                 var htmlBody = ReplacePlaceholders(template.HtmlBody, placeholders);
                 var ok = await SendHtmlEmailAsync(email, subject, htmlBody);
-                if (!ok) allOk = false;
+                if (!ok)
+                    allOk = false;
             }
             return allOk;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending expiry reminder for Contract {ContractId}", contractId);
+            _logger.LogError(
+                ex,
+                "Error sending expiry reminder for Contract {ContractId}",
+                contractId
+            );
             return false;
         }
     }
@@ -1050,10 +1119,7 @@ public class EmailNotificationService : IEmailNotificationService
                 : reportType.Trim();
             var pdfContent = await _reportingService.GenerateCustomReportPdfAsync(
                 normalizedReportType,
-                new Dictionary<string, object>
-                {
-                    ["financial_year"] = financialYear,
-                }
+                new Dictionary<string, object> { ["financial_year"] = financialYear }
             );
 
             var safeReportName = string.Concat(
@@ -1061,7 +1127,8 @@ public class EmailNotificationService : IEmailNotificationService
             );
             var attachment = new EmailAttachment
             {
-                FileName = $"Financial_Report_{safeReportName}_{financialYear}_{DateTime.Now:yyyyMMdd}.pdf",
+                FileName =
+                    $"Financial_Report_{safeReportName}_{financialYear}_{DateTime.Now:yyyyMMdd}.pdf",
                 Content = pdfContent,
                 ContentType = "application/pdf",
                 Description = $"{normalizedReportType} financial report for FY {financialYear}",
@@ -1110,13 +1177,14 @@ public class EmailNotificationService : IEmailNotificationService
             var today = DateTime.Today;
             var vehicles = (await _vehicleRepository.GetAllAsync())
                 .Where(v =>
-                    !v.is_deleted &&
-                    (
-                        !v.service_last_done.HasValue ||
-                        v.service_last_done.Value.Date <= today.AddDays(-90) ||
-                        !v.service_last_odo.HasValue ||
-                        v.current_odo >= (v.service_last_odo.Value + 10000)
-                    ))
+                    !v.is_deleted
+                    && (
+                        !v.service_last_done.HasValue
+                        || v.service_last_done.Value.Date <= today.AddDays(-90)
+                        || !v.service_last_odo.HasValue
+                        || v.current_odo >= (v.service_last_odo.Value + 10000)
+                    )
+                )
                 .ToList();
 
             result.TotalEmails = vehicles.Count;
@@ -1136,7 +1204,8 @@ public class EmailNotificationService : IEmailNotificationService
                 var recipient = await ResolveVehicleRecipientAsync(
                     vehicle.vmf_code,
                     activeContracts,
-                    fallbackEmail);
+                    fallbackEmail
+                );
 
                 if (recipient is null)
                 {
@@ -1148,13 +1217,17 @@ public class EmailNotificationService : IEmailNotificationService
                 var sent = await SendMaintenanceReminderAsync(
                     vehicle.vmf_code,
                     recipient.Value.Email,
-                    recipient.Value.Name);
+                    recipient.Value.Name
+                );
 
-                if (sent) result.SuccessfulEmails++;
+                if (sent)
+                    result.SuccessfulEmails++;
                 else
                 {
                     result.FailedEmails++;
-                    result.ErrorMessages.Add($"Failed sending maintenance reminder for VMF {vehicle.vmf_code}");
+                    result.ErrorMessages.Add(
+                        $"Failed sending maintenance reminder for VMF {vehicle.vmf_code}"
+                    );
                 }
             }
         }
@@ -1184,7 +1257,10 @@ public class EmailNotificationService : IEmailNotificationService
 
             var vehicles = (await _vehicleRepository.GetAllAsync())
                 .Where(v => !v.is_deleted && v.licence_due_date.HasValue)
-                .Where(v => v.licence_due_date!.Value.Date >= today && v.licence_due_date.Value.Date <= reminderWindowEnd)
+                .Where(v =>
+                    v.licence_due_date!.Value.Date >= today
+                    && v.licence_due_date.Value.Date <= reminderWindowEnd
+                )
                 .ToList();
 
             result.TotalEmails = vehicles.Count;
@@ -1204,7 +1280,8 @@ public class EmailNotificationService : IEmailNotificationService
                 var recipient = await ResolveVehicleRecipientAsync(
                     vehicle.vmf_code,
                     activeContracts,
-                    fallbackEmail);
+                    fallbackEmail
+                );
 
                 if (recipient is null)
                 {
@@ -1216,13 +1293,17 @@ public class EmailNotificationService : IEmailNotificationService
                 var sent = await SendLicenceReminderAsync(
                     vehicle.vmf_code,
                     recipient.Value.Email,
-                    recipient.Value.Name);
+                    recipient.Value.Name
+                );
 
-                if (sent) result.SuccessfulEmails++;
+                if (sent)
+                    result.SuccessfulEmails++;
                 else
                 {
                     result.FailedEmails++;
-                    result.ErrorMessages.Add($"Failed sending licence reminder for VMF {vehicle.vmf_code}");
+                    result.ErrorMessages.Add(
+                        $"Failed sending licence reminder for VMF {vehicle.vmf_code}"
+                    );
                 }
             }
         }
@@ -1276,7 +1357,8 @@ public class EmailNotificationService : IEmailNotificationService
                 var recipient = await ResolveVehicleRecipientAsync(
                     vehicle.vmf_code,
                     activeContracts,
-                    fallbackEmail);
+                    fallbackEmail
+                );
 
                 if (recipient is null)
                 {
@@ -1288,13 +1370,17 @@ public class EmailNotificationService : IEmailNotificationService
                 var sent = await SendCofReminderAsync(
                     vehicle.vmf_code,
                     recipient.Value.Email,
-                    recipient.Value.Name);
+                    recipient.Value.Name
+                );
 
-                if (sent) result.SuccessfulEmails++;
+                if (sent)
+                    result.SuccessfulEmails++;
                 else
                 {
                     result.FailedEmails++;
-                    result.ErrorMessages.Add($"Failed sending COF reminder for VMF {vehicle.vmf_code}");
+                    result.ErrorMessages.Add(
+                        $"Failed sending COF reminder for VMF {vehicle.vmf_code}"
+                    );
                 }
             }
         }
@@ -1324,7 +1410,10 @@ public class EmailNotificationService : IEmailNotificationService
 
             var contracts = (await _contractRepository.GetActiveContractsAsync())
                 .Where(c => !c.is_deleted && c.target_return_date.HasValue)
-                .Where(c => c.target_return_date!.Value.Date >= today && c.target_return_date.Value.Date <= reminderWindowEnd)
+                .Where(c =>
+                    c.target_return_date!.Value.Date >= today
+                    && c.target_return_date.Value.Date <= reminderWindowEnd
+                )
                 .ToList();
 
             result.TotalEmails = contracts.Count;
@@ -1335,14 +1424,23 @@ public class EmailNotificationService : IEmailNotificationService
 
             foreach (var contract in contracts)
             {
-                var daysRemaining = Math.Max(0, (contract.target_return_date!.Value.Date - today).Days);
-                var sent = await SendContractExpiryReminderAsync(contract.contract_code, daysRemaining);
+                var daysRemaining = Math.Max(
+                    0,
+                    (contract.target_return_date!.Value.Date - today).Days
+                );
+                var sent = await SendContractExpiryReminderAsync(
+                    contract.contract_code,
+                    daysRemaining
+                );
 
-                if (sent) result.SuccessfulEmails++;
+                if (sent)
+                    result.SuccessfulEmails++;
                 else
                 {
                     result.FailedEmails++;
-                    result.ErrorMessages.Add($"Failed sending contract expiry reminder for Contract {contract.contract_code}");
+                    result.ErrorMessages.Add(
+                        $"Failed sending contract expiry reminder for Contract {contract.contract_code}"
+                    );
                 }
             }
         }
@@ -1467,7 +1565,8 @@ public class EmailNotificationService : IEmailNotificationService
     private async Task<(string Email, string Name)?> ResolveVehicleRecipientAsync(
         int vmfCode,
         List<Contract> activeContracts,
-        string? fallbackEmail)
+        string? fallbackEmail
+    )
     {
         var contract = activeContracts.FirstOrDefault(c => c.vmf_code == vmfCode);
         if (contract is not null)
@@ -1495,13 +1594,13 @@ public class EmailNotificationService : IEmailNotificationService
         {
             return _graphAuthentication switch
             {
-                "managed-identity" or "managedidentity" or "mi" =>
-                    string.IsNullOrWhiteSpace(_graphManagedIdentityClientId)
-                        ? new ManagedIdentityCredential()
-                        : new ManagedIdentityCredential(_graphManagedIdentityClientId),
-                "client-secret" or "clientsecret" =>
-                    CreateClientSecretCredential(emailConfig),
-                _ => LogUnsupportedGraphAuthentication()
+                "managed-identity" or "managedidentity" or "mi" => string.IsNullOrWhiteSpace(
+                    _graphManagedIdentityClientId
+                )
+                    ? new ManagedIdentityCredential()
+                    : new ManagedIdentityCredential(_graphManagedIdentityClientId),
+                "client-secret" or "clientsecret" => CreateClientSecretCredential(emailConfig),
+                _ => LogUnsupportedGraphAuthentication(),
             };
         }
         catch (Exception ex)
@@ -1514,9 +1613,11 @@ public class EmailNotificationService : IEmailNotificationService
     private TokenCredential? CreateClientSecretCredential(IConfigurationSection emailConfig)
     {
         var clientSecret = emailConfig["GraphClientSecret"]?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(_graphTenantId)
+        if (
+            string.IsNullOrWhiteSpace(_graphTenantId)
             || string.IsNullOrWhiteSpace(_graphClientId)
-            || string.IsNullOrWhiteSpace(clientSecret))
+            || string.IsNullOrWhiteSpace(clientSecret)
+        )
         {
             _logger.LogWarning(
                 "Graph client-secret authentication requires GraphTenantId, GraphClientId, and "
@@ -1567,7 +1668,7 @@ public class EmailNotificationService : IEmailNotificationService
                     ["body"] = new Dictionary<string, string>
                     {
                         ["contentType"] = isHtml ? "HTML" : "Text",
-                        ["content"] = body
+                        ["content"] = body,
                     },
                     ["toRecipients"] = toAddresses
                         .Where(address => !string.IsNullOrWhiteSpace(address))
@@ -1575,19 +1676,21 @@ public class EmailNotificationService : IEmailNotificationService
                         {
                             ["emailAddress"] = new Dictionary<string, string>
                             {
-                                ["address"] = address.Trim()
-                            }
+                                ["address"] = address.Trim(),
+                            },
                         })
                         .ToList(),
-                    ["attachments"] = attachments.Select(attachment => new Dictionary<string, object?>
-                    {
-                        ["@odata.type"] = "#microsoft.graph.fileAttachment",
-                        ["name"] = attachment.FileName,
-                        ["contentType"] = attachment.ContentType,
-                        ["contentBytes"] = Convert.ToBase64String(attachment.Content)
-                    }).ToList()
+                    ["attachments"] = attachments
+                        .Select(attachment => new Dictionary<string, object?>
+                        {
+                            ["@odata.type"] = "#microsoft.graph.fileAttachment",
+                            ["name"] = attachment.FileName,
+                            ["contentType"] = attachment.ContentType,
+                            ["contentBytes"] = Convert.ToBase64String(attachment.Content),
+                        })
+                        .ToList(),
                 },
-                ["saveToSentItems"] = false
+                ["saveToSentItems"] = false,
             };
 
             using var request = new HttpRequestMessage(
@@ -1608,10 +1711,9 @@ public class EmailNotificationService : IEmailNotificationService
             if (!response.IsSuccessStatusCode)
             {
                 var responseBody = await response.Content.ReadAsStringAsync();
-                var safeDetails = responseBody.Length > 500
-                    ? responseBody[..500]
-                    : responseBody;
-                _lastErrorMessage = $"Microsoft Graph sendMail returned {(int)response.StatusCode}: {safeDetails}";
+                var safeDetails = responseBody.Length > 500 ? responseBody[..500] : responseBody;
+                _lastErrorMessage =
+                    $"Microsoft Graph sendMail returned {(int)response.StatusCode}: {safeDetails}";
                 _logger.LogError(
                     "Microsoft Graph sendMail failed with status {StatusCode}: {Details}",
                     (int)response.StatusCode,

@@ -9,10 +9,19 @@ public class InMemorySessionTokenStore : ISessionTokenStore
     private static readonly TimeSpan AccessLifetime = TimeSpan.FromMinutes(15);
     private static readonly TimeSpan RefreshLifetime = TimeSpan.FromHours(8);
 
-    private readonly ConcurrentDictionary<string, SessionRecord> _accessSessions = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, SessionRecord> _refreshSessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SessionRecord> _accessSessions = new(
+        StringComparer.Ordinal
+    );
+    private readonly ConcurrentDictionary<string, SessionRecord> _refreshSessions = new(
+        StringComparer.Ordinal
+    );
 
-    public (string AccessToken, DateTimeOffset AccessExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt) IssueTokens(IEnumerable<Claim> claims)
+    public (
+        string AccessToken,
+        DateTimeOffset AccessExpiresAt,
+        string RefreshToken,
+        DateTimeOffset RefreshExpiresAt
+    ) IssueTokens(IEnumerable<Claim> claims)
     {
         var claimList = claims.ToList().AsReadOnly();
         var now = DateTimeOffset.UtcNow;
@@ -22,7 +31,8 @@ public class InMemorySessionTokenStore : ISessionTokenStore
         var record = new SessionRecord(
             claimList,
             now.Add(AccessLifetime),
-            now.Add(RefreshLifetime));
+            now.Add(RefreshLifetime)
+        );
 
         _accessSessions[accessToken] = record;
         _refreshSessions[refreshToken] = record;
@@ -49,7 +59,16 @@ public class InMemorySessionTokenStore : ISessionTokenStore
         return true;
     }
 
-    public bool TryRefresh(string refreshToken, out (string AccessToken, DateTimeOffset AccessExpiresAt, string RefreshToken, DateTimeOffset RefreshExpiresAt) refreshedTokens, out IReadOnlyCollection<Claim> claims)
+    public bool TryRefresh(
+        string refreshToken,
+        out (
+            string AccessToken,
+            DateTimeOffset AccessExpiresAt,
+            string RefreshToken,
+            DateTimeOffset RefreshExpiresAt
+        ) refreshedTokens,
+        out IReadOnlyCollection<Claim> claims
+    )
     {
         refreshedTokens = default;
         claims = Array.Empty<Claim>();
@@ -83,14 +102,12 @@ public class InMemorySessionTokenStore : ISessionTokenStore
     {
         Span<byte> bytes = stackalloc byte[32];
         RandomNumberGenerator.Fill(bytes);
-        return Convert.ToBase64String(bytes)
-            .TrimEnd('=')
-            .Replace('+', '-')
-            .Replace('/', '_');
+        return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     }
 
     private sealed record SessionRecord(
         IReadOnlyCollection<Claim> Claims,
         DateTimeOffset AccessExpiresAt,
-        DateTimeOffset RefreshExpiresAt);
+        DateTimeOffset RefreshExpiresAt
+    );
 }

@@ -74,11 +74,15 @@ public class WorkflowController : BaseApiController
             var workflow = new Workflow
             {
                 WorkflowName = dto.WorkflowName,
-                AlwaysExecute = dto.AlwaysExecute
+                AlwaysExecute = dto.AlwaysExecute,
             };
 
             var created = await _repository.CreateAsync(workflow, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetById), new { id = created.WorkflowID }, MapToDto(created));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = created.WorkflowID },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -99,7 +103,7 @@ public class WorkflowController : BaseApiController
             {
                 WorkflowID = dto.WorkflowID,
                 WorkflowName = dto.WorkflowName,
-                AlwaysExecute = dto.AlwaysExecute
+                AlwaysExecute = dto.AlwaysExecute,
             };
 
             await _repository.UpdateAsync(workflow, GetCurrentUserId());
@@ -135,7 +139,7 @@ public class WorkflowController : BaseApiController
             WorkflowName = workflow.WorkflowName,
             AlwaysExecute = workflow.AlwaysExecute,
             DateCreated = workflow.date_created,
-            DateUpdated = workflow.date_updated
+            DateUpdated = workflow.date_updated,
         };
     }
 }

@@ -10,12 +10,21 @@ public interface IWorkflowTemplateService
     /// <summary>
     /// Creates a new workflow template
     /// </summary>
-    Task<WorkflowTemplate> CreateTemplateAsync(string templateName, string category, string? description, int userId);
+    Task<WorkflowTemplate> CreateTemplateAsync(
+        string templateName,
+        string category,
+        string? description,
+        int userId
+    );
 
     /// <summary>
     /// Instantiates a workflow from a template
     /// </summary>
-    Task<Domain.Entities.System.Workflow> InstantiateFromTemplateAsync(int templateId, string workflowName, int userId);
+    Task<Domain.Entities.System.Workflow> InstantiateFromTemplateAsync(
+        int templateId,
+        string workflowName,
+        int userId
+    );
 
     /// <summary>
     /// Gets all templates in a category

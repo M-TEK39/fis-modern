@@ -44,7 +44,8 @@ public interface IPdfGenerationService
     Task<byte[]> GenerateFinancialSummaryPdfAsync(
         string reportTitle,
         Dictionary<string, decimal> summaryData,
-        DateTime reportDate);
+        DateTime reportDate
+    );
 
     #endregion
 
@@ -60,7 +61,8 @@ public interface IPdfGenerationService
     Task<byte[]> GenerateMaintenanceReportPdfAsync(
         string reportTitle,
         List<MaintenanceRecord> maintenanceRecords,
-        DateTime reportDate);
+        DateTime reportDate
+    );
 
     #endregion
 }

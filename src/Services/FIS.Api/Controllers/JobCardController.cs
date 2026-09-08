@@ -1,10 +1,8 @@
 using FIS.Api.DTOs;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Domain.Entities.Operations;
-using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -18,16 +16,17 @@ namespace FIS.Api.Controllers;
 public class JobCardController : BaseApiController
 {
     private readonly IJobCardRepository _repository;
-    private readonly FisDbContext _context;
+    private readonly IContractRepository _contractRepository;
     private readonly ILogger<JobCardController> _logger;
 
     public JobCardController(
         IJobCardRepository repository,
-        FisDbContext context,
-        ILogger<JobCardController> logger)
+        IContractRepository contractRepository,
+        ILogger<JobCardController> logger
+    )
     {
         _repository = repository;
-        _context = context;
+        _contractRepository = contractRepository;
         _logger = logger;
     }
 
@@ -78,7 +77,10 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while retrieving the job card" });
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving the job card" }
+            );
         }
     }
 
@@ -124,7 +126,10 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting priority unassigned job cards");
-            return StatusCode(500, new { error = "An error occurred while retrieving priority unassigned job cards" });
+            return StatusCode(
+                500,
+                new { error = "An error occurred while retrieving priority unassigned job cards" }
+            );
         }
     }
 
@@ -136,13 +141,19 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<JobCardResponseDto>> Create([FromBody] CreateJobCardDto createDto)
+    public async Task<ActionResult<JobCardResponseDto>> Create(
+        [FromBody] CreateJobCardDto createDto
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
-            _logger.LogInformation("Creating new job card for vehicle {VmfCode}, extra {ExtraCode} by user {UserId}",
-                createDto.vmf_code, createDto.extra_code, currentUserId);
+            _logger.LogInformation(
+                "Creating new job card for vehicle {VmfCode}, extra {ExtraCode} by user {UserId}",
+                createDto.vmf_code,
+                createDto.extra_code,
+                currentUserId
+            );
 
             var jobCard = new JobCard
             {
@@ -152,7 +163,7 @@ public class JobCardController : BaseApiController
                 damages = createDto.damages,
                 priority = createDto.priority,
                 status_code = 1, // Pending
-                reviewed = "N"
+                reviewed = "N",
             };
 
             var created = await _repository.CreateAsync(jobCard, currentUserId);
@@ -164,7 +175,14 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating job card");
-            return StatusCode(500, new { error = "An error occurred while creating the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "An error occurred while creating the job card",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -177,12 +195,19 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<JobCardResponseDto>> Update(int id, [FromBody] UpdateJobCardDto updateDto)
+    public async Task<ActionResult<JobCardResponseDto>> Update(
+        int id,
+        [FromBody] UpdateJobCardDto updateDto
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
-            _logger.LogInformation("Updating job card {JobCardId} by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Updating job card {JobCardId} by user {UserId}",
+                id,
+                currentUserId
+            );
 
             var existingJobCard = await _repository.GetByIdAsync(id);
             if (existingJobCard == null)
@@ -213,7 +238,14 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error updating job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while updating the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "An error occurred while updating the job card",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -227,12 +259,19 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<JobCardResponseDto>> Authorize(int id, [FromBody] JobCardAuthorizationDto? authDto = null)
+    public async Task<ActionResult<JobCardResponseDto>> Authorize(
+        int id,
+        [FromBody] JobCardAuthorizationDto? authDto = null
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} authorizing job card {JobCardId}", currentUserId, id);
+            _logger.LogInformation(
+                "User {UserId} authorizing job card {JobCardId}",
+                currentUserId,
+                id
+            );
 
             // Fetch job card to validate self-approval prevention
             var jobCard = await _repository.GetByIdAsync(id);
@@ -250,7 +289,11 @@ public class JobCardController : BaseApiController
             var authorized = await _repository.AuthorizeAsync(id, currentUserId, authDto?.comment);
             var dto = MapToDto(authorized);
 
-            _logger.LogInformation("Job card {JobCardId} authorized by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Job card {JobCardId} authorized by user {UserId}",
+                id,
+                currentUserId
+            );
             return Ok(dto);
         }
         catch (KeyNotFoundException ex)
@@ -261,7 +304,14 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error authorizing job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while authorizing the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "An error occurred while authorizing the job card",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -275,7 +325,10 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<JobCardResponseDto>> Decline(int id, [FromBody] JobCardDeclineDto declineDto)
+    public async Task<ActionResult<JobCardResponseDto>> Decline(
+        int id,
+        [FromBody] JobCardDeclineDto declineDto
+    )
     {
         try
         {
@@ -285,8 +338,12 @@ public class JobCardController : BaseApiController
             }
 
             int currentUserId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} declining job card {JobCardId} with reason: {Reason}",
-                currentUserId, id, declineDto.decline_reason);
+            _logger.LogInformation(
+                "User {UserId} declining job card {JobCardId} with reason: {Reason}",
+                currentUserId,
+                id,
+                declineDto.decline_reason
+            );
 
             // Fetch job card to validate self-approval prevention
             var jobCard = await _repository.GetByIdAsync(id);
@@ -301,10 +358,18 @@ public class JobCardController : BaseApiController
             if (selfApprovalCheck != null)
                 return selfApprovalCheck;
 
-            var declined = await _repository.DeclineAsync(id, currentUserId, declineDto.decline_reason);
+            var declined = await _repository.DeclineAsync(
+                id,
+                currentUserId,
+                declineDto.decline_reason
+            );
             var dto = MapToDto(declined);
 
-            _logger.LogInformation("Job card {JobCardId} declined by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Job card {JobCardId} declined by user {UserId}",
+                id,
+                currentUserId
+            );
             return Ok(dto);
         }
         catch (KeyNotFoundException ex)
@@ -315,7 +380,14 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error declining job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while declining the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "An error occurred while declining the job card",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -326,17 +398,32 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<JobCardResponseDto>> Cancel(int id, [FromBody] JobCardCancelDto? cancelDto = null)
+    public async Task<ActionResult<JobCardResponseDto>> Cancel(
+        int id,
+        [FromBody] JobCardCancelDto? cancelDto = null
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} canceling job card {JobCardId}", currentUserId, id);
+            _logger.LogInformation(
+                "User {UserId} canceling job card {JobCardId}",
+                currentUserId,
+                id
+            );
 
-            var canceled = await _repository.CancelAsync(id, currentUserId, cancelDto?.cancel_reason);
+            var canceled = await _repository.CancelAsync(
+                id,
+                currentUserId,
+                cancelDto?.cancel_reason
+            );
             var dto = MapToDto(canceled);
 
-            _logger.LogInformation("Job card {JobCardId} canceled by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Job card {JobCardId} canceled by user {UserId}",
+                id,
+                currentUserId
+            );
             return Ok(dto);
         }
         catch (KeyNotFoundException ex)
@@ -347,7 +434,14 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error canceling job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while canceling the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "An error occurred while canceling the job card",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -358,23 +452,34 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<JobCardResponseDto>> Close(int id, [FromBody] JobCardCloseDto? closeDto = null)
+    public async Task<ActionResult<JobCardResponseDto>> Close(
+        int id,
+        [FromBody] JobCardCloseDto? closeDto = null
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
             _logger.LogInformation("User {UserId} closing job card {JobCardId}", currentUserId, id);
 
-            var closed = await _repository.CloseAsync(id, currentUserId, closeDto?.close_notes,
+            var closed = await _repository.CloseAsync(
+                id,
+                currentUserId,
+                closeDto?.close_notes,
                 labourCost: closeDto?.labour_cost,
                 partsCost: closeDto?.parts_cost,
                 otherCost: closeDto?.other_cost,
                 invoiceNumber: closeDto?.invoice_number,
                 invoiceDate: closeDto?.invoice_date,
-                serviceProvider: closeDto?.service_provider);
+                serviceProvider: closeDto?.service_provider
+            );
             var dto = MapToDto(closed);
 
-            _logger.LogInformation("Job card {JobCardId} closed by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Job card {JobCardId} closed by user {UserId}",
+                id,
+                currentUserId
+            );
             return Ok(dto);
         }
         catch (KeyNotFoundException ex)
@@ -385,7 +490,10 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error closing job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while closing the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "An error occurred while closing the job card", message = ex.Message }
+            );
         }
     }
 
@@ -401,11 +509,19 @@ public class JobCardController : BaseApiController
         try
         {
             int currentUserId = GetCurrentUserId();
-            _logger.LogInformation("User {UserId} deleting job card {JobCardId}", currentUserId, id);
+            _logger.LogInformation(
+                "User {UserId} deleting job card {JobCardId}",
+                currentUserId,
+                id
+            );
 
             await _repository.DeleteAsync(id, currentUserId);
 
-            _logger.LogInformation("Job card {JobCardId} deleted by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Job card {JobCardId} deleted by user {UserId}",
+                id,
+                currentUserId
+            );
             return NoContent();
         }
         catch (KeyNotFoundException ex)
@@ -416,7 +532,14 @@ public class JobCardController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error deleting job card {JobCardId}", id);
-            return StatusCode(500, new { error = "An error occurred while deleting the job card", message = ex.Message });
+            return StatusCode(
+                500,
+                new
+                {
+                    error = "An error occurred while deleting the job card",
+                    message = ex.Message,
+                }
+            );
         }
     }
 
@@ -432,21 +555,28 @@ public class JobCardController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<JobCardResponseDto>> UpdateCosts(
         int id,
-        [FromBody] JobCardCostDto costDto)
+        [FromBody] JobCardCostDto costDto
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
             var updated = await _repository.UpdateCostsAsync(
-                id, currentUserId,
+                id,
+                currentUserId,
                 labourCost: costDto.labour_cost,
                 partsCost: costDto.parts_cost,
                 otherCost: costDto.other_cost,
                 invoiceNumber: costDto.invoice_number,
                 invoiceDate: costDto.invoice_date,
-                serviceProvider: costDto.service_provider);
+                serviceProvider: costDto.service_provider
+            );
 
-            _logger.LogInformation("Repair costs updated on job card {JobCardId} by user {UserId}", id, currentUserId);
+            _logger.LogInformation(
+                "Repair costs updated on job card {JobCardId} by user {UserId}",
+                id,
+                currentUserId
+            );
             return Ok(MapToDto(updated));
         }
         catch (KeyNotFoundException ex)
@@ -473,71 +603,81 @@ public class JobCardController : BaseApiController
         [FromQuery] int? vmfCode = null,
         [FromQuery] short? siteCode = null,
         [FromQuery] DateTime? fromDate = null,
-        [FromQuery] DateTime? toDate = null)
+        [FromQuery] DateTime? toDate = null
+    )
     {
         try
         {
-            var query = _context.JobCards
-                .Include(j => j.Vehicle)
-                .Where(j => !j.is_deleted && j.status_code == 5) // 5 = Complete
-                .AsQueryable();
+            var results = (await _repository.GetByStatusAsync(5)).AsEnumerable();
 
             if (vmfCode.HasValue)
-                query = query.Where(j => j.vmf_code == vmfCode.Value);
+                results = results.Where(j => j.vmf_code == vmfCode.Value);
 
             if (fromDate.HasValue)
-                query = query.Where(j => j.date_updated >= fromDate.Value);
+                results = results.Where(j => j.date_updated >= fromDate.Value);
 
             if (toDate.HasValue)
-                query = query.Where(j => j.date_updated <= toDate.Value.AddDays(1));
+                results = results.Where(j => j.date_updated <= toDate.Value.AddDays(1));
 
-            // Site filter: find vehicles currently or recently on contract to the given site
+            // Site filter: use the compatibility contract repository so the
+            // original contract table does not go through EF's static model.
             if (siteCode.HasValue)
             {
-                var vehiclesAtSite = await _context.Contracts
-                    .Where(c => c.site_code == siteCode.Value && !c.is_deleted)
+                var vehiclesAtSite = (await _contractRepository.GetAllAsync())
+                    .Where(c => c.site_code == siteCode.Value)
                     .Select(c => c.vmf_code)
                     .Distinct()
-                    .ToListAsync();
-                query = query.Where(j => vehiclesAtSite.Contains(j.vmf_code));
+                    .ToHashSet();
+                results = results.Where(j => vehiclesAtSite.Contains(j.vmf_code));
             }
 
-            var results = await query
-                .OrderByDescending(j => j.date_updated)
-                .ToListAsync();
+            var orderedResults = results.OrderByDescending(j => j.date_updated).ToList();
 
-            var lineItems = results.Select(j => new
-            {
-                job_card_id = j.job_card_id,
-                vmf_code = j.vmf_code,
-                fleet_number = j.Vehicle?.fleet_number,
-                registration = j.Vehicle?.registration_number,
-                damages = j.damages,
-                service_provider = j.service_provider,
-                invoice_number = j.invoice_number,
-                invoice_date = j.invoice_date?.ToString("yyyy-MM-dd"),
-                labour_cost = j.labour_cost,
-                parts_cost = j.parts_cost,
-                other_cost = j.other_cost,
-                total_cost = j.total_cost,
-                closed_date = j.date_updated?.ToString("yyyy-MM-dd"),
-            }).ToList();
+            var lineItems = orderedResults
+                .Select(j => new
+                {
+                    job_card_id = j.job_card_id,
+                    vmf_code = j.vmf_code,
+                    fleet_number = j.Vehicle?.fleet_number,
+                    registration = j.Vehicle?.registration_number,
+                    damages = j.damages,
+                    service_provider = j.service_provider,
+                    invoice_number = j.invoice_number,
+                    invoice_date = j.invoice_date?.ToString("yyyy-MM-dd"),
+                    labour_cost = j.labour_cost,
+                    parts_cost = j.parts_cost,
+                    other_cost = j.other_cost,
+                    total_cost = j.total_cost,
+                    closed_date = j.date_updated?.ToString("yyyy-MM-dd"),
+                })
+                .ToList();
 
-            return Ok(new
-            {
-                filters_applied = new { vmfCode, siteCode, fromDate, toDate },
-                total_records = lineItems.Count,
-                grand_total = lineItems.Sum(i => i.total_cost ?? 0),
-                total_labour = lineItems.Sum(i => i.labour_cost ?? 0),
-                total_parts = lineItems.Sum(i => i.parts_cost ?? 0),
-                total_other = lineItems.Sum(i => i.other_cost ?? 0),
-                line_items = lineItems
-            });
+            return Ok(
+                new
+                {
+                    filters_applied = new
+                    {
+                        vmfCode,
+                        siteCode,
+                        fromDate,
+                        toDate,
+                    },
+                    total_records = lineItems.Count,
+                    grand_total = lineItems.Sum(i => i.total_cost ?? 0),
+                    total_labour = lineItems.Sum(i => i.labour_cost ?? 0),
+                    total_parts = lineItems.Sum(i => i.parts_cost ?? 0),
+                    total_other = lineItems.Sum(i => i.other_cost ?? 0),
+                    line_items = lineItems,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating repair cost report");
-            return StatusCode(500, new { error = "Failed to generate report", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to generate report", message = ex.Message }
+            );
         }
     }
 
@@ -548,19 +688,26 @@ public class JobCardController : BaseApiController
     private ActionResult? ValidateSelfApprovalPrevention(JobCard jobCard, int currentUserId)
     {
         // Check if current user is the job card capturer
-        if (jobCard.created_by_user_code.HasValue &&
-            jobCard.created_by_user_code.Value == currentUserId)
+        if (
+            jobCard.created_by_user_code.HasValue
+            && jobCard.created_by_user_code.Value == currentUserId
+        )
         {
             _logger.LogWarning(
                 "Self-approval blocked: User {UserId} attempted to authorize their own job card {JobCardId}",
-                currentUserId, jobCard.job_card_id);
+                currentUserId,
+                jobCard.job_card_id
+            );
 
-            return StatusCode(403, new
-            {
-                error = "You cannot authorize or review your own job card.",
-                jobCardId = jobCard.job_card_id,
-                userId = currentUserId
-            });
+            return StatusCode(
+                403,
+                new
+                {
+                    error = "You cannot authorize or review your own job card.",
+                    jobCardId = jobCard.job_card_id,
+                    userId = currentUserId,
+                }
+            );
         }
 
         return null; // Validation passed
@@ -581,7 +728,7 @@ public class JobCardController : BaseApiController
             5 => "Complete",
             6 => "Failed",
             7 => "Canceled",
-            _ => "Unknown"
+            _ => "Unknown",
         };
     }
 
@@ -602,13 +749,17 @@ public class JobCardController : BaseApiController
             status_text = GetStatusText(jobCard.status_code),
             priority = jobCard.priority,
             assigned_to = jobCard.assigned_to,
-            assigned_to_name = jobCard.AssignedToUser?.email ?? jobCard.AssignedToUser?.user_access_code.ToString(),
+            assigned_to_name =
+                jobCard.AssignedToUser?.email
+                ?? jobCard.AssignedToUser?.user_access_code.ToString(),
             assigned_date = jobCard.assigned_date,
             jcs_comment = jobCard.jcs_comment,
             damages = jobCard.damages,
             comments = jobCard.comments,
             authorizer = jobCard.authorizer,
-            authorizer_name = jobCard.AuthorizerUser?.email ?? jobCard.AuthorizerUser?.user_access_code.ToString(),
+            authorizer_name =
+                jobCard.AuthorizerUser?.email
+                ?? jobCard.AuthorizerUser?.user_access_code.ToString(),
             reviewed = jobCard.reviewed,
             captured_by_user_code = jobCard.created_by_user_code,
             authorized_by_user_code = jobCard.authorizer,

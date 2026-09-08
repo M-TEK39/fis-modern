@@ -18,7 +18,10 @@ public class ContractStatusController : BaseApiController
     private readonly IContractStatusRepository _contractStatusRepository;
     private readonly ILogger<ContractStatusController> _logger;
 
-    public ContractStatusController(IContractStatusRepository contractStatusRepository, ILogger<ContractStatusController> logger)
+    public ContractStatusController(
+        IContractStatusRepository contractStatusRepository,
+        ILogger<ContractStatusController> logger
+    )
     {
         _contractStatusRepository = contractStatusRepository;
         _logger = logger;
@@ -65,7 +68,11 @@ public class ContractStatusController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving contract status with code {StatusCode}", statusCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving contract status with code {StatusCode}",
+                statusCode
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -90,7 +97,11 @@ public class ContractStatusController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving contract status with description {Description}", description);
+            _logger.LogError(
+                ex,
+                "Error retrieving contract status with description {Description}",
+                description
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -115,7 +126,11 @@ public class ContractStatusController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving contract status with abbreviation {Abbreviation}", abbreviation);
+            _logger.LogError(
+                ex,
+                "Error retrieving contract status with abbreviation {Abbreviation}",
+                abbreviation
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -179,7 +194,11 @@ public class ContractStatusController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching contract statuses with term {SearchTerm}", searchTerm);
+            _logger.LogError(
+                ex,
+                "Error searching contract statuses with term {SearchTerm}",
+                searchTerm
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -190,7 +209,9 @@ public class ContractStatusController : BaseApiController
     /// <param name="createStatusDto">The contract status data to create</param>
     /// <returns>The created contract status entity</returns>
     [HttpPost]
-    public async Task<ActionResult<ContractStatus>> CreateStatus([FromBody] CreateContractStatusDto createStatusDto)
+    public async Task<ActionResult<ContractStatus>> CreateStatus(
+        [FromBody] CreateContractStatusDto createStatusDto
+    )
     {
         try
         {
@@ -204,11 +225,15 @@ public class ContractStatusController : BaseApiController
                 status_description = createStatusDto.status_description,
                 status_abbreviation = createStatusDto.status_abbreviation,
                 is_active = createStatusDto.is_active,
-                is_final = createStatusDto.is_final
+                is_final = createStatusDto.is_final,
             };
 
             var createdStatus = await _contractStatusRepository.CreateAsync(status, currentUserId);
-            return CreatedAtAction(nameof(GetStatus), new { statusCode = createdStatus.contract_status_code }, createdStatus);
+            return CreatedAtAction(
+                nameof(GetStatus),
+                new { statusCode = createdStatus.contract_status_code },
+                createdStatus
+            );
         }
         catch (Exception ex)
         {
@@ -224,7 +249,10 @@ public class ContractStatusController : BaseApiController
     /// <param name="status">The updated contract status data</param>
     /// <returns>The updated contract status entity</returns>
     [HttpPut("{statusCode}")]
-    public async Task<ActionResult<ContractStatus>> UpdateStatus(short statusCode, [FromBody] ContractStatus status)
+    public async Task<ActionResult<ContractStatus>> UpdateStatus(
+        short statusCode,
+        [FromBody] ContractStatus status
+    )
     {
         try
         {
@@ -242,7 +270,11 @@ public class ContractStatusController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating contract status with code {StatusCode}", statusCode);
+            _logger.LogError(
+                ex,
+                "Error updating contract status with code {StatusCode}",
+                statusCode
+            );
             return StatusCode(500, "Internal server error");
         }
     }
@@ -267,7 +299,11 @@ public class ContractStatusController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting contract status with code {StatusCode}", statusCode);
+            _logger.LogError(
+                ex,
+                "Error deleting contract status with code {StatusCode}",
+                statusCode
+            );
             return StatusCode(500, "Internal server error");
         }
     }

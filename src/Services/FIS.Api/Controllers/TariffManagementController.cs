@@ -31,7 +31,8 @@ public class TariffManagementController : BaseApiController
 
     public TariffManagementController(
         ITariffManagementRepository repository,
-        ILogger<TariffManagementController> logger)
+        ILogger<TariffManagementController> logger
+    )
     {
         _repository = repository;
         _logger = logger;
@@ -39,61 +40,71 @@ public class TariffManagementController : BaseApiController
 
     private ActionResult? ValidateSelfApprovalPrevention(Tariff tariff, int currentUserId)
     {
-        if (tariff.created_by_user_code.HasValue &&
-            tariff.created_by_user_code.Value == currentUserId)
+        if (
+            tariff.created_by_user_code.HasValue
+            && tariff.created_by_user_code.Value == currentUserId
+        )
         {
             _logger.LogWarning(
                 "Self-approval blocked: User {UserId} attempted to approve their own tariff {TariffCode}",
-                currentUserId, tariff.tariff_code);
+                currentUserId,
+                tariff.tariff_code
+            );
 
-            return StatusCode(403, new
-            {
-                error = "You cannot approve or reject your own tariff.",
-                tariffCode = tariff.tariff_code,
-                userId = currentUserId
-            });
+            return StatusCode(
+                403,
+                new
+                {
+                    error = "You cannot approve or reject your own tariff.",
+                    tariffCode = tariff.tariff_code,
+                    userId = currentUserId,
+                }
+            );
         }
         return null;
     }
 
-    private static string GetStatusText(short status) => status switch
-    {
-        0 => "Draft",
-        1 => "Pending Approval",
-        2 => "Approved",
-        3 => "Rejected",
-        _ => "Unknown"
-    };
+    private static string GetStatusText(short status) =>
+        status switch
+        {
+            0 => "Draft",
+            1 => "Pending Approval",
+            2 => "Approved",
+            3 => "Rejected",
+            _ => "Unknown",
+        };
 
-    private static object MapToDto(Tariff t) => new
-    {
-        t.tariff_code,
-        t.class_code,
-        t.year_manufactured,
-        t.monthly_fixed_amount,
-        t.monthly_odo_amount,
-        t.daily_fixed_amount,
-        t.hourly_fixed_amount,
-        t.effective_start_date,
-        t.effective_end_date,
-        t.replacement_percent,
-        t.loss_percent,
-        t.profit_percent,
-        t.overhead_percent,
-        t.accident_percent,
-        t.fuel_kilo_tariff,
-        t.tariff_approval_status,
-        approval_status_text = GetStatusText(t.tariff_approval_status),
-        t.approver_code,
-        t.approval_date,
-        t.rejection_reason,
-        t.created_by_user_code,
-        t.date_created,
-        t.modified_by_user_code,
-        t.date_updated,
-        requires_approval = t.monthly_fixed_amount > TariffManagementRepository.ApprovalThreshold,
-        approval_threshold = TariffManagementRepository.ApprovalThreshold
-    };
+    private static object MapToDto(Tariff t) =>
+        new
+        {
+            t.tariff_code,
+            t.class_code,
+            t.year_manufactured,
+            t.monthly_fixed_amount,
+            t.monthly_odo_amount,
+            t.daily_fixed_amount,
+            t.hourly_fixed_amount,
+            t.effective_start_date,
+            t.effective_end_date,
+            t.replacement_percent,
+            t.loss_percent,
+            t.profit_percent,
+            t.overhead_percent,
+            t.accident_percent,
+            t.fuel_kilo_tariff,
+            t.tariff_approval_status,
+            approval_status_text = GetStatusText(t.tariff_approval_status),
+            t.approver_code,
+            t.approval_date,
+            t.rejection_reason,
+            t.created_by_user_code,
+            t.date_created,
+            t.modified_by_user_code,
+            t.date_updated,
+            requires_approval = t.monthly_fixed_amount
+                > TariffManagementRepository.ApprovalThreshold,
+            approval_threshold = TariffManagementRepository.ApprovalThreshold,
+        };
 
     /// <summary>
     /// Get all tariffs with optional filters.
@@ -107,7 +118,8 @@ public class TariffManagementController : BaseApiController
         [FromQuery] short? class_code = null,
         [FromQuery] short? year_manufactured = null,
         [FromQuery] short? tariff_approval_status = null,
-        [FromQuery] DateTime? effective_on = null)
+        [FromQuery] DateTime? effective_on = null
+    )
     {
         try
         {
@@ -122,24 +134,35 @@ public class TariffManagementController : BaseApiController
                 filtered = filtered.Where(t => t.year_manufactured == year_manufactured.Value);
 
             if (tariff_approval_status.HasValue)
-                filtered = filtered.Where(t => t.tariff_approval_status == tariff_approval_status.Value);
+                filtered = filtered.Where(t =>
+                    t.tariff_approval_status == tariff_approval_status.Value
+                );
 
             if (effective_on.HasValue)
             {
                 var date = effective_on.Value.Date;
                 filtered = filtered.Where(t =>
-                    t.effective_start_date.Date <= date &&
-                    (t.effective_end_date == null || t.effective_end_date.Value.Date >= date));
+                    t.effective_start_date.Date <= date
+                    && (t.effective_end_date == null || t.effective_end_date.Value.Date >= date)
+                );
             }
 
             var result = filtered.Select(MapToDto).ToList();
 
-            return Ok(new
-            {
-                total_count = result.Count,
-                filters_applied = new { class_code, year_manufactured, tariff_approval_status, effective_on },
-                tariffs = result
-            });
+            return Ok(
+                new
+                {
+                    total_count = result.Count,
+                    filters_applied = new
+                    {
+                        class_code,
+                        year_manufactured,
+                        tariff_approval_status,
+                        effective_on,
+                    },
+                    tariffs = result,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -193,7 +216,8 @@ public class TariffManagementController : BaseApiController
         try
         {
             var tariff = await _repository.GetByIdAsync(tariffCode);
-            if (tariff == null) return NotFound();
+            if (tariff == null)
+                return NotFound();
             return Ok(MapToDto(tariff));
         }
         catch (Exception ex)
@@ -230,24 +254,32 @@ public class TariffManagementController : BaseApiController
                 profit_percent = request.profit_percent,
                 overhead_percent = request.overhead_percent,
                 accident_percent = request.accident_percent,
-                fuel_kilo_tariff = request.fuel_kilo_tariff
+                fuel_kilo_tariff = request.fuel_kilo_tariff,
             };
 
             var created = await _repository.CreateAsync(tariff, currentUserId);
 
             _logger.LogInformation(
                 "Tariff {TariffCode} created by user {UserId} (status={Status}, monthly={Monthly})",
-                created.tariff_code, currentUserId,
-                GetStatusText(created.tariff_approval_status), created.monthly_fixed_amount);
+                created.tariff_code,
+                currentUserId,
+                GetStatusText(created.tariff_approval_status),
+                created.monthly_fixed_amount
+            );
 
-            var needsApproval = created.monthly_fixed_amount > TariffManagementRepository.ApprovalThreshold;
-            return CreatedAtAction(nameof(GetById), new { tariffCode = created.tariff_code }, new
-            {
-                tariff = MapToDto(created),
-                message = needsApproval
-                    ? $"Tariff exceeds R{TariffManagementRepository.ApprovalThreshold:N0}/month. Call /submit to send for approval."
-                    : "Tariff auto-approved (below threshold)."
-            });
+            var needsApproval =
+                created.monthly_fixed_amount > TariffManagementRepository.ApprovalThreshold;
+            return CreatedAtAction(
+                nameof(GetById),
+                new { tariffCode = created.tariff_code },
+                new
+                {
+                    tariff = MapToDto(created),
+                    message = needsApproval
+                        ? $"Tariff exceeds R{TariffManagementRepository.ApprovalThreshold:N0}/month. Call /submit to send for approval."
+                        : "Tariff auto-approved (below threshold).",
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -268,17 +300,22 @@ public class TariffManagementController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var existing = await _repository.GetByIdAsync(tariffCode);
-            if (existing == null) return NotFound();
+            if (existing == null)
+                return NotFound();
 
             existing.class_code = request.class_code ?? existing.class_code;
             existing.year_manufactured = request.year_manufactured ?? existing.year_manufactured;
-            existing.monthly_fixed_amount = request.monthly_fixed_amount ?? existing.monthly_fixed_amount;
+            existing.monthly_fixed_amount =
+                request.monthly_fixed_amount ?? existing.monthly_fixed_amount;
             existing.monthly_odo_amount = request.monthly_odo_amount ?? existing.monthly_odo_amount;
             existing.daily_fixed_amount = request.daily_fixed_amount ?? existing.daily_fixed_amount;
-            existing.hourly_fixed_amount = request.hourly_fixed_amount ?? existing.hourly_fixed_amount;
-            existing.effective_start_date = request.effective_start_date ?? existing.effective_start_date;
+            existing.hourly_fixed_amount =
+                request.hourly_fixed_amount ?? existing.hourly_fixed_amount;
+            existing.effective_start_date =
+                request.effective_start_date ?? existing.effective_start_date;
             existing.effective_end_date = request.effective_end_date ?? existing.effective_end_date;
-            existing.replacement_percent = request.replacement_percent ?? existing.replacement_percent;
+            existing.replacement_percent =
+                request.replacement_percent ?? existing.replacement_percent;
             existing.loss_percent = request.loss_percent ?? existing.loss_percent;
             existing.profit_percent = request.profit_percent ?? existing.profit_percent;
             existing.overhead_percent = request.overhead_percent ?? existing.overhead_percent;
@@ -288,7 +325,10 @@ public class TariffManagementController : BaseApiController
             await _repository.UpdateAsync(existing, currentUserId);
 
             _logger.LogInformation(
-                "Tariff {TariffCode} updated by user {UserId}", tariffCode, currentUserId);
+                "Tariff {TariffCode} updated by user {UserId}",
+                tariffCode,
+                currentUserId
+            );
 
             return Ok(MapToDto(existing));
         }
@@ -317,15 +357,20 @@ public class TariffManagementController : BaseApiController
             var tariff = await _repository.SubmitForApprovalAsync(tariffCode, currentUserId);
 
             _logger.LogInformation(
-                "Tariff {TariffCode} submitted for approval by user {UserId}", tariffCode, currentUserId);
-
-            return Ok(new
-            {
-                message = "Tariff submitted for approval.",
+                "Tariff {TariffCode} submitted for approval by user {UserId}",
                 tariffCode,
-                tariff_approval_status = tariff.tariff_approval_status,
-                approval_status_text = GetStatusText(tariff.tariff_approval_status)
-            });
+                currentUserId
+            );
+
+            return Ok(
+                new
+                {
+                    message = "Tariff submitted for approval.",
+                    tariffCode,
+                    tariff_approval_status = tariff.tariff_approval_status,
+                    approval_status_text = GetStatusText(tariff.tariff_approval_status),
+                }
+            );
         }
         catch (InvalidOperationException ex)
         {
@@ -347,30 +392,40 @@ public class TariffManagementController : BaseApiController
     /// Segregation of duties: the capturer cannot approve their own tariff.
     /// </summary>
     [HttpPost("{tariffCode}/approve")]
-    public async Task<ActionResult> Approve(int tariffCode, [FromBody] TariffApprovalDto? request = null)
+    public async Task<ActionResult> Approve(
+        int tariffCode,
+        [FromBody] TariffApprovalDto? request = null
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
 
             var tariff = await _repository.GetByIdAsync(tariffCode);
-            if (tariff == null) return NotFound();
+            if (tariff == null)
+                return NotFound();
 
             var selfApprovalCheck = ValidateSelfApprovalPrevention(tariff, currentUserId);
-            if (selfApprovalCheck != null) return selfApprovalCheck;
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             await _repository.ApproveAsync(tariffCode, currentUserId);
 
             _logger.LogInformation(
-                "Tariff {TariffCode} approved by user {UserId}", tariffCode, currentUserId);
-
-            return Ok(new
-            {
-                message = "Tariff approved. It is now effective for billing calculations.",
+                "Tariff {TariffCode} approved by user {UserId}",
                 tariffCode,
-                approver_code = currentUserId,
-                approval_date = DateTime.Now
-            });
+                currentUserId
+            );
+
+            return Ok(
+                new
+                {
+                    message = "Tariff approved. It is now effective for billing calculations.",
+                    tariffCode,
+                    approver_code = currentUserId,
+                    approval_date = DateTime.Now,
+                }
+            );
         }
         catch (InvalidOperationException ex)
         {
@@ -379,7 +434,10 @@ public class TariffManagementController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error approving tariff {TariffCode}", tariffCode);
-            return StatusCode(500, new { error = "Failed to approve tariff", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Failed to approve tariff", message = ex.Message }
+            );
         }
     }
 
@@ -396,23 +454,30 @@ public class TariffManagementController : BaseApiController
             int currentUserId = GetCurrentUserId();
 
             var tariff = await _repository.GetByIdAsync(tariffCode);
-            if (tariff == null) return NotFound();
+            if (tariff == null)
+                return NotFound();
 
             var selfApprovalCheck = ValidateSelfApprovalPrevention(tariff, currentUserId);
-            if (selfApprovalCheck != null) return selfApprovalCheck;
+            if (selfApprovalCheck != null)
+                return selfApprovalCheck;
 
             await _repository.RejectAsync(tariffCode, currentUserId, request.rejection_reason);
 
             _logger.LogInformation(
                 "Tariff {TariffCode} rejected by user {UserId}: {Reason}",
-                tariffCode, currentUserId, request.rejection_reason);
-
-            return Ok(new
-            {
-                message = "Tariff rejected. The capturer must edit and resubmit.",
                 tariffCode,
-                rejection_reason = request.rejection_reason
-            });
+                currentUserId,
+                request.rejection_reason
+            );
+
+            return Ok(
+                new
+                {
+                    message = "Tariff rejected. The capturer must edit and resubmit.",
+                    tariffCode,
+                    rejection_reason = request.rejection_reason,
+                }
+            );
         }
         catch (InvalidOperationException ex)
         {

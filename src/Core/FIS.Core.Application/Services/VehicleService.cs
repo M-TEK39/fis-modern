@@ -17,10 +17,13 @@ public class VehicleService
     public VehicleService(
         IVehicleRepository vehicleRepository,
         IContractRepository contractRepository,
-        ILogger<VehicleService> logger)
+        ILogger<VehicleService> logger
+    )
     {
-        _vehicleRepository = vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
-        _contractRepository = contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
+        _vehicleRepository =
+            vehicleRepository ?? throw new ArgumentNullException(nameof(vehicleRepository));
+        _contractRepository =
+            contractRepository ?? throw new ArgumentNullException(nameof(contractRepository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -34,22 +37,26 @@ public class VehicleService
 
         foreach (var vehicle in vehicles)
         {
-            var hasActiveContract = await _contractRepository.HasActiveContractAsync(vehicle.vmf_code);
-            var activeContract = hasActiveContract 
+            var hasActiveContract = await _contractRepository.HasActiveContractAsync(
+                vehicle.vmf_code
+            );
+            var activeContract = hasActiveContract
                 ? await _contractRepository.GetActiveContractByVehicleAsync(vehicle.vmf_code)
                 : null;
 
-            result.Add(new VehicleBusinessInfo
-            {
-                Vehicle = vehicle,
-                IsCurrentlyHired = hasActiveContract,
-                ActiveContract = activeContract,
-                AvailabilityStatus = hasActiveContract ? "Hired" : "Available",
-                CurrentMileage = vehicle.current_odo,
-                DaysSinceLastService = vehicle.service_last_done.HasValue 
-                    ? (DateTime.Now - vehicle.service_last_done.Value).Days 
-                    : null
-            });
+            result.Add(
+                new VehicleBusinessInfo
+                {
+                    Vehicle = vehicle,
+                    IsCurrentlyHired = hasActiveContract,
+                    ActiveContract = activeContract,
+                    AvailabilityStatus = hasActiveContract ? "Hired" : "Available",
+                    CurrentMileage = vehicle.current_odo,
+                    DaysSinceLastService = vehicle.service_last_done.HasValue
+                        ? (DateTime.Now - vehicle.service_last_done.Value).Days
+                        : null,
+                }
+            );
         }
 
         return result;
@@ -58,22 +65,26 @@ public class VehicleService
     /// <summary>
     /// Search vehicles with advanced filtering and business logic
     /// </summary>
-    public async Task<IEnumerable<VehicleBusinessInfo>> SearchVehiclesAsync(VehicleSearchCriteria criteria)
+    public async Task<IEnumerable<VehicleBusinessInfo>> SearchVehiclesAsync(
+        VehicleSearchCriteria criteria
+    )
     {
-        var vehicles = await _vehicleRepository.SearchVehiclesAsync(criteria.SearchTerm ?? string.Empty);
+        var vehicles = await _vehicleRepository.SearchVehiclesAsync(
+            criteria.SearchTerm ?? string.Empty
+        );
         var result = new List<VehicleBusinessInfo>();
 
         foreach (var vehicle in vehicles)
         {
             var businessInfo = await CreateVehicleBusinessInfoAsync(vehicle);
-            
+
             // Apply business filters
             if (criteria.AvailableOnly && businessInfo.IsCurrentlyHired)
                 continue;
-                
+
             if (criteria.MinMileage.HasValue && vehicle.current_odo < criteria.MinMileage.Value)
                 continue;
-                
+
             if (criteria.MaxMileage.HasValue && vehicle.current_odo > criteria.MaxMileage.Value)
                 continue;
 
@@ -88,7 +99,10 @@ public class VehicleService
     /// </summary>
     /// <param name="request">Vehicle creation request</param>
     /// <param name="currentUserId">The user creating the vehicle</param>
-    public async Task<VehicleCreationResult> CreateVehicleAsync(VehicleCreationRequest request, int currentUserId)
+    public async Task<VehicleCreationResult> CreateVehicleAsync(
+        VehicleCreationRequest request,
+        int currentUserId
+    )
     {
         // Business validation
         var validationResult = await ValidateVehicleCreationAsync(request);
@@ -114,21 +128,28 @@ public class VehicleService
             year_manufactured = request.YearManufactured,
             purchase_date = request.PurchaseDate,
             purchase_amount = request.PurchaseAmount,
-            book_value = request.BookValue ?? request.PurchaseAmount
+            book_value = request.BookValue ?? request.PurchaseAmount,
         };
 
         try
         {
             var createdVehicle = await _vehicleRepository.CreateAsync(vehicle, currentUserId);
-            _logger.LogInformation("Vehicle created successfully: VMF {VmfCode}, Fleet {FleetNumber}", 
-                createdVehicle.vmf_code, createdVehicle.fleet_number);
-            
+            _logger.LogInformation(
+                "Vehicle created successfully: VMF {VmfCode}, Fleet {FleetNumber}",
+                createdVehicle.vmf_code,
+                createdVehicle.fleet_number
+            );
+
             return VehicleCreationResult.Success(createdVehicle);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create vehicle: Fleet {FleetNumber}, Registration {Registration}", 
-                request.FleetNumber, request.RegistrationNumber);
+            _logger.LogError(
+                ex,
+                "Failed to create vehicle: Fleet {FleetNumber}, Registration {Registration}",
+                request.FleetNumber,
+                request.RegistrationNumber
+            );
             return VehicleCreationResult.Failed($"Database error: {ex.Message}");
         }
     }
@@ -140,7 +161,12 @@ public class VehicleService
     /// <param name="newOdometer">The new odometer reading</param>
     /// <param name="notes">Optional notes</param>
     /// <param name="currentUserId">The user updating the odometer</param>
-    public async Task<VehicleUpdateResult> UpdateOdometerAsync(int vmfCode, int newOdometer, string? notes, int currentUserId)
+    public async Task<VehicleUpdateResult> UpdateOdometerAsync(
+        int vmfCode,
+        int newOdometer,
+        string? notes,
+        int currentUserId
+    )
     {
         var vehicle = await _vehicleRepository.GetByIdAsync(vmfCode);
         if (vehicle == null)
@@ -151,27 +177,35 @@ public class VehicleService
         // Business rule: New odometer must be higher than current
         if (newOdometer < vehicle.current_odo)
         {
-            return VehicleUpdateResult.Failed("New odometer reading cannot be lower than current reading");
+            return VehicleUpdateResult.Failed(
+                "New odometer reading cannot be lower than current reading"
+            );
         }
 
         // Business rule: Check for unrealistic jumps (more than 10,000km)
         var odometerIncrease = newOdometer - vehicle.current_odo;
         if (odometerIncrease > 10000)
         {
-            _logger.LogWarning("Large odometer increase detected: VMF {VmfCode}, increase {Increase}km", 
-                vmfCode, odometerIncrease);
+            _logger.LogWarning(
+                "Large odometer increase detected: VMF {VmfCode}, increase {Increase}km",
+                vmfCode,
+                odometerIncrease
+            );
         }
 
         // Update vehicle
         vehicle.current_odo = newOdometer;
         vehicle.odo_update_date = DateTime.Now;
-        
+
         try
         {
             await _vehicleRepository.UpdateAsync(vehicle, currentUserId);
-            _logger.LogInformation("Odometer updated: VMF {VmfCode}, new reading {NewOdometer}", 
-                vmfCode, newOdometer);
-            
+            _logger.LogInformation(
+                "Odometer updated: VMF {VmfCode}, new reading {NewOdometer}",
+                vmfCode,
+                newOdometer
+            );
+
             return VehicleUpdateResult.Success();
         }
         catch (Exception ex)
@@ -206,7 +240,7 @@ public class VehicleService
     private async Task<VehicleBusinessInfo> CreateVehicleBusinessInfoAsync(Vehicle vehicle)
     {
         var hasActiveContract = await _contractRepository.HasActiveContractAsync(vehicle.vmf_code);
-        var activeContract = hasActiveContract 
+        var activeContract = hasActiveContract
             ? await _contractRepository.GetActiveContractByVehicleAsync(vehicle.vmf_code)
             : null;
 
@@ -217,13 +251,15 @@ public class VehicleService
             ActiveContract = activeContract,
             AvailabilityStatus = hasActiveContract ? "Hired" : "Available",
             CurrentMileage = vehicle.current_odo,
-            DaysSinceLastService = vehicle.service_last_done.HasValue 
-                ? (DateTime.Now - vehicle.service_last_done.Value).Days 
-                : null
+            DaysSinceLastService = vehicle.service_last_done.HasValue
+                ? (DateTime.Now - vehicle.service_last_done.Value).Days
+                : null,
         };
     }
 
-    private async Task<ValidationResult> ValidateVehicleCreationAsync(VehicleCreationRequest request)
+    private async Task<ValidationResult> ValidateVehicleCreationAsync(
+        VehicleCreationRequest request
+    )
     {
         var errors = new List<string>();
 
@@ -244,7 +280,9 @@ public class VehicleService
 
         if (!string.IsNullOrWhiteSpace(request.RegistrationNumber))
         {
-            var existingReg = await _vehicleRepository.GetByRegistrationNumberAsync(request.RegistrationNumber);
+            var existingReg = await _vehicleRepository.GetByRegistrationNumberAsync(
+                request.RegistrationNumber
+            );
             if (existingReg != null)
                 errors.Add($"Registration number {request.RegistrationNumber} already exists");
         }
@@ -259,12 +297,12 @@ public class VehicleService
     private VehicleServiceAlert? CheckVehicleServiceRequirements(Vehicle vehicle)
     {
         // Service interval business rules (example: service every 10,000km or 6 months)
-        var kmSinceService = vehicle.service_last_odo.HasValue 
-            ? vehicle.current_odo - vehicle.service_last_odo.Value 
+        var kmSinceService = vehicle.service_last_odo.HasValue
+            ? vehicle.current_odo - vehicle.service_last_odo.Value
             : vehicle.current_odo;
 
-        var daysSinceService = vehicle.service_last_done.HasValue 
-            ? (DateTime.Now - vehicle.service_last_done.Value).Days 
+        var daysSinceService = vehicle.service_last_done.HasValue
+            ? (DateTime.Now - vehicle.service_last_done.Value).Days
             : (DateTime.Now - vehicle.take_on_date).Days;
 
         if (kmSinceService > 10000)
@@ -275,7 +313,7 @@ public class VehicleService
                 FleetNumber = vehicle.fleet_number,
                 AlertType = "Service Due - Mileage",
                 Message = $"Service due: {kmSinceService}km since last service",
-                Priority = kmSinceService > 15000 ? 3 : 2
+                Priority = kmSinceService > 15000 ? 3 : 2,
             };
         }
 
@@ -287,7 +325,7 @@ public class VehicleService
                 FleetNumber = vehicle.fleet_number,
                 AlertType = "Service Due - Time",
                 Message = $"Service due: {daysSinceService} days since last service",
-                Priority = daysSinceService > 270 ? 3 : 2 // 9 months = high priority
+                Priority = daysSinceService > 270 ? 3 : 2, // 9 months = high priority
             };
         }
 
@@ -338,13 +376,17 @@ public class VehicleCreationResult
     public Vehicle? Vehicle { get; set; }
     public List<string> Errors { get; set; } = new();
 
-    public static VehicleCreationResult Success(Vehicle vehicle) => 
+    public static VehicleCreationResult Success(Vehicle vehicle) =>
         new() { IsSuccess = true, Vehicle = vehicle };
 
-    public static VehicleCreationResult Failed(string error) => 
-        new() { IsSuccess = false, Errors = new List<string> { error } };
+    public static VehicleCreationResult Failed(string error) =>
+        new()
+        {
+            IsSuccess = false,
+            Errors = new List<string> { error },
+        };
 
-    public static VehicleCreationResult Failed(List<string> errors) => 
+    public static VehicleCreationResult Failed(List<string> errors) =>
         new() { IsSuccess = false, Errors = errors };
 }
 
@@ -354,8 +396,12 @@ public class VehicleUpdateResult
     public string? ErrorMessage { get; set; }
 
     public static VehicleUpdateResult Success() => new() { IsSuccess = true };
-    public static VehicleUpdateResult Failed(string error) => new() { IsSuccess = false, ErrorMessage = error };
-    public static VehicleUpdateResult NotFound() => new() { IsSuccess = false, ErrorMessage = "Vehicle not found" };
+
+    public static VehicleUpdateResult Failed(string error) =>
+        new() { IsSuccess = false, ErrorMessage = error };
+
+    public static VehicleUpdateResult NotFound() =>
+        new() { IsSuccess = false, ErrorMessage = "Vehicle not found" };
 }
 
 public class VehicleServiceAlert

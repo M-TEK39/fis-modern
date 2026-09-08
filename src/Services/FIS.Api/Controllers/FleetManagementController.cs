@@ -50,7 +50,8 @@ public class FleetManagementController : BaseApiController
                 request.VmfCode,
                 request.ReceiverName,
                 request.ReceiverTelephone,
-                request.SiteCode
+                request.SiteCode,
+                GetCurrentUserId()
             );
 
             var response = new FuelCardIssueResponse
@@ -111,7 +112,11 @@ public class FleetManagementController : BaseApiController
     {
         try
         {
-            var result = await _fuelCardService.ReturnFuelCardAsync(fuelCardCode, request.Reason);
+            var result = await _fuelCardService.ReturnFuelCardAsync(
+                fuelCardCode,
+                request.Reason,
+                GetCurrentUserId()
+            );
 
             if (!result)
             {

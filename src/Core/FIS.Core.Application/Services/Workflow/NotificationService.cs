@@ -1,9 +1,9 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using FIS.Core.Application.Interfaces;
 using FIS.Core.Application.Interfaces.Workflow;
 using FIS.Core.Domain.Entities.System;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace FIS.Core.Application.Services.Workflow;
 
@@ -33,7 +33,8 @@ public class NotificationService : INotificationService
         IUserRepository userRepository,
         IUserProfileRepository userProfileRepository,
         IAccessLevelRepository accessLevelRepository,
-        ILogger<NotificationService> logger)
+        ILogger<NotificationService> logger
+    )
     {
         _notificationRepository = notificationRepository;
         _templateRepository = templateRepository;
@@ -47,25 +48,35 @@ public class NotificationService : INotificationService
         _logger = logger;
     }
 
-    public async Task SendWorkflowNotificationAsync(int workflowId, string eventType, Dictionary<string, object> contextData)
+    public async Task SendWorkflowNotificationAsync(
+        int workflowId,
+        string eventType,
+        Dictionary<string, object> contextData
+    )
     {
         try
         {
-            _logger.LogInformation("Sending workflow notifications for WorkflowID: {WorkflowId}, Event: {EventType}", 
-                workflowId, eventType);
+            _logger.LogInformation(
+                "Sending workflow notifications for WorkflowID: {WorkflowId}, Event: {EventType}",
+                workflowId,
+                eventType
+            );
 
             // Get all active notifications for this workflow and event type
             var notifications = await _notificationRepository.GetByWorkflowIdAsync(workflowId);
-            var relevantNotifications = notifications.Where(n => 
-                n.IsActive && 
-                n.EventType == eventType &&
-                n.StepID == null // Workflow-level notifications
-            ).ToList();
+            var relevantNotifications = notifications
+                .Where(n =>
+                    n.IsActive && n.EventType == eventType && n.StepID == null // Workflow-level notifications
+                )
+                .ToList();
 
             if (!relevantNotifications.Any())
             {
-                _logger.LogInformation("No notifications configured for WorkflowID: {WorkflowId}, Event: {EventType}",
-                    workflowId, eventType);
+                _logger.LogInformation(
+                    "No notifications configured for WorkflowID: {WorkflowId}, Event: {EventType}",
+                    workflowId,
+                    eventType
+                );
                 return;
             }
 
@@ -80,28 +91,41 @@ public class NotificationService : INotificationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error sending workflow notifications for WorkflowID: {WorkflowId}", workflowId);
+            _logger.LogError(
+                ex,
+                "Error sending workflow notifications for WorkflowID: {WorkflowId}",
+                workflowId
+            );
         }
     }
 
-    public async Task SendStepNotificationAsync(int stepId, string eventType, Dictionary<string, object> contextData)
+    public async Task SendStepNotificationAsync(
+        int stepId,
+        string eventType,
+        Dictionary<string, object> contextData
+    )
     {
         try
         {
-            _logger.LogInformation("Sending step notifications for StepID: {StepId}, Event: {EventType}",
-                stepId, eventType);
+            _logger.LogInformation(
+                "Sending step notifications for StepID: {StepId}, Event: {EventType}",
+                stepId,
+                eventType
+            );
 
             // Get all active notifications for this step and event type
             var notifications = await _notificationRepository.GetByStepIdAsync(stepId);
-            var relevantNotifications = notifications.Where(n =>
-                n.IsActive &&
-                n.EventType == eventType
-            ).ToList();
+            var relevantNotifications = notifications
+                .Where(n => n.IsActive && n.EventType == eventType)
+                .ToList();
 
             if (!relevantNotifications.Any())
             {
-                _logger.LogInformation("No notifications configured for StepID: {StepId}, Event: {EventType}",
-                    stepId, eventType);
+                _logger.LogInformation(
+                    "No notifications configured for StepID: {StepId}, Event: {EventType}",
+                    stepId,
+                    eventType
+                );
                 return;
             }
 
@@ -127,7 +151,10 @@ public class NotificationService : INotificationService
         }
     }
 
-    private async Task SendNotificationAsync(WorkflowNotification notification, Dictionary<string, object> contextData)
+    private async Task SendNotificationAsync(
+        WorkflowNotification notification,
+        Dictionary<string, object> contextData
+    )
     {
         var log = new NotificationLog
         {
@@ -135,17 +162,21 @@ public class NotificationService : INotificationService
             WorkflowID = notification.WorkflowID,
             StepID = notification.StepID,
             EventType = notification.EventType,
-            DeliveryStatus = "Pending"
+            DeliveryStatus = "Pending",
         };
 
         try
         {
             // Resolve recipient email
-            var recipientEmails = await ResolveRecipientEmailsAsync(notification.RecipientType, notification.RecipientIdentifier);
+            var recipientEmails = await ResolveRecipientEmailsAsync(
+                notification.RecipientType,
+                notification.RecipientIdentifier
+            );
             if (recipientEmails.Count == 0)
             {
                 log.DeliveryStatus = "Failed";
-                log.ErrorMessage = $"Could not resolve recipient: {notification.RecipientType}:{notification.RecipientIdentifier}";
+                log.ErrorMessage =
+                    $"Could not resolve recipient: {notification.RecipientType}:{notification.RecipientIdentifier}";
                 await _logRepository.CreateAsync(log);
                 return;
             }
@@ -159,7 +190,9 @@ public class NotificationService : INotificationService
             if (notification.NotificationTemplateID.HasValue)
             {
                 // Use template
-                var template = await _templateRepository.GetByIdAsync(notification.NotificationTemplateID.Value);
+                var template = await _templateRepository.GetByIdAsync(
+                    notification.NotificationTemplateID.Value
+                );
                 if (template == null)
                 {
                     log.DeliveryStatus = "Failed";
@@ -174,31 +207,54 @@ public class NotificationService : INotificationService
             else
             {
                 // Use inline subject/body
-                subject = ReplaceVariables(notification.Subject ?? "Workflow Notification", contextData);
-                body = ReplaceVariables(notification.Body ?? "A workflow event has occurred.", contextData);
+                subject = ReplaceVariables(
+                    notification.Subject ?? "Workflow Notification",
+                    contextData
+                );
+                body = ReplaceVariables(
+                    notification.Body ?? "A workflow event has occurred.",
+                    contextData
+                );
             }
 
             log.Subject = subject;
             log.Body = body;
 
             // Send email
-            var emailResult = recipientEmails.Count == 1
-                ? await _emailService.SendEmailAsync(recipientEmails[0], subject, body, isHtml: true)
-                : await _emailService.SendEmailAsync(recipientEmails, subject, body, isHtml: true);
+            var emailResult =
+                recipientEmails.Count == 1
+                    ? await _emailService.SendEmailAsync(
+                        recipientEmails[0],
+                        subject,
+                        body,
+                        isHtml: true
+                    )
+                    : await _emailService.SendEmailAsync(
+                        recipientEmails,
+                        subject,
+                        body,
+                        isHtml: true
+                    );
 
             if (emailResult.Success)
             {
                 log.DeliveryStatus = "Sent";
                 log.SentAt = DateTime.UtcNow;
                 log.ExternalMessageId = emailResult.MessageId;
-                _logger.LogInformation("Notification sent successfully to {RecipientCount} recipient(s)", recipientEmails.Count);
+                _logger.LogInformation(
+                    "Notification sent successfully to {RecipientCount} recipient(s)",
+                    recipientEmails.Count
+                );
             }
             else
             {
                 log.DeliveryStatus = "Failed";
                 log.ErrorMessage = emailResult.ErrorMessage;
-                _logger.LogWarning("Failed to send notification to {Recipient}: {Error}",
-                    log.RecipientEmail, emailResult.ErrorMessage);
+                _logger.LogWarning(
+                    "Failed to send notification to {Recipient}: {Error}",
+                    log.RecipientEmail,
+                    emailResult.ErrorMessage
+                );
             }
         }
         catch (Exception ex)
@@ -228,7 +284,10 @@ public class NotificationService : INotificationService
         return result;
     }
 
-    private async Task<List<string>> ResolveRecipientEmailsAsync(string recipientType, string recipientIdentifier)
+    private async Task<List<string>> ResolveRecipientEmailsAsync(
+        string recipientType,
+        string recipientIdentifier
+    )
     {
         try
         {
@@ -237,7 +296,7 @@ public class NotificationService : INotificationService
                 "email" => ResolveDirectEmails(recipientIdentifier),
                 "user" => await GetUserEmailsAsync(recipientIdentifier),
                 "role" => await GetRoleEmailsAsync(recipientIdentifier),
-                _ => new List<string>()
+                _ => new List<string>(),
             };
 
             return resolved
@@ -249,8 +308,12 @@ public class NotificationService : INotificationService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error resolving recipient email for type: {Type}, identifier: {Identifier}",
-                recipientType, recipientIdentifier);
+            _logger.LogError(
+                ex,
+                "Error resolving recipient email for type: {Type}, identifier: {Identifier}",
+                recipientType,
+                recipientIdentifier
+            );
             return new List<string>();
         }
     }
@@ -293,7 +356,10 @@ public class NotificationService : INotificationService
             return new List<string> { legacyUserByEmail.E_Mail! };
         }
 
-        _logger.LogWarning("No user email could be resolved for identifier: {Identifier}", userIdentifier);
+        _logger.LogWarning(
+            "No user email could be resolved for identifier: {Identifier}",
+            userIdentifier
+        );
         return new List<string>();
     }
 
@@ -302,7 +368,10 @@ public class NotificationService : INotificationService
         var role = await _accessLevelRepository.GetByNameAsync(roleName);
         if (role == null)
         {
-            _logger.LogWarning("Role/access level not found for notification recipient role: {Role}", roleName);
+            _logger.LogWarning(
+                "Role/access level not found for notification recipient role: {Role}",
+                roleName
+            );
             return new List<string>();
         }
 
@@ -323,7 +392,10 @@ public class NotificationService : INotificationService
         }
 
         return value
-            .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Split(
+                new[] { ',', ';' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            )
             .Where(IsLikelyEmail)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -344,20 +416,25 @@ public class NotificationService : INotificationService
         try
         {
             var pendingNotifications = await _logRepository.GetPendingNotificationsAsync();
-            
-            _logger.LogInformation("Processing {Count} pending notifications", pendingNotifications.Count());
+
+            _logger.LogInformation(
+                "Processing {Count} pending notifications",
+                pendingNotifications.Count()
+            );
 
             foreach (var log in pendingNotifications)
             {
                 if (log.NotificationID.HasValue)
                 {
-                    var notification = await _notificationRepository.GetByIdAsync(log.NotificationID.Value);
+                    var notification = await _notificationRepository.GetByIdAsync(
+                        log.NotificationID.Value
+                    );
                     if (notification != null)
                     {
                         var contextData = new Dictionary<string, object>
                         {
                             ["WorkflowID"] = log.WorkflowID,
-                            ["StepID"] = log.StepID ?? 0
+                            ["StepID"] = log.StepID ?? 0,
                         };
 
                         await SendNotificationAsync(notification, contextData);
@@ -376,15 +453,22 @@ public class NotificationService : INotificationService
         try
         {
             var failedNotifications = await _logRepository.GetFailedNotificationsAsync();
-            var retriableNotifications = failedNotifications.Where(l => l.RetryCount < maxRetries).ToList();
+            var retriableNotifications = failedNotifications
+                .Where(l => l.RetryCount < maxRetries)
+                .ToList();
 
-            _logger.LogInformation("Retrying {Count} failed notifications", retriableNotifications.Count);
+            _logger.LogInformation(
+                "Retrying {Count} failed notifications",
+                retriableNotifications.Count
+            );
 
             foreach (var log in retriableNotifications)
             {
                 if (log.NotificationID.HasValue)
                 {
-                    var notification = await _notificationRepository.GetByIdAsync(log.NotificationID.Value);
+                    var notification = await _notificationRepository.GetByIdAsync(
+                        log.NotificationID.Value
+                    );
                     if (notification != null)
                     {
                         log.RetryCount++;
@@ -394,7 +478,7 @@ public class NotificationService : INotificationService
                         var contextData = new Dictionary<string, object>
                         {
                             ["WorkflowID"] = log.WorkflowID,
-                            ["StepID"] = log.StepID ?? 0
+                            ["StepID"] = log.StepID ?? 0,
                         };
 
                         await SendNotificationAsync(notification, contextData);

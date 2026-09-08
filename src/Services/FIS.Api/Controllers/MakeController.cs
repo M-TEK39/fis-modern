@@ -14,9 +14,7 @@ public class MakeController : BaseApiController
     private readonly IMakeRepository _makeRepository;
     private readonly ILogger<MakeController> _logger;
 
-    public MakeController(
-        IMakeRepository makeRepository,
-        ILogger<MakeController> logger)
+    public MakeController(IMakeRepository makeRepository, ILogger<MakeController> logger)
     {
         _makeRepository = makeRepository;
         _logger = logger;
@@ -34,7 +32,7 @@ public class MakeController : BaseApiController
             var makeResponse = makes.Select(m => new MakeResponseDto
             {
                 make_code = m.make_code,
-                make_description = m.make_description
+                make_description = m.make_description,
             });
             _logger.LogInformation("Retrieved {Count} makes", makes.Count());
             return Ok(makeResponse);
@@ -65,7 +63,7 @@ public class MakeController : BaseApiController
             var makeResponse = new MakeResponseDto
             {
                 make_code = make.make_code,
-                make_description = make.make_description
+                make_description = make.make_description,
             };
 
             _logger.LogInformation("Retrieved make with code {MakeCode}", makeCode);
@@ -82,7 +80,9 @@ public class MakeController : BaseApiController
     /// Search makes by name or code
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<MakeResponseDto>>> SearchMakes([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<MakeResponseDto>>> SearchMakes(
+        [FromQuery] string? searchTerm
+    )
     {
         try
         {
@@ -90,16 +90,39 @@ public class MakeController : BaseApiController
             var makeResponse = makes.Select(m => new MakeResponseDto
             {
                 make_code = m.make_code,
-                make_description = m.make_description
+                make_description = m.make_description,
             });
-            _logger.LogInformation("Found {Count} makes matching search term '{SearchTerm}'", 
-                makes.Count(), searchTerm);
+            _logger.LogInformation(
+                "Found {Count} makes matching search term '{SearchTerm}'",
+                makes.Count(),
+                searchTerm
+            );
             return Ok(makeResponse);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching makes with term '{SearchTerm}'", searchTerm);
             return StatusCode(500, "An error occurred while searching makes");
+        }
+    }
+
+    [HttpGet("{makeCode:int}/delete-check")]
+    public async Task<ActionResult<MakeDeleteCheck>> GetDeleteCheck(short makeCode)
+    {
+        try
+        {
+            var make = await _makeRepository.GetByIdAsync(makeCode);
+            if (make is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(await _makeRepository.GetDeleteCheckAsync(makeCode));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking make dependencies for {MakeCode}", makeCode);
+            return StatusCode(500, "An error occurred while checking make dependencies");
         }
     }
 
@@ -122,7 +145,7 @@ public class MakeController : BaseApiController
             var makeResponse = new MakeResponseDto
             {
                 make_code = make.make_code,
-                make_description = make.make_description
+                make_description = make.make_description,
             };
 
             _logger.LogInformation("Retrieved make with name {MakeName}", makeName);
@@ -139,41 +162,45 @@ public class MakeController : BaseApiController
     /// Create a new make
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<MakeResponseDto>> CreateMake([FromBody] CreateMakeDto createMakeDto)
+    public async Task<ActionResult<MakeResponseDto>> CreateMake(
+        [FromBody] CreateMakeDto createMakeDto
+    )
     {
         try
         {
             int currentUserId = GetCurrentUserId();
-            
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
             // Create Make entity from DTO (ID will be auto-generated)
-            var make = new Make
-            {
-                make_description = createMakeDto.make_description
-            };
+            var make = new Make { make_description = createMakeDto.make_description };
 
             var createdMake = await _makeRepository.CreateAsync(make, currentUserId);
-            
+
             var makeResponse = new MakeResponseDto
             {
                 make_code = createdMake.make_code,
-                make_description = createdMake.make_description
+                make_description = createdMake.make_description,
             };
-            
+
             _logger.LogInformation("Created new make with code {MakeCode}", createdMake.make_code);
-            
+
             return CreatedAtAction(
-                nameof(GetMake), 
-                new { makeCode = createdMake.make_code }, 
-                makeResponse);
+                nameof(GetMake),
+                new { makeCode = createdMake.make_code },
+                makeResponse
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating make: {MakeDescription}", createMakeDto.make_description);
+            _logger.LogError(
+                ex,
+                "Error creating make: {MakeDescription}",
+                createMakeDto.make_description
+            );
             return StatusCode(500, "An error occurred while creating the make");
         }
     }
@@ -182,7 +209,10 @@ public class MakeController : BaseApiController
     /// Update an existing make
     /// </summary>
     [HttpPut("{makeCode}")]
-    public async Task<ActionResult<MakeResponseDto>> UpdateMake(short makeCode, [FromBody] Make make)
+    public async Task<ActionResult<MakeResponseDto>> UpdateMake(
+        short makeCode,
+        [FromBody] Make make
+    )
     {
         try
         {
@@ -203,15 +233,15 @@ public class MakeController : BaseApiController
             }
 
             var updatedMake = await _makeRepository.UpdateAsync(make, GetCurrentUserId());
-            
+
             var makeResponse = new MakeResponseDto
             {
                 make_code = updatedMake.make_code,
-                make_description = updatedMake.make_description
+                make_description = updatedMake.make_description,
             };
-            
+
             _logger.LogInformation("Updated make with code {MakeCode}", makeCode);
-            
+
             return Ok(makeResponse);
         }
         catch (Exception ex)
@@ -235,9 +265,21 @@ public class MakeController : BaseApiController
                 return NotFound();
             }
 
+            var deleteCheck = await _makeRepository.GetDeleteCheckAsync(makeCode);
+            if (!deleteCheck.CanDelete)
+            {
+                return Conflict(
+                    new
+                    {
+                        message = "This make cannot be deleted while models are linked to it.",
+                        modelCount = deleteCheck.ModelCount,
+                    }
+                );
+            }
+
             await _makeRepository.DeleteAsync(makeCode, GetCurrentUserId());
             _logger.LogInformation("Deleted make with code {MakeCode}", makeCode);
-            
+
             return NoContent();
         }
         catch (Exception ex)

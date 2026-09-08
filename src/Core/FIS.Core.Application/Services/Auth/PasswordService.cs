@@ -1,5 +1,5 @@
-using FIS.Core.Application.Interfaces.Auth;
 using BCrypt.Net;
+using FIS.Core.Application.Interfaces.Auth;
 
 namespace FIS.Core.Application.Services.Auth;
 
@@ -43,15 +43,20 @@ public class PasswordService : IPasswordService
 
         foreach (char c in password)
         {
-            if (char.IsUpper(c)) hasUpper = true;
-            else if (char.IsLower(c)) hasLower = true;
-            else if (char.IsDigit(c)) hasDigit = true;
-            else if (!char.IsLetterOrDigit(c)) hasSpecial = true;
+            if (char.IsUpper(c))
+                hasUpper = true;
+            else if (char.IsLower(c))
+                hasLower = true;
+            else if (char.IsDigit(c))
+                hasDigit = true;
+            else if (!char.IsLetterOrDigit(c))
+                hasSpecial = true;
         }
 
         if (!hasUpper || !hasLower || !hasDigit || !hasSpecial)
         {
-            errorMessage = "Password must contain uppercase, lowercase, digit, and special character";
+            errorMessage =
+                "Password must contain uppercase, lowercase, digit, and special character";
             return false;
         }
 

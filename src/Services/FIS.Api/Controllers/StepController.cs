@@ -16,9 +16,10 @@ public class StepController : BaseApiController
     private readonly ILogger<StepController> _logger;
 
     public StepController(
-        IStepRepository repository, 
+        IStepRepository repository,
         IConditionEvaluator conditionEvaluator,
-        ILogger<StepController> logger)
+        ILogger<StepController> logger
+    )
     {
         _repository = repository;
         _conditionEvaluator = conditionEvaluator;
@@ -105,7 +106,7 @@ public class StepController : BaseApiController
                 IsConditional = dto.IsConditional,
                 ConditionExpression = dto.ConditionExpression,
                 TrueStepID = dto.TrueStepID,
-                FalseStepID = dto.FalseStepID
+                FalseStepID = dto.FalseStepID,
             };
 
             var created = await _repository.CreateAsync(step, GetCurrentUserId());
@@ -139,7 +140,7 @@ public class StepController : BaseApiController
                 IsConditional = dto.IsConditional,
                 ConditionExpression = dto.ConditionExpression,
                 TrueStepID = dto.TrueStepID,
-                FalseStepID = dto.FalseStepID
+                FalseStepID = dto.FalseStepID,
             };
 
             await _repository.UpdateAsync(step, GetCurrentUserId());
@@ -182,7 +183,9 @@ public class StepController : BaseApiController
             // Validate condition expression before saving
             if (!string.IsNullOrWhiteSpace(dto.ConditionExpression))
             {
-                var isValid = await _conditionEvaluator.ValidateExpressionAsync(dto.ConditionExpression);
+                var isValid = await _conditionEvaluator.ValidateExpressionAsync(
+                    dto.ConditionExpression
+                );
                 if (!isValid)
                 {
                     return BadRequest("Invalid condition expression syntax");
@@ -196,12 +199,15 @@ public class StepController : BaseApiController
 
             await _repository.UpdateAsync(step, GetCurrentUserId());
 
-            return Ok(new { 
-                message = "Step condition configured successfully", 
-                id,
-                isConditional = step.IsConditional,
-                conditionExpression = step.ConditionExpression
-            });
+            return Ok(
+                new
+                {
+                    message = "Step condition configured successfully",
+                    id,
+                    isConditional = step.IsConditional,
+                    conditionExpression = step.ConditionExpression,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -214,40 +220,51 @@ public class StepController : BaseApiController
     /// Test a condition expression with sample data
     /// </summary>
     [HttpPost("condition/test")]
-    public async Task<ActionResult<ConditionTestResultDto>> TestCondition([FromBody] TestConditionDto dto)
+    public async Task<ActionResult<ConditionTestResultDto>> TestCondition(
+        [FromBody] TestConditionDto dto
+    )
     {
         try
         {
             // Validate expression
-            var isValid = await _conditionEvaluator.ValidateExpressionAsync(dto.ConditionExpression);
+            var isValid = await _conditionEvaluator.ValidateExpressionAsync(
+                dto.ConditionExpression
+            );
             if (!isValid)
             {
                 return BadRequest("Invalid condition expression syntax");
             }
 
             // Evaluate with test data
-            var result = await _conditionEvaluator.EvaluateAsync(dto.ConditionExpression, dto.TestData);
+            var result = await _conditionEvaluator.EvaluateAsync(
+                dto.ConditionExpression,
+                dto.TestData
+            );
 
-            return Ok(new ConditionTestResultDto
-            {
-                IsValid = true,
-                EvaluationResult = result,
-                Expression = dto.ConditionExpression,
-                TestData = dto.TestData,
-                Message = $"Condition evaluated to: {result}"
-            });
+            return Ok(
+                new ConditionTestResultDto
+                {
+                    IsValid = true,
+                    EvaluationResult = result,
+                    Expression = dto.ConditionExpression,
+                    TestData = dto.TestData,
+                    Message = $"Condition evaluated to: {result}",
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error testing condition expression");
-            return Ok(new ConditionTestResultDto
-            {
-                IsValid = false,
-                EvaluationResult = false,
-                Expression = dto.ConditionExpression,
-                TestData = dto.TestData,
-                Message = $"Error: {ex.Message}"
-            });
+            return Ok(
+                new ConditionTestResultDto
+                {
+                    IsValid = false,
+                    EvaluationResult = false,
+                    Expression = dto.ConditionExpression,
+                    TestData = dto.TestData,
+                    Message = $"Error: {ex.Message}",
+                }
+            );
         }
     }
 
@@ -263,15 +280,17 @@ public class StepController : BaseApiController
             if (step == null)
                 return NotFound("Step not found");
 
-            return Ok(new StepConditionDto
-            {
-                StepID = step.StepID,
-                StepName = step.StepName,
-                IsConditional = step.IsConditional,
-                ConditionExpression = step.ConditionExpression,
-                TrueStepID = step.TrueStepID,
-                FalseStepID = step.FalseStepID
-            });
+            return Ok(
+                new StepConditionDto
+                {
+                    StepID = step.StepID,
+                    StepName = step.StepName,
+                    IsConditional = step.IsConditional,
+                    ConditionExpression = step.ConditionExpression,
+                    TrueStepID = step.TrueStepID,
+                    FalseStepID = step.FalseStepID,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -297,7 +316,7 @@ public class StepController : BaseApiController
             TrueStepID = step.TrueStepID,
             FalseStepID = step.FalseStepID,
             DateCreated = step.date_created,
-            DateUpdated = step.date_updated
+            DateUpdated = step.date_updated,
         };
     }
 }

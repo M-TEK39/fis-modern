@@ -30,7 +30,8 @@ public interface ITariffCalculationService
     Task<TariffResult> GetVehicleTariffAsync(
         int contractCode,
         DateTime checkDate,
-        TariffType tariffType);
+        TariffType tariffType
+    );
 
     /// <summary>
     /// Overload accepting full contract details for tariff calculation.
@@ -46,7 +47,8 @@ public interface ITariffCalculationService
         int departmentCode,
         string contractType,
         DateTime checkDate,
-        TariffType tariffType);
+        TariffType tariffType
+    );
 
     #endregion
 
@@ -73,7 +75,8 @@ public interface ITariffCalculationService
         int vehicleClassCode,
         int yearManufactured,
         DateTime effectiveDate,
-        string contractType);
+        string contractType
+    );
 
     /// <summary>
     /// Get kilometer tariff from legacy tariff table (pre-2009 system).
@@ -89,7 +92,8 @@ public interface ITariffCalculationService
     Task<decimal> GetLegacyKilometerTariffAsync(
         int vehicleClassCode,
         int yearManufactured,
-        DateTime effectiveDate);
+        DateTime effectiveDate
+    );
 
     #endregion
 
@@ -106,7 +110,8 @@ public interface ITariffCalculationService
     Task<VehicleTariff?> GetConfiguredVehicleTariffAsync(
         int vmfCode,
         int parameterYear,
-        DateTime effectiveDate);
+        DateTime effectiveDate
+    );
 
     /// <summary>
     /// Get fixed tariff from modern tariff system based on contract type.
@@ -173,7 +178,8 @@ public interface ITariffCalculationService
     decimal CalculateLeaseExcessCharge(
         LeaseTariff leaseTariff,
         int actualKilometers,
-        int contractedKilometers);
+        int contractedKilometers
+    );
 
     #endregion
 
@@ -253,7 +259,8 @@ public interface ITariffCalculationService
         int siteCode,
         int departmentCode,
         DateTime billingPeriodStart,
-        DateTime billingPeriodEnd);
+        DateTime billingPeriodEnd
+    );
 
     #endregion
 
@@ -272,7 +279,8 @@ public interface ITariffCalculationService
         DateTime periodStart,
         DateTime periodEnd,
         int? siteCode = null,
-        int? departmentCode = null);
+        int? departmentCode = null
+    );
 
     #endregion
 
@@ -328,7 +336,7 @@ public class TariffResult
             Amount = amount,
             Status = TariffStatus.Valid,
             Source = source,
-            Message = $"Tariff calculated successfully from {source} system"
+            Message = $"Tariff calculated successfully from {source} system",
         };
     }
 
@@ -342,7 +350,7 @@ public class TariffResult
             Amount = status == TariffStatus.Valid ? 0m : (decimal)status,
             Status = status,
             Source = TariffSource.None,
-            Message = message
+            Message = message,
         };
     }
 }
@@ -370,7 +378,7 @@ public enum TariffStatus
     /// <summary>
     /// Incomplete tariff - missing overhead or maintenance components (returns -3).
     /// </summary>
-    Incomplete = -3
+    Incomplete = -3,
 }
 
 /// <summary>
@@ -401,7 +409,7 @@ public enum TariffSource
     /// <summary>
     /// Special business rule (0.00 tariff for GGMT internal, relief vehicles, etc.).
     /// </summary>
-    SpecialRule
+    SpecialRule,
 }
 
 /// <summary>
@@ -417,7 +425,7 @@ public enum TariffType
     /// <summary>
     /// Kilometer tariff (per-kilometer charges).
     /// </summary>
-    Kilos
+    Kilos,
 }
 
 /// <summary>
@@ -438,7 +446,7 @@ public enum TariffSystem
     /// <summary>
     /// LeaseTariff table (lease-specific).
     /// </summary>
-    Lease
+    Lease,
 }
 
 /// <summary>
@@ -470,7 +478,7 @@ public class TariffValidationResult
         {
             IsValid = true,
             Status = TariffStatus.Valid,
-            Messages = new List<string> { "Tariff is complete and valid" }
+            Messages = new List<string> { "Tariff is complete and valid" },
         };
     }
 
@@ -483,7 +491,7 @@ public class TariffValidationResult
         {
             IsValid = false,
             Status = status,
-            Messages = messages.ToList()
+            Messages = messages.ToList(),
         };
     }
 }

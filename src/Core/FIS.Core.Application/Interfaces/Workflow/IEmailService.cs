@@ -13,12 +13,21 @@ public interface IEmailService
     /// <summary>
     /// Sends an email to multiple recipients
     /// </summary>
-    Task<EmailResult> SendEmailAsync(List<string> to, string subject, string body, bool isHtml = true);
+    Task<EmailResult> SendEmailAsync(
+        List<string> to,
+        string subject,
+        string body,
+        bool isHtml = true
+    );
 
     /// <summary>
     /// Sends an email using a template with variable substitution
     /// </summary>
-    Task<EmailResult> SendTemplatedEmailAsync(string to, string templateId, Dictionary<string, string> variables);
+    Task<EmailResult> SendTemplatedEmailAsync(
+        string to,
+        string templateId,
+        Dictionary<string, string> variables
+    );
 }
 
 /// <summary>
@@ -37,7 +46,7 @@ public class EmailResult
         {
             Success = true,
             MessageId = messageId,
-            StatusCode = 200
+            StatusCode = 200,
         };
     }
 
@@ -47,7 +56,7 @@ public class EmailResult
         {
             Success = false,
             ErrorMessage = errorMessage,
-            StatusCode = statusCode
+            StatusCode = statusCode,
         };
     }
 }

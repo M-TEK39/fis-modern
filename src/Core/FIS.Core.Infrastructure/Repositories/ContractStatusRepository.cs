@@ -25,9 +25,9 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>ContractStatus entity if found, null otherwise</returns>
     public async Task<ContractStatus?> GetByIdAsync(short statusCode)
     {
-        return await _context.ContractStatuses
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(cs => cs.contract_status_code == statusCode);
+        return await _context
+            .ContractStatuses.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(cs => cs.contract_status_code == statusCode);
     }
 
     /// <summary>
@@ -37,9 +37,9 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>ContractStatus entity if found, null otherwise</returns>
     public async Task<ContractStatus?> GetByDescriptionAsync(string description)
     {
-        return await _context.ContractStatuses
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(cs => cs.status_description == description);
+        return await _context
+            .ContractStatuses.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(cs => cs.status_description == description);
     }
 
     /// <summary>
@@ -49,9 +49,9 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>ContractStatus entity if found, null otherwise</returns>
     public async Task<ContractStatus?> GetByAbbreviationAsync(string abbreviation)
     {
-        return await _context.ContractStatuses
-                .Where(x => !x.is_deleted)
-                .FirstOrDefaultAsync(cs => cs.status_abbreviation == abbreviation);
+        return await _context
+            .ContractStatuses.Where(x => !x.is_deleted)
+            .FirstOrDefaultAsync(cs => cs.status_abbreviation == abbreviation);
     }
 
     /// <summary>
@@ -60,8 +60,8 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>List of all contract status entities</returns>
     public async Task<IEnumerable<ContractStatus>> GetAllStatusesAsync()
     {
-        return await _context.ContractStatuses
-                .Where(x => !x.is_deleted)
+        return await _context
+            .ContractStatuses.Where(x => !x.is_deleted)
             .OrderBy(cs => cs.status_description)
             .ToListAsync();
     }
@@ -72,8 +72,8 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>List of active contract status entities</returns>
     public async Task<IEnumerable<ContractStatus>> GetActiveStatusesAsync()
     {
-        return await _context.ContractStatuses
-            .Where(cs => cs.is_active)
+        return await _context
+            .ContractStatuses.Where(cs => cs.is_active)
             .OrderBy(cs => cs.status_description)
             .ToListAsync();
     }
@@ -84,8 +84,8 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>List of final contract status entities</returns>
     public async Task<IEnumerable<ContractStatus>> GetFinalStatusesAsync()
     {
-        return await _context.ContractStatuses
-            .Where(cs => cs.is_final)
+        return await _context
+            .ContractStatuses.Where(cs => cs.is_final)
             .OrderBy(cs => cs.status_description)
             .ToListAsync();
     }
@@ -97,9 +97,11 @@ public class ContractStatusRepository : IContractStatusRepository
     /// <returns>List of matching contract status entities</returns>
     public async Task<IEnumerable<ContractStatus>> SearchStatusesAsync(string searchTerm)
     {
-        return await _context.ContractStatuses
-            .Where(cs => cs.status_description.Contains(searchTerm) ||
-                        (cs.status_abbreviation != null && cs.status_abbreviation.Contains(searchTerm)))
+        return await _context
+            .ContractStatuses.Where(cs =>
+                cs.status_description.Contains(searchTerm)
+                || (cs.status_abbreviation != null && cs.status_abbreviation.Contains(searchTerm))
+            )
             .OrderBy(cs => cs.status_description)
             .ToListAsync();
     }
@@ -113,11 +115,11 @@ public class ContractStatusRepository : IContractStatusRepository
     public async Task<ContractStatus> CreateAsync(ContractStatus status, int currentUserId)
     {
         // Auto-populate audit fields
-            status.date_created = DateTime.UtcNow;
-            status.created_by_user_code = currentUserId;
-            status.is_deleted = false;
-            
-            _context.ContractStatuses.Add(status);
+        status.date_created = DateTime.UtcNow;
+        status.created_by_user_code = currentUserId;
+        status.is_deleted = false;
+
+        _context.ContractStatuses.Add(status);
         await _context.SaveChangesAsync();
         return status;
     }
@@ -135,7 +137,9 @@ public class ContractStatusRepository : IContractStatusRepository
 
         var existing = await _context.ContractStatuses.FindAsync(status.contract_status_code);
         if (existing == null)
-            throw new InvalidOperationException($"ContractStatus with contract_status_code {status.contract_status_code} not found");
+            throw new InvalidOperationException(
+                $"ContractStatus with contract_status_code {status.contract_status_code} not found"
+            );
 
         // Preserve creation audit fields
         status.date_created = existing.date_created;
@@ -143,7 +147,7 @@ public class ContractStatusRepository : IContractStatusRepository
         // Set update audit fields
         status.date_updated = DateTime.UtcNow;
         status.modified_by_user_code = currentUserId;
-        
+
         _context.Entry(existing).CurrentValues.SetValues(status);
         await _context.SaveChangesAsync();
         return existing;
@@ -162,9 +166,9 @@ public class ContractStatusRepository : IContractStatusRepository
             return false;
 
         // Soft delete instead of hard delete
-                status.is_deleted = true;
-                status.date_updated = DateTime.UtcNow;
-                status.modified_by_user_code = currentUserId;
+        status.is_deleted = true;
+        status.date_updated = DateTime.UtcNow;
+        status.modified_by_user_code = currentUserId;
         await _context.SaveChangesAsync();
         return true;
     }

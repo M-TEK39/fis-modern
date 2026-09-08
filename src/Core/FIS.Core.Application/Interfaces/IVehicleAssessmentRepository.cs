@@ -1,5 +1,7 @@
 using FIS.Core.Domain.Entities;
+
 namespace FIS.Core.Application.Interfaces;
+
 public interface IVehicleAssessmentRepository
 {
     Task<VehicleAssessment?> GetByIdAsync(int assessmentCode);

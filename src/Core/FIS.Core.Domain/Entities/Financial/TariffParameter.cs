@@ -67,10 +67,13 @@ public class TariffParameter
     public string? Approval_user_access_name { get; set; }
 
     // Navigation properties
-    public virtual ICollection<VehicleTariff> VehicleTariffs { get; set; } = new List<VehicleTariff>();
-    public virtual ICollection<MaintenanceValue> MaintenanceValues { get; set; } = new List<MaintenanceValue>();
+    public virtual ICollection<VehicleTariff> VehicleTariffs { get; set; } =
+        new List<VehicleTariff>();
+    public virtual ICollection<MaintenanceValue> MaintenanceValues { get; set; } =
+        new List<MaintenanceValue>();
     public virtual ICollection<Overhead> Overheads { get; set; } = new List<Overhead>();
-    public virtual ICollection<TariffWeightCalculation> WeightCalculations { get; set; } = new List<TariffWeightCalculation>();
+    public virtual ICollection<TariffWeightCalculation> WeightCalculations { get; set; } =
+        new List<TariffWeightCalculation>();
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
     [Column("date_created")]

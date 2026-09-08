@@ -16,20 +16,22 @@ public class StepTypeRepository : IStepTypeRepository
 
     public async Task<StepType?> GetByIdAsync(int stepTypeId)
     {
-        return await _context.StepTypes
-            .FirstOrDefaultAsync(st => st.StepTypeID == stepTypeId && !st.is_deleted);
+        return await _context.StepTypes.FirstOrDefaultAsync(st =>
+            st.StepTypeID == stepTypeId && !st.is_deleted
+        );
     }
 
     public async Task<StepType?> GetByNameAsync(string stepTypeName)
     {
-        return await _context.StepTypes
-            .FirstOrDefaultAsync(st => st.StepTypeName == stepTypeName && !st.is_deleted);
+        return await _context.StepTypes.FirstOrDefaultAsync(st =>
+            st.StepTypeName == stepTypeName && !st.is_deleted
+        );
     }
 
     public async Task<IEnumerable<StepType>> GetAllAsync()
     {
-        return await _context.StepTypes
-            .Where(st => !st.is_deleted)
+        return await _context
+            .StepTypes.Where(st => !st.is_deleted)
             .OrderBy(st => st.StepTypeName)
             .ToListAsync();
     }
@@ -52,7 +54,9 @@ public class StepTypeRepository : IStepTypeRepository
 
         var existing = await _context.StepTypes.FindAsync(stepType.StepTypeID);
         if (existing == null || existing.is_deleted)
-            throw new InvalidOperationException($"StepType with ID {stepType.StepTypeID} not found");
+            throw new InvalidOperationException(
+                $"StepType with ID {stepType.StepTypeID} not found"
+            );
 
         stepType.date_updated = DateTime.Now;
         stepType.modified_by_user_code = currentUserId;

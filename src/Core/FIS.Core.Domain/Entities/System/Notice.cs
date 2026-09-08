@@ -62,7 +62,8 @@ public class Notice
     /// <summary>
     /// Notice schedules associated with this notice
     /// </summary>
-    public virtual ICollection<NoticeSchedule> NoticeSchedules { get; set; } = new List<NoticeSchedule>();
+    public virtual ICollection<NoticeSchedule> NoticeSchedules { get; set; } =
+        new List<NoticeSchedule>();
 
     // Global audit fields (AI_CODING_RULES.md - Section 4.5)
     [Column("date_created")]

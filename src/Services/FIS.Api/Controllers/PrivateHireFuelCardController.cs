@@ -3,7 +3,6 @@ using FIS.Core.Domain.Entities.Vehicles;
 using FIS.Data.SqlServer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Controllers;
 
@@ -13,17 +12,29 @@ namespace FIS.Api.Controllers;
 public class PrivateHireFuelCardController : BaseApiController
 {
     private readonly IPrivateHireFuelCardRepository _repository;
-    private readonly FisDbContext _context;
     private readonly ILogger<PrivateHireFuelCardController> _logger;
 
     public PrivateHireFuelCardController(
         IPrivateHireFuelCardRepository repository,
-        FisDbContext context,
-        ILogger<PrivateHireFuelCardController> logger)
+        ILogger<PrivateHireFuelCardController> logger
+    )
     {
         _repository = repository;
-        _context = context;
         _logger = logger;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<IEnumerable<PrivateHireFuelCard>>> GetAll()
+    {
+        try
+        {
+            return Ok(await _repository.GetActiveFuelCardsAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving private hire fuel cards");
+            return StatusCode(500, "Error retrieving private hire fuel cards");
+        }
     }
 
     [HttpGet("{id}")]
@@ -42,7 +53,9 @@ public class PrivateHireFuelCardController : BaseApiController
     }
 
     [HttpGet("privatehire/{privateHireCode}")]
-    public async Task<ActionResult<IEnumerable<PrivateHireFuelCard>>> GetByPrivateHireCode(int privateHireCode)
+    public async Task<ActionResult<IEnumerable<PrivateHireFuelCard>>> GetByPrivateHireCode(
+        int privateHireCode
+    )
     {
         try
         {
@@ -51,13 +64,19 @@ public class PrivateHireFuelCardController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving private hire fuel cards for PHV {PrivateHireCode}", privateHireCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving private hire fuel cards for PHV {PrivateHireCode}",
+                privateHireCode
+            );
             return StatusCode(500, "Error retrieving private hire fuel cards");
         }
     }
 
     [HttpGet("registration/{registrationNumber}")]
-    public async Task<ActionResult<IEnumerable<PrivateHireFuelCard>>> GetByRegistrationNumber(string registrationNumber)
+    public async Task<ActionResult<IEnumerable<PrivateHireFuelCard>>> GetByRegistrationNumber(
+        string registrationNumber
+    )
     {
         try
         {
@@ -66,13 +85,19 @@ public class PrivateHireFuelCardController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving private hire fuel cards for registration {RegistrationNumber}", registrationNumber);
+            _logger.LogError(
+                ex,
+                "Error retrieving private hire fuel cards for registration {RegistrationNumber}",
+                registrationNumber
+            );
             return StatusCode(500, "Error retrieving private hire fuel cards");
         }
     }
 
     [HttpPost("delete/search")]
-    public async Task<ActionResult<PrivateHireFuelCardDeleteSearchResultDto>> SearchForDelete([FromBody] PrivateHireFuelCardDeleteSearchDto request)
+    public async Task<ActionResult<PrivateHireFuelCardDeleteSearchResultDto>> SearchForDelete(
+        [FromBody] PrivateHireFuelCardDeleteSearchDto request
+    )
     {
         try
         {
@@ -82,17 +107,26 @@ public class PrivateHireFuelCardController : BaseApiController
             }
 
             var card = await _repository.GetByCardNumberAsync(request.CardNumber.Trim());
-            return Ok(new PrivateHireFuelCardDeleteSearchResultDto
-            {
-                Found = card != null,
-                Message = card == null ? "Private hire fuel card not found" : "Private hire fuel card found and ready for deletion",
-                FuelCardCode = card?.PHFuel_card_code,
-                CardNumber = card?.card_number
-            });
+            return Ok(
+                new PrivateHireFuelCardDeleteSearchResultDto
+                {
+                    Found = card != null,
+                    Message =
+                        card == null
+                            ? "Private hire fuel card not found"
+                            : "Private hire fuel card found and ready for deletion",
+                    FuelCardCode = card?.PHFuel_card_code,
+                    CardNumber = card?.card_number,
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching private hire fuel card for deletion with card number {CardNumber}", request.CardNumber);
+            _logger.LogError(
+                ex,
+                "Error searching private hire fuel card for deletion with card number {CardNumber}",
+                request.CardNumber
+            );
             return StatusCode(500, "Error searching private hire fuel card");
         }
     }
@@ -113,7 +147,9 @@ public class PrivateHireFuelCardController : BaseApiController
     }
 
     [HttpPost]
-    public async Task<ActionResult<PrivateHireFuelCard>> Create([FromBody] CreatePrivateHireFuelCardRequest request)
+    public async Task<ActionResult<PrivateHireFuelCard>> Create(
+        [FromBody] CreatePrivateHireFuelCardRequest request
+    )
     {
         try
         {
@@ -128,19 +164,21 @@ public class PrivateHireFuelCardController : BaseApiController
             }
 
             var registration = request.RegistrationNumber.Trim();
-            var privateHire = await _context.PrivateHires
-                .Where(x => !x.is_deleted && x.registration_number != null && x.registration_number == registration)
-                .OrderByDescending(x => x.PHV_code)
-                .FirstOrDefaultAsync();
-
-            if (privateHire == null)
+            var privateHireCode = await _repository.GetPrivateHireCodeByRegistrationAsync(
+                registration
+            );
+            if (!privateHireCode.HasValue)
             {
-                return NotFound($"Private hire vehicle not found for registration '{registration}'.");
+                return NotFound(
+                    $"Private hire vehicle not found for registration '{registration}'."
+                );
             }
 
             if (!string.IsNullOrWhiteSpace(request.CardNumber))
             {
-                var existingCard = await _repository.GetByCardNumberAsync(request.CardNumber.Trim());
+                var existingCard = await _repository.GetByCardNumberAsync(
+                    request.CardNumber.Trim()
+                );
                 if (existingCard != null)
                 {
                     return Conflict($"Card number '{request.CardNumber.Trim()}' already exists.");
@@ -149,10 +187,14 @@ public class PrivateHireFuelCardController : BaseApiController
 
             var entity = new PrivateHireFuelCard
             {
-                phv_code = privateHire.PHV_code,
+                phv_code = privateHireCode.Value,
                 Counter = request.Counter,
-                card_number = string.IsNullOrWhiteSpace(request.CardNumber) ? null : request.CardNumber.Trim(),
-                PAN_number = string.IsNullOrWhiteSpace(request.PanNumber) ? null : request.PanNumber.Trim()
+                card_number = string.IsNullOrWhiteSpace(request.CardNumber)
+                    ? null
+                    : request.CardNumber.Trim(),
+                PAN_number = string.IsNullOrWhiteSpace(request.PanNumber)
+                    ? null
+                    : request.PanNumber.Trim(),
             };
 
             var created = await _repository.CreateAsync(entity, GetCurrentUserId());
@@ -160,7 +202,11 @@ public class PrivateHireFuelCardController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating private hire fuel card for registration {RegistrationNumber}", request.RegistrationNumber);
+            _logger.LogError(
+                ex,
+                "Error creating private hire fuel card for registration {RegistrationNumber}",
+                request.RegistrationNumber
+            );
             return StatusCode(500, "Error creating private hire fuel card");
         }
     }

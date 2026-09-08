@@ -109,11 +109,15 @@ public class StatusController : BaseApiController
                 DateStarted = dto.DateStarted,
                 DateCompleted = dto.DateCompleted,
                 IsBusy = dto.IsBusy,
-                StartedByUserName = dto.StartedByUserName
+                StartedByUserName = dto.StartedByUserName,
             };
 
             var created = await _repository.CreateAsync(status, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetById), new { id = created.StatusID }, MapToDto(created));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = created.StatusID },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -137,7 +141,7 @@ public class StatusController : BaseApiController
                 DateStarted = dto.DateStarted,
                 DateCompleted = dto.DateCompleted,
                 IsBusy = dto.IsBusy,
-                StartedByUserName = dto.StartedByUserName
+                StartedByUserName = dto.StartedByUserName,
             };
 
             await _repository.UpdateAsync(status, GetCurrentUserId());
@@ -176,7 +180,7 @@ public class StatusController : BaseApiController
             IsBusy = status.IsBusy,
             StartedByUserName = status.StartedByUserName,
             DateCreated = status.date_created,
-            DateUpdated = status.date_updated
+            DateUpdated = status.date_updated,
         };
     }
 }

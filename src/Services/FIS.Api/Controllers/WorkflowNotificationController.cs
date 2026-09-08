@@ -18,7 +18,8 @@ public class WorkflowNotificationController : BaseApiController
     public WorkflowNotificationController(
         IWorkflowNotificationRepository repository,
         INotificationService notificationService,
-        ILogger<WorkflowNotificationController> logger)
+        ILogger<WorkflowNotificationController> logger
+    )
     {
         _repository = repository;
         _notificationService = notificationService;
@@ -66,7 +67,9 @@ public class WorkflowNotificationController : BaseApiController
     /// Get notifications for a specific workflow
     /// </summary>
     [HttpGet("workflow/{workflowId}")]
-    public async Task<ActionResult<IEnumerable<WorkflowNotificationDto>>> GetByWorkflow(int workflowId)
+    public async Task<ActionResult<IEnumerable<WorkflowNotificationDto>>> GetByWorkflow(
+        int workflowId
+    )
     {
         try
         {
@@ -76,7 +79,11 @@ public class WorkflowNotificationController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving notifications for workflow {WorkflowId}", workflowId);
+            _logger.LogError(
+                ex,
+                "Error retrieving notifications for workflow {WorkflowId}",
+                workflowId
+            );
             return StatusCode(500, "Error retrieving notifications");
         }
     }
@@ -104,7 +111,9 @@ public class WorkflowNotificationController : BaseApiController
     /// Get notifications by event type
     /// </summary>
     [HttpGet("event/{eventType}")]
-    public async Task<ActionResult<IEnumerable<WorkflowNotificationDto>>> GetByEventType(string eventType)
+    public async Task<ActionResult<IEnumerable<WorkflowNotificationDto>>> GetByEventType(
+        string eventType
+    )
     {
         try
         {
@@ -123,7 +132,9 @@ public class WorkflowNotificationController : BaseApiController
     /// Create a new workflow notification
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<WorkflowNotificationDto>> Create([FromBody] CreateWorkflowNotificationDto dto)
+    public async Task<ActionResult<WorkflowNotificationDto>> Create(
+        [FromBody] CreateWorkflowNotificationDto dto
+    )
     {
         try
         {
@@ -138,11 +149,15 @@ public class WorkflowNotificationController : BaseApiController
                 Subject = dto.Subject,
                 Body = dto.Body,
                 IsActive = dto.IsActive,
-                SendDelay = dto.SendDelay
+                SendDelay = dto.SendDelay,
             };
 
             var created = await _repository.CreateAsync(notification, GetCurrentUserId());
-            return CreatedAtAction(nameof(GetById), new { id = created.NotificationID }, MapToDto(created));
+            return CreatedAtAction(
+                nameof(GetById),
+                new { id = created.NotificationID },
+                MapToDto(created)
+            );
         }
         catch (Exception ex)
         {
@@ -174,7 +189,7 @@ public class WorkflowNotificationController : BaseApiController
                 Subject = dto.Subject,
                 Body = dto.Body,
                 IsActive = dto.IsActive,
-                SendDelay = dto.SendDelay
+                SendDelay = dto.SendDelay,
             };
 
             await _repository.UpdateAsync(notification, GetCurrentUserId());
@@ -219,7 +234,11 @@ public class WorkflowNotificationController : BaseApiController
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving notification logs for workflow {WorkflowId}", workflowId);
+            _logger.LogError(
+                ex,
+                "Error retrieving notification logs for workflow {WorkflowId}",
+                workflowId
+            );
             return StatusCode(500, "Error retrieving notification logs");
         }
     }
@@ -276,7 +295,7 @@ public class WorkflowNotificationController : BaseApiController
             IsActive = notification.IsActive,
             SendDelay = notification.SendDelay,
             DateCreated = notification.date_created,
-            DateUpdated = notification.date_updated
+            DateUpdated = notification.date_updated,
         };
     }
 
@@ -296,7 +315,7 @@ public class WorkflowNotificationController : BaseApiController
             ErrorMessage = log.ErrorMessage,
             RetryCount = log.RetryCount,
             ExternalMessageId = log.ExternalMessageId,
-            DateCreated = log.date_created
+            DateCreated = log.date_created,
         };
     }
 }

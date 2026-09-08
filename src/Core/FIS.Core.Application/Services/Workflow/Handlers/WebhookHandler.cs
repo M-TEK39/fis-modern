@@ -1,8 +1,8 @@
-using FIS.Core.Application.Interfaces.Workflow;
-using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using FIS.Core.Application.Interfaces.Workflow;
+using Microsoft.Extensions.Logging;
 
 namespace FIS.Core.Application.Services.Workflow.Handlers;
 
@@ -12,12 +12,16 @@ public class WebhookHandler : StepHandlerBase
 
     public override string HandlerType => "webhook";
 
-    public WebhookHandler(IHttpClientFactory httpClientFactory, ILogger<WebhookHandler> logger) : base(logger)
+    public WebhookHandler(IHttpClientFactory httpClientFactory, ILogger<WebhookHandler> logger)
+        : base(logger)
     {
         _httpClientFactory = httpClientFactory;
     }
 
-    protected override async Task<StepExecutionResult> ExecuteInternalAsync(Dictionary<string, object> parameters, WorkflowExecutionContext context)
+    protected override async Task<StepExecutionResult> ExecuteInternalAsync(
+        Dictionary<string, object> parameters,
+        WorkflowExecutionContext context
+    )
     {
         var url = GetRequiredParameter<string>(parameters, "url");
         var method = GetOptionalParameter<string>(parameters, "method", "POST") ?? "POST";
@@ -30,7 +34,9 @@ public class WebhookHandler : StepHandlerBase
             var response = await httpClient.SendAsync(request);
             if (response.IsSuccessStatusCode)
             {
-                return StepExecutionResult.SuccessResult($"Webhook executed: {response.StatusCode}");
+                return StepExecutionResult.SuccessResult(
+                    $"Webhook executed: {response.StatusCode}"
+                );
             }
             return StepExecutionResult.FailureResult($"Webhook failed: {response.StatusCode}");
         }
@@ -40,11 +46,16 @@ public class WebhookHandler : StepHandlerBase
         }
     }
 
-    public override Task<Interfaces.Workflow.ValidationResult> ValidateParametersAsync(Dictionary<string, object> parameters)
+    public override Task<Interfaces.Workflow.ValidationResult> ValidateParametersAsync(
+        Dictionary<string, object> parameters
+    )
     {
         var result = new Interfaces.Workflow.ValidationResult { IsValid = true };
 
-        if (!parameters.ContainsKey("url") || string.IsNullOrWhiteSpace(parameters["url"]?.ToString()))
+        if (
+            !parameters.ContainsKey("url")
+            || string.IsNullOrWhiteSpace(parameters["url"]?.ToString())
+        )
             result.AddError("Parameter 'url' is required");
         else if (!Uri.TryCreate(parameters["url"].ToString(), UriKind.Absolute, out _))
             result.AddError("Parameter 'url' must be a valid URL");

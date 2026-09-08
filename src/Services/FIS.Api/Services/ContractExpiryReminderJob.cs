@@ -1,6 +1,6 @@
 using FIS.Core.Application.Interfaces;
-using Microsoft.EntityFrameworkCore;
 using FIS.Data.SqlServer;
+using Microsoft.EntityFrameworkCore;
 
 namespace FIS.Api.Services;
 
@@ -27,7 +27,8 @@ public class ContractExpiryReminderJob
     public ContractExpiryReminderJob(
         FisDbContext context,
         IEmailNotificationService emailNotification,
-        ILogger<ContractExpiryReminderJob> logger)
+        ILogger<ContractExpiryReminderJob> logger
+    )
     {
         _context = context;
         _emailNotification = emailNotification;
@@ -44,14 +45,15 @@ public class ContractExpiryReminderJob
         _logger.LogInformation("ContractExpiryReminderJob: starting daily check");
 
         var today = DateTime.Today;
-        int sent = 0, skipped = 0, errors = 0;
+        int sent = 0,
+            skipped = 0,
+            errors = 0;
 
         // Load active contracts that have a target return date
-        var contracts = await _context.Contracts
-            .Where(c =>
-                !c.is_deleted &&
-                c.still_current == "Y" &&
-                c.target_return_date.HasValue)
+        var contracts = await _context
+            .Contracts.Where(c =>
+                !c.is_deleted && c.still_current == "Y" && c.target_return_date.HasValue
+            )
             .Select(c => new { c.contract_code, c.target_return_date })
             .ToListAsync();
 
@@ -68,7 +70,10 @@ public class ContractExpiryReminderJob
 
             try
             {
-                var ok = await _emailNotification.SendContractExpiryReminderAsync(c.contract_code, daysRemaining);
+                var ok = await _emailNotification.SendContractExpiryReminderAsync(
+                    c.contract_code,
+                    daysRemaining
+                );
                 if (ok)
                     sent++;
                 else
@@ -77,14 +82,20 @@ public class ContractExpiryReminderJob
             catch (Exception ex)
             {
                 errors++;
-                _logger.LogError(ex,
+                _logger.LogError(
+                    ex,
                     "ContractExpiryReminderJob: error sending reminder for Contract {ContractId} ({Days} days)",
-                    c.contract_code, daysRemaining);
+                    c.contract_code,
+                    daysRemaining
+                );
             }
         }
 
         _logger.LogInformation(
             "ContractExpiryReminderJob: complete — {Sent} sent, {Errors} errors, {Skipped} not at milestone",
-            sent, errors, skipped);
+            sent,
+            errors,
+            skipped
+        );
     }
 }

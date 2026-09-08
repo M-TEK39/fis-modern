@@ -67,6 +67,36 @@ public class Towing
     [Column("Site_code")]
     public short? Site_code { get; set; }
 
+    /// <summary>
+    /// Contact person captured on the legacy Road Assistance form.
+    /// </summary>
+    [StringLength(30)]
+    [Column("Contact_person_name")]
+    public string? Contact_person_name { get; set; }
+
+    [StringLength(30)]
+    [Column("Contact_person_tel")]
+    public string? Contact_person_tel { get; set; }
+
+    [StringLength(10)]
+    [Column("Contact_person_cell")]
+    public string? Contact_person_cell { get; set; }
+
+    [StringLength(30)]
+    [Column("Person_at_vehicle_name")]
+    public string? Person_at_vehicle_name { get; set; }
+
+    [StringLength(10)]
+    [Column("Person_at_vehicle_cell")]
+    public string? Person_at_vehicle_cell { get; set; }
+
+    [StringLength(50)]
+    [Column("Remaks")]
+    public string? Remaks { get; set; }
+
+    [Column("Tow_Truck_code")]
+    public short? Tow_Truck_code { get; set; }
+
     // Navigation properties
     /// <summary>
     /// Associated vehicle

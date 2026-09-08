@@ -85,7 +85,10 @@ public interface IMaintenanceService
     /// <summary>
     /// Get maintenance records by date range
     /// </summary>
-    Task<IEnumerable<MaintenanceRecord>> GetMaintenanceByDateRangeAsync(DateTime startDate, DateTime endDate);
+    Task<IEnumerable<MaintenanceRecord>> GetMaintenanceByDateRangeAsync(
+        DateTime startDate,
+        DateTime endDate
+    );
 
     /// <summary>
     /// Check if roadworthy certificate is valid
@@ -132,7 +135,8 @@ public interface IMaintenanceService
         DateTime scheduledDate,
         string maintenanceType,
         string description,
-        int? estimatedOdometer = null);
+        int? estimatedOdometer = null
+    );
 
     /// <summary>
     /// Complete scheduled maintenance
@@ -143,7 +147,8 @@ public interface IMaintenanceService
         DateTime actualDate,
         int actualOdometer,
         decimal totalCost,
-        string? mechanicNotes = null);
+        string? mechanicNotes = null
+    );
 
     /// <summary>
     /// Cancel scheduled maintenance

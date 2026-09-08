@@ -29,16 +29,18 @@ public class RegistrationController : BaseApiController
     [HttpGet]
     public ActionResult GetRoot()
     {
-        return Ok(new
-        {
-            module = "Registration History",
-            endpoints = new[]
+        return Ok(
+            new
             {
-                "search?q={value}",
-                "vehicle/{vmfCode}",
-                "vehicle/{vmfCode} [POST]"
+                module = "Registration History",
+                endpoints = new[]
+                {
+                    "search?q={value}",
+                    "vehicle/{vmfCode}",
+                    "vehicle/{vmfCode} [POST]",
+                },
             }
-        });
+        );
     }
 
     /// <summary>
@@ -50,37 +52,48 @@ public class RegistrationController : BaseApiController
     {
         try
         {
-            var vehicle = await _context.Vehicles
-                .Where(v => v.vmf_code == vmfCode && !v.is_deleted)
-                .Select(v => new { v.vmf_code, v.fleet_number, v.registration_number })
+            var vehicle = await _context
+                .Vehicles.Where(v => v.vmf_code == vmfCode && !v.is_deleted)
+                .Select(v => new
+                {
+                    v.vmf_code,
+                    v.fleet_number,
+                    v.registration_number,
+                })
                 .FirstOrDefaultAsync();
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle {vmfCode} not found" });
 
-            var history = await _context.Registrations
-                .Where(r => r.vmf_code == vmfCode && !r.is_deleted)
+            var history = await _context
+                .Registrations.Where(r => r.vmf_code == vmfCode && !r.is_deleted)
                 .OrderByDescending(r => r.RegistrationDate)
                 .Select(r => new
                 {
                     registration_id = r.RegistrationID,
                     registration_number = r.RegistrationNumber,
                     recorded_date = r.RegistrationDate,
-                    is_current = false
+                    is_current = false,
                 })
                 .ToListAsync();
 
-            return Ok(new
-            {
-                vmf_code = vehicle.vmf_code,
-                fleet_number = vehicle.fleet_number,
-                current_registration = vehicle.registration_number,
-                history
-            });
+            return Ok(
+                new
+                {
+                    vmf_code = vehicle.vmf_code,
+                    fleet_number = vehicle.fleet_number,
+                    current_registration = vehicle.registration_number,
+                    history,
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving registration history for vehicle {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error retrieving registration history for vehicle {VmfCode}",
+                vmfCode
+            );
             return StatusCode(500, new { error = "Failed to retrieve registration history" });
         }
     }
@@ -102,38 +115,44 @@ public class RegistrationController : BaseApiController
             var term = q.Trim().ToUpper();
 
             // 1. Vehicles whose CURRENT registration matches
-            var currentMatches = await _context.Vehicles
-                .Where(v => !v.is_deleted &&
-                            v.registration_number != null &&
-                            v.registration_number.ToUpper().Contains(term))
+            var currentMatches = await _context
+                .Vehicles.Where(v =>
+                    !v.is_deleted
+                    && v.registration_number != null
+                    && v.registration_number.ToUpper().Contains(term)
+                )
                 .Select(v => new
                 {
                     vmf_code = v.vmf_code,
                     fleet_number = v.fleet_number,
                     current_registration = v.registration_number,
                     matched_registration = v.registration_number,
-                    is_historical_match = false
+                    is_historical_match = false,
                 })
                 .ToListAsync();
 
             // 2. Vehicles found via HISTORICAL registrations that aren't already in current matches
             var currentVmfCodes = currentMatches.Select(m => m.vmf_code).ToHashSet();
 
-            var historicalMatches = await _context.Registrations
-                .Where(r => !r.is_deleted &&
-                            r.RegistrationNumber.ToUpper().Contains(term))
-                .Join(_context.Vehicles.Where(v => !v.is_deleted),
-                      r => r.vmf_code,
-                      v => v.vmf_code,
-                      (r, v) => new
-                      {
-                          vmf_code = v.vmf_code,
-                          fleet_number = v.fleet_number,
-                          current_registration = v.registration_number,
-                          matched_registration = r.RegistrationNumber,
-                          recorded_date = r.RegistrationDate,
-                          is_historical_match = true
-                      })
+            var historicalMatches = await _context
+                .Registrations.Where(r =>
+                    !r.is_deleted && r.RegistrationNumber.ToUpper().Contains(term)
+                )
+                .Join(
+                    _context.Vehicles.Where(v => !v.is_deleted),
+                    r => r.vmf_code,
+                    v => v.vmf_code,
+                    (r, v) =>
+                        new
+                        {
+                            vmf_code = v.vmf_code,
+                            fleet_number = v.fleet_number,
+                            current_registration = v.registration_number,
+                            matched_registration = r.RegistrationNumber,
+                            recorded_date = r.RegistrationDate,
+                            is_historical_match = true,
+                        }
+                )
                 .Where(m => !currentVmfCodes.Contains(m.vmf_code))
                 .ToListAsync();
 
@@ -145,31 +164,38 @@ public class RegistrationController : BaseApiController
                     m.current_registration,
                     matched_registration = (string?)m.matched_registration,
                     m.is_historical_match,
-                    recorded_date = (DateTime?)null
+                    recorded_date = (DateTime?)null,
                 })
-                .Concat(historicalMatches.Select(m => new
-                {
-                    m.vmf_code,
-                    m.fleet_number,
-                    m.current_registration,
-                    matched_registration = (string?)m.matched_registration,
-                    m.is_historical_match,
-                    recorded_date = (DateTime?)m.recorded_date
-                }))
+                .Concat(
+                    historicalMatches.Select(m => new
+                    {
+                        m.vmf_code,
+                        m.fleet_number,
+                        m.current_registration,
+                        matched_registration = (string?)m.matched_registration,
+                        m.is_historical_match,
+                        recorded_date = (DateTime?)m.recorded_date,
+                    })
+                )
                 .OrderBy(m => m.is_historical_match)
                 .ThenBy(m => m.fleet_number)
                 .ToList();
 
             _logger.LogInformation(
                 "Registration search for '{Term}': {Current} current, {Historical} historical matches",
-                q, currentMatches.Count, historicalMatches.Count);
+                q,
+                currentMatches.Count,
+                historicalMatches.Count
+            );
 
-            return Ok(new
-            {
-                search_term = q,
-                total = results.Count,
-                results
-            });
+            return Ok(
+                new
+                {
+                    search_term = q,
+                    total = results.Count,
+                    results,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -183,15 +209,19 @@ public class RegistrationController : BaseApiController
     /// Use this to backfill historical GP numbers that were lost in the old system.
     /// </summary>
     [HttpPost("vehicle/{vmfCode}")]
-    public async Task<ActionResult> AddHistorical(int vmfCode, [FromBody] AddRegistrationDto request)
+    public async Task<ActionResult> AddHistorical(
+        int vmfCode,
+        [FromBody] AddRegistrationDto request
+    )
     {
         if (string.IsNullOrWhiteSpace(request.registration_number))
             return BadRequest(new { error = "registration_number is required" });
 
         try
         {
-            var vehicle = await _context.Vehicles
-                .FirstOrDefaultAsync(v => v.vmf_code == vmfCode && !v.is_deleted);
+            var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v =>
+                v.vmf_code == vmfCode && !v.is_deleted
+            );
 
             if (vehicle == null)
                 return NotFound(new { message = $"Vehicle {vmfCode} not found" });
@@ -203,7 +233,7 @@ public class RegistrationController : BaseApiController
                 RegistrationDate = request.effective_date ?? DateTime.UtcNow,
                 date_created = DateTime.UtcNow,
                 created_by_user_code = GetCurrentUserId(),
-                is_deleted = false
+                is_deleted = false,
             };
 
             _context.Registrations.Add(entry);
@@ -211,20 +241,28 @@ public class RegistrationController : BaseApiController
 
             _logger.LogInformation(
                 "Manually added historical registration '{Reg}' for vehicle {VmfCode}",
-                request.registration_number, vmfCode);
+                request.registration_number,
+                vmfCode
+            );
 
-            return Ok(new
-            {
-                message = "Historical registration recorded",
-                registration_id = entry.RegistrationID,
-                vmf_code = vmfCode,
-                registration_number = entry.RegistrationNumber,
-                recorded_date = entry.RegistrationDate
-            });
+            return Ok(
+                new
+                {
+                    message = "Historical registration recorded",
+                    registration_id = entry.RegistrationID,
+                    vmf_code = vmfCode,
+                    registration_number = entry.RegistrationNumber,
+                    recorded_date = entry.RegistrationDate,
+                }
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding historical registration for vehicle {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error adding historical registration for vehicle {VmfCode}",
+                vmfCode
+            );
             return StatusCode(500, new { error = "Failed to add historical registration" });
         }
     }

@@ -34,17 +34,25 @@ public class NoticesController : BaseApiController
         return Ok(ToDto(notice));
     }
 
+    [HttpGet("active")]
+    [AllowAnonymous]
+    public async Task<ActionResult<IEnumerable<NoticeDto>>> GetActive()
+    {
+        var notices = await _noticeRepository.GetActiveNoticesAsync();
+        return Ok(notices.Select(ToDto));
+    }
+
     [HttpPost]
     public async Task<ActionResult<NoticeDto>> Create([FromBody] CreateNoticeDto request)
     {
         var notice = new Notice
         {
-            notice_date = DateTime.UtcNow,
+            notice_date = request.NoticeDate ?? DateTime.UtcNow,
             notice_from = request.NoticeFrom,
             notice_title = request.NoticeTitle,
             notice_body = request.NoticeBody,
             notice_person = request.NoticePerson,
-            notice_person_title = request.NoticePersonTitle
+            notice_person_title = request.NoticePersonTitle,
         };
 
         var created = await _noticeRepository.CreateAsync(notice, GetCurrentUserId());
@@ -61,6 +69,7 @@ public class NoticesController : BaseApiController
         if (existing == null)
             return NotFound(new { message = $"Notice with ID {id} not found" });
 
+        existing.notice_date = request.NoticeDate;
         existing.notice_from = request.NoticeFrom;
         existing.notice_title = request.NoticeTitle;
         existing.notice_body = request.NoticeBody;
@@ -92,7 +101,8 @@ public class NoticesController : BaseApiController
             NoticeTitle = notice.notice_title,
             NoticeBody = notice.notice_body,
             NoticePerson = notice.notice_person,
-            NoticePersonTitle = notice.notice_person_title
+            NoticePersonTitle = notice.notice_person_title,
+            CreatedDate = notice.date_created,
         };
     }
 }

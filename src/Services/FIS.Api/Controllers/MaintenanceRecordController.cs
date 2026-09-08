@@ -18,7 +18,8 @@ public class MaintenanceRecordController : BaseApiController
 
     public MaintenanceRecordController(
         IMaintenanceService maintenanceService,
-        ILogger<MaintenanceRecordController> logger)
+        ILogger<MaintenanceRecordController> logger
+    )
     {
         _maintenanceService = maintenanceService;
         _logger = logger;
@@ -32,20 +33,32 @@ public class MaintenanceRecordController : BaseApiController
     {
         try
         {
-            var maintenanceRecord = await _maintenanceService.GetMaintenanceRecordByIdAsync(maintenanceId);
+            var maintenanceRecord = await _maintenanceService.GetMaintenanceRecordByIdAsync(
+                maintenanceId
+            );
             if (maintenanceRecord == null)
             {
-                _logger.LogWarning("Maintenance record with ID {MaintenanceId} not found", maintenanceId);
+                _logger.LogWarning(
+                    "Maintenance record with ID {MaintenanceId} not found",
+                    maintenanceId
+                );
                 return NotFound($"Maintenance record with ID {maintenanceId} not found");
             }
 
-            _logger.LogInformation("Retrieved maintenance record {MaintenanceId} for vehicle {VmfCode}", 
-                maintenanceId, maintenanceRecord.VmfCode);
+            _logger.LogInformation(
+                "Retrieved maintenance record {MaintenanceId} for vehicle {VmfCode}",
+                maintenanceId,
+                maintenanceRecord.VmfCode
+            );
             return Ok(maintenanceRecord);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving maintenance record {MaintenanceId}", maintenanceId);
+            _logger.LogError(
+                ex,
+                "Error retrieving maintenance record {MaintenanceId}",
+                maintenanceId
+            );
             return StatusCode(500, "An error occurred while retrieving the maintenance record");
         }
     }
@@ -54,19 +67,31 @@ public class MaintenanceRecordController : BaseApiController
     /// Get all maintenance records for a vehicle
     /// </summary>
     [HttpGet("vehicle/{vmfCode}")]
-    public async Task<ActionResult<IEnumerable<MaintenanceRecord>>> GetMaintenanceRecordsByVehicle(int vmfCode)
+    public async Task<ActionResult<IEnumerable<MaintenanceRecord>>> GetMaintenanceRecordsByVehicle(
+        int vmfCode
+    )
     {
         try
         {
             var maintenanceRecords = await _maintenanceService.GetMaintenanceHistoryAsync(vmfCode);
-            _logger.LogInformation("Found {Count} maintenance records for vehicle {VmfCode}", 
-                maintenanceRecords.Count(), vmfCode);
+            _logger.LogInformation(
+                "Found {Count} maintenance records for vehicle {VmfCode}",
+                maintenanceRecords.Count(),
+                vmfCode
+            );
             return Ok(maintenanceRecords);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving maintenance records for vehicle {VmfCode}", vmfCode);
-            return StatusCode(500, "An error occurred while retrieving maintenance records for the vehicle");
+            _logger.LogError(
+                ex,
+                "Error retrieving maintenance records for vehicle {VmfCode}",
+                vmfCode
+            );
+            return StatusCode(
+                500,
+                "An error occurred while retrieving maintenance records for the vehicle"
+            );
         }
     }
 
@@ -74,8 +99,9 @@ public class MaintenanceRecordController : BaseApiController
     /// Get maintenance records by date range
     /// </summary>
     [HttpGet("daterange")]
-    public async Task<ActionResult<IEnumerable<MaintenanceRecord>>> GetMaintenanceRecordsByDateRange(
-        [FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
+    public async Task<
+        ActionResult<IEnumerable<MaintenanceRecord>>
+    > GetMaintenanceRecordsByDateRange([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
     {
         try
         {
@@ -84,16 +110,30 @@ public class MaintenanceRecordController : BaseApiController
                 return BadRequest("Start date must be before or equal to end date");
             }
 
-            var maintenanceRecords = await _maintenanceService.GetMaintenanceByDateRangeAsync(startDate, endDate);
-            _logger.LogInformation("Found {Count} maintenance records between {StartDate} and {EndDate}", 
-                maintenanceRecords.Count(), startDate.ToShortDateString(), endDate.ToShortDateString());
+            var maintenanceRecords = await _maintenanceService.GetMaintenanceByDateRangeAsync(
+                startDate,
+                endDate
+            );
+            _logger.LogInformation(
+                "Found {Count} maintenance records between {StartDate} and {EndDate}",
+                maintenanceRecords.Count(),
+                startDate.ToShortDateString(),
+                endDate.ToShortDateString()
+            );
             return Ok(maintenanceRecords);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving maintenance records for date range {StartDate} - {EndDate}", 
-                startDate, endDate);
-            return StatusCode(500, "An error occurred while retrieving maintenance records for the date range");
+            _logger.LogError(
+                ex,
+                "Error retrieving maintenance records for date range {StartDate} - {EndDate}",
+                startDate,
+                endDate
+            );
+            return StatusCode(
+                500,
+                "An error occurred while retrieving maintenance records for the date range"
+            );
         }
     }
 
@@ -101,19 +141,33 @@ public class MaintenanceRecordController : BaseApiController
     /// Get maintenance records by service type
     /// </summary>
     [HttpGet("servicetype/{serviceType}")]
-    public async Task<ActionResult<IEnumerable<MaintenanceRecord>>> GetMaintenanceRecordsByServiceType(string serviceType)
+    public async Task<
+        ActionResult<IEnumerable<MaintenanceRecord>>
+    > GetMaintenanceRecordsByServiceType(string serviceType)
     {
         try
         {
-            var maintenanceRecords = await _maintenanceService.GetMaintenanceByTypeAsync(serviceType);
-            _logger.LogInformation("Found {Count} maintenance records for service type '{ServiceType}'", 
-                maintenanceRecords.Count(), serviceType);
+            var maintenanceRecords = await _maintenanceService.GetMaintenanceByTypeAsync(
+                serviceType
+            );
+            _logger.LogInformation(
+                "Found {Count} maintenance records for service type '{ServiceType}'",
+                maintenanceRecords.Count(),
+                serviceType
+            );
             return Ok(maintenanceRecords);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error retrieving maintenance records for service type '{ServiceType}'", serviceType);
-            return StatusCode(500, "An error occurred while retrieving maintenance records for the service type");
+            _logger.LogError(
+                ex,
+                "Error retrieving maintenance records for service type '{ServiceType}'",
+                serviceType
+            );
+            return StatusCode(
+                500,
+                "An error occurred while retrieving maintenance records for the service type"
+            );
         }
     }
 
@@ -121,19 +175,28 @@ public class MaintenanceRecordController : BaseApiController
     /// Search maintenance records by description, service provider, or work order
     /// </summary>
     [HttpGet("search")]
-    public async Task<ActionResult<IEnumerable<MaintenanceRecord>>> SearchMaintenanceRecords([FromQuery] string? searchTerm)
+    public async Task<ActionResult<IEnumerable<MaintenanceRecord>>> SearchMaintenanceRecords(
+        [FromQuery] string? searchTerm
+    )
     {
         try
         {
             // Note: Search not in service yet, would need to add to IMaintenanceService
             var maintenanceRecords = await _maintenanceService.GetMaintenanceByTypeAsync("SERVICE");
-            _logger.LogInformation("Found {Count} maintenance records matching search term '{SearchTerm}'", 
-                maintenanceRecords.Count(), searchTerm);
+            _logger.LogInformation(
+                "Found {Count} maintenance records matching search term '{SearchTerm}'",
+                maintenanceRecords.Count(),
+                searchTerm
+            );
             return Ok(maintenanceRecords);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching maintenance records with term '{SearchTerm}'", searchTerm);
+            _logger.LogError(
+                ex,
+                "Error searching maintenance records with term '{SearchTerm}'",
+                searchTerm
+            );
             return StatusCode(500, "An error occurred while searching maintenance records");
         }
     }
@@ -142,20 +205,35 @@ public class MaintenanceRecordController : BaseApiController
     /// Create a new maintenance record
     /// </summary>
     [HttpPost]
-    public async Task<ActionResult<MaintenanceRecord>> CreateMaintenanceRecord([FromBody] MaintenanceRecord maintenanceRecord)
+    public async Task<ActionResult<MaintenanceRecord>> CreateMaintenanceRecord(
+        [FromBody] MaintenanceRecord maintenanceRecord
+    )
     {
         try
         {
-            var createdMaintenanceRecord = await _maintenanceService.CreateMaintenanceRecordAsync(maintenanceRecord);
-            _logger.LogInformation("Created maintenance record {MaintenanceId} for vehicle {VmfCode}: {MaintenanceType}", 
-                createdMaintenanceRecord.MaintenanceId, createdMaintenanceRecord.VmfCode, createdMaintenanceRecord.MaintenanceType);
-            
-            return CreatedAtAction(nameof(GetMaintenanceRecord), 
-                new { maintenanceId = createdMaintenanceRecord.MaintenanceId }, createdMaintenanceRecord);
+            var createdMaintenanceRecord = await _maintenanceService.CreateMaintenanceRecordAsync(
+                maintenanceRecord
+            );
+            _logger.LogInformation(
+                "Created maintenance record {MaintenanceId} for vehicle {VmfCode}: {MaintenanceType}",
+                createdMaintenanceRecord.MaintenanceId,
+                createdMaintenanceRecord.VmfCode,
+                createdMaintenanceRecord.MaintenanceType
+            );
+
+            return CreatedAtAction(
+                nameof(GetMaintenanceRecord),
+                new { maintenanceId = createdMaintenanceRecord.MaintenanceId },
+                createdMaintenanceRecord
+            );
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error creating maintenance record for vehicle {VmfCode}", maintenanceRecord.VmfCode);
+            _logger.LogError(
+                ex,
+                "Error creating maintenance record for vehicle {VmfCode}",
+                maintenanceRecord.VmfCode
+            );
             return StatusCode(500, "An error occurred while creating the maintenance record");
         }
     }
@@ -164,7 +242,10 @@ public class MaintenanceRecordController : BaseApiController
     /// Update an existing maintenance record
     /// </summary>
     [HttpPut("{maintenanceId}")]
-    public async Task<ActionResult<MaintenanceRecord>> UpdateMaintenanceRecord(int maintenanceId, [FromBody] MaintenanceRecord maintenanceRecord)
+    public async Task<ActionResult<MaintenanceRecord>> UpdateMaintenanceRecord(
+        int maintenanceId,
+        [FromBody] MaintenanceRecord maintenanceRecord
+    )
     {
         try
         {
@@ -173,10 +254,15 @@ public class MaintenanceRecordController : BaseApiController
                 return BadRequest("Maintenance record ID mismatch");
             }
 
-            var existingMaintenanceRecord = await _maintenanceService.GetMaintenanceRecordByIdAsync(maintenanceId);
+            var existingMaintenanceRecord = await _maintenanceService.GetMaintenanceRecordByIdAsync(
+                maintenanceId
+            );
             if (existingMaintenanceRecord == null)
             {
-                _logger.LogWarning("Maintenance record with ID {MaintenanceId} not found for update", maintenanceId);
+                _logger.LogWarning(
+                    "Maintenance record with ID {MaintenanceId} not found for update",
+                    maintenanceId
+                );
                 return NotFound($"Maintenance record with ID {maintenanceId} not found");
             }
 
@@ -184,14 +270,21 @@ public class MaintenanceRecordController : BaseApiController
             maintenanceRecord.CreatedDate = existingMaintenanceRecord.CreatedDate;
 
             await _maintenanceService.UpdateMaintenanceRecordAsync(maintenanceRecord);
-            _logger.LogInformation("Updated maintenance record {MaintenanceId} for vehicle {VmfCode}", 
-                maintenanceId, maintenanceRecord.VmfCode);
-            
+            _logger.LogInformation(
+                "Updated maintenance record {MaintenanceId} for vehicle {VmfCode}",
+                maintenanceId,
+                maintenanceRecord.VmfCode
+            );
+
             return Ok(maintenanceRecord);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating maintenance record {MaintenanceId}", maintenanceId);
+            _logger.LogError(
+                ex,
+                "Error updating maintenance record {MaintenanceId}",
+                maintenanceId
+            );
             return StatusCode(500, "An error occurred while updating the maintenance record");
         }
     }
@@ -204,22 +297,34 @@ public class MaintenanceRecordController : BaseApiController
     {
         try
         {
-            var existingMaintenanceRecord = await _maintenanceService.GetMaintenanceRecordByIdAsync(maintenanceId);
+            var existingMaintenanceRecord = await _maintenanceService.GetMaintenanceRecordByIdAsync(
+                maintenanceId
+            );
             if (existingMaintenanceRecord == null)
             {
-                _logger.LogWarning("Maintenance record with ID {MaintenanceId} not found for deletion", maintenanceId);
+                _logger.LogWarning(
+                    "Maintenance record with ID {MaintenanceId} not found for deletion",
+                    maintenanceId
+                );
                 return NotFound($"Maintenance record with ID {maintenanceId} not found");
             }
 
             await _maintenanceService.DeleteMaintenanceRecordAsync(maintenanceId);
-            _logger.LogInformation("Deleted maintenance record {MaintenanceId} for vehicle {VmfCode}", 
-                maintenanceId, existingMaintenanceRecord.VmfCode);
-            
+            _logger.LogInformation(
+                "Deleted maintenance record {MaintenanceId} for vehicle {VmfCode}",
+                maintenanceId,
+                existingMaintenanceRecord.VmfCode
+            );
+
             return NoContent();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting maintenance record {MaintenanceId}", maintenanceId);
+            _logger.LogError(
+                ex,
+                "Error deleting maintenance record {MaintenanceId}",
+                maintenanceId
+            );
             return StatusCode(500, "An error occurred while deleting the maintenance record");
         }
     }
@@ -234,13 +339,20 @@ public class MaintenanceRecordController : BaseApiController
         {
             var stats = await _maintenanceService.GetMaintenanceStatisticsAsync(vmfCode);
 
-            _logger.LogInformation("Generated maintenance statistics for vehicle {VmfCode}: {TotalRecords} records", 
-                vmfCode, stats.TotalRecords);
+            _logger.LogInformation(
+                "Generated maintenance statistics for vehicle {VmfCode}: {TotalRecords} records",
+                vmfCode,
+                stats.TotalRecords
+            );
             return Ok(stats);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating maintenance statistics for vehicle {VmfCode}", vmfCode);
+            _logger.LogError(
+                ex,
+                "Error generating maintenance statistics for vehicle {VmfCode}",
+                vmfCode
+            );
             return StatusCode(500, "An error occurred while generating maintenance statistics");
         }
     }

@@ -14,7 +14,11 @@ public class LogbookController : BaseApiController
     private readonly IVehicleRepository _vehicleRepository;
     private readonly ILogger<LogbookController> _logger;
 
-    public LogbookController(ILogbookRepository repository, IVehicleRepository vehicleRepository, ILogger<LogbookController> logger)
+    public LogbookController(
+        ILogbookRepository repository,
+        IVehicleRepository vehicleRepository,
+        ILogger<LogbookController> logger
+    )
     {
         _repository = repository;
         _vehicleRepository = vehicleRepository;
@@ -24,36 +28,76 @@ public class LogbookController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<Logbook>>> GetAll()
     {
-        try { return Ok(await _repository.GetAllAsync()); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            return Ok(await _repository.GetAllAsync());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<Logbook>> GetById(short id)
     {
-        try { var item = await _repository.GetByIdAsync(id); return item == null ? NotFound() : Ok(item); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var item = await _repository.GetByIdAsync(id);
+            return item == null ? NotFound() : Ok(item);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPost]
     public async Task<ActionResult<Logbook>> Create([FromBody] Logbook item)
     {
-        try { var created = await _repository.CreateAsync(item, GetCurrentUserId()); return CreatedAtAction(nameof(GetById), new { id = created.logbookcode }, created); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            var created = await _repository.CreateAsync(item, GetCurrentUserId());
+            return CreatedAtAction(nameof(GetById), new { id = created.logbookcode }, created);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<ActionResult<Logbook>> Update(short id, [FromBody] Logbook item)
     {
-        try { if (id != item.logbookcode) return BadRequest(); return Ok(await _repository.UpdateAsync(item, GetCurrentUserId())); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            if (id != item.logbookcode)
+                return BadRequest();
+            return Ok(await _repository.UpdateAsync(item, GetCurrentUserId()));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     [HttpDelete("{id}")]
     public async Task<ActionResult> Delete(short id)
     {
-        try { await _repository.DeleteAsync(id, GetCurrentUserId()); return NoContent(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+        try
+        {
+            await _repository.DeleteAsync(id, GetCurrentUserId());
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error");
+            return StatusCode(500);
+        }
     }
 
     #region Specialized Operations
@@ -66,7 +110,7 @@ public class LogbookController : BaseApiController
     {
         var menu = new LogbookMenuDto
         {
-            Options = new List<string> { "Maintenance", "Collection", "Delete", "Reports", "Help" }
+            Options = new List<string> { "Maintenance", "Collection", "Delete", "Reports", "Help" },
         };
         return Ok(menu);
     }
@@ -80,7 +124,7 @@ public class LogbookController : BaseApiController
         var help = new LogbookHelpDto
         {
             Title = "Logbook Management Help",
-            Description = "Manage vehicle logbooks, track collection and returns"
+            Description = "Manage vehicle logbooks, track collection and returns",
         };
         return Ok(help);
     }
@@ -106,8 +150,11 @@ public class LogbookController : BaseApiController
             var result = new VehicleLookupDto
             {
                 Found = vehicle != null,
-                Message = vehicle != null ? $"Vehicle found: {vehicle.fleet_number}" : "Vehicle not found",
-                VmfCode = vehicle?.vmf_code
+                Message =
+                    vehicle != null
+                        ? $"Vehicle found: {vehicle.fleet_number}"
+                        : "Vehicle not found",
+                VmfCode = vehicle?.vmf_code,
             };
             return Ok(result);
         }
@@ -122,7 +169,9 @@ public class LogbookController : BaseApiController
     /// Process logbook collection
     /// </summary>
     [HttpPost("collection")]
-    public async Task<ActionResult<LogbookCollectionResultDto>> ProcessCollection([FromBody] LogbookCollectionDto request)
+    public async Task<ActionResult<LogbookCollectionResultDto>> ProcessCollection(
+        [FromBody] LogbookCollectionDto request
+    )
     {
         try
         {
@@ -136,7 +185,7 @@ public class LogbookController : BaseApiController
                 begin_num = request.BeginNumber,
                 end_num = request.EndNumber,
                 site_code = request.SiteCode,
-                lb_comment = request.Comments
+                lb_comment = request.Comments,
             };
 
             var created = await _repository.CreateAsync(logbook, GetCurrentUserId());
@@ -145,7 +194,7 @@ public class LogbookController : BaseApiController
             {
                 Success = true,
                 Message = "Logbook collection processed successfully",
-                LogbookCode = created.logbookcode
+                LogbookCode = created.logbookcode,
             };
             return Ok(result);
         }
@@ -190,7 +239,7 @@ public class LogbookController : BaseApiController
     {
         var menu = new ReportMenuDto
         {
-            Reports = new List<string> { "One Number", "Department Period" }
+            Reports = new List<string> { "One Number", "Department Period" },
         };
         return Ok(menu);
     }
@@ -199,7 +248,9 @@ public class LogbookController : BaseApiController
     /// Generate logbook report by number
     /// </summary>
     [HttpPost("reports/one-number")]
-    public async Task<ActionResult<LogbookReportDto>> GetReportByNumber([FromBody] LogbookOneNumberRequestDto request)
+    public async Task<ActionResult<LogbookReportDto>> GetReportByNumber(
+        [FromBody] LogbookOneNumberRequestDto request
+    )
     {
         try
         {
@@ -209,8 +260,22 @@ public class LogbookController : BaseApiController
             var allLogbooks = await _repository.GetAllAsync();
             var matchingLogbooks = allLogbooks
                 .Where(l => !l.is_deleted)
-                .Where(l => (l.begin_num != null && l.begin_num.Contains(request.LogbookNumber, StringComparison.OrdinalIgnoreCase)) ||
-                           (l.end_num != null && l.end_num.Contains(request.LogbookNumber, StringComparison.OrdinalIgnoreCase)))
+                .Where(l =>
+                    (
+                        l.begin_num != null
+                        && l.begin_num.Contains(
+                            request.LogbookNumber,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                    || (
+                        l.end_num != null
+                        && l.end_num.Contains(
+                            request.LogbookNumber,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+                )
                 .OrderByDescending(l => l.handout_date)
                 .ToList();
 
@@ -219,13 +284,17 @@ public class LogbookController : BaseApiController
                 ReportType = "OneNumber",
                 Data = matchingLogbooks.Cast<object>().ToList(),
                 RecordCount = matchingLogbooks.Count,
-                GeneratedDate = DateTime.UtcNow
+                GeneratedDate = DateTime.UtcNow,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating logbook report by number: {LogbookNumber}", request.LogbookNumber);
+            _logger.LogError(
+                ex,
+                "Error generating logbook report by number: {LogbookNumber}",
+                request.LogbookNumber
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -234,7 +303,9 @@ public class LogbookController : BaseApiController
     /// Generate logbook report by department and period
     /// </summary>
     [HttpPost("reports/department-period")]
-    public async Task<ActionResult<LogbookReportDto>> GetReportByDepartmentPeriod([FromBody] DepartmentPeriodRequestDto request)
+    public async Task<ActionResult<LogbookReportDto>> GetReportByDepartmentPeriod(
+        [FromBody] DepartmentPeriodRequestDto request
+    )
     {
         try
         {
@@ -244,9 +315,11 @@ public class LogbookController : BaseApiController
             // Filter by date range
             var filteredLogbooks = siteLogbooks
                 .Where(l => !l.is_deleted)
-                .Where(l => l.handout_date.HasValue &&
-                           l.handout_date.Value >= request.StartDate &&
-                           l.handout_date.Value <= request.EndDate)
+                .Where(l =>
+                    l.handout_date.HasValue
+                    && l.handout_date.Value >= request.StartDate
+                    && l.handout_date.Value <= request.EndDate
+                )
                 .OrderByDescending(l => l.handout_date)
                 .ToList();
 
@@ -257,14 +330,19 @@ public class LogbookController : BaseApiController
                 RecordCount = filteredLogbooks.Count,
                 GeneratedDate = DateTime.UtcNow,
                 StartDate = request.StartDate,
-                EndDate = request.EndDate
+                EndDate = request.EndDate,
             };
             return Ok(report);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error generating logbook report by department period: Department={DepartmentCode}, Start={StartDate}, End={EndDate}",
-                request.DepartmentCode, request.StartDate, request.EndDate);
+            _logger.LogError(
+                ex,
+                "Error generating logbook report by department period: Department={DepartmentCode}, Start={StartDate}, End={EndDate}",
+                request.DepartmentCode,
+                request.StartDate,
+                request.EndDate
+            );
             return StatusCode(500, "Error generating report");
         }
     }
@@ -273,9 +351,24 @@ public class LogbookController : BaseApiController
 }
 
 #region Logbook DTOs
-public class LogbookMenuDto { public List<string> Options { get; set; } = new(); }
-public class LogbookHelpDto { public string Title { get; set; } = ""; public string Description { get; set; } = ""; }
-public class VehicleLookupDto { public bool Found { get; set; } public string Message { get; set; } = ""; public int? VmfCode { get; set; } }
+public class LogbookMenuDto
+{
+    public List<string> Options { get; set; } = new();
+}
+
+public class LogbookHelpDto
+{
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+}
+
+public class VehicleLookupDto
+{
+    public bool Found { get; set; }
+    public string Message { get; set; } = "";
+    public int? VmfCode { get; set; }
+}
+
 public class LogbookCollectionDto
 {
     public short LogbookCode { get; set; }
@@ -288,10 +381,31 @@ public class LogbookCollectionDto
     public short? SiteCode { get; set; }
     public string? Comments { get; set; }
 }
-public class LogbookCollectionResultDto { public bool Success { get; set; } public string Message { get; set; } = ""; public short? LogbookCode { get; set; } }
-public class ReportMenuDto { public List<string> Reports { get; set; } = new(); }
-public class LogbookOneNumberRequestDto { public string LogbookNumber { get; set; } = ""; }
-public class DepartmentPeriodRequestDto { public int DepartmentCode { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } }
+
+public class LogbookCollectionResultDto
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public short? LogbookCode { get; set; }
+}
+
+public class ReportMenuDto
+{
+    public List<string> Reports { get; set; } = new();
+}
+
+public class LogbookOneNumberRequestDto
+{
+    public string LogbookNumber { get; set; } = "";
+}
+
+public class DepartmentPeriodRequestDto
+{
+    public int DepartmentCode { get; set; }
+    public DateTime StartDate { get; set; }
+    public DateTime EndDate { get; set; }
+}
+
 public class LogbookReportDto
 {
     public string ReportType { get; set; } = "";

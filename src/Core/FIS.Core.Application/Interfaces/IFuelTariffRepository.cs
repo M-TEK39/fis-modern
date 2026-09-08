@@ -51,7 +51,12 @@ namespace FIS.Core.Application.Interfaces
         /// <param name="notes">Optional notes about the rate change</param>
         /// <param name="currentUserId">User making the change</param>
         /// <returns>The newly created tariff</returns>
-        Task<FuelTariff> CreateNewRateAsync(short fuelTypeCode, decimal newRate, string? notes, int currentUserId);
+        Task<FuelTariff> CreateNewRateAsync(
+            short fuelTypeCode,
+            decimal newRate,
+            string? notes,
+            int currentUserId
+        );
 
         /// <summary>
         /// Deletes a fuel tariff (soft delete)

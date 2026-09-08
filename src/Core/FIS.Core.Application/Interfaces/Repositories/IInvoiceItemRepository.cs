@@ -59,7 +59,8 @@ public interface IInvoiceItemRepository
     Task<List<InvoiceItem>> GetByContractTypeAndPeriodAsync(
         string contractType,
         DateTime fromDate,
-        DateTime toDate);
+        DateTime toDate
+    );
 
     /// <summary>
     /// Get invoice items by vehicle and date range.
@@ -71,7 +72,8 @@ public interface IInvoiceItemRepository
     Task<List<InvoiceItem>> GetByVehicleAndPeriodAsync(
         int vmfCode,
         DateTime fromDate,
-        DateTime toDate);
+        DateTime toDate
+    );
 
     /// <summary>
     /// Get invoice items by contract type.
@@ -83,7 +85,8 @@ public interface IInvoiceItemRepository
     Task<List<InvoiceItem>> GetByTypeAndPeriodAsync(
         string contractType,
         DateTime fromDate,
-        DateTime toDate);
+        DateTime toDate
+    );
 
     /// <summary>
     /// Delete all items for an invoice (used for cancellations).
@@ -102,7 +105,8 @@ public interface IInvoiceItemRepository
     Task<InvoiceItemSummary> GetSummaryByDepartmentAsync(
         int departmentCode,
         DateTime fromDate,
-        DateTime toDate);
+        DateTime toDate
+    );
 }
 
 /// <summary>

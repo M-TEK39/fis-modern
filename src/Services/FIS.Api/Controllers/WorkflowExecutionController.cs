@@ -22,7 +22,8 @@ public class WorkflowExecutionController : BaseApiController
         IWorkflowRepository workflowRepository,
         IStepRepository stepRepository,
         IStatusRepository statusRepository,
-        ILogger<WorkflowExecutionController> logger)
+        ILogger<WorkflowExecutionController> logger
+    )
     {
         _workflowRepository = workflowRepository;
         _stepRepository = stepRepository;
@@ -34,7 +35,9 @@ public class WorkflowExecutionController : BaseApiController
     /// Start a new workflow instance
     /// </summary>
     [HttpPost("start")]
-    public async Task<ActionResult<WorkflowInstanceDto>> StartWorkflow([FromBody] StartWorkflowDto request)
+    public async Task<ActionResult<WorkflowInstanceDto>> StartWorkflow(
+        [FromBody] StartWorkflowDto request
+    )
     {
         try
         {
@@ -58,25 +61,31 @@ public class WorkflowExecutionController : BaseApiController
                 StepID = firstStep.StepID,
                 DateStarted = DateTime.Now,
                 IsBusy = true,
-                StartedByUserName = User.Identity?.Name ?? "Unknown"
+                StartedByUserName = User.Identity?.Name ?? "Unknown",
             };
 
             var createdStatus = await _statusRepository.CreateAsync(status, GetCurrentUserId());
 
-            _logger.LogInformation("Started workflow {WorkflowId} at step {StepId}", workflow.WorkflowID, firstStep.StepID);
+            _logger.LogInformation(
+                "Started workflow {WorkflowId} at step {StepId}",
+                workflow.WorkflowID,
+                firstStep.StepID
+            );
 
-            return Ok(new WorkflowInstanceDto
-            {
-                WorkflowID = workflow.WorkflowID,
-                WorkflowName = workflow.WorkflowName,
-                CurrentStepID = firstStep.StepID,
-                CurrentStepName = firstStep.StepName,
-                StatusID = createdStatus.StatusID,
-                IsActive = true,
-                StartedDate = status.DateStarted,
-                TotalSteps = stepsList.Count,
-                CurrentStepOrder = firstStep.StepOrder
-            });
+            return Ok(
+                new WorkflowInstanceDto
+                {
+                    WorkflowID = workflow.WorkflowID,
+                    WorkflowName = workflow.WorkflowName,
+                    CurrentStepID = firstStep.StepID,
+                    CurrentStepName = firstStep.StepName,
+                    StatusID = createdStatus.StatusID,
+                    IsActive = true,
+                    StartedDate = status.DateStarted,
+                    TotalSteps = stepsList.Count,
+                    CurrentStepOrder = firstStep.StepOrder,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -89,7 +98,9 @@ public class WorkflowExecutionController : BaseApiController
     /// Complete current step and move to next step
     /// </summary>
     [HttpPost("complete-step")]
-    public async Task<ActionResult<WorkflowInstanceDto>> CompleteStep([FromBody] CompleteStepDto request)
+    public async Task<ActionResult<WorkflowInstanceDto>> CompleteStep(
+        [FromBody] CompleteStepDto request
+    )
     {
         try
         {
@@ -123,19 +134,21 @@ public class WorkflowExecutionController : BaseApiController
 
                 var workflow = await _workflowRepository.GetByIdAsync(currentStep.WorkflowID);
 
-                return Ok(new WorkflowInstanceDto
-                {
-                    WorkflowID = currentStep.WorkflowID,
-                    WorkflowName = workflow?.WorkflowName,
-                    CurrentStepID = currentStep.StepID,
-                    CurrentStepName = currentStep.StepName,
-                    StatusID = currentStatus.StatusID,
-                    IsActive = false,
-                    IsCompleted = true,
-                    CompletedDate = DateTime.Now,
-                    TotalSteps = stepsList.Count,
-                    CurrentStepOrder = currentStep.StepOrder
-                });
+                return Ok(
+                    new WorkflowInstanceDto
+                    {
+                        WorkflowID = currentStep.WorkflowID,
+                        WorkflowName = workflow?.WorkflowName,
+                        CurrentStepID = currentStep.StepID,
+                        CurrentStepName = currentStep.StepName,
+                        StatusID = currentStatus.StatusID,
+                        IsActive = false,
+                        IsCompleted = true,
+                        CompletedDate = DateTime.Now,
+                        TotalSteps = stepsList.Count,
+                        CurrentStepOrder = currentStep.StepOrder,
+                    }
+                );
             }
 
             // Create status for next step
@@ -144,27 +157,36 @@ public class WorkflowExecutionController : BaseApiController
                 StepID = nextStep.StepID,
                 DateStarted = DateTime.Now,
                 IsBusy = true,
-                StartedByUserName = User.Identity?.Name ?? "Unknown"
+                StartedByUserName = User.Identity?.Name ?? "Unknown",
             };
 
-            var createdNextStatus = await _statusRepository.CreateAsync(nextStatus, GetCurrentUserId());
+            var createdNextStatus = await _statusRepository.CreateAsync(
+                nextStatus,
+                GetCurrentUserId()
+            );
 
-            _logger.LogInformation("Workflow {WorkflowId} advanced to step {StepId}", currentStep.WorkflowID, nextStep.StepID);
+            _logger.LogInformation(
+                "Workflow {WorkflowId} advanced to step {StepId}",
+                currentStep.WorkflowID,
+                nextStep.StepID
+            );
 
             var workflowForNext = await _workflowRepository.GetByIdAsync(currentStep.WorkflowID);
 
-            return Ok(new WorkflowInstanceDto
-            {
-                WorkflowID = currentStep.WorkflowID,
-                WorkflowName = workflowForNext?.WorkflowName,
-                CurrentStepID = nextStep.StepID,
-                CurrentStepName = nextStep.StepName,
-                StatusID = createdNextStatus.StatusID,
-                IsActive = true,
-                StartedDate = nextStatus.DateStarted,
-                TotalSteps = stepsList.Count,
-                CurrentStepOrder = nextStep.StepOrder
-            });
+            return Ok(
+                new WorkflowInstanceDto
+                {
+                    WorkflowID = currentStep.WorkflowID,
+                    WorkflowName = workflowForNext?.WorkflowName,
+                    CurrentStepID = nextStep.StepID,
+                    CurrentStepName = nextStep.StepName,
+                    StatusID = createdNextStatus.StatusID,
+                    IsActive = true,
+                    StartedDate = nextStatus.DateStarted,
+                    TotalSteps = stepsList.Count,
+                    CurrentStepOrder = nextStep.StepOrder,
+                }
+            );
         }
         catch (Exception ex)
         {
@@ -193,26 +215,31 @@ public class WorkflowExecutionController : BaseApiController
             var allSteps = await _stepRepository.GetByWorkflowIdAsync(step.WorkflowID);
             var stepsList = allSteps.OrderBy(s => s.StepOrder).ToList();
 
-            return Ok(new WorkflowStatusDto
-            {
-                StatusID = status.StatusID,
-                WorkflowID = step.WorkflowID,
-                WorkflowName = workflow?.WorkflowName,
-                CurrentStepID = step.StepID,
-                CurrentStepName = step.StepName,
-                CurrentStepOrder = step.StepOrder,
-                TotalSteps = stepsList.Count,
-                IsBusy = status.IsBusy,
-                DateStarted = status.DateStarted,
-                DateCompleted = status.DateCompleted,
-                StartedByUserName = status.StartedByUserName,
-                IsCompleted = status.DateCompleted != null
-            });
+            return Ok(
+                new WorkflowStatusDto
+                {
+                    StatusID = status.StatusID,
+                    WorkflowID = step.WorkflowID,
+                    WorkflowName = workflow?.WorkflowName,
+                    CurrentStepID = step.StepID,
+                    CurrentStepName = step.StepName,
+                    CurrentStepOrder = step.StepOrder,
+                    TotalSteps = stepsList.Count,
+                    IsBusy = status.IsBusy,
+                    DateStarted = status.DateStarted,
+                    DateCompleted = status.DateCompleted,
+                    StartedByUserName = status.StartedByUserName,
+                    IsCompleted = status.DateCompleted != null,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving workflow status");
-            return StatusCode(500, new { error = "Error retrieving workflow status", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error retrieving workflow status", message = ex.Message }
+            );
         }
     }
 
@@ -238,37 +265,46 @@ public class WorkflowExecutionController : BaseApiController
                 var statuses = await _statusRepository.GetByStepIdAsync(step.StepID);
                 var statusesList = statuses.OrderByDescending(s => s.DateStarted).ToList();
 
-                history.Add(new StepHistoryDto
-                {
-                    StepID = step.StepID,
-                    StepName = step.StepName,
-                    StepOrder = step.StepOrder,
-                    ExecutionCount = statusesList.Count,
-                    LastExecution = statusesList.FirstOrDefault()?.DateStarted,
-                    LastCompletion = statusesList.FirstOrDefault()?.DateCompleted,
-                    Executions = statusesList.Select(s => new StatusExecutionDto
+                history.Add(
+                    new StepHistoryDto
                     {
-                        StatusID = s.StatusID,
-                        DateStarted = s.DateStarted,
-                        DateCompleted = s.DateCompleted,
-                        StartedByUserName = s.StartedByUserName,
-                        IsBusy = s.IsBusy
-                    }).ToList()
-                });
+                        StepID = step.StepID,
+                        StepName = step.StepName,
+                        StepOrder = step.StepOrder,
+                        ExecutionCount = statusesList.Count,
+                        LastExecution = statusesList.FirstOrDefault()?.DateStarted,
+                        LastCompletion = statusesList.FirstOrDefault()?.DateCompleted,
+                        Executions = statusesList
+                            .Select(s => new StatusExecutionDto
+                            {
+                                StatusID = s.StatusID,
+                                DateStarted = s.DateStarted,
+                                DateCompleted = s.DateCompleted,
+                                StartedByUserName = s.StartedByUserName,
+                                IsBusy = s.IsBusy,
+                            })
+                            .ToList(),
+                    }
+                );
             }
 
-            return Ok(new WorkflowHistoryDto
-            {
-                WorkflowID = workflow.WorkflowID,
-                WorkflowName = workflow.WorkflowName,
-                TotalSteps = stepsList.Count,
-                StepHistory = history
-            });
+            return Ok(
+                new WorkflowHistoryDto
+                {
+                    WorkflowID = workflow.WorkflowID,
+                    WorkflowName = workflow.WorkflowName,
+                    TotalSteps = stepsList.Count,
+                    StepHistory = history,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving workflow history");
-            return StatusCode(500, new { error = "Error retrieving workflow history", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error retrieving workflow history", message = ex.Message }
+            );
         }
     }
 
@@ -294,12 +330,22 @@ public class WorkflowExecutionController : BaseApiController
 
             _logger.LogInformation("Workflow cancelled at status {StatusId}", request.StatusID);
 
-            return Ok(new { message = "Workflow cancelled successfully", statusId = request.StatusID, cancelledBy = User.Identity?.Name });
+            return Ok(
+                new
+                {
+                    message = "Workflow cancelled successfully",
+                    statusId = request.StatusID,
+                    cancelledBy = User.Identity?.Name,
+                }
+            );
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error cancelling workflow");
-            return StatusCode(500, new { error = "Error cancelling workflow", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error cancelling workflow", message = ex.Message }
+            );
         }
     }
 
@@ -317,20 +363,23 @@ public class WorkflowExecutionController : BaseApiController
             foreach (var status in activeStatuses)
             {
                 var step = await _stepRepository.GetByIdAsync(status.StepID);
-                if (step == null) continue;
+                if (step == null)
+                    continue;
 
                 var workflow = await _workflowRepository.GetByIdAsync(step.WorkflowID);
 
-                activeWorkflows.Add(new ActiveWorkflowDto
-                {
-                    StatusID = status.StatusID,
-                    WorkflowID = step.WorkflowID,
-                    WorkflowName = workflow?.WorkflowName,
-                    CurrentStepID = step.StepID,
-                    CurrentStepName = step.StepName,
-                    DateStarted = status.DateStarted,
-                    StartedByUserName = status.StartedByUserName
-                });
+                activeWorkflows.Add(
+                    new ActiveWorkflowDto
+                    {
+                        StatusID = status.StatusID,
+                        WorkflowID = step.WorkflowID,
+                        WorkflowName = workflow?.WorkflowName,
+                        CurrentStepID = step.StepID,
+                        CurrentStepName = step.StepName,
+                        DateStarted = status.DateStarted,
+                        StartedByUserName = status.StartedByUserName,
+                    }
+                );
             }
 
             return Ok(activeWorkflows);
@@ -338,7 +387,10 @@ public class WorkflowExecutionController : BaseApiController
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error retrieving active workflows");
-            return StatusCode(500, new { error = "Error retrieving active workflows", message = ex.Message });
+            return StatusCode(
+                500,
+                new { error = "Error retrieving active workflows", message = ex.Message }
+            );
         }
     }
 }

@@ -21,9 +21,12 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// <summary>
     /// Get all weight calculations for a tariff parameter year.
     /// </summary>
-    public async Task<List<TariffWeightCalculation>> GetByTariffParameterAsync(int tariffParameterId)
+    public async Task<List<TariffWeightCalculation>> GetByTariffParameterAsync(
+        int tariffParameterId
+    )
     {
-        return await _context.Set<TariffWeightCalculation>()
+        return await _context
+            .Set<TariffWeightCalculation>()
             .Where(twc => twc.TariffParameterID == tariffParameterId)
             .OrderBy(twc => twc.category)
             .ToListAsync();
@@ -32,16 +35,20 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// <summary>
     /// Get weight calculation for a specific category.
     /// </summary>
-    public async Task<TariffWeightCalculation?> GetByCategoryAsync(int tariffParameterId, string category)
+    public async Task<TariffWeightCalculation?> GetByCategoryAsync(
+        int tariffParameterId,
+        string category
+    )
     {
         // Note: The entity has category as decimal, which seems unusual
         // Attempting to parse the string to decimal for comparison
         if (decimal.TryParse(category, out decimal categoryValue))
         {
-            return await _context.Set<TariffWeightCalculation>()
+            return await _context
+                .Set<TariffWeightCalculation>()
                 .FirstOrDefaultAsync(twc =>
-                    twc.TariffParameterID == tariffParameterId &&
-                    twc.category == categoryValue);
+                    twc.TariffParameterID == tariffParameterId && twc.category == categoryValue
+                );
         }
         return null;
     }
@@ -51,8 +58,11 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// </summary>
     public async Task<TariffWeightCalculation?> GetByIdAsync(int tariffWeightCalculationId)
     {
-        return await _context.Set<TariffWeightCalculation>()
-            .FirstOrDefaultAsync(twc => twc.TariffWeightCalculation_Code == tariffWeightCalculationId);
+        return await _context
+            .Set<TariffWeightCalculation>()
+            .FirstOrDefaultAsync(twc =>
+                twc.TariffWeightCalculation_Code == tariffWeightCalculationId
+            );
     }
 
     /// <summary>
@@ -71,7 +81,10 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// <summary>
     /// Create new weight calculation.
     /// </summary>
-    public async Task<TariffWeightCalculation> CreateAsync(TariffWeightCalculation weightCalculation, int currentUserId)
+    public async Task<TariffWeightCalculation> CreateAsync(
+        TariffWeightCalculation weightCalculation,
+        int currentUserId
+    )
     {
         weightCalculation.calculation_date_time = DateTime.Now;
         _context.Set<TariffWeightCalculation>().Add(weightCalculation);
@@ -82,14 +95,21 @@ public class TariffWeightCalculationRepository : ITariffWeightCalculationReposit
     /// <summary>
     /// Update existing weight calculation.
     /// </summary>
-    public async Task<TariffWeightCalculation> UpdateAsync(TariffWeightCalculation weightCalculation, int currentUserId)
+    public async Task<TariffWeightCalculation> UpdateAsync(
+        TariffWeightCalculation weightCalculation,
+        int currentUserId
+    )
     {
         if (weightCalculation == null)
             throw new ArgumentNullException(nameof(weightCalculation));
 
-        var existing = await _context.Set<TariffWeightCalculation>().FindAsync(weightCalculation.TariffWeightCalculation_Code);
+        var existing = await _context
+            .Set<TariffWeightCalculation>()
+            .FindAsync(weightCalculation.TariffWeightCalculation_Code);
         if (existing == null)
-            throw new InvalidOperationException($"TariffWeightCalculation with TariffWeightCalculation_Code {weightCalculation.TariffWeightCalculation_Code} not found");
+            throw new InvalidOperationException(
+                $"TariffWeightCalculation with TariffWeightCalculation_Code {weightCalculation.TariffWeightCalculation_Code} not found"
+            );
 
         weightCalculation.calculation_date_time = DateTime.Now;
         _context.Entry(existing).CurrentValues.SetValues(weightCalculation);

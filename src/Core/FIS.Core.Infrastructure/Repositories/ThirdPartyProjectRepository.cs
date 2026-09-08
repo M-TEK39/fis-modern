@@ -16,7 +16,8 @@ public class ThirdPartyProjectRepository : IThirdPartyProjectRepository
 
     public async Task<ThirdPartyProject?> GetByIdAsync(int projectId)
     {
-        return await _context.Set<ThirdPartyProject>()
+        return await _context
+            .Set<ThirdPartyProject>()
             .Include(p => p.Department)
             .Include(p => p.Site)
             .FirstOrDefaultAsync(p => p.project_id == projectId && !p.is_deleted);
@@ -24,7 +25,8 @@ public class ThirdPartyProjectRepository : IThirdPartyProjectRepository
 
     public async Task<IEnumerable<ThirdPartyProject>> GetAllAsync()
     {
-        return await _context.Set<ThirdPartyProject>()
+        return await _context
+            .Set<ThirdPartyProject>()
             .Include(p => p.Department)
             .Include(p => p.Site)
             .Where(p => !p.is_deleted)
@@ -34,7 +36,8 @@ public class ThirdPartyProjectRepository : IThirdPartyProjectRepository
 
     public async Task<IEnumerable<ThirdPartyProject>> GetByDepartmentAsync(short departmentCode)
     {
-        return await _context.Set<ThirdPartyProject>()
+        return await _context
+            .Set<ThirdPartyProject>()
             .Include(p => p.Department)
             .Include(p => p.Site)
             .Where(p => p.department_code == departmentCode && !p.is_deleted)
@@ -55,8 +58,10 @@ public class ThirdPartyProjectRepository : IThirdPartyProjectRepository
 
     public async Task<ThirdPartyProject> UpdateAsync(ThirdPartyProject project, int currentUserId)
     {
-        var existing = await _context.Set<ThirdPartyProject>()
-            .FirstOrDefaultAsync(p => p.project_id == project.project_id)
+        var existing =
+            await _context
+                .Set<ThirdPartyProject>()
+                .FirstOrDefaultAsync(p => p.project_id == project.project_id)
             ?? throw new KeyNotFoundException($"Project {project.project_id} not found");
 
         existing.department_code = project.department_code;
@@ -83,8 +88,10 @@ public class ThirdPartyProjectRepository : IThirdPartyProjectRepository
 
     public async Task DeleteAsync(int projectId, int currentUserId)
     {
-        var project = await _context.Set<ThirdPartyProject>()
-            .FirstOrDefaultAsync(p => p.project_id == projectId)
+        var project =
+            await _context
+                .Set<ThirdPartyProject>()
+                .FirstOrDefaultAsync(p => p.project_id == projectId)
             ?? throw new KeyNotFoundException($"Project {projectId} not found");
 
         // Soft delete
