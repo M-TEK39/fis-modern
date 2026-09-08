@@ -197,6 +197,78 @@ export function getFinanceYears() {
   return getOptions("api/finance/reference/financial-years", ["code", "Code", "value", "Value"], ["name", "Name", "label", "Label"]);
 }
 
+function fallbackFinanceYears(): FinanceOption[] {
+  const currentYear = new Date().getUTCFullYear();
+  return Array.from({ length: 7 }, (_, index) => currentYear - 5 + index).map((year) => ({ value: String(year), label: String(year) }));
+}
+
+export async function getFinanceTariffYears() {
+  try {
+    const options = collection(await requestJson("api/finance/tariff-parameters/years")).map((item) => {
+      if (typeof item === "number" && Number.isSafeInteger(item)) return { value: String(item), label: String(item) };
+      if (typeof item === "string" && /^\d{4}$/.test(item.trim())) return { value: item.trim(), label: item.trim() };
+      if (!isRecord(item)) return null;
+      const raw = getValue(item, "value", "Value", "code", "Code", "year", "Year");
+      const year = typeof raw === "number" ? raw : Number(raw);
+      return Number.isSafeInteger(year) ? { value: String(year), label: String(year) } : null;
+    }).filter((item): item is FinanceOption => item !== null);
+    return options.length > 0 ? options : fallbackFinanceYears();
+  } catch {
+    return fallbackFinanceYears();
+  }
+}
+
+export type FinanceTariffParameters = {
+  year: number;
+  isApproved: boolean;
+  approvedBy: string | null;
+  effectiveDate: string | null;
+  parameters: Array<{ parameterName: string; value: number | null; unit: string }>;
+  fixedTariffs: Array<{ classCode: number | null; classDescription: string; amount: number | null; unit: string; effectiveDate: string | null }>;
+  kiloTariffs: Array<{ classCode: number | null; classDescription: string; amount: number | null; unit: string; effectiveDate: string | null }>;
+  maintenanceValues: Array<{ classCode: number | null; classDescription: string; monthsAge: number | null; kilometerAge: number | null; amount: number | null; randPerKilometer: number | null }>;
+};
+
+function mapTariffClassRow(item: unknown) {
+  if (!isRecord(item)) return null;
+  return {
+    classCode: asNumber(getValue(item, "classCode", "ClassCode")),
+    classDescription: asString(getValue(item, "classDescription", "ClassDescription")) ?? "",
+    amount: asNumber(getValue(item, "amount", "Amount")),
+    unit: asString(getValue(item, "unit", "Unit")) ?? "",
+    effectiveDate: asString(getValue(item, "effectiveDate", "EffectiveDate")),
+  };
+}
+
+export async function getFinanceTariffParameters(year: number): Promise<FinanceTariffParameters> {
+  const payload = await requestJson(`api/finance/tariff-parameters/${encodeURIComponent(String(year))}`);
+  if (!isRecord(payload)) throw new FinanceApiError("invalid-response", "The FIS API returned invalid tariff parameters.");
+  const mapRows = (keys: string[]) => collection(getValue(payload, ...keys)).map(mapTariffClassRow).filter((item): item is NonNullable<ReturnType<typeof mapTariffClassRow>> => item !== null);
+  const parameters = collection(getValue(payload, "parameters", "Parameters")).filter(isRecord).map((item) => ({
+    parameterName: asString(getValue(item, "parameterName", "ParameterName")) ?? "",
+    value: asNumber(getValue(item, "value", "Value")),
+    unit: asString(getValue(item, "unit", "Unit")) ?? "",
+  }));
+  const maintenanceValues = collection(getValue(payload, "maintenanceValues", "MaintenanceValues")).filter(isRecord).map((item) => ({
+    classCode: asNumber(getValue(item, "classCode", "ClassCode")),
+    classDescription: asString(getValue(item, "classDescription", "ClassDescription")) ?? "",
+    monthsAge: asNumber(getValue(item, "monthsAge", "MonthsAge")),
+    kilometerAge: asNumber(getValue(item, "kilometerAge", "KilometerAge")),
+    amount: asNumber(getValue(item, "amount", "Amount")),
+    randPerKilometer: asNumber(getValue(item, "randPerKilometer", "RandPerKilometer")),
+  }));
+  return {
+    year: asNumber(getValue(payload, "year", "Year")) ?? year,
+    isApproved: asBoolean(getValue(payload, "isApproved", "IsApproved", "is_approved")),
+    approvedBy: asString(getValue(payload, "approvedBy", "ApprovedBy", "approved_by")),
+    effectiveDate: asString(getValue(payload, "effectiveDate", "EffectiveDate", "effective_date")),
+    parameters,
+    fixedTariffs: mapRows(["fixedTariffs", "FixedTariffs"]),
+    kiloTariffs: mapRows(["kiloTariffs", "KiloTariffs"]),
+    maintenanceValues,
+  };
+}
+
 function formatBatchDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -276,6 +348,36 @@ export async function importBas(fileData: string, departmentCode?: number) {
 
 export async function activateBasSegments(segmentCodes: number[]) {
   return requestJson("api/finance/bas/segments/activate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ segmentCodes }) });
+}
+
+export async function importStandardBankFile(file: Blob, filename: string) {
+  const cookieHeader = await getForwardedAuthCookieHeader();
+  if (!cookieHeader) throw new FinanceApiError("unauthorized", "No FIS access cookie is available.");
+  const formData = new FormData();
+  formData.append("file", file, filename);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(new URL("api/finance/standard-bank/import", getApiBaseUrl()), {
+      method: "POST",
+      cache: "no-store",
+      headers: { accept: "application/json", cookie: cookieHeader },
+      body: formData,
+      signal: controller.signal,
+    });
+    if (response.status === 401 || response.status === 403) throw new FinanceApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+    if (!response.ok) throw new FinanceApiError(response.status >= 500 ? "unavailable" : "invalid-response", `FIS API returned HTTP ${response.status}.`, response.status);
+    try {
+      return (await response.json()) as unknown;
+    } catch {
+      throw new FinanceApiError("invalid-response", "The FIS API returned invalid JSON.");
+    }
+  } catch (error) {
+    if (error instanceof FinanceApiError) throw error;
+    throw new FinanceApiError("unavailable", "The FIS API could not be reached.");
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function runFinanceAction(path: string, body: unknown = {}) {

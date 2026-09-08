@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 
-import { FinanceFrame, FinanceMenuLink, FinanceMenuSection, FinanceNotice, FinanceRestricted, FinanceUnavailable, hasFinanceRole, hasRole } from "@/app/finance/_components";
+import { FinanceFrame, FinanceMenuLink, FinanceMenuSection, FinanceNotice, FinanceRestricted, FinanceUnavailable, hasCoisIdentity, hasFinanceRole, hasHeadOfficeFinanceAccess, hasRole } from "@/app/finance/_components";
 import { FinanceApiError, getBatchStatus, type FinanceBatchStatus } from "@/lib/api-finance";
 import { getSession } from "@/lib/session";
 
@@ -22,9 +22,9 @@ export default async function FinancePage() {
   const batchRunning = batch?.isActive === true;
   const administrator = hasRole(session.roles, "Administrator") || hasRole(session.roles, "Admin");
   const ownData = administrator || hasRole(session.roles, "Financial Data (Own Department)") || hasRole(session.roles, "Financial Data (All Departments)");
-  const headOffice = session.siteCode === "1598";
+  const headOffice = hasHeadOfficeFinanceAccess(session.siteCode, session.email, session.roles);
   const dept147 = session.departmentCode === "147";
-  const cois = false;
+  const cois = hasCoisIdentity(session.email, session.roles);
 
   return <FinanceFrame title="Finance Menu" description="Finance functions and reports.">
     {batchRunning ? <FinanceNotice>Batch is currently running. Finance functions are restricted while batch is active. <Link className="button button-secondary button-small" href="/finance/batch-management">Back to batch management screen</Link></FinanceNotice> : null}

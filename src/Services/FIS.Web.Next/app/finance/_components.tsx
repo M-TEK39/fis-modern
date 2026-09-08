@@ -10,6 +10,23 @@ export function hasRole(roles: readonly string[], role: string) {
   return roles.some((item) => item.trim().toLowerCase() === expected);
 }
 
+export function hasCoisIdentity(email: string | undefined, roles: readonly string[]) {
+  const username = email?.split("@", 1)[0]?.trim().toLowerCase();
+  return username === "cois" || hasRole(roles, "COIS");
+}
+
+export function hasHeadOfficeFinanceAccess(siteCode: string | undefined, email: string | undefined, roles: readonly string[]) {
+  return siteCode === "1598" || hasCoisIdentity(email, roles);
+}
+
+export function hasTariffParametersRole(roles: readonly string[]) {
+  return hasRole(roles, "Financial Tariff Parameters") || hasTariffApproverRole(roles);
+}
+
+export function hasTariffApproverRole(roles: readonly string[]) {
+  return hasRole(roles, "Financial Tariff Parameters (Approver)");
+}
+
 export function FinanceFrame({ title, description, children }: Readonly<{ title: string; description: string; children: ReactNode }>) {
   return (
     <main className="page-shell vehicle-page-shell">
