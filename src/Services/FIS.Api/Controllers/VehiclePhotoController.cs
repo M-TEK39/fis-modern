@@ -137,11 +137,9 @@ public class VehiclePhotoController : BaseApiController
             if (photo == null || string.IsNullOrEmpty(photo.FileUrl))
                 return NotFound(new { error = "Photo not found" });
 
-            var basePath = _config["PhotoStorage:BasePath"] ?? "uploads/photos";
-            var absPath  = Path.Combine(Directory.GetCurrentDirectory(), basePath,
-                               photo.FileUrl.Replace('/', Path.DirectorySeparatorChar));
+            var absPath = ResolveStoredPath(photo.FileUrl);
 
-            if (!System.IO.File.Exists(absPath))
+            if (absPath is null || !System.IO.File.Exists(absPath))
                 return NotFound(new { error = "File not found on server" });
 
             var ext      = Path.GetExtension(absPath).ToLowerInvariant();
@@ -197,10 +195,8 @@ public class VehiclePhotoController : BaseApiController
             var photo = await _repository.GetByIdAsync(id);
             if (photo != null && !string.IsNullOrEmpty(photo.FileUrl))
             {
-                var basePath = _config["PhotoStorage:BasePath"] ?? "uploads/photos";
-                var absPath  = Path.Combine(Directory.GetCurrentDirectory(), basePath,
-                                   photo.FileUrl.Replace('/', Path.DirectorySeparatorChar));
-                if (System.IO.File.Exists(absPath))
+                var absPath = ResolveStoredPath(photo.FileUrl);
+                if (absPath is not null && System.IO.File.Exists(absPath))
                     System.IO.File.Delete(absPath);
             }
 
@@ -208,5 +204,23 @@ public class VehiclePhotoController : BaseApiController
             return NoContent();
         }
         catch (Exception ex) { _logger.LogError(ex, "Error"); return StatusCode(500); }
+    }
+
+    private string? ResolveStoredPath(string? fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
+
+        var basePath = _config["PhotoStorage:BasePath"] ?? "uploads/photos";
+        var storageRoot = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), basePath));
+        var relativePath = fileUrl.Trim().Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        var candidate = Path.GetFullPath(Path.Combine(storageRoot, relativePath));
+        var relativeCandidate = Path.GetRelativePath(storageRoot, candidate);
+
+        return relativeCandidate == "."
+            || relativeCandidate.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+            || relativeCandidate == ".."
+            || Path.IsPathRooted(relativeCandidate)
+            ? null
+            : candidate;
     }
 }
