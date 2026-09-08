@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { hasFinanceRole } from "@/app/finance/_components";
 import { FinanceApiError, getFinanceOutput } from "@/lib/api-finance";
-import { dedicatedFinanceReportPath, getAuditFinanceReport, getBillingHistory, getDedicatedFinanceReport, getRegionalFinanceReport, getReversalTree, getUniversalFinanceReport, getWesbankFinanceReport, REGIONAL_SUMMARY_ACTIONS, type FinanceReport } from "@/lib/api-finance-reports";
+import { dedicatedFinanceReportPath, getAuditFinanceReport, getBillingHistory, getDedicatedFinanceReport, getMissingKilometresFinanceReport, getRegionalFinanceReport, getReversalTree, getUniversalFinanceReport, getWesbankFinanceReport, REGIONAL_SUMMARY_ACTIONS, type FinanceReport } from "@/lib/api-finance-reports";
 import { getSession } from "@/lib/session";
 
 function positiveInteger(value: string | null) {
@@ -42,6 +42,15 @@ export async function GET(request: Request) {
   const kind = query.get("kind") ?? "";
   const format = query.get("format") ?? "html";
   try {
+    if (kind === "interface") {
+      const action = query.get("action") ?? "";
+      const batchDate = query.get("batchDate") ?? "";
+      if (!["pastel-csv", "pastel-csv-customer"].includes(action) || !batchDate) return NextResponse.json({ message: "A valid interface action and batch date are required." }, { status: 400 });
+      const endpoint = action === "pastel-csv-customer" ? "api/finance/interface/pastel-csv-customer" : "api/finance/interface/pastel-csv";
+      const output = await getFinanceOutput(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ batchDate, financialSystemCode: 1 }) });
+      return outputResponse(output, `${action === "pastel-csv-customer" ? "pastel-customers" : "pastel-export"}-${Date.now()}.csv`, "attachment");
+    }
+
     if (kind === "dedicated") {
       const reportAction = query.get("reportAction") ?? "";
       const id = positiveInteger(query.get("id"));
@@ -87,6 +96,10 @@ export async function GET(request: Request) {
       report = await getAuditFinanceReport({ mode, auditType, outputFormat, departmentCode: query.get("departmentCode") ?? "", siteCode: query.get("siteCode") ?? "", vmfCode: positiveInteger(query.get("vmfCode")), startDate: query.get("startDate") ?? "", endDate: query.get("endDate") ?? "" });
     } else if (kind === "universal") {
       report = await getUniversalFinanceReport({ mode: query.get("action") ?? "financial", action: query.get("reportAction") ?? "", departmentCode: query.get("departmentCode") ?? "", siteCode: query.get("siteCode") ?? "", province: query.get("province") ?? "", financialYear: query.get("financialYear") ?? "", batchDate: query.get("batchDate") ?? "", vmfCode: positiveInteger(query.get("vmfCode")), startDate: query.get("startDate") ?? "", endDate: query.get("endDate") ?? "" });
+    } else if (kind === "missing-kilometres") {
+      const action = query.get("action") ?? "";
+      if (!["kilo-gaps-pdf", "kilo-gaps-xls"].includes(action) || !query.get("financialYear")) return NextResponse.json({ message: "A valid missing-kilometres action and financial year are required." }, { status: 400 });
+      report = await getMissingKilometresFinanceReport({ mode: action, financialYear: query.get("financialYear") ?? "" });
     } else {
       return NextResponse.json({ message: "Invalid Finance report output request." }, { status: 400 });
     }

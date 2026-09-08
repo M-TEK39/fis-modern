@@ -157,6 +157,27 @@ export async function getRegionalFinanceReport(input: {
   return { ...report, title: `${input.summaryType} regional finance` };
 }
 
+export async function getMissingKilometresFinanceReport(input: {
+  mode: string;
+  departmentCode?: string;
+  provinceCode?: string;
+  financialYear?: string;
+  excludeUnposted?: boolean;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const payload = await runFinanceAction("api/report/finance/missing-kilometres", {
+    mode: input.mode,
+    departmentCode: input.departmentCode ?? "",
+    provinceCode: input.provinceCode ?? "",
+    financialYear: input.financialYear ?? "",
+    excludeUnposted: input.excludeUnposted ?? false,
+    startDate: input.startDate || undefined,
+    endDate: input.endDate || undefined,
+  });
+  return mapFinanceReport(payload, `${input.mode} missing kilometres`);
+}
+
 export const WESBANK_REPORT_ACTIONS = [
   "summary-all",
   "department-summary",

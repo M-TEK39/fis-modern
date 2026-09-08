@@ -197,6 +197,38 @@ export function getFinanceYears() {
   return getOptions("api/finance/reference/financial-years", ["code", "Code", "value", "Value"], ["name", "Name", "label", "Label"]);
 }
 
+function formatBatchDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-ZA", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
+}
+
+function fallbackBatchDates(): FinanceOption[] {
+  const current = new Date();
+  const options: FinanceOption[] = [];
+  for (let offset = 0; offset < 12; offset += 1) {
+    const month = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() - offset, 1));
+    const value = month.toISOString().slice(0, 10);
+    options.push({ value, label: new Intl.DateTimeFormat("en-ZA", { month: "short", year: "numeric", timeZone: "UTC" }).format(month) });
+  }
+  return options;
+}
+
+export async function getFinanceBatchDates() {
+  try {
+    const options = collection(await requestJson("api/finance/reference/batch-dates")).map((item) => {
+      if (typeof item === "string") return { value: item, label: formatBatchDate(item) };
+      if (!isRecord(item)) return null;
+      const raw = getValue(item, "value", "Value", "date", "Date", "batchDate", "BatchDate");
+      if (typeof raw !== "string" || !raw.trim()) return null;
+      return { value: raw, label: formatBatchDate(raw) };
+    }).filter((item): item is FinanceOption => item !== null);
+    return options.length > 0 ? options : fallbackBatchDates();
+  } catch {
+    return fallbackBatchDates();
+  }
+}
+
 export function getFinanceSegmentTypes() {
   return getOptions("api/finance/reference/segment-types", ["value", "Value", "code", "Code", "id", "Id"], ["label", "Label", "name", "Name", "description", "Description"]);
 }
