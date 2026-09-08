@@ -12,6 +12,11 @@
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
+IF ISNULL(CONVERT(NVARCHAR(50), SESSION_CONTEXT(N'FIS_MIGRATION_RUNNER')), N'') <> N'FIS-ADDITIVE-ONLY'
+BEGIN
+    ;THROW 51000, 'This approved migration must be executed by DatabaseMigrationTool.', 1;
+END
+
 IF OBJECT_ID(N'dbo.fis_session_tokens', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.fis_session_tokens

@@ -42,9 +42,7 @@ public static class Program
 
             await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
-            Console.Error.WriteLine(
-                $"Auditing database '{connection.Database}' on '{connection.DataSource}' (read-only)."
-            );
+            Console.Error.WriteLine($"Auditing database '{connection.Database}' (read-only).");
 
             var report = await BuildReportAsync(connection);
             var output = options.Format switch

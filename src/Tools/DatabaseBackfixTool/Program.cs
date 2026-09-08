@@ -64,9 +64,7 @@ public static class Program
 
             await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
-            Console.Error.WriteLine(
-                $"Connected to database '{connection.Database}' on '{connection.DataSource}'."
-            );
+            Console.Error.WriteLine($"Connected to database '{connection.Database}'.");
 
             var planHash = Convert.ToHexString(
                 SHA256.HashData(await File.ReadAllBytesAsync(options.PlanPath))

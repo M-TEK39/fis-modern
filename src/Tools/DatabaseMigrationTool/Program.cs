@@ -35,9 +35,7 @@ public static class Program
 
             await using var connection = new SqlConnection(connectionString);
             await connection.OpenAsync();
-            Console.WriteLine(
-                $"Connected to database '{connection.Database}' on '{connection.DataSource}'."
-            );
+            Console.WriteLine($"Connected to database '{connection.Database}'.");
 
             if (!options.Apply)
             {
@@ -309,6 +307,7 @@ public static class Program
             try
             {
                 await EnsureLedgerAsync(connection, transaction);
+                await SetMigrationContextAsync(connection, transaction);
                 var applied = await ReadAppliedMigrationsAsync(connection, transaction);
                 var pending = 0;
 
@@ -379,6 +378,17 @@ public static class Program
         {
             CommandTimeout = 120,
         };
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task SetMigrationContextAsync(
+        SqlConnection connection,
+        SqlTransaction transaction
+    )
+    {
+        const string sql =
+            "EXEC sys.sp_set_session_context @key = N'FIS_MIGRATION_RUNNER', @value = N'FIS-ADDITIVE-ONLY';";
+        await using var command = new SqlCommand(sql, connection, transaction);
         await command.ExecuteNonQueryAsync();
     }
 
