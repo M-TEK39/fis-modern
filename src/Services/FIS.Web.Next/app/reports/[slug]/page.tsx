@@ -132,6 +132,7 @@ const FIS_REPORT_MENU: readonly ReportMenuEntry[] = [
   { label: "24) Registration Certificates", href: "/reports/registration-certificates", badge: "Menu" },
   { label: "25) Clearance Reports", href: "/reports/clearance", badge: "Menu" },
   { label: "29) Audit Trail Reports", href: "/reports/audit-trail", badge: "Menu" },
+  { label: "Request additional reports from the developer", href: "/reports/request", badge: "Menu" },
 ];
 
 function definitionFor(slug: string): ReportDefinition | null {

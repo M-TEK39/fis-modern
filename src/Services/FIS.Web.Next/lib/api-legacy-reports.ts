@@ -62,7 +62,13 @@ function asNumber(value: unknown) {
   return null;
 }
 
-async function requestApi(path: string) {
+function asBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") return ["true", "1", "yes", "y"].includes(value.trim().toLowerCase());
+  return null;
+}
+
+async function requestApi(path: string, init: RequestInit = {}) {
   const cookieHeader = await getForwardedAuthCookieHeader();
   if (!cookieHeader) throw new LegacyReportApiError("unauthorized", "No FIS access cookie is available.");
 
@@ -70,8 +76,9 @@ async function requestApi(path: string) {
   const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   try {
     const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
+      ...init,
       cache: "no-store",
-      headers: { accept: "application/json", cookie: cookieHeader },
+      headers: { accept: "application/json", cookie: cookieHeader, ...init.headers },
       signal: controller.signal,
     });
 
@@ -158,6 +165,19 @@ export type ReportHelp = {
   sections: Array<{ title: string; content: string }>;
 };
 
+export type AdditionalReportRequestInput = {
+  reportType: string;
+  requestedBy: string;
+  parameters: Record<string, string>;
+};
+
+export type ReportRequestResult = {
+  success: boolean;
+  requestId: string;
+  message: string;
+  estimatedCompletionTime: string | null;
+};
+
 export async function getReportHelp(): Promise<ReportHelp> {
   const value = await requestApi("api/report/help");
   if (!isRecord(value)) return { sections: [] };
@@ -174,5 +194,24 @@ export async function getReportHelp(): Promise<ReportHelp> {
         return title && content ? { title, content } : null;
       })
       .filter((section): section is { title: string; content: string } => section !== null),
+  };
+}
+
+export async function submitAdditionalReportRequest(input: AdditionalReportRequestInput): Promise<ReportRequestResult> {
+  const value = await requestApi("api/report/request-additional", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (!isRecord(value)) throw new LegacyReportApiError("invalid-response", "The FIS API returned an invalid report request result.");
+  const success = asBoolean(getValue(value, "success", "Success"));
+  if (success === null) throw new LegacyReportApiError("invalid-response", "The FIS API returned an invalid report request result.");
+
+  return {
+    success,
+    requestId: asString(getValue(value, "requestId", "RequestId")) ?? "",
+    message: asString(getValue(value, "message", "Message")) ?? (success ? "Report request submitted successfully." : "Report request failed."),
+    estimatedCompletionTime: asString(getValue(value, "estimatedCompletionTime", "EstimatedCompletionTime")),
   };
 }
