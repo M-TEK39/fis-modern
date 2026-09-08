@@ -87,6 +87,30 @@ There is no production command for creating or dropping a database. The
 development-only `docker-compose.dev.yml` may initialize its disposable local
 SQL Server, but that path is not part of production deployment.
 
+## Local development database
+
+The local Compose file owns the disposable development database workflow. It
+creates `fis_dev` if needed and starts a separate, guarded schema-bootstrap
+container that applies the existing clean-install EF migrations. The bootstrap
+refuses non-local SQL Server hosts, non-development database names, and any
+database that already contains tables without EF migration history.
+
+```bash
+./scripts/docker-dev.sh start-db
+```
+
+Demo data is a separate explicit operation and is never included in production
+Compose or the production API image:
+
+```bash
+./scripts/docker-dev.sh seed-db
+```
+
+The seed command is restricted to local `fis_dev`/`fis_test` databases and
+requires both Development mode and explicit confirmation. Use a restored or
+sanitized client database separately when testing legacy-schema compatibility;
+never run the development bootstrap or seed command against that database.
+
 ## 4. Prepare and validate a back-fix plan
 
 The audit identifies records needing review; it does not choose a canonical
