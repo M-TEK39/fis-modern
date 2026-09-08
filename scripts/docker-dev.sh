@@ -134,7 +134,7 @@ start_full() {
     cd "$PROJECT_ROOT"
     run_compose -f docker/docker-compose.yml up -d
     print_status "Full application started successfully!"
-    print_status "API: http://localhost:5000"
+    print_status "API: https://localhost:5443"
     print_status "Web: https://localhost (Next.js via nginx)"
     print_status "Database: ${DB_HOST}:${DB_PORT} (external Windows SQL Server)"
 }
