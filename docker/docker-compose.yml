@@ -102,6 +102,41 @@ services:
     networks:
       - fis-network
 
+  # Read-only data-quality audit (run on demand; emits text, JSON, or CSV).
+  db-audit:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    container_name: fis-db-audit
+    working_dir: /tmp
+    volumes:
+      - ..:/src
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseAuditTool/DatabaseAuditTool.csproj", "--"]
+    environment:
+      - ConnectionStrings__Default=${ConnectionStrings__Default:?Set a real SQL Server connection string for db-audit}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+    restart: "no"
+    profiles:
+      - tools
+    networks:
+      - fis-network
+
+  # Reviewed data back-fix (run on demand; validation is the default).
+  db-backfix:
+    image: mcr.microsoft.com/dotnet/sdk:8.0
+    container_name: fis-db-backfix
+    working_dir: /tmp
+    volumes:
+      - ..:/src
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseBackfixTool/DatabaseBackfixTool.csproj", "--"]
+    environment:
+      - ConnectionStrings__Default=${ConnectionStrings__Default:?Set a real SQL Server connection string for db-backfix}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - FIS_ALLOW_PRODUCTION_DATA_FIXES=${FIS_ALLOW_PRODUCTION_DATA_FIXES:-}
+    restart: "no"
+    profiles:
+      - tools
+    networks:
+      - fis-network
+
   # Cloudflare tunnel (run on demand)
   cloudflared:
     image: cloudflare/cloudflared:2026.2.0

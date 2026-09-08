@@ -210,6 +210,11 @@ public static class Program
                     $"Back-fix item '{item.FixId}' requires a non-empty NewValue."
                 );
 
+            if (string.IsNullOrWhiteSpace(item.Reason))
+                throw new InvalidOperationException(
+                    $"Back-fix item '{item.FixId}' requires a review reason."
+                );
+
             if (item.NewValue.Length > 4000)
                 throw new InvalidOperationException(
                     $"Back-fix item '{item.FixId}' NewValue is too long."
@@ -481,24 +486,7 @@ public static class Program
         const string sql = """
             IF OBJECT_ID(N'dbo.fis_data_fix_audit', N'U') IS NULL
             BEGIN
-                CREATE TABLE dbo.fis_data_fix_audit
-                (
-                    audit_id BIGINT IDENTITY(1, 1) NOT NULL,
-                    run_id UNIQUEIDENTIFIER NOT NULL,
-                    plan_id NVARCHAR(200) NOT NULL,
-                    plan_sha256 CHAR(64) NOT NULL,
-                    fix_id NVARCHAR(200) NOT NULL,
-                    table_name NVARCHAR(128) NOT NULL,
-                    key_column NVARCHAR(128) NOT NULL,
-                    key_value NVARCHAR(256) NOT NULL,
-                    column_name NVARCHAR(128) NOT NULL,
-                    old_value NVARCHAR(MAX) NULL,
-                    new_value NVARCHAR(MAX) NOT NULL,
-                    approved_by NVARCHAR(256) NOT NULL,
-                    applied_at_utc DATETIME2(7) NOT NULL CONSTRAINT DF_fis_data_fix_audit_applied_at_utc DEFAULT SYSUTCDATETIME(),
-                    CONSTRAINT PK_fis_data_fix_audit PRIMARY KEY (audit_id)
-                );
-                CREATE INDEX IX_fis_data_fix_audit_plan ON dbo.fis_data_fix_audit(plan_id, plan_sha256);
+                ;THROW 51020, 'dbo.fis_data_fix_audit is missing; run the guarded additive migration first.', 1;
             END
             ELSE IF (
                 SELECT COUNT(*)
@@ -512,7 +500,17 @@ public static class Program
                   )
             ) <> 13
             BEGIN
-                THROW 51020, 'dbo.fis_data_fix_audit exists with an unexpected shape; manual review is required.', 1;
+                ;THROW 51021, 'dbo.fis_data_fix_audit exists with an unexpected shape; manual review is required.', 1;
+            END
+            IF NOT EXISTS
+            (
+                SELECT 1
+                FROM sys.indexes
+                WHERE object_id = OBJECT_ID(N'dbo.fis_data_fix_audit')
+                  AND name = N'IX_fis_data_fix_audit_plan'
+            )
+            BEGIN
+                ;THROW 51022, 'dbo.fis_data_fix_audit is missing its plan index; manual review is required.', 1;
             END
             """;
         await using var command = new SqlCommand(sql, connection, transaction);

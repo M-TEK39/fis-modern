@@ -124,3 +124,51 @@ ELSE IF EXISTS
 BEGIN
     ;THROW 51005, 'dbo.Call_centre.Incident_Desc exists with an unexpected shape; manual review is required.', 1;
 END
+
+IF OBJECT_ID(N'dbo.fis_data_fix_audit', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.fis_data_fix_audit
+    (
+        audit_id BIGINT IDENTITY(1, 1) NOT NULL,
+        run_id UNIQUEIDENTIFIER NOT NULL,
+        plan_id NVARCHAR(200) NOT NULL,
+        plan_sha256 CHAR(64) NOT NULL,
+        fix_id NVARCHAR(200) NOT NULL,
+        table_name NVARCHAR(128) NOT NULL,
+        key_column NVARCHAR(128) NOT NULL,
+        key_value NVARCHAR(256) NOT NULL,
+        column_name NVARCHAR(128) NOT NULL,
+        old_value NVARCHAR(MAX) NULL,
+        new_value NVARCHAR(MAX) NOT NULL,
+        approved_by NVARCHAR(256) NOT NULL,
+        applied_at_utc DATETIME2(7) NOT NULL CONSTRAINT DF_fis_data_fix_audit_applied_at_utc DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT PK_fis_data_fix_audit PRIMARY KEY (audit_id)
+    );
+END
+ELSE IF
+(
+    SELECT COUNT(*)
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID(N'dbo.fis_data_fix_audit')
+      AND name IN
+      (
+          N'audit_id', N'run_id', N'plan_id', N'plan_sha256', N'fix_id',
+          N'table_name', N'key_column', N'key_value', N'column_name',
+          N'old_value', N'new_value', N'approved_by', N'applied_at_utc'
+      )
+) <> 13
+BEGIN
+    ;THROW 51006, 'dbo.fis_data_fix_audit exists with an unexpected shape; manual review is required.', 1;
+END
+
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes
+    WHERE object_id = OBJECT_ID(N'dbo.fis_data_fix_audit')
+      AND name = N'IX_fis_data_fix_audit_plan'
+)
+BEGIN
+    CREATE INDEX IX_fis_data_fix_audit_plan
+        ON dbo.fis_data_fix_audit(plan_id, plan_sha256);
+END

@@ -20,6 +20,17 @@ public class Program
 {
     public static async Task Main(string[] args)
     {
+        try
+        {
+            ValidateSeedAuthorization(args);
+        }
+        catch (InvalidOperationException exception)
+        {
+            Console.Error.WriteLine($"Database seeding refused: {exception.Message}");
+            Environment.ExitCode = 1;
+            return;
+        }
+
         Console.WriteLine("🌱 FIS Database Seeder Tool - Test Data Setup");
         Console.WriteLine("=============================================");
         Console.WriteLine();
@@ -178,6 +189,53 @@ public class Program
             logger.LogError(ex, "❌ Failed to seed database");
             Console.WriteLine($"❌ Error: {ex.Message}");
             Environment.ExitCode = 1;
+        }
+    }
+
+    private static void ValidateSeedAuthorization(string[] args)
+    {
+        var environmentName =
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? "Production";
+
+        if (!string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool is development-only and refuses non-development environments."
+            );
+        }
+
+        if (!args.Contains("--confirm=FIS-DEVELOPMENT-SEED", StringComparer.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool is guarded. Re-run with --confirm=FIS-DEVELOPMENT-SEED."
+            );
+        }
+
+        if (
+            !string.Equals(
+                Environment.GetEnvironmentVariable("FIS_ALLOW_DEVELOPMENT_SEEDING"),
+                "I_UNDERSTAND_DEVELOPMENT_SEEDING",
+                StringComparison.Ordinal
+            )
+        )
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool requires FIS_ALLOW_DEVELOPMENT_SEEDING=I_UNDERSTAND_DEVELOPMENT_SEEDING."
+            );
+        }
+
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default");
+        if (
+            string.IsNullOrWhiteSpace(connectionString)
+            || connectionString.Contains("YOUR_DB_", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("192.0.2.10", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidOperationException(
+                "DatabaseSeederTool requires an explicit non-placeholder development connection string."
+            );
         }
     }
 

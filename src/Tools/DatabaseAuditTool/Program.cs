@@ -23,6 +23,7 @@ public static class Program
         new("Legacy_User_Credentials", false),
         new("EntraId_User_Mapping", false),
         new("fis_session_tokens", false),
+        new("fis_data_fix_audit", false),
     ];
 
     public static async Task Main(string[] args)
