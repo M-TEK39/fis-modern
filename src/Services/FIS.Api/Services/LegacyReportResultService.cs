@@ -358,7 +358,6 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             "trip-authorities-over-25000" => "trip-authority",
             "trip-authorities-over-3500-per-day" => "trip-authority",
             "els-manual-kilo" => "trip-authority",
-            "driver-information-finyear" => "trip-authority",
             "high-distance-department" => "high-distance-dept",
             "high-distance-all" => "high-distance-all",
 
@@ -750,6 +749,15 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 null,
                 BuildTripAuthorityAsync,
                 ""),
+
+            ["driver-information-finyear"] = new(
+                "driver-information-finyear",
+                "Driver Information over a Financial Year",
+                "ShowReport.aspx?Item=gFleetVehicleUsers",
+                "gFleetVehicleUsers",
+                BuildDriverInformationAsync,
+                "The legacy report is executed when available. If the stored procedure is missing, this fallback reads the compatible trip, contract, vehicle, and trip-driver tables.",
+                BuildDriverInformationStoredProcedureParameters),
 
             ["trips-open-31"] = new(
                 "trips-open-31",
@@ -3275,6 +3283,171 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
             Column("Target", row => row.Target)));
     }
 
+    private static IReadOnlyList<LegacyStoredProcedureParameter> BuildDriverInformationStoredProcedureParameters(IDictionary<string, string?> filters)
+        =>
+        [
+            new LegacyStoredProcedureParameter("@province_code", GetInt(filters, "province") ?? 0, DbType.Int32),
+            new LegacyStoredProcedureParameter("@department_code", GetInt(filters, "dept") ?? 0, DbType.Int32),
+            new LegacyStoredProcedureParameter("@site_code", GetInt(filters, "site") ?? 0, DbType.Int32),
+            new LegacyStoredProcedureParameter("@FinYear", GetFinancialYear(filters).ToString(CultureInfo.InvariantCulture), DbType.String)
+        ];
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "The fallback SQL is assembled from fixed table and column names selected through INFORMATION_SCHEMA; all report values are parameters.")]
+    private async Task<LegacyReportResultDto> BuildDriverInformationAsync(IDictionary<string, string?> filters, CancellationToken cancellationToken)
+    {
+        var financialYear = GetFinancialYear(filters);
+        var fromDate = new DateTime(financialYear, 4, 1);
+        var toDate = fromDate.AddYears(1);
+        var tripColumns = await GetReportTableColumnsAsync("trip_authorities", cancellationToken);
+        var contractColumns = await GetReportTableColumnsAsync("contract", cancellationToken);
+        var vehicleColumns = await GetReportTableColumnsAsync("vehicle_master", cancellationToken);
+        var driverTable = await ResolveTripDriverReportTableAsync(cancellationToken);
+
+        var requiredColumns = new[]
+        {
+            "trip_authority_code",
+            "contract_code",
+            "issue_date"
+        };
+        if (requiredColumns.Any(column => !tripColumns.Contains(column))
+            || !contractColumns.Contains("contract_code")
+            || !contractColumns.Contains("vmf_code")
+            || !vehicleColumns.Contains("vmf_code"))
+        {
+            return CreateDynamicResult(
+                "Driver Information over a Financial Year",
+                "ShowReport.aspx?Item=gFleetVehicleUsers",
+                true,
+                "The compatible base tables are not available in this database.",
+                Array.Empty<DriverInformationFallbackRow>(),
+                Column("Trip Authority Code", row => row.TripAuthorityCode),
+                Column("Driver Name", row => row.DriverName),
+                Column("Driver ID", row => row.DriverId),
+                Column("Trip Date", row => row.TripDate),
+                Column("Contract Code", row => row.ContractCode),
+                Column("GG Number", row => row.FleetNumber),
+                Column("GP Number", row => row.RegistrationNumber),
+                Column("Site Code", row => row.SiteCode));
+        }
+
+        var tripDeletedPredicate = tripColumns.Contains("is_deleted") ? " AND COALESCE(t.[is_deleted], 0) = 0" : string.Empty;
+        var contractDeletedPredicate = contractColumns.Contains("is_deleted") ? " AND COALESCE(c.[is_deleted], 0) = 0" : string.Empty;
+        var driverJoin = string.Empty;
+        var driverDeletedPredicate = string.Empty;
+        var driverSelection = "CAST(NULL AS nvarchar(255)) AS [Driver Name], CAST(NULL AS nvarchar(255)) AS [Driver ID], CAST(NULL AS bit) AS [Driver Primary]";
+        if (driverTable is not null)
+        {
+            driverJoin = $"LEFT JOIN [dbo].[{driverTable.Name}] d ON d.[trip_authority_code] = t.[trip_authority_code]";
+            driverDeletedPredicate = driverTable.Columns.Contains("is_deleted") ? " AND COALESCE(d.[is_deleted], 0) = 0" : string.Empty;
+            driverSelection = $"{OptionalReportColumn(driverTable.Columns, "d", "trip_driver_name", "Driver Name")}, {OptionalReportColumn(driverTable.Columns, "d", "trip_driver_id", "Driver ID")}, {OptionalReportColumn(driverTable.Columns, "d", "trip_driver_primary", "Driver Primary", "bit")}";
+        }
+
+        var sql = $"""
+            SELECT
+                t.[trip_authority_code] AS [Trip Authority Code],
+                t.[issue_date] AS [Trip Date],
+                c.[contract_code] AS [Contract Code],
+                c.[site_code] AS [Site Code],
+                v.[fleet_number] AS [GG Number],
+                v.[registration_number] AS [GP Number],
+                {driverSelection}
+            FROM [dbo].[trip_authorities] t
+            INNER JOIN [dbo].[contract] c ON c.[contract_code] = t.[contract_code]{contractDeletedPredicate}
+            LEFT JOIN [dbo].[vehicle_master] v ON v.[vmf_code] = c.[vmf_code]
+            {driverJoin}
+            WHERE t.[issue_date] >= @fromDate
+              AND t.[issue_date] < @toDate{tripDeletedPredicate}{driverDeletedPredicate}
+            ORDER BY t.[issue_date], t.[trip_authority_code], [Driver Primary] DESC
+            """;
+
+        var connection = _context.Database.GetDbConnection();
+        var shouldClose = connection.State != ConnectionState.Open;
+        if (shouldClose)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            AddReportParameter(command, "@fromDate", DbType.DateTime, fromDate);
+            AddReportParameter(command, "@toDate", DbType.DateTime, toDate);
+
+            var rows = new List<DriverInformationFallbackRow>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                rows.Add(new DriverInformationFallbackRow(
+                    ReadNullableInt(reader, "Trip Authority Code"),
+                    ReadNullableString(reader, "Driver Name"),
+                    ReadNullableString(reader, "Driver ID"),
+                    ReadNullableDateTime(reader, "Trip Date"),
+                    ReadNullableInt(reader, "Contract Code"),
+                    ReadNullableString(reader, "GG Number"),
+                    ReadNullableString(reader, "GP Number"),
+                    ReadNullableInt(reader, "Site Code")));
+            }
+
+            return CreateDynamicResult(
+                "Driver Information over a Financial Year",
+                "ShowReport.aspx?Item=gFleetVehicleUsers",
+                true,
+                "The legacy report procedure was unavailable; results use the compatible trip, contract, vehicle, and trip-driver tables.",
+                rows,
+                Column("Trip Authority Code", row => row.TripAuthorityCode),
+                Column("Driver Name", row => row.DriverName),
+                Column("Driver ID", row => row.DriverId),
+                Column("Trip Date", row => row.TripDate),
+                Column("Contract Code", row => row.ContractCode),
+                Column("GG Number", row => row.FleetNumber),
+                Column("GP Number", row => row.RegistrationNumber),
+                Column("Site Code", row => row.SiteCode));
+        }
+        finally
+        {
+            if (shouldClose)
+            {
+                await connection.CloseAsync();
+            }
+        }
+    }
+
+    private async Task<TripDriverReportTable?> ResolveTripDriverReportTableAsync(CancellationToken cancellationToken)
+    {
+        foreach (var tableName in new[] { "trip_driver", "trip_drivers" })
+        {
+            var columns = await GetReportTableColumnsAsync(tableName, cancellationToken);
+            if (columns.Contains("trip_authority_code") && columns.Contains("trip_driver_name"))
+            {
+                return new TripDriverReportTable(tableName, columns);
+            }
+        }
+
+        return null;
+    }
+
+    private static int? ReadNullableInt(DbDataReader reader, string column)
+    {
+        var value = reader[column];
+        return value is DBNull ? null : Convert.ToInt32(value, CultureInfo.InvariantCulture);
+    }
+
+    private static DateTime? ReadNullableDateTime(DbDataReader reader, string column)
+    {
+        var value = reader[column];
+        return value is DBNull ? null : Convert.ToDateTime(value, CultureInfo.InvariantCulture);
+    }
+
+    private static string? ReadNullableString(DbDataReader reader, string column)
+    {
+        var value = reader[column];
+        return value is DBNull ? null : value.ToString()?.Trim();
+    }
+
     private async Task<LegacyReportResultDto> BuildTripsOpen31Async(IDictionary<string, string?> filters, CancellationToken cancellationToken)
     {
         var days = Math.Max(1, GetInt(filters, "days") ?? 31);
@@ -4505,6 +4678,16 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         Func<IDictionary<string, string?>, IReadOnlyList<LegacyStoredProcedureParameter>>? BuildStoredProcedureParameters = null);
 
     private sealed record LegacyStoredProcedureParameter(string Name, object? Value, DbType DbType);
+    private sealed record TripDriverReportTable(string Name, IReadOnlySet<string> Columns);
+    private sealed record DriverInformationFallbackRow(
+        int? TripAuthorityCode,
+        string? DriverName,
+        string? DriverId,
+        DateTime? TripDate,
+        int? ContractCode,
+        string? FleetNumber,
+        string? RegistrationNumber,
+        int? SiteCode);
     private sealed record ReportParameter(string Name, DbType Type, object? Value);
     private sealed record LegacyProjectionColumn(string Header, Func<object, object?> Selector);
     private sealed record WorkshopReportRow(
