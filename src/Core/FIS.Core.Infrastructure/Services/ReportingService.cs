@@ -641,9 +641,16 @@ public class ReportingService : IReportingService
                 break;
 
             case "financial":
+                var departmentFilter = GetNullableIntParameter(request.Parameters, "departmentCode");
+                var siteFilter = GetNullableIntParameter(request.Parameters, "siteCode");
+                var provinceFilter = GetNullableIntParameter(request.Parameters, "provinceCode");
                 var financialItems = await _context.InvoiceItems
                     .Where(ii => !ii.is_deleted
-                        && (request.VmfCode == null || ii.vmf_code == request.VmfCode))
+                        && (request.VmfCode == null || ii.vmf_code == request.VmfCode)
+                        && (!departmentFilter.HasValue || _context.Invoices.Any(invoice => !invoice.is_deleted
+                            && invoice.invoice_code == ii.invoice_code
+                            && invoice.department_code == departmentFilter.Value))
+                        && (!siteFilter.HasValue || ii.site_code == siteFilter.Value))
                     .Join(_context.Invoices.Where(i => !i.is_deleted),
                           ii => ii.invoice_code, i => i.invoice_code,
                           (ii, i) => new { ii, i })
@@ -659,6 +666,7 @@ public class ReportingService : IReportingService
                     .Select(x => new
                     {
                         x.ii.vmf_code,
+                        x.ii.site_code,
                         x.ii.fixed_tariff_amount,
                         x.ii.odo_tariff_amount,
                         x.i.department_code,
@@ -667,6 +675,18 @@ public class ReportingService : IReportingService
                         year         = x.py.year_start_date.Year,
                     })
                     .ToListAsync();
+
+                if (provinceFilter.HasValue)
+                {
+                    var provinceSiteCodes = await _context.Sites
+                        .Where(site => !site.is_deleted && (int?)site.province_code == provinceFilter.Value)
+                        .Select(site => site.Site_code)
+                        .ToListAsync();
+                    var allowedSiteCodes = provinceSiteCodes.ToHashSet();
+                    financialItems = financialItems
+                        .Where(item => allowedSiteCodes.Contains(item.site_code))
+                        .ToList();
+                }
 
                 dataRows = financialItems.Select(f => new Dictionary<string, object>
                 {

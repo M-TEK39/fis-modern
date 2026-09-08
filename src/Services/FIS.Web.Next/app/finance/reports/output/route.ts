@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { hasFinanceRole } from "@/app/finance/_components";
 import { FinanceApiError, getFinanceOutput } from "@/lib/api-finance";
-import { dedicatedFinanceReportPath, getAuditFinanceReport, getBillingHistory, getDedicatedFinanceReport, getReversalTree, getUniversalFinanceReport, type FinanceReport } from "@/lib/api-finance-reports";
+import { dedicatedFinanceReportPath, getAuditFinanceReport, getBillingHistory, getDedicatedFinanceReport, getRegionalFinanceReport, getReversalTree, getUniversalFinanceReport, getWesbankFinanceReport, REGIONAL_SUMMARY_ACTIONS, type FinanceReport } from "@/lib/api-finance-reports";
 import { getSession } from "@/lib/session";
 
 function positiveInteger(value: string | null) {
@@ -53,7 +53,24 @@ export async function GET(request: Request) {
     }
 
     let report: FinanceReport;
-    if (kind === "billing") {
+    if (kind === "wesbank") {
+      const action = query.get("action") ?? "";
+      const reportAction = query.get("reportAction") ?? "";
+      const validActions = ["summary-all", "summary-selection", "detailed-all", "detailed-selection"];
+      const validReportActions = ["summary-all", "department-summary", "site-summary", "summary-all-download", "department-summary-download", "site-summary-download", "summary-province", "department-province-summary", "site-province-summary", "summary-province-download", "department-province-summary-download", "site-province-summary-download", "detailed-fuel-download", "detailed-other-download", "detailed-fuel-province-download", "detailed-other-province-download"];
+      if (!validActions.includes(action) || !validReportActions.includes(reportAction) || (format !== "html" && format !== "excel")) return NextResponse.json({ message: "Invalid Wesbank report output request." }, { status: 400 });
+      report = await getWesbankFinanceReport({ mode: action, provinceCode: query.get("provinceCode") ?? "", startDate: query.get("startDate") ?? "", endDate: query.get("endDate") ?? "" });
+    } else if (kind === "regional") {
+      const action = query.get("action") ?? "";
+      const reportAction = query.get("reportAction") ?? "";
+      if (!["summary-all", "summary-per-province"].includes(action) || !REGIONAL_SUMMARY_ACTIONS.includes(reportAction as (typeof REGIONAL_SUMMARY_ACTIONS)[number]) || (format !== "html" && format !== "excel")) return NextResponse.json({ message: "Invalid Regional Finance report output request." }, { status: 400 });
+      const summaryType = reportAction.replace(/-download$/, "") === "summary"
+        ? `SummaryReport${action === "summary-per-province" ? "PerProvince" : ""}`
+        : reportAction.replace(/-download$/, "") === "department-cost-type"
+          ? `SummaryReport${action === "summary-per-province" ? "PerProvince" : ""}DeptCostType`
+          : `SummaryReport${action === "summary-per-province" ? "PerProvince" : ""}ByCostType`;
+      report = await getRegionalFinanceReport({ mode: action, summaryType, provinceCode: query.get("provinceCode") ?? "", startDate: query.get("startDate") ?? "", endDate: query.get("endDate") ?? "" });
+    } else if (kind === "billing") {
       const vmfCode = positiveInteger(query.get("vmfCode"));
       const financialYear = positiveInteger(query.get("financialYear"));
       if (!vmfCode || !financialYear) return NextResponse.json({ message: "A vehicle and financial year are required." }, { status: 400 });

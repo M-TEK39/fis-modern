@@ -122,6 +122,69 @@ export async function getAuditFinanceReport(input: {
   return mapFinanceReport(payload, `${input.auditType} audit trail`);
 }
 
+export async function getWesbankFinanceReport(input: {
+  mode: string;
+  provinceCode?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const payload = await runFinanceAction("api/report/finance/wesbank", {
+    mode: input.mode,
+    provinceCode: input.provinceCode ?? "",
+    startDate: input.startDate || undefined,
+    endDate: input.endDate || undefined,
+  });
+  const report = mapFinanceReport(payload, `${input.mode} Wesbank expenses`);
+  return { ...report, title: `${input.mode} Wesbank expenses` };
+}
+
+export async function getRegionalFinanceReport(input: {
+  mode: string;
+  summaryType: string;
+  provinceCode?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const payload = await runFinanceAction("api/report/finance/regional", {
+    reportType: "financial",
+    mode: input.mode,
+    provinceCode: input.provinceCode ?? "",
+    summaryType: input.summaryType,
+    startDate: input.startDate || undefined,
+    endDate: input.endDate || undefined,
+  });
+  const report = mapFinanceReport(payload, `${input.summaryType} regional finance`);
+  return { ...report, title: `${input.summaryType} regional finance` };
+}
+
+export const WESBANK_REPORT_ACTIONS = [
+  "summary-all",
+  "department-summary",
+  "site-summary",
+  "summary-all-download",
+  "department-summary-download",
+  "site-summary-download",
+  "summary-province",
+  "department-province-summary",
+  "site-province-summary",
+  "summary-province-download",
+  "department-province-summary-download",
+  "site-province-summary-download",
+  "detailed-fuel-download",
+  "detailed-other-download",
+  "detailed-fuel-province-download",
+  "detailed-other-province-download",
+] as const;
+
+export const REGIONAL_SUMMARY_ACTIONS = [
+  "summary",
+  "department-cost-type",
+  "site-cost-type",
+  "summary-download",
+  "department-cost-type-download",
+  "site-cost-type-download",
+] as const;
+
 const DEDICATED_REPORTS: Record<string, DedicatedFinanceReport> = {
   "summary-by-cost-type": { endpoint: "invoice-summary", defaultFormat: "html" },
   "summary-by-cost-type-journal": { endpoint: "invoice-by-cost-type", defaultFormat: "html" },

@@ -905,6 +905,8 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
         var search = GetString(filters, "search");
         var mode = GetString(filters, "mode") ?? "GG";
         var siteCode = GetShort(filters, "site");
+        var departmentCode = GetShort(filters, "department") ?? GetShort(filters, "department_code");
+        var provinceCode = GetShort(filters, "province") ?? GetShort(filters, "province_code");
 
         var query =
             from vehicle in _context.Vehicles.AsNoTracking()
@@ -929,13 +931,25 @@ public sealed class LegacyReportResultService : ILegacyReportResultService
                 Status = status != null ? status.status_description : null,
                 Make = make != null ? make.make_description : null,
                 Model = model != null ? model.model_description : null,
+                DepartmentCode = site != null ? site.Depatrment_code : null,
+                ProvinceCode = site != null ? (short?)site.province_code : null,
                 vehicle.year_manufactured,
                 vehicle.take_on_date
             };
 
         if (siteCode.HasValue)
         {
-            query = query.Where(row => row.Site != null && row.vmf_code > 0).Where(row => _context.Vehicles.Any(v => v.vmf_code == row.vmf_code && v.location_code == siteCode.Value));
+                query = query.Where(row => row.Site != null && row.vmf_code > 0).Where(row => _context.Vehicles.Any(v => v.vmf_code == row.vmf_code && v.location_code == siteCode.Value));
+        }
+
+        if (departmentCode.HasValue)
+        {
+            query = query.Where(row => row.DepartmentCode == departmentCode.Value);
+        }
+
+        if (provinceCode.HasValue)
+        {
+            query = query.Where(row => row.ProvinceCode == provinceCode.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
