@@ -84,6 +84,46 @@ async function requestJson(path: string, init: RequestInit = {}) {
   }
 }
 
+export function getFinanceJson(path: string) {
+  return requestJson(path);
+}
+
+export type FinanceOutput = {
+  body: ArrayBuffer;
+  contentType: string;
+  filename: string | null;
+};
+
+export async function getFinanceOutput(path: string, init: RequestInit = {}): Promise<FinanceOutput> {
+  const cookieHeader = await getForwardedAuthCookieHeader();
+  if (!cookieHeader) throw new FinanceApiError("unauthorized", "No FIS access cookie is available.");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const response = await fetch(new URL(path.replace(/^\//, ""), getApiBaseUrl()), {
+      ...init,
+      cache: "no-store",
+      headers: { accept: "*/*", cookie: cookieHeader, ...init.headers },
+      signal: controller.signal,
+    });
+    if (response.status === 401 || response.status === 403) throw new FinanceApiError("unauthorized", "The FIS access cookie was rejected.", response.status);
+    if (!response.ok) throw new FinanceApiError(response.status >= 500 ? "unavailable" : "invalid-response", `FIS API returned HTTP ${response.status}.`, response.status);
+    const disposition = response.headers.get("content-disposition");
+    const filenameMatch = disposition?.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
+    return {
+      body: await response.arrayBuffer(),
+      contentType: response.headers.get("content-type") ?? "application/octet-stream",
+      filename: filenameMatch ? decodeURIComponent(filenameMatch[1]) : null,
+    };
+  } catch (error) {
+    if (error instanceof FinanceApiError) throw error;
+    throw new FinanceApiError("unavailable", "The FIS API could not be reached.");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export async function getBatchStatus(): Promise<FinanceBatchStatus> {
   const value = await requestJson("api/finance/batch/status");
   if (!isRecord(value)) throw new FinanceApiError("invalid-response", "The FIS API returned an invalid batch status.");
@@ -159,6 +199,14 @@ export function getFinanceYears() {
 
 export function getFinanceSegmentTypes() {
   return getOptions("api/finance/reference/segment-types", ["value", "Value", "code", "Code", "id", "Id"], ["label", "Label", "name", "Name", "description", "Description"]);
+}
+
+export async function getFinancePostingMonths(filterBy = "Department") {
+  const payload = await requestJson(`api/finance/reports/posting-months${queryString({ filterBy })}`);
+  const values = isRecord(payload) ? getValue(payload, "months", "Months") : payload;
+  return collection(values)
+    .map((item) => toOption(item, ["value", "Value", "posting_month_code", "postingMonthCode"], ["label", "Label", "month_name", "monthName"]))
+    .filter((item): item is FinanceOption => item !== null);
 }
 
 function mapBasSegment(value: unknown): BasSegment | null {
