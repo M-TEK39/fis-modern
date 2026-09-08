@@ -39,28 +39,7 @@ services:
     networks:
       - fis-network
 
-  # FIS Web Application
-  fis-web:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.web
-    container_name: fis-web
-    environment:
-      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
-      - ASPNETCORE_URLS=http://+:8080
-      - TZ=Africa/Johannesburg
-      - ApiSettings__BaseUrl=http://fis-api:8080
-      - ApiSettings__WebBaseUrl=https://${SERVER_HOSTNAME:-${SERVER_IP:-localhost}}
-    expose:
-      - "8080"
-    depends_on:
-      fis-api:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - fis-network
-
-  # Next.js frontend — migrated routes during Blazor coexistence
+  # Next.js frontend
   fis-web-next:
     build:
       context: ..
@@ -99,8 +78,6 @@ services:
     depends_on:
       fis-api:
         condition: service_healthy
-      fis-web:
-        condition: service_started
       fis-web-next:
         condition: service_started
     networks:
@@ -148,8 +125,6 @@ services:
     depends_on:
       fis-api:
         condition: service_healthy
-      fis-web:
-        condition: service_started
       fis-web-next:
         condition: service_started
     restart: unless-stopped

@@ -6,7 +6,6 @@
 FIS.sln
 src/Services/FIS.Api/             C# REST API
 src/Services/FIS.Web.Next/        standalone Next.js frontend
-src/Services/FIS.Web/             legacy Blazor project during migration
 src/Core/FIS.Core.Domain/
 src/Core/FIS.Core.Application/
 src/Core/FIS.Core.Infrastructure/
@@ -23,7 +22,7 @@ The root guardrails are `AGENTS.md` and `CLAUDE.md`. Detailed rules live in `.ru
 
 ## Architecture and placement
 
-No application project is off-limits by blanket policy. A feature or compatibility fix may span the Next frontend, API, Core, Data, Docker, and remaining Blazor project. Keep each concern in its owning layer and review the complete execution path when a contract crosses layers.
+No application project is off-limits by blanket policy. A feature or compatibility fix may span the Next frontend, API, Core, Data, and Docker. Keep each concern in its owning layer and review the complete execution path when a contract crosses layers.
 
 - Put Next routes, layouts, actions, server adapters, and styles under `src/Services/FIS.Web.Next`.
 - Put reusable Next UI in that app's `components/` directory; keep route-specific composition next to its route.
@@ -58,7 +57,7 @@ Do not bypass layer boundaries to avoid a reference problem. Do not introduce da
 
 - Production Compose expects the SQL Server host and credentials through environment configuration; it does not provision a production database.
 - `docker/docker-compose.dev.yml` owns the local SQL Server development container and initialization flow.
-- Keep the API, legacy web, Next web, and nginx services on the existing network. Route only to healthy, intended upstreams.
+- Keep the API, Next web, and nginx services on the existing network. Route only to healthy, intended upstreams.
 - Do not commit certificates, tokens, passwords, or machine-specific host values.
 - Validate nginx paths, cookie forwarding, headers, health checks, and WebSocket behavior when changing routing.
 

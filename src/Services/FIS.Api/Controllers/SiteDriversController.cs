@@ -200,8 +200,8 @@ public sealed class SiteDriversController : BaseApiController
                 };
 
                 // An omitted code must not erase a legacy code that the current
-                // Blazor form does not edit. The code remains available through
-                // the read DTO and can be updated when a caller supplies it.
+                // workflow does not edit. The code remains available through the
+                // read DTO and can be updated when a caller supplies it.
                 if (schema.Has("driver_licence_type_code") && !string.IsNullOrWhiteSpace(dto.Code))
                 {
                     assignments.Add("[driver_licence_type_code] = @code");

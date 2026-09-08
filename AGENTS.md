@@ -20,7 +20,6 @@ FIS is a modernization of a legacy fleet system. The implementation is split int
 src/
 ├── Services/FIS.Api/             # ASP.NET Core .NET 8 REST API
 ├── Services/FIS.Web.Next/        # Next.js 16.3.4, React 19, TypeScript frontend
-├── Services/FIS.Web/             # legacy Blazor surface being removed incrementally
 ├── Core/FIS.Core.Domain/          # domain entities and contracts
 ├── Core/FIS.Core.Application/    # application services and use cases
 ├── Core/FIS.Core.Infrastructure/ # repositories and infrastructure
@@ -29,13 +28,13 @@ src/
 
 The legacy reference implementation is under `backup/sources/`. Docker and reverse-proxy configuration is under `docker/`. The Next app is a standalone pnpm package; it is not a workspace package and must not acquire unrelated monorepo infrastructure.
 
-All application layers are in scope. A feature or compatibility slice may require changes in the Next frontend, API, Core, Data, Docker, or remaining Blazor project. Keep each change in the layer that owns its behavior and update related layers together when the contract requires it.
+All application layers are in scope. A feature or compatibility slice may require changes in the Next frontend, API, Core, Data, or Docker. Keep each change in the layer that owns its behavior and update related layers together when the contract requires it.
 
 ## Non-negotiable boundaries
 
 - Preserve the existing SQL Server schema exactly. Do not rename, add, remove, or change tables, columns, types, keys, or constraints. The app must run against both the client's current legacy schema and databases containing expanded modern objects, using explicit runtime fallbacks from modern fields/tables to their legacy counterparts.
 - Keep business rules and legacy navigation flow intact while modernizing presentation and transport.
-- Place behavior in its owning layer, but do not avoid a necessary cross-layer change merely because it touches API, Core, Data, deployment, or the remaining Blazor project. Preserve project boundaries and update the complete execution path when a contract or compatibility fix spans layers.
+- Place behavior in its owning layer and update the complete execution path when a contract or compatibility fix spans API, Core, Data, deployment, and Next.js.
 - The Next frontend consumes the existing REST API through server-only typed adapters. Browser code must not contain API secrets or bearer tokens.
 - Use Next Server Components by default. Add Client Components only for browser state, events, or APIs that require the browser. Keep mutations in Server Actions or server routes where appropriate.
 - Preserve the existing FIS cookie/session contract. Do not replace it with a new authentication framework as part of a page migration.

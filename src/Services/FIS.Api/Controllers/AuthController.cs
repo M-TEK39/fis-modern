@@ -1732,7 +1732,7 @@ public class AuthController : ControllerBase
         return claims;
     }
 
-    // Permission bits (must mirror FIS.Web.Services.LegacyPermissionBits)
+    // Permission bits retained for compatibility with the legacy role model.
     private const long BitVehicleManagement = 1;
     private const long BitContractManagement = 2;
     private const long BitUserAdministration = 4;

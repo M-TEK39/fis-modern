@@ -68,13 +68,13 @@ Commands:
   restart-db     Restart the database container
   logs-db        Show database container logs
   
-  start-full     Start application services using external SQL Server, API, web
+  start-full     Start application services using external SQL Server, API, Next.js
   stop-full      Stop all services
   restart-full   Restart all services
   logs-full      Show logs for all services
   
   build-api      Build the API Docker image
-  build-web      Build the Web Docker image
+  build-web      Build the Next.js Web Docker image
   build-all      Build all Docker images
   
   clean          Clean up all containers and images
@@ -135,7 +135,7 @@ start_full() {
     run_compose -f docker/docker-compose.yml up -d
     print_status "Full application started successfully!"
     print_status "API: http://localhost:5000"
-    print_status "Web: http://localhost:5001"
+    print_status "Web: https://localhost (Next.js via nginx)"
     print_status "Database: ${DB_HOST}:${DB_PORT} (external Windows SQL Server)"
 }
 
@@ -167,10 +167,10 @@ build_api() {
 }
 
 build_web() {
-    print_header "Building Web Docker Image"
+    print_header "Building Next.js Web Docker Image"
     cd "$PROJECT_ROOT"
-    docker build -f docker/Dockerfile.web -t fis-web:latest .
-    print_status "Web image built successfully!"
+    docker build -f docker/Dockerfile.web-next -t fis-web-next:latest .
+    print_status "Next.js Web image built successfully!"
 }
 
 build_all() {

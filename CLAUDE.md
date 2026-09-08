@@ -4,7 +4,7 @@ Read `.rules/AI_CODING_RULES.md` before every task, then read the specific rules
 
 FIS keeps a legacy-compatible SQL Server schema and business process while moving the presentation layer to Next.js. The active frontend is `src/Services/FIS.Web.Next` (Next.js 16.3.4, React 19, TypeScript, pnpm). The C# backend remains in `src/Services/FIS.Api` and the domain/application/infrastructure/data projects remain under `src/Core` and `src/Data`.
 
-Every application layer is available for the work. Slices may update the Next frontend, API, Core, Data, Docker, and the remaining Blazor project together when that is required by the real execution path. Keep changes in the layer that owns the behavior and preserve existing contracts unless the requested slice deliberately changes them.
+Every application layer is available for the work. Slices may update the Next frontend, API, Core, Data, and Docker together when that is required by the real execution path. Keep changes in the layer that owns the behavior and preserve existing contracts unless the requested slice deliberately changes them.
 
 Keep the Next app's App Router and Server Component architecture. Fetch protected data through server-only typed REST adapters, forward the existing HttpOnly FIS session cookie, and use Client Components only where browser interaction requires them. Keep Cache Components and instant navigation compatible with authorization freshness: never cache login state, authorization, or protected user-specific responses.
 

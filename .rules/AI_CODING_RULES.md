@@ -16,7 +16,6 @@ These rules apply to every change in this repository. They complement the root `
 ```text
 src/Services/FIS.Api/             ASP.NET Core REST API
 src/Services/FIS.Web.Next/        Next.js 16.3.4 frontend
-src/Services/FIS.Web/             legacy Blazor surface during migration
 src/Core/FIS.Core.Domain/          domain model
 src/Core/FIS.Core.Application/    application/use-case layer
 src/Core/FIS.Core.Infrastructure/ infrastructure and repositories
@@ -27,7 +26,7 @@ backup/sources/                    legacy reference code; do not treat as a writ
 docker/                            containers and nginx routing
 ```
 
-The Next app is currently a standalone pnpm package. Keep its dependencies and scripts in `src/Services/FIS.Web.Next/package.json`; if a slice genuinely requires shared workspace or data-layer infrastructure, make that change explicit and update every affected contract rather than working around it in the wrong layer.
+The Next app is a standalone pnpm package. Keep its dependencies and scripts in `src/Services/FIS.Web.Next/package.json`; if a slice genuinely requires shared workspace or data-layer infrastructure, make that change explicit and update every affected contract rather than working around it in the wrong layer.
 
 ## 3. Database and business compatibility
 

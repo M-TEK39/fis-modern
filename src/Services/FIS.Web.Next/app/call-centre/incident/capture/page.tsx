@@ -1206,7 +1206,7 @@ export default async function IncidentCapturePage({ searchParams }: IncidentCapt
               <section className="vehicle-status-card" role="status">
                 <p className="eyebrow">{incidentType}</p>
                 <h2>This incident branch is next in the capture migration.</h2>
-                <p className="muted-copy">Vehicle selection is preserved. Its type-specific fields and related legacy table writes will be migrated before this branch replaces Blazor.</p>
+                <p className="muted-copy">Vehicle selection is preserved. This capture branch is being completed in Next.js with the established type-specific fields and table writes.</p>
               </section>
             ) : null}
           </div>
