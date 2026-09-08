@@ -12,7 +12,7 @@ namespace FIS.Api.Controllers;
 
 [ApiController]
 [Route("api/troubleshoot")]
-[Authorize]
+[Authorize(Roles = "Trouble Shooting")]
 [SuppressMessage(
     "Security",
     "CA2100:Review SQL queries for security vulnerabilities",
@@ -45,8 +45,7 @@ public class TroubleshootController : BaseApiController
                 "odometer/search",
                 "remove-trips-no-routes",
                 "approver-ranks",
-                "vehicle-master-edit",
-                "update-recovered-gg"
+                "vehicle-master-edit"
             }
         });
     }
@@ -310,29 +309,6 @@ public class TroubleshootController : BaseApiController
             .ToListAsync();
 
         return Ok(rows);
-    }
-
-    [HttpPost("update-recovered-gg")]
-    public async Task<ActionResult> UpdateRecoveredGg([FromBody] UpdateRecoveredGgRequest request)
-    {
-        var id = (request.VehicleIdentifier ?? string.Empty).Trim();
-        var vehicle = await _context.Vehicles.FirstOrDefaultAsync(v =>
-            !v.is_deleted && (
-                v.vmf_code.ToString() == id ||
-                v.fleet_number == id ||
-                v.registration_number == id));
-
-        if (vehicle == null)
-        {
-            return NotFound(new { message = "Vehicle not found" });
-        }
-
-        vehicle.derived_odo = request.Notes;
-        vehicle.date_updated = DateTime.UtcNow;
-        vehicle.modified_by_user_code = GetCurrentUserId();
-
-        await _context.SaveChangesAsync();
-        return Ok(new { vmfCode = vehicle.vmf_code, updated = true });
     }
 
     private IQueryable<TroubleshootLogEntryDto> QueryLogs(int? userAccessCode, string? keyword, DateTime? fromDate, DateTime? toDate)
@@ -721,9 +697,4 @@ public class TroubleshootController : BaseApiController
         public string? RecoveredGg { get; set; }
     }
 
-    public class UpdateRecoveredGgRequest
-    {
-        public string? VehicleIdentifier { get; set; }
-        public string? Notes { get; set; }
-    }
 }
