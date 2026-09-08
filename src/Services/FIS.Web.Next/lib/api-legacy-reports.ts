@@ -153,3 +153,26 @@ export async function getLegacyReport(
   if (!report) throw new LegacyReportApiError("invalid-response", "The FIS API returned an invalid legacy report.");
   return report;
 }
+
+export type ReportHelp = {
+  sections: Array<{ title: string; content: string }>;
+};
+
+export async function getReportHelp(): Promise<ReportHelp> {
+  const value = await requestApi("api/report/help");
+  if (!isRecord(value)) return { sections: [] };
+
+  const rawSections = getValue(value, "sections", "Sections");
+  if (!Array.isArray(rawSections)) return { sections: [] };
+
+  return {
+    sections: rawSections
+      .map((section) => {
+        if (!isRecord(section)) return null;
+        const title = asString(getValue(section, "title", "Title"));
+        const content = asString(getValue(section, "content", "Content"));
+        return title && content ? { title, content } : null;
+      })
+      .filter((section): section is { title: string; content: string } => section !== null),
+  };
+}
