@@ -8,6 +8,8 @@ using FIS.Core.Domain.Entities.Logistics;
 using FIS.Core.Domain.Entities.ReferenceData;
 using FIS.Core.Domain.Entities.WorkshopEntities;
 using FIS.Data.SqlServer;
+using FIS.Tools.DatabaseTooling;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -58,14 +60,14 @@ public class Program
             Console.WriteLine("🚗 Seeding vehicle data...");
             await SeedVehicleData(dbContext);
 
+            Console.WriteLine("🧪 Seeding frontend demo coverage data...");
+            await SeedFrontendDemoCoverage(dbContext);
+
             Console.WriteLine("📜 Seeding contract data...");
             await SeedContractData(dbContext);
 
             Console.WriteLine("💳 Seeding lease tariff data...");
             await SeedLeaseTariffData(dbContext);
-
-            Console.WriteLine("🧪 Seeding frontend demo coverage data...");
-            await SeedFrontendDemoCoverage(dbContext);
 
             Console.WriteLine("⛽ Seeding fuel card data...");
             await SeedFuelCardData(dbContext);
@@ -227,16 +229,10 @@ public class Program
         }
 
         var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default");
-        if (
-            string.IsNullOrWhiteSpace(connectionString)
-            || connectionString.Contains("YOUR_DB_", StringComparison.OrdinalIgnoreCase)
-            || connectionString.Contains("192.0.2.10", StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            throw new InvalidOperationException(
-                "DatabaseSeederTool requires an explicit non-placeholder development connection string."
-            );
-        }
+        DevelopmentDatabaseTargetGuard.ValidateConnectionString(
+            connectionString,
+            requireDockerSqlServerHost: true
+        );
     }
 
     private static async Task SeedTestUsers(FisDbContext dbContext)
@@ -1487,15 +1483,53 @@ public class Program
         // Suppliers (Suppliers)
         if (!await dbContext.Suppliers.AnyAsync())
         {
-            await dbContext.Database.ExecuteSqlRawAsync(
-                @"
-                SET IDENTITY_INSERT Suppliers ON;
-                INSERT INTO Suppliers (supplier_id, supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted) VALUES 
-                (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0),
-                (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0),
-                (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
-                SET IDENTITY_INSERT Suppliers OFF;
-            "
+            var hasExpandedSupplierColumns =
+                await HasColumnAsync(dbContext, "Suppliers", "supplier_name")
+                && await HasColumnAsync(dbContext, "Suppliers", "phone_number")
+                && await HasColumnAsync(dbContext, "Suppliers", "is_active");
+
+            await ExecuteIdentityAwareSqlAsync(
+                dbContext,
+                hasExpandedSupplierColumns
+                    ? @"
+                    SET IDENTITY_INSERT Suppliers ON;
+                    INSERT INTO Suppliers (supplier_id, supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted) VALUES
+                    (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0),
+                    (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0),
+                    (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
+                    SET IDENTITY_INSERT Suppliers OFF;
+                "
+                    : @"
+                    SET IDENTITY_INSERT Suppliers ON;
+                    INSERT INTO Suppliers (supplier_id, name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted) VALUES
+                    (1, 'Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 'Vehicle supplier', 1, GETDATE(), 0),
+                    (2, 'Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 'Vehicle supplier', 1, GETDATE(), 0),
+                    (3, 'Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                    SET IDENTITY_INSERT Suppliers OFF;
+                ",
+                hasExpandedSupplierColumns
+                    ? @"
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 1)
+                        INSERT INTO Suppliers (supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted)
+                        VALUES ('Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 2)
+                        INSERT INTO Suppliers (supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted)
+                        VALUES ('Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 3)
+                        INSERT INTO Suppliers (supplier_name, address, phone_number, contact_person, email, is_active, date_created, is_deleted)
+                        VALUES ('Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 1, GETDATE(), 0);
+                "
+                    : @"
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 1)
+                        INSERT INTO Suppliers (name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted)
+                        VALUES ('Toyota SA', 'Sandton, JHB', '011 809 9111', 'Sales Manager', 'sales@toyota.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 2)
+                        INSERT INTO Suppliers (name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted)
+                        VALUES ('Ford SA', 'Silverton, Pretoria', '012 800 1234', 'Fleet Sales', 'fleet@ford.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                    IF NOT EXISTS (SELECT 1 FROM Suppliers WHERE supplier_id = 3)
+                        INSERT INTO Suppliers (name, address, tel, contact_person, email, supplier_type, active, date_created, is_deleted)
+                        VALUES ('Avis Fleet', 'Isando, JHB', '011 923 3900', 'Account Mgr', 'accounts@avisfleet.co.za', 'Vehicle supplier', 1, GETDATE(), 0);
+                "
             );
             Console.WriteLine("  ✓ Suppliers seeded.");
         }
@@ -2245,7 +2279,60 @@ public class Program
 
     private static async Task SeedVehicleAuthorizationQueue(FisDbContext dbContext)
     {
-        await dbContext.Database.ExecuteSqlRawAsync(
+        var hasExpandedColumns =
+            await dbContext
+                .Database.SqlQueryRaw<int>(
+                    """
+                    SELECT CASE
+                        WHEN COL_LENGTH(N'dbo.pre_vehicle_master', N'chassis_number') IS NOT NULL
+                         AND COL_LENGTH(N'dbo.pre_vehicle_master', N'engine_number') IS NOT NULL
+                         AND COL_LENGTH(N'dbo.pre_vehicle_master', N'Authority_Status') IS NOT NULL
+                         AND COL_LENGTH(N'dbo.pre_vehicle_master', N'purchase_amount') IS NOT NULL
+                        THEN 1 ELSE 0 END AS [Value]
+                    """
+                )
+                .SingleAsync() == 1;
+
+        if (!hasExpandedColumns)
+        {
+            await ExecuteIdentityAwareSqlAsync(
+                dbContext,
+                @"
+                SET IDENTITY_INSERT pre_vehicle_master ON;
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3001, 1, 'PRC 301 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3002, 2, 'PRA 302 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3003, 3, 'PRR 303 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                    INSERT INTO pre_vehicle_master (temp_vmf_code, model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3004, 4, 'PRC 304 GP', GETDATE(), 6, 0);
+                SET IDENTITY_INSERT pre_vehicle_master OFF;
+                ",
+                @"
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (1, 'PRC 301 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (2, 'PRA 302 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (3, 'PRR 303 GP', GETDATE(), 4, 0);
+                IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                    INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, created_by_user_code, is_deleted)
+                    VALUES (4, 'PRC 304 GP', GETDATE(), 6, 0);
+                "
+            );
+            return;
+        }
+
+        await ExecuteIdentityAwareSqlAsync(
+            dbContext,
             @"
             DECLARE @can_seed_explicit_pre_vehicle_ids BIT = 1;
 
@@ -2280,7 +2367,21 @@ public class Program
                 BEGIN CATCH
                 END CATCH
             END
-        "
+        ",
+            @"
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3001)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (1, 'PRC 301 GP', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3002)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (2, 'PRA 302 GP', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3003)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (3, 'PRR 303 GP', GETDATE(), 0);
+            IF NOT EXISTS (SELECT 1 FROM pre_vehicle_master WHERE temp_vmf_code = 3004)
+                INSERT INTO pre_vehicle_master (model_code, registration_number, date_created, is_deleted)
+                VALUES (4, 'PRC 304 GP', GETDATE(), 0);
+            "
         );
     }
 
@@ -2292,11 +2393,47 @@ public class Program
     {
         try
         {
-            await dbContext.Database.ExecuteSqlRawAsync(sqlWithIdentityInsert);
+            await ExecuteSqlWithoutEfLoggingAsync(dbContext, sqlWithIdentityInsert);
         }
-        catch
+        catch (SqlException exception) when (IsIdentityInsertCompatibilityError(exception))
         {
-            await dbContext.Database.ExecuteSqlRawAsync(sqlFallback);
+            await ExecuteSqlWithoutEfLoggingAsync(dbContext, sqlFallback);
+        }
+    }
+
+    private static bool IsIdentityInsertCompatibilityError(SqlException exception) =>
+        exception.Number is 544 or 8101 or 8106;
+
+    [SuppressMessage(
+        "Security",
+        "CA2100:Review SQL queries for security vulnerabilities",
+        Justification = "Seeder SQL is fixed internal data and schema setup text only."
+    )]
+    private static async Task ExecuteSqlWithoutEfLoggingAsync(
+        FisDbContext dbContext,
+        string sql
+    )
+    {
+        var connection = dbContext.Database.GetDbConnection();
+        var openedHere = false;
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await dbContext.Database.OpenConnectionAsync();
+            openedHere = true;
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (openedHere)
+            {
+                await dbContext.Database.CloseConnectionAsync();
+            }
         }
     }
 
@@ -3608,9 +3745,13 @@ public class Program
             dbContext,
             "SELECT COUNT(1) FROM Collection WHERE ISNULL(is_deleted, 0) = 0"
         );
-        var jobCardCount = await QueryCountAsync(
-            dbContext,
-            "SELECT COUNT(1) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0"
+        var jobCardCount = await (
+            await HasTableAsync(dbContext, "job_cards")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(1) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0"
+                )
+                : Task.FromResult(0)
         );
         var workshopCount = await QueryCountAsync(
             dbContext,
@@ -3642,9 +3783,13 @@ public class Program
                     AND ISNULL(ta.is_deleted, 0) = 0
               )"
         );
-        var vehiclesWithJobCards = await QueryCountAsync(
-            dbContext,
-            "SELECT COUNT(DISTINCT vmf_code) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
+        var vehiclesWithJobCards = await (
+            await HasTableAsync(dbContext, "job_cards")
+                ? QueryCountAsync(
+                    dbContext,
+                    "SELECT COUNT(DISTINCT vmf_code) FROM job_cards WHERE ISNULL(is_deleted, 0) = 0 AND vmf_code IS NOT NULL"
+                )
+                : Task.FromResult(0)
         );
         var vehiclesWithAssessments = await QueryCountAsync(
             dbContext,
@@ -4044,14 +4189,12 @@ public class Program
 
             IF OBJECT_ID('Positions', 'U') IS NOT NULL
             BEGIN
-                SET IDENTITY_INSERT Positions ON;
                 IF NOT EXISTS (SELECT 1 FROM Positions WHERE Position_Code = 1)
                     INSERT INTO Positions (Position_Code, Position_Name, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'Fleet Administrator', GETDATE(), @defaultUserCode, 0);
                 IF NOT EXISTS (SELECT 1 FROM Positions WHERE Position_Code = 2)
                     INSERT INTO Positions (Position_Code, Position_Name, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'Transport Officer', GETDATE(), @defaultUserCode, 0);
-                SET IDENTITY_INSERT Positions OFF;
             END
 
             IF OBJECT_ID('Incident_Area', 'U') IS NOT NULL
@@ -4069,14 +4212,12 @@ public class Program
 
             IF OBJECT_ID('vehicle_source', 'U') IS NOT NULL
             BEGIN
-                SET IDENTITY_INSERT vehicle_source ON;
                 IF NOT EXISTS (SELECT 1 FROM vehicle_source WHERE vs_code = 1)
                     INSERT INTO vehicle_source (vs_code, name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                     VALUES (1, 'OEM Direct', '1 Industry Rd, Midrand', 'PO Box 100, Midrand', '0110000000', '0110000001', GETDATE(), @defaultUserCode, 0);
                 IF NOT EXISTS (SELECT 1 FROM vehicle_source WHERE vs_code = 2)
                     INSERT INTO vehicle_source (vs_code, name, physical_address, postal_address, tel_number, fax_number, date_created, created_by_user_code, is_deleted)
                     VALUES (2, 'Auction House', '22 Auction Ave, JHB', 'PO Box 220, JHB', '0110000002', '0110000003', GETDATE(), @defaultUserCode, 0);
-                SET IDENTITY_INSERT vehicle_source OFF;
             END
 
             IF OBJECT_ID('fuel_tariff', 'U') IS NOT NULL
@@ -4320,14 +4461,12 @@ public class Program
                    AND NOT EXISTS (SELECT 1 FROM Workflow.Step WHERE WorkflowID = @workflowId AND StepName = 'Review Contract' AND ISNULL(is_deleted, 0) = 0)
                     INSERT INTO Workflow.Step
                     (
-                        StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, StepParameters, HandlerType,
-                        IsConditional, ConditionExpression, TrueStepID, FalseStepID,
+                        StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID,
                         date_created, created_by_user_code, is_deleted
                     )
                     VALUES
                     (
-                        'Review Contract', 1, @stepTypeId, @workflowId, NULL, '{{""source"":""batch7""}}', 'ManualApproval',
-                        0, NULL, NULL, NULL,
+                        'Review Contract', 1, @stepTypeId, @workflowId, NULL,
                         GETDATE(), @defaultUserCode, 0
                     );
             END
@@ -5395,7 +5534,7 @@ public class Program
                         residual_amount, capital_payment, overhead_payment, adjustment_amount, vehicle_fixed_tariff,
                         vehicle_fixed_daily_tariff, vehicle_fixed_tariff_pool, class_fixed_tariff, class_fixed_pool_tariff,
                         lease_fixed_tariff, overhead_kilometer_amount, maintenance_kilometer_amount, vehicle_kilometer_tariff,
-                        fuel_kilo_tariff, calculation_date, comment, date_created, created_by_user_code, is_deleted
+                        calculation_date, date_created, created_by_user_code, is_deleted
                     )
                     VALUES
                     (
@@ -5405,7 +5544,7 @@ public class Program
                         135000, 4200, 850, 0, 3500,
                         180, 3000, 3400, 3200,
                         4200, 0.85, 1.10, 2.20,
-                        2.45, GETDATE(), 'Seeded tariff row', GETDATE(), {2}, 0
+                        GETDATE(), GETDATE(), {2}, 0
                     );
             END
         ",
@@ -6253,6 +6392,7 @@ public class Program
             dbContext,
             $@"
                 IF OBJECT_ID('segment_journal_detail_map', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @segmentCode int = (
                         SELECT TOP 1 segment_code FROM bassegment WHERE segment_number = '4500000' AND ISNULL(is_deleted, 0) = 0 ORDER BY segment_code
@@ -6274,6 +6414,7 @@ public class Program
             ",
             $@"
                 IF OBJECT_ID('segment_journal_detail_map', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @segmentCode int = (
                         SELECT TOP 1 segment_code FROM bassegment WHERE segment_number = '4500000' AND ISNULL(is_deleted, 0) = 0 ORDER BY segment_code
@@ -7177,6 +7318,7 @@ public class Program
             dbContext,
             $@"
                 IF OBJECT_ID('fin.Overhead', 'U') IS NOT NULL
+                   AND OBJECT_ID('fin.OverheadType', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @overheadId int = ISNULL((SELECT MAX(OverheadId) FROM fin.Overhead), 0);
                     DECLARE @overheadTypeId int = ISNULL((SELECT TOP 1 OverheadTypeId FROM fin.OverheadType WHERE ISNULL(is_deleted, 0) = 0 ORDER BY OverheadTypeId), 1);
@@ -7197,6 +7339,7 @@ public class Program
             ",
             $@"
                 IF OBJECT_ID('fin.Overhead', 'U') IS NOT NULL
+                   AND OBJECT_ID('fin.OverheadType', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @overheadId int = ISNULL((SELECT MAX(OverheadId) FROM fin.Overhead), 0);
                     DECLARE @overheadTypeId int = ISNULL((SELECT TOP 1 OverheadTypeId FROM fin.OverheadType WHERE ISNULL(is_deleted, 0) = 0 ORDER BY OverheadTypeId), 1);
@@ -7414,6 +7557,7 @@ public class Program
             dbContext,
             $@"
                 IF OBJECT_ID('absa_transaction', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @absaTxCode int = ISNULL((SELECT MAX(absa_transaction_code) FROM absa_transaction), 0);
                     DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created);
@@ -7427,6 +7571,7 @@ public class Program
             ",
             $@"
                 IF OBJECT_ID('absa_transaction', 'U') IS NOT NULL
+                   AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
                 BEGIN
                     DECLARE @absaTxCode int = ISNULL((SELECT MAX(absa_transaction_code) FROM absa_transaction), 0);
                     DECLARE @journalDetailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE ISNULL(is_deleted, 0) = 0 ORDER BY date_created);
@@ -7545,6 +7690,7 @@ public class Program
         await dbContext.Database.ExecuteSqlRawAsync(
             @"
             IF OBJECT_ID('InvalidSegmentNumbersUsed', 'U') IS NOT NULL
+               AND OBJECT_ID('journal_detail', 'U') IS NOT NULL
             BEGIN
                 DECLARE @journalDetailCode uniqueidentifier = (
                     SELECT TOP 1 journal_detail_code
@@ -9686,6 +9832,7 @@ public class Program
         await dbContext.Database.ExecuteSqlRawAsync(
             @"
             IF OBJECT_ID('journal_detail_allocation_exception','U') IS NOT NULL
+               AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(journal_detail_allocation_exception_code) FROM journal_detail_allocation_exception), 0);
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('journal_detail_allocation_exception'), 'journal_detail_allocation_exception_code', 'IsIdentity');
@@ -9715,6 +9862,7 @@ public class Program
         await dbContext.Database.ExecuteSqlRawAsync(
             @"
             IF OBJECT_ID('Income_Split_TempTable','U') IS NOT NULL
+               AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @detailId int = (SELECT TOP 1 journal_detail_id FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
                 DECLARE @detailCode uniqueidentifier = (SELECT TOP 1 journal_detail_code FROM journal_detail WHERE journal_detail_description = 'Seeded batch21 journal detail' AND ISNULL(is_deleted, 0) = 0 ORDER BY journal_detail_date_created DESC);
@@ -9775,6 +9923,7 @@ public class Program
         await dbContext.Database.ExecuteSqlRawAsync(
             @"
             IF OBJECT_ID('vip_billing','U') IS NOT NULL
+               AND OBJECT_ID('journal_detail','U') IS NOT NULL
             BEGIN
                 DECLARE @code int = ISNULL((SELECT MAX(vip_billing_code) FROM vip_billing), 0);
                 DECLARE @isIdentity int = COLUMNPROPERTY(OBJECT_ID('vip_billing'), 'vip_billing_code', 'IsIdentity');
@@ -10063,14 +10212,14 @@ public class Program
                     IF @isIdentity = 1
                     BEGIN
                         INSERT INTO [Workflow].[Step]
-                        (StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, StepParameters, HandlerType, IsConditional, ConditionExpression, TrueStepID, FalseStepID, date_created, created_by_user_code, is_deleted)
-                        VALUES ('Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, 'mode=seed', 'SeedHandler', 0, NULL, NULL, NULL, GETDATE(), {0}, 0);
+                        (StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, date_created, created_by_user_code, is_deleted)
+                        VALUES ('Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, GETDATE(), {0}, 0);
                     END
                     ELSE
                     BEGIN
                         INSERT INTO [Workflow].[Step]
-                        (StepID, StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, StepParameters, HandlerType, IsConditional, ConditionExpression, TrueStepID, FalseStepID, date_created, created_by_user_code, is_deleted)
-                        VALUES (@code + 1, 'Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, 'mode=seed', 'SeedHandler', 0, NULL, NULL, NULL, GETDATE(), {0}, 0);
+                        (StepID, StepName, StepOrder, StepTypeID, WorkflowID, ParentStepID, date_created, created_by_user_code, is_deleted)
+                        VALUES (@code + 1, 'Seeded Step 1', 1, @stepTypeId, @workflowId, NULL, GETDATE(), {0}, 0);
                     END
                 END
             END
@@ -10380,17 +10529,26 @@ public class Program
             openedHere = true;
         }
 
-        await using var command = connection.CreateCommand();
-        command.CommandText = sql;
-        var result = await command.ExecuteScalarAsync();
-        var count = result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
-
-        if (openedHere)
+        try
         {
-            await dbContext.Database.CloseConnectionAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = sql;
+            var result = await command.ExecuteScalarAsync();
+            return result == null || result == DBNull.Value ? 0 : Convert.ToInt32(result);
         }
-
-        return count;
+        catch (SqlException exception) when (exception.Number == 208)
+        {
+            // Optional legacy tables are absent from clean-install or older client schemas.
+            // Reporting zero keeps the seed run useful without hiding invalid-column errors.
+            return 0;
+        }
+        finally
+        {
+            if (openedHere)
+            {
+                await dbContext.Database.CloseConnectionAsync();
+            }
+        }
     }
 
     private static async Task<bool> HasColumnAsync(
