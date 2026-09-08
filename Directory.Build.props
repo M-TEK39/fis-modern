@@ -12,7 +12,7 @@
 
   <!-- Common package versions -->
   <PropertyGroup>
-    <MicrosoftExtensionsVersion>8.0.3</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion>10.0.7</MicrosoftExtensionsVersion>
     <EntityFrameworkVersion>8.0.11</EntityFrameworkVersion>
     <AspNetCoreVersion>8.0.0</AspNetCoreVersion>
     <SerilogVersion>3.1.1</SerilogVersion>
