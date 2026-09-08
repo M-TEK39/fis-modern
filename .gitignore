@@ -114,6 +114,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 pnpm-lock.yaml
+!src/Services/FIS.Web.Next/pnpm-lock.yaml
 
 # csv files
 *.csv
