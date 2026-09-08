@@ -90,27 +90,12 @@ services:
     working_dir: /tmp
     volumes:
       - ..:/src
-    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj"]
+    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseMigrationTool/DatabaseMigrationTool.csproj", "--"]
     environment:
-      - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
-      - DOTNET_ENVIRONMENT=Development
-    restart: "no"
-    profiles:
-      - tools
-    networks:
-      - fis-network
-
-  # Database seeder tool (run on demand)
-  db-seed:
-    image: mcr.microsoft.com/dotnet/sdk:8.0
-    container_name: fis-db-seed
-    working_dir: /tmp
-    volumes:
-      - ..:/src
-    command: ["dotnet", "run", "--project", "/src/src/Tools/DatabaseSeederTool/DatabaseSeederTool.csproj"]
-    environment:
-      - ConnectionStrings__Default=${ConnectionStrings__Default:-Server=${DB_HOST:-192.0.2.10},${DB_PORT:-1433};Database=${DB_NAME:-legacy};User Id=${DB_USER:-YOUR_DB_USER};Password=${DB_PASSWORD:-YOUR_DB_PASSWORD};Encrypt=${DB_ENCRYPT:-False};TrustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:-True};}
-      - DOTNET_ENVIRONMENT=Development
+      - ConnectionStrings__Default=${ConnectionStrings__Default:?Set a real SQL Server connection string for db-migrate}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - FIS_ALLOW_PRODUCTION_MIGRATIONS=${FIS_ALLOW_PRODUCTION_MIGRATIONS:-}
+      - FIS_MIGRATION_OPERATOR=${FIS_MIGRATION_OPERATOR:-}
     restart: "no"
     profiles:
       - tools

@@ -163,7 +163,6 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 builder.Services.AddSingleton<ISessionTokenStore, SqlSessionTokenStore>();
-builder.Services.AddHostedService<SessionTokenSchemaInitializer>();
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {

@@ -1,677 +1,550 @@
-using System.Data;
 using System.Diagnostics.CodeAnalysis;
-using FIS.Data.SqlServer;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace FIS.Tools.DatabaseMigrationTool;
 
-public class Program
+public static class Program
 {
+    private const string ApplyConfirmation = "FIS-ADDITIVE-ONLY";
+    private const string ProductionGate = "I_UNDERSTAND_ADDITIVE_ONLY";
+    private const string LedgerTable = "dbo.fis_schema_migrations";
+
+    private static readonly MigrationDefinition[] Manifest =
+    [
+        new("001_modern_compatibility_additive", "001_modern_compatibility_additive.sql"),
+    ];
+
     public static async Task Main(string[] args)
     {
-        Console.WriteLine("🔧 FIS Database Migration Tool - Idempotent Schema Sync");
-        Console.WriteLine("======================================================");
-        Console.WriteLine();
-
-        var host = CreateHostBuilder(args).Build();
-
-        using var scope = host.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<FisDbContext>();
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
         try
         {
-            Console.WriteLine("🔍 Checking database state...");
-
-            bool canConnect = await dbContext.Database.CanConnectAsync();
-            if (!canConnect)
+            var options = ParseOptions(args);
+            if (options.ShowHelp)
             {
-                Console.WriteLine("📦 Database does not exist. Creating...");
-                await dbContext.Database.EnsureCreatedAsync();
-                Console.WriteLine("✅ Database created successfully!");
-            }
-            else
-            {
-                Console.WriteLine("✅ Database exists. Checking for schema updates...");
-                await SyncSchemaAsync(dbContext, logger);
+                PrintUsage();
+                return;
             }
 
-            Console.WriteLine();
+            var connectionString = ResolveRequiredConnectionString();
+            var environmentName = ResolveEnvironmentName();
+            ValidateConnectionString(connectionString, environmentName);
+            var migrations = LoadManifest();
 
-            Console.WriteLine("🛡️ Verifying schema integrity...");
-            await VerifySchemaIntegrity(dbContext);
+            await using var connection = new SqlConnection(connectionString);
+            await connection.OpenAsync();
+            Console.WriteLine(
+                $"Connected to database '{connection.Database}' on '{connection.DataSource}'."
+            );
 
-            var vehicleCount = await dbContext.Vehicles.CountAsync();
+            if (!options.Apply)
+            {
+                await PrintPlanAsync(connection, migrations);
+                return;
+            }
 
-            Console.WriteLine();
-            Console.WriteLine("🔌 Database Connection Test:");
-            Console.WriteLine($"  ✓ Connected to database successfully");
-            Console.WriteLine($"  ✓ Vehicles table accessible ({vehicleCount} records)");
-            Console.WriteLine();
-
-            Console.WriteLine("🎉 SUCCESS: Database schema is synchronized and up-to-date!");
+            ValidateApplyAuthorization(options, environmentName);
+            await ApplyMigrationsAsync(connection, migrations, environmentName);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            logger.LogError(ex, "❌ Failed to sync database schema");
-            Console.WriteLine($"❌ Error: {ex.Message}");
-            Console.WriteLine($"   {ex.InnerException?.Message}");
+            Console.Error.WriteLine($"Migration command failed: {exception.Message}");
             Environment.ExitCode = 1;
         }
     }
 
-    private static async Task SyncSchemaAsync(FisDbContext dbContext, ILogger logger)
+    private static MigrationOptions ParseOptions(string[] args)
     {
-        var connectionString = dbContext.Database.GetConnectionString();
-        using var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync();
+        var apply = false;
+        var showHelp = false;
+        string? confirmation = null;
 
-        var entityTypes = dbContext.Model.GetEntityTypes();
-        int tablesCreated = 0;
-        int tablesUpdated = 0;
-        int columnsAdded = 0;
-        int tablesRebuilt = 0;
-
-        foreach (var entityType in entityTypes)
+        foreach (var argument in args)
         {
-            var tableName = entityType.GetTableName();
-            var schema = entityType.GetSchema() ?? "dbo";
-
-            if (string.IsNullOrEmpty(tableName))
-                continue;
-
-            Console.WriteLine($"  🔍 Checking table [{schema}].[{tableName}]...");
-
-            await EnsureSchemaExistsAsync(connection, schema);
-
-            bool tableExists = await TableExistsAsync(connection, tableName, schema);
-
-            if (!tableExists)
+            switch (argument)
             {
-                // Clean up any leftover __identity_old table from a previous failed rebuild.
-                // It may still hold the PK constraint name that the new table needs.
-                var leftoverName = $"{tableName}__identity_old";
-                bool leftoverExists = await TableExistsAsync(connection, leftoverName, schema);
-                if (leftoverExists)
-                {
-                    Console.WriteLine(
-                        $"    🧹 Cleaning up leftover '{leftoverName}' from previous run..."
+                case "plan":
+                case "status":
+                    break;
+                case "apply":
+                case "--apply":
+                    apply = true;
+                    break;
+                case "--help":
+                case "-h":
+                    showHelp = true;
+                    break;
+                default:
+                    if (argument.StartsWith("--confirm=", StringComparison.Ordinal))
+                    {
+                        confirmation = argument["--confirm=".Length..];
+                        break;
+                    }
+
+                    throw new InvalidOperationException(
+                        $"Unknown option '{argument}'. Only plan/status or the guarded apply command is supported."
                     );
-                    await DropTableAsync(connection, schema, leftoverName);
+            }
+        }
+
+        return new MigrationOptions(apply, confirmation, showHelp);
+    }
+
+    private static string ResolveRequiredConnectionString()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__Default");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "ConnectionStrings__Default must be set explicitly. The migration tool never supplies a fallback connection string."
+            );
+        }
+
+        return connectionString;
+    }
+
+    private static string ResolveEnvironmentName() =>
+        Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
+        ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+        ?? "Production";
+
+    private static void ValidateConnectionString(string connectionString, string environmentName)
+    {
+        if (
+            connectionString.Contains("YOUR_DB_", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("192.0.2.10", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidOperationException(
+                "The migration tool rejected a documentation or placeholder database connection."
+            );
+        }
+
+        SqlConnectionStringBuilder builder;
+        try
+        {
+            builder = new SqlConnectionStringBuilder(connectionString);
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidOperationException(
+                "ConnectionStrings__Default is not valid.",
+                exception
+            );
+        }
+
+        if (string.IsNullOrWhiteSpace(builder.DataSource))
+            throw new InvalidOperationException(
+                "ConnectionStrings__Default must specify a SQL Server data source."
+            );
+
+        if (string.IsNullOrWhiteSpace(builder.InitialCatalog))
+            throw new InvalidOperationException(
+                "ConnectionStrings__Default must specify a target database."
+            );
+
+        var systemDatabaseNames = new[] { "master", "model", "msdb", "tempdb" };
+        if (systemDatabaseNames.Contains(builder.InitialCatalog, StringComparer.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "The migration tool refuses to target a SQL Server system database."
+            );
+
+        if (!builder.IntegratedSecurity && string.IsNullOrWhiteSpace(builder.UserID))
+        {
+            throw new InvalidOperationException(
+                $"The {environmentName} connection must specify a database user or use integrated security."
+            );
+        }
+    }
+
+    private static void ValidateApplyAuthorization(MigrationOptions options, string environmentName)
+    {
+        if (!string.Equals(options.Confirmation, ApplyConfirmation, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Apply is guarded. Re-run with --confirm={ApplyConfirmation}."
+            );
+        }
+
+        if (string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var productionGate = Environment.GetEnvironmentVariable("FIS_ALLOW_PRODUCTION_MIGRATIONS");
+        if (!string.Equals(productionGate, ProductionGate, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Non-development migration requires FIS_ALLOW_PRODUCTION_MIGRATIONS=I_UNDERSTAND_ADDITIVE_ONLY."
+            );
+        }
+
+        Console.WriteLine("Production gate accepted: additive migrations only.");
+    }
+
+    private static MigrationDefinition[] LoadManifest()
+    {
+        var assembly = Assembly.GetExecutingAssembly();
+        var resources = assembly.GetManifestResourceNames();
+        var definitions = new List<MigrationDefinition>(Manifest.Length);
+
+        foreach (var expected in Manifest)
+        {
+            var resourceName = resources.SingleOrDefault(name =>
+                name.EndsWith(
+                    $".Migrations.{expected.FileName}",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            );
+
+            if (resourceName is null)
+                throw new InvalidOperationException(
+                    $"Approved migration resource '{expected.FileName}' is missing."
+                );
+
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream is null)
+                throw new InvalidOperationException(
+                    $"Approved migration resource '{expected.FileName}' cannot be read."
+                );
+
+            using var reader = new StreamReader(
+                stream,
+                Encoding.UTF8,
+                detectEncodingFromByteOrderMarks: true
+            );
+            var sql = reader.ReadToEnd();
+            ValidateAdditiveScript(expected.FileName, sql);
+            definitions.Add(expected with { ResourceName = resourceName, Sql = sql });
+        }
+
+        return definitions.ToArray();
+    }
+
+    private static void ValidateAdditiveScript(string fileName, string sql)
+    {
+        var forbiddenFragments = new[]
+        {
+            "CREATE DATABASE",
+            "ALTER DATABASE",
+            "DROP ",
+            "TRUNCATE ",
+            "DELETE ",
+            "UPDATE ",
+            "MERGE ",
+            "SP_RENAME",
+            "DBCC ",
+        };
+
+        foreach (var fragment in forbiddenFragments)
+        {
+            if (sql.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Approved migration '{fileName}' contains non-additive SQL fragment '{fragment.Trim()}'."
+                );
+            }
+        }
+
+        if (sql.Contains("GO", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                $"Approved migration '{fileName}' must not contain batch separators."
+            );
+    }
+
+    private static async Task PrintPlanAsync(
+        SqlConnection connection,
+        IReadOnlyCollection<MigrationDefinition> migrations
+    )
+    {
+        var ledgerExists = await TableExistsAsync(connection, LedgerTable);
+        var applied = ledgerExists
+            ? await ReadAppliedMigrationsAsync(connection)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        Console.WriteLine("Migration plan (read-only):");
+        if (!ledgerExists)
+            Console.WriteLine(
+                $"  {LedgerTable} is absent; it will be created only by a guarded apply."
+            );
+
+        var pending = 0;
+        foreach (var migration in migrations)
+        {
+            var hash = ComputeHash(migration.Sql!);
+            if (applied.TryGetValue(migration.Id, out var appliedHash))
+            {
+                if (!string.Equals(appliedHash, hash, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Applied migration '{migration.Id}' has a different script hash; refusing to continue."
+                    );
                 }
 
-                Console.WriteLine($"    ➕ Table does not exist. Creating...");
-                await CreateTableAsync(dbContext, entityType, schema, tableName);
-                tablesCreated++;
-                Console.WriteLine($"    ✅ Table created successfully");
+                Console.WriteLine($"  applied  {migration.Id}  {hash}");
             }
             else
             {
-                // Check for IDENTITY mismatches first — requires a table rebuild
-                var identityMismatches = await GetIdentityMismatchColumnsAsync(
-                    connection,
-                    entityType,
-                    schema,
-                    tableName
-                );
+                pending++;
+                Console.WriteLine($"  pending  {migration.Id}  {hash}");
+            }
+        }
 
-                if (identityMismatches.Any())
-                {
-                    Console.WriteLine(
-                        $"    ⚠️  IDENTITY missing on: {string.Join(", ", identityMismatches)}"
-                    );
-                    Console.WriteLine(
-                        $"    🔄 Rebuilding table to add IDENTITY property (data preserved)..."
-                    );
-                    await RebuildTableWithIdentityAsync(
-                        dbContext,
-                        connection,
-                        entityType,
-                        schema,
-                        tableName
-                    );
-                    tablesRebuilt++;
-                    tablesUpdated++;
-                    Console.WriteLine($"    ✅ Table rebuilt with IDENTITY columns");
-                }
-                else
-                {
-                    // IDENTITY is fine — just check for missing columns
-                    var missingColumns = await GetMissingColumnsAsync(
-                        connection,
-                        entityType,
-                        schema,
-                        tableName
-                    );
+        Console.WriteLine($"Pending migrations: {pending}.");
+        Console.WriteLine(
+            "No database changes were made. Use the guarded apply command after backup and review."
+        );
+    }
 
-                    if (missingColumns.Any())
+    private static async Task ApplyMigrationsAsync(
+        SqlConnection connection,
+        IReadOnlyCollection<MigrationDefinition> migrations,
+        string environmentName
+    )
+    {
+        await AcquireMigrationLockAsync(connection);
+        try
+        {
+            await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+            try
+            {
+                await EnsureLedgerAsync(connection, transaction);
+                var applied = await ReadAppliedMigrationsAsync(connection, transaction);
+                var pending = 0;
+
+                foreach (var migration in migrations)
+                {
+                    var hash = ComputeHash(migration.Sql!);
+                    if (applied.TryGetValue(migration.Id, out var appliedHash))
                     {
-                        Console.WriteLine(
-                            $"    🔧 Found {missingColumns.Count} missing columns. Adding..."
-                        );
-                        foreach (var column in missingColumns)
+                        if (!string.Equals(appliedHash, hash, StringComparison.OrdinalIgnoreCase))
                         {
-                            await AddColumnAsync(connection, schema, tableName, column);
-                            columnsAdded++;
-                            Console.WriteLine(
-                                $"       ✅ Added column: {column.ColumnName} ({column.DataType})"
+                            throw new InvalidOperationException(
+                                $"Applied migration '{migration.Id}' has a different script hash; refusing to continue."
                             );
                         }
-                        tablesUpdated++;
+
+                        Console.WriteLine($"  applied  {migration.Id}");
+                        continue;
                     }
-                    else
-                    {
-                        Console.WriteLine($"    ✅ Table is up-to-date");
-                    }
+
+                    pending++;
+                    Console.WriteLine($"  applying {migration.Id}...");
+                    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    await ExecuteScriptAsync(connection, transaction, migration.Sql!);
+                    stopwatch.Stop();
+                    await RecordMigrationAsync(
+                        connection,
+                        transaction,
+                        migration.Id,
+                        hash,
+                        stopwatch.ElapsedMilliseconds
+                    );
+                    Console.WriteLine(
+                        $"  applied  {migration.Id} ({stopwatch.ElapsedMilliseconds} ms)"
+                    );
                 }
+
+                await transaction.CommitAsync();
+                Console.WriteLine(
+                    pending == 0
+                        ? $"Database is already current; no changes were required in {environmentName}."
+                        : $"Applied {pending} additive migration(s) successfully."
+                );
             }
-        }
-
-        Console.WriteLine();
-        Console.WriteLine("📊 Schema Sync Summary:");
-        Console.WriteLine($"  • Tables created:  {tablesCreated}");
-        Console.WriteLine($"  • Tables rebuilt (IDENTITY fix): {tablesRebuilt}");
-        Console.WriteLine($"  • Tables updated (columns added): {tablesUpdated - tablesRebuilt}");
-        Console.WriteLine($"  • Columns added:   {columnsAdded}");
-    }
-
-    // -----------------------------------------------------------------------
-    // IDENTITY mismatch detection
-    // -----------------------------------------------------------------------
-
-    private static async Task<List<string>> GetIdentityMismatchColumnsAsync(
-        SqlConnection connection,
-        IEntityType entityType,
-        string schema,
-        string tableName
-    )
-    {
-        var mismatches = new List<string>();
-
-        foreach (var property in entityType.GetProperties())
-        {
-            // Only PK columns should have IDENTITY(1,1) in SQL Server
-            if (property.ValueGenerated != ValueGenerated.OnAdd || !property.IsPrimaryKey())
-                continue;
-
-            var columnName = property.GetColumnName();
-            if (string.IsNullOrEmpty(columnName))
-                continue;
-
-            var sql =
-                @"
-                SELECT COLUMNPROPERTY(OBJECT_ID(@FullName), @Col, 'IsIdentity')";
-
-            using var cmd = new SqlCommand(sql, connection);
-            cmd.Parameters.AddWithValue("@FullName", $"{schema}.{tableName}");
-            cmd.Parameters.AddWithValue("@Col", columnName);
-
-            var result = await cmd.ExecuteScalarAsync();
-            bool isIdentity = result != DBNull.Value && Convert.ToInt32(result) == 1;
-
-            if (!isIdentity)
-                mismatches.Add(columnName);
-        }
-
-        return mismatches;
-    }
-
-    // -----------------------------------------------------------------------
-    // Table rebuild to add IDENTITY — preserves all existing data
-    // -----------------------------------------------------------------------
-
-    [SuppressMessage(
-        "Security",
-        "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "SQL is constructed from EF Core metadata, not user input"
-    )]
-    private static async Task RebuildTableWithIdentityAsync(
-        FisDbContext dbContext,
-        SqlConnection connection,
-        IEntityType entityType,
-        string schema,
-        string tableName
-    )
-    {
-        var oldName = $"{tableName}__identity_old";
-
-        // Ensure no leftover temp table from a previous failed run
-        bool oldExists = await TableExistsAsync(connection, oldName, schema);
-        if (oldExists)
-            await DropTableAsync(connection, schema, oldName);
-
-        // 1. Rename original → temp
-        using (
-            var cmd = new SqlCommand(
-                $"EXEC sp_rename '[{schema}].[{tableName}]', '{oldName}'",
-                connection
-            )
-        )
-            await cmd.ExecuteNonQueryAsync();
-
-        // 1b. Drop the PK constraint on the old table so the new table can reuse the same constraint name
-        var dropPkSql =
-            $@"
-            DECLARE @pkName NVARCHAR(256)
-            SELECT @pkName = kc.name
-            FROM sys.key_constraints kc
-            JOIN sys.tables t ON kc.parent_object_id = t.object_id
-            WHERE kc.type = 'PK'
-              AND t.name = '{oldName}'
-              AND SCHEMA_NAME(t.schema_id) = '{schema}'
-            IF @pkName IS NOT NULL
-            BEGIN
-                DECLARE @dropSql NVARCHAR(MAX) = 'ALTER TABLE [{schema}].[{oldName}] DROP CONSTRAINT [' + @pkName + ']'
-                EXEC (@dropSql)
-            END";
-        using (var cmd = new SqlCommand(dropPkSql, connection))
-            await cmd.ExecuteNonQueryAsync();
-
-        // 2. Create new table with correct schema (IDENTITY included)
-        await CreateTableAsync(dbContext, entityType, schema, tableName);
-
-        // 3. Build column list from EF model (columns that exist in both tables)
-        var efColumns = entityType
-            .GetProperties()
-            .Select(p => p.GetColumnName())
-            .Where(c => !string.IsNullOrEmpty(c))
-            .ToList();
-
-        // Only copy columns that physically exist in the old table
-        var oldColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var colSql =
-            @"
-            SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName";
-        using (var cmd = new SqlCommand(colSql, connection))
-        {
-            cmd.Parameters.AddWithValue("@Schema", schema);
-            cmd.Parameters.AddWithValue("@TableName", oldName);
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                oldColumns.Add(reader.GetString(0));
-        }
-
-        var copyColumns = efColumns
-            .Where(c => oldColumns.Contains(c!))
-            .Select(c => $"[{c}]")
-            .ToList();
-
-        if (!copyColumns.Any())
-        {
-            // Nothing to copy (empty table or schema mismatch) — just drop old
-            using var drop = new SqlCommand($"DROP TABLE [{schema}].[{oldName}]", connection);
-            await drop.ExecuteNonQueryAsync();
-            return;
-        }
-
-        var columnList = string.Join(", ", copyColumns);
-
-        // 4. Copy data — use IDENTITY_INSERT so existing IDs are preserved
-        var identityColumns = entityType
-            .GetProperties()
-            .Where(p => p.ValueGenerated == ValueGenerated.OnAdd && p.IsPrimaryKey())
-            .Select(p => p.GetColumnName())
-            .Where(c => !string.IsNullOrEmpty(c))
-            .ToList();
-
-        if (identityColumns.Any())
-        {
-            using var setOn = new SqlCommand(
-                $"SET IDENTITY_INSERT [{schema}].[{tableName}] ON",
-                connection
-            );
-            await setOn.ExecuteNonQueryAsync();
-        }
-
-        using (
-            var copy = new SqlCommand(
-                $"INSERT INTO [{schema}].[{tableName}] ({columnList}) "
-                    + $"SELECT {columnList} FROM [{schema}].[{oldName}]",
-                connection
-            )
-        )
-            await copy.ExecuteNonQueryAsync();
-
-        if (identityColumns.Any())
-        {
-            using var setOff = new SqlCommand(
-                $"SET IDENTITY_INSERT [{schema}].[{tableName}] OFF",
-                connection
-            );
-            await setOff.ExecuteNonQueryAsync();
-
-            // Reseed so next INSERT gets MAX + 1
-            foreach (var col in identityColumns)
+            catch
             {
-                var reseedSql =
-                    $@"
-                    DECLARE @max BIGINT = (SELECT ISNULL(MAX([{col}]), 0) FROM [{schema}].[{tableName}])
-                    DBCC CHECKIDENT('[{schema}].[{tableName}]', RESEED, @max)";
-                using var reseed = new SqlCommand(reseedSql, connection);
-                await reseed.ExecuteNonQueryAsync();
+                await transaction.RollbackAsync();
+                throw;
             }
         }
-
-        // 5. Drop old table
-        await DropTableAsync(connection, schema, oldName);
+        finally
+        {
+            await ReleaseMigrationLockAsync(connection);
+        }
     }
 
     [SuppressMessage(
         "Security",
         "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "SQL is constructed from EF Core metadata, not user input"
+        Justification = "Only embedded, manifest-listed, additive SQL is accepted after forbidden-fragment validation."
     )]
-    private static async Task DropTableAsync(
+    private static async Task ExecuteScriptAsync(
         SqlConnection connection,
-        string schema,
-        string tableName
+        SqlTransaction transaction,
+        string sql
     )
     {
-        // Drop PK constraint first (prevents name conflicts when recreating)
-        var dropPkSql =
-            $@"
-            DECLARE @pkName NVARCHAR(256)
-            SELECT @pkName = kc.name
-            FROM sys.key_constraints kc
-            JOIN sys.tables t ON kc.parent_object_id = t.object_id
-            WHERE kc.type = 'PK' AND t.name = '{tableName}' AND SCHEMA_NAME(t.schema_id) = '{schema}'
-            IF @pkName IS NOT NULL
-            BEGIN
-                DECLARE @sql NVARCHAR(MAX) = 'ALTER TABLE [{schema}].[{tableName}] DROP CONSTRAINT [' + @pkName + ']'
-                EXEC (@sql)
-            END";
-        using (var cmd = new SqlCommand(dropPkSql, connection))
-            await cmd.ExecuteNonQueryAsync();
-
-        using var drop = new SqlCommand($"DROP TABLE [{schema}].[{tableName}]", connection);
-        await drop.ExecuteNonQueryAsync();
+        await using var command = new SqlCommand(sql, connection, transaction)
+        {
+            CommandTimeout = 120,
+        };
+        await command.ExecuteNonQueryAsync();
     }
 
-    // -----------------------------------------------------------------------
-    // Existing helpers (unchanged)
-    // -----------------------------------------------------------------------
+    private static async Task EnsureLedgerAsync(
+        SqlConnection connection,
+        SqlTransaction transaction
+    )
+    {
+        const string sql = """
+            IF OBJECT_ID(N'dbo.fis_schema_migrations', N'U') IS NULL
+            BEGIN
+                CREATE TABLE dbo.fis_schema_migrations
+                (
+                    migration_id NVARCHAR(200) NOT NULL,
+                    script_sha256 CHAR(64) NOT NULL,
+                    applied_at_utc DATETIME2(7) NOT NULL CONSTRAINT DF_fis_schema_migrations_applied_at_utc DEFAULT SYSUTCDATETIME(),
+                    applied_by NVARCHAR(256) NOT NULL,
+                    duration_ms BIGINT NOT NULL,
+                    CONSTRAINT PK_fis_schema_migrations PRIMARY KEY (migration_id)
+                );
+            END
+            ELSE IF (
+                SELECT COUNT(*)
+                FROM sys.columns
+                WHERE object_id = OBJECT_ID(N'dbo.fis_schema_migrations')
+                  AND name IN (N'migration_id', N'script_sha256', N'applied_at_utc', N'applied_by', N'duration_ms')
+            ) <> 5
+            BEGIN
+                THROW 51001, 'dbo.fis_schema_migrations exists with an unexpected shape; manual review is required.', 1;
+            END
+            """;
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task RecordMigrationAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        string migrationId,
+        string hash,
+        long durationMilliseconds
+    )
+    {
+        const string sql = """
+            INSERT INTO dbo.fis_schema_migrations
+                (migration_id, script_sha256, applied_by, duration_ms)
+            VALUES
+                (@migration_id, @script_sha256, @applied_by, @duration_ms);
+            """;
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.Add("@migration_id", System.Data.SqlDbType.NVarChar, 200).Value =
+            migrationId;
+        command.Parameters.Add("@script_sha256", System.Data.SqlDbType.Char, 64).Value = hash;
+        command.Parameters.Add("@applied_by", System.Data.SqlDbType.NVarChar, 256).Value =
+            ResolveOperatorName();
+        command.Parameters.Add("@duration_ms", System.Data.SqlDbType.BigInt).Value =
+            durationMilliseconds;
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<Dictionary<string, string>> ReadAppliedMigrationsAsync(
+        SqlConnection connection,
+        SqlTransaction? transaction = null
+    )
+    {
+        const string sql = """
+            SELECT migration_id, script_sha256
+            FROM dbo.fis_schema_migrations;
+            """;
+
+        await using var command = new SqlCommand(sql, connection, transaction);
+        var applied = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            applied[reader.GetString(0)] = reader.GetString(1);
+
+        return applied;
+    }
 
     private static async Task<bool> TableExistsAsync(
         SqlConnection connection,
-        string tableName,
-        string schema
+        string qualifiedTableName
     )
     {
-        var sql =
-            @"
-            SELECT CASE WHEN EXISTS (
-                SELECT 1 FROM INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName
-            ) THEN 1 ELSE 0 END";
+        const string sql = """
+            SELECT CASE WHEN OBJECT_ID(@table_name, N'U') IS NULL THEN 0 ELSE 1 END;
+            """;
 
-        using var cmd = new SqlCommand(sql, connection);
-        cmd.Parameters.AddWithValue("@Schema", schema);
-        cmd.Parameters.AddWithValue("@TableName", tableName);
-
-        var result = await cmd.ExecuteScalarAsync();
-        return Convert.ToInt32(result) == 1;
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.Add("@table_name", System.Data.SqlDbType.NVarChar, 258).Value =
+            qualifiedTableName;
+        return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
     }
 
-    private static async Task EnsureSchemaExistsAsync(SqlConnection connection, string schema)
+    private static async Task AcquireMigrationLockAsync(SqlConnection connection)
     {
-        if (string.Equals(schema, "dbo", StringComparison.OrdinalIgnoreCase))
-            return;
+        const string sql = """
+            DECLARE @result INT;
+            EXEC @result = sp_getapplock
+                @Resource = N'FIS.Database.AdditiveMigrations',
+                @LockMode = N'Exclusive',
+                @LockOwner = N'Session',
+                @LockTimeout = 0;
+            SELECT @result;
+            """;
 
-        const string sql =
-            @"
-            IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = @SchemaName)
-            BEGIN
-                DECLARE @createSql NVARCHAR(MAX) = N'CREATE SCHEMA ' + QUOTENAME(@SchemaName);
-                EXEC (@createSql);
-            END";
-
-        using var cmd = new SqlCommand(sql, connection);
-        cmd.Parameters.AddWithValue("@SchemaName", schema);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    private static async Task CreateTableAsync(
-        FisDbContext dbContext,
-        IEntityType entityType,
-        string schema,
-        string tableName
-    )
-    {
-        var createScript = dbContext.Database.GenerateCreateScript();
-
-        var tableCreateStart = createScript.IndexOf($"CREATE TABLE [{schema}].[{tableName}]");
-        if (tableCreateStart == -1)
-            throw new Exception($"Could not find CREATE TABLE script for {schema}.{tableName}");
-
-        var tableCreateEnd = createScript.IndexOf("CREATE TABLE", tableCreateStart + 1);
-        if (tableCreateEnd == -1)
-            tableCreateEnd = createScript.Length;
-
-        var tableScript = createScript
-            .Substring(tableCreateStart, tableCreateEnd - tableCreateStart)
-            .Trim();
-
-        var lines = tableScript.Split('\n');
-        var createTableLines = new List<string>();
-        bool insideCreateTable = false;
-
-        foreach (var line in lines)
-        {
-            if (line.Contains("CREATE TABLE"))
-            {
-                insideCreateTable = true;
-                createTableLines.Add(line);
-            }
-            else if (insideCreateTable)
-            {
-                if (line.Contains("ALTER TABLE"))
-                    break;
-
-                if (line.TrimStart().StartsWith("CONSTRAINT") && line.Contains("FOREIGN KEY"))
-                {
-                    if (createTableLines.Count > 0 && createTableLines[^1].TrimEnd().EndsWith(","))
-                    {
-                        var nextNonFkLineIndex = lines.ToList().IndexOf(line) + 1;
-                        var hasMoreColumns = false;
-                        for (int i = nextNonFkLineIndex; i < lines.Length; i++)
-                        {
-                            var nextLine = lines[i].TrimStart();
-                            if (
-                                nextLine.StartsWith("CONSTRAINT")
-                                && nextLine.Contains("FOREIGN KEY")
-                            )
-                                continue;
-                            if (nextLine.StartsWith(")") || nextLine.Contains(");"))
-                                break;
-                            if (!string.IsNullOrWhiteSpace(nextLine))
-                            {
-                                hasMoreColumns = true;
-                                break;
-                            }
-                        }
-
-                        if (!hasMoreColumns)
-                            createTableLines[^1] = createTableLines[^1].TrimEnd().TrimEnd(',');
-                    }
-                    continue;
-                }
-
-                createTableLines.Add(line);
-                if (line.TrimEnd().EndsWith(";"))
-                    break;
-            }
-        }
-
-        var finalScript = string.Join("\n", createTableLines);
-        await dbContext.Database.ExecuteSqlRawAsync(finalScript);
-    }
-
-    private static async Task<List<ColumnDefinition>> GetMissingColumnsAsync(
-        SqlConnection connection,
-        IEntityType entityType,
-        string schema,
-        string tableName
-    )
-    {
-        var dbColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var sql =
-            @"
-            SELECT COLUMN_NAME
-            FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = @Schema AND TABLE_NAME = @TableName";
-
-        using (var cmd = new SqlCommand(sql, connection))
-        {
-            cmd.Parameters.AddWithValue("@Schema", schema);
-            cmd.Parameters.AddWithValue("@TableName", tableName);
-
-            using var reader = await cmd.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                dbColumns.Add(reader.GetString(0));
-        }
-
-        var missingColumns = new List<ColumnDefinition>();
-
-        foreach (var property in entityType.GetProperties())
-        {
-            var columnName = property.GetColumnName();
-            if (string.IsNullOrEmpty(columnName))
-                continue;
-
-            if (!dbColumns.Contains(columnName))
-            {
-                missingColumns.Add(
-                    new ColumnDefinition
-                    {
-                        ColumnName = columnName,
-                        DataType = GetSqlDataType(property),
-                        IsNullable = property.IsNullable,
-                        DefaultValue = property.GetDefaultValueSql(),
-                    }
-                );
-            }
-        }
-
-        return missingColumns;
-    }
-
-    [SuppressMessage(
-        "Security",
-        "CA2100:Review SQL queries for security vulnerabilities",
-        Justification = "SQL is constructed from EF Core metadata, not user input"
-    )]
-    private static async Task AddColumnAsync(
-        SqlConnection connection,
-        string schema,
-        string tableName,
-        ColumnDefinition column
-    )
-    {
-        string? defaultValue = column.DefaultValue;
-
-        if (!column.IsNullable && string.IsNullOrEmpty(defaultValue))
-        {
-            defaultValue = column.DataType.ToUpperInvariant() switch
-            {
-                var t when t.Contains("INT") || t.Contains("NUMERIC") || t.Contains("DECIMAL") =>
-                    "0",
-                var t when t.Contains("BIT") => "0",
-                var t when t.Contains("DATETIME") => "GETDATE()",
-                var t when t.Contains("UNIQUEIDENTIFIER") => "NEWID()",
-                var t when t.Contains("NVARCHAR") || t.Contains("VARCHAR") || t.Contains("CHAR") =>
-                    "''",
-                _ => (string?)null,
-            };
-        }
-
-        var nullability = column.IsNullable ? "NULL" : "NOT NULL";
-        var defaultClause = !string.IsNullOrEmpty(defaultValue) ? $" DEFAULT {defaultValue}" : "";
-
-        var sql =
-            $@"
-            ALTER TABLE [{schema}].[{tableName}]
-            ADD [{column.ColumnName}] {column.DataType} {nullability}{defaultClause}";
-
-        using var cmd = new SqlCommand(sql, connection);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    private static string GetSqlDataType(IProperty property)
-    {
-        var storeType = property.GetColumnType();
-        if (!string.IsNullOrEmpty(storeType))
-            return storeType;
-
-        var clrType = property.ClrType;
-        var underlyingType = Nullable.GetUnderlyingType(clrType) ?? clrType;
-
-        return underlyingType.Name switch
-        {
-            "Int32" => "INT",
-            "Int16" => "SMALLINT",
-            "Int64" => "BIGINT",
-            "String" => $"NVARCHAR({property.GetMaxLength() ?? 255})",
-            "Boolean" => "BIT",
-            "DateTime" => "DATETIME2",
-            "Decimal" => "DECIMAL(18,2)",
-            "Double" => "FLOAT",
-            "Guid" => "UNIQUEIDENTIFIER",
-            "Byte" => "TINYINT",
-            _ => "NVARCHAR(MAX)",
-        };
-    }
-
-    private static async Task VerifySchemaIntegrity(FisDbContext dbContext)
-    {
-        var tables = new[] { "vehicle_master", "contract", "site", "TS_Users", "department" };
-        foreach (var table in tables)
-        {
-            try
-            {
-                string sql = "SELECT TOP 1 * FROM " + table;
-                await dbContext.Database.ExecuteSqlRawAsync(sql);
-                Console.WriteLine($"  ✓ Table '{table}' verified.");
-            }
-            catch (Exception)
-            {
-                throw new Exception($"Critical legacy table '{table}' is missing or inaccessible!");
-            }
-        }
-    }
-
-    private static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .ConfigureServices(
-                (context, services) =>
-                {
-                    var connectionString = SqlServerConnectionStringHelper.Resolve(
-                        context.Configuration["ConnectionStrings:Default"],
-                        context.HostingEnvironment.IsDevelopment()
-                    );
-
-                    services.AddDbContext<FisDbContext>(options =>
-                        options.UseSqlServer(connectionString)
-                    );
-
-                    services.AddLogging(builder =>
-                    {
-                        builder.AddConsole();
-                        builder.SetMinimumLevel(LogLevel.Information);
-                    });
-                }
+        await using var command = new SqlCommand(sql, connection);
+        var result = Convert.ToInt32(await command.ExecuteScalarAsync());
+        if (result < 0)
+            throw new InvalidOperationException(
+                "Another additive migration run is active; try again later."
             );
-}
+    }
 
-public class ColumnDefinition
-{
-    public string ColumnName { get; set; } = string.Empty;
-    public string DataType { get; set; } = string.Empty;
-    public bool IsNullable { get; set; }
-    public string? DefaultValue { get; set; }
+    private static async Task ReleaseMigrationLockAsync(SqlConnection connection)
+    {
+        try
+        {
+            const string sql =
+                "EXEC sp_releaseapplock @Resource = N'FIS.Database.AdditiveMigrations', @LockOwner = N'Session';";
+            await using var command = new SqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
+        }
+        catch (SqlException)
+        {
+            // Closing the connection also releases a session-owned application lock.
+        }
+    }
+
+    private static string ResolveOperatorName()
+    {
+        var operatorName = Environment.GetEnvironmentVariable("FIS_MIGRATION_OPERATOR");
+        if (string.IsNullOrWhiteSpace(operatorName))
+            operatorName = Environment.UserName;
+
+        return operatorName.Length <= 256 ? operatorName : operatorName[..256];
+    }
+
+    private static string ComputeHash(string sql) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sql)));
+
+    private static void PrintUsage()
+    {
+        Console.WriteLine("FIS additive database migration tool");
+        Console.WriteLine();
+        Console.WriteLine(
+            "  plan                                      Read-only migration plan (default)"
+        );
+        Console.WriteLine(
+            "  apply --confirm=FIS-ADDITIVE-ONLY        Apply approved additive migrations"
+        );
+        Console.WriteLine();
+        Console.WriteLine("For non-development environments also set:");
+        Console.WriteLine("  FIS_ALLOW_PRODUCTION_MIGRATIONS=I_UNDERSTAND_ADDITIVE_ONLY");
+        Console.WriteLine();
+        Console.WriteLine("The tool never creates a database or synchronizes the EF model.");
+    }
+
+    private sealed record MigrationOptions(bool Apply, string? Confirmation, bool ShowHelp);
+
+    private sealed record MigrationDefinition(
+        string Id,
+        string FileName,
+        string? ResourceName = null,
+        string? Sql = null
+    );
 }
